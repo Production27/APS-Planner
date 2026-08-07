@@ -1276,6 +1276,24 @@ const COLOR_PRESETS = [
   '#8e7cc3','#c0c0c0','#424242','#6c757d'
 ];
 
+function genId() {
+  if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+function ensureTaskIdsAndOrder(arr) {
+  (arr || []).forEach(function(t, i) {
+    if (!t.id) t.id = genId();
+    if (typeof t.order !== 'number') t.order = i;
+  });
+  return arr;
+}
+
+function ensureCardIds(arr) {
+  (arr || []).forEach(function(c) { if (!c.id) c.id = genId(); });
+  return arr;
+}
+
 let tasks = [];
 let editingIndex = -1;
 let dayWidth = 28;
@@ -1410,6 +1428,7 @@ function createNewProject(name) {
   loadActiveProjectData();
   renderAll();
   showToast('Created "' + project.name + '"', 'success');
+  pushProjectToShared(id);
 }
 
 function duplicateProject(projectId) {
@@ -1425,6 +1444,7 @@ function duplicateProject(projectId) {
   loadActiveProjectData();
   renderAll();
   showToast('Duplicated "' + source.name + '"', 'success');
+  pushProjectToShared(id);
 }
 
 function renameProject(projectId, newName) {
@@ -1433,6 +1453,7 @@ function renameProject(projectId, newName) {
   saveProjects();
   renderProjectDropdown();
   showToast('Project renamed', 'success');
+  pushProjectToShared(projectId);
 }
 
 function deleteProject(projectId) {
@@ -1452,14 +1473,15 @@ function deleteProject(projectId) {
   saveProjects();
   renderProjectDropdown();
   showToast('Project deleted', 'info');
+  removeProjectFromShared(projectId);
 }
 
 function loadActiveProjectData() {
   const p = getActiveProject();
   if (!p) return;
-  tasks = p.tasks || [];
+  tasks = ensureTaskIdsAndOrder(p.tasks || []);
   BOARD_COLUMNS = p.boardColumns || JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS));
-  boardCards = p.boardCards || [];
+  boardCards = ensureCardIds(p.boardCards || []);
   fieldOptions = p.fieldOptions || {};
   document.getElementById('headerTitle').textContent = p.header.title || 'APS Production';
   document.getElementById('headerSubtitle').textContent = p.header.subtitle || '';
@@ -1558,9 +1580,14 @@ function closeAllDropdowns() {
 }
 
 // Override old save functions to use project layer
-function saveTasks() { saveActiveProject(); queueSharedSync(); }
+function saveTasks() {
+  ensureTaskIdsAndOrder(tasks);
+  tasks.forEach(function(t, i) { t.order = i; }); // keep order in sync with current array position
+  saveActiveProject();
+  queueSharedSync();
+}
 function saveBoardColumns() { saveActiveProject(); queueSharedSync(); }
-function saveBoardCards() { saveActiveProject(); queueSharedSync(); }
+function saveBoardCards() { ensureCardIds(boardCards); saveActiveProject(); queueSharedSync(); }
 function saveFieldOptions() { saveActiveProject(); queueSharedSync(); }
 function saveHeader() { saveActiveProject(); queueSharedSync(); }
 
@@ -4148,14 +4175,110 @@ document.getElementById('headerSubtitle').addEventListener('paste', function(e) 
 
 // ===== LIVEBLOCKS SYNC =====
 // Note: background photos stay local-only (per-browser).
-const LIVEBLOCKS_PUBLIC_KEY = "pk_dev_rFvh4Q9m7QIFrjgdqX4_3FMJXg8WW-7PiqOgk3mJL_YMibnr3XnJcpqvFAnuWjuh";
-const LIVEBLOCKS_ROOM_ID = "aps-production-room";
+//
+// Auth: the browser holds no Liveblocks key at all. Instead it calls
+// LIVEBLOCKS_AUTH_ENDPOINT (a small Cloudflare Worker — see
+// liveblocks-auth-worker.js) with a shared team password. The worker checks
+// the password server-side and, if it matches, mints a short-lived token
+// scoped to just this room using the Liveblocks SECRET key (which lives only
+// on the worker, never in this file). This replaces the old pk_dev_ public
+// key, which let anyone who viewed page source read/write the whole room.
+//
+// Fill this in after deploying the worker (see that file's header comment
+// for deploy steps) — it'll look like https://xxx.<you>.workers.dev
+const LIVEBLOCKS_AUTH_ENDPOINT = "https://lucky-snow-8179.production-db3.workers.dev/";
+const LIVEBLOCKS_ROOM_ID = "aps-production-room"; // must match ROOM_ID in the worker
+
+const TEAM_PASSWORD_KEY = "gantt_team_password_v1";
+const DISPLAY_NAME_KEY = "gantt_display_name_v1";
+
+function getStoredTeamPassword() {
+  return localStorage.getItem(TEAM_PASSWORD_KEY) || "";
+}
+function getStoredDisplayName() {
+  return localStorage.getItem(DISPLAY_NAME_KEY) || "";
+}
+
+// Prompts once (native prompt, matching how project rename/create already
+// ask for input elsewhere in this app) and caches the answers so people
+// aren't asked again every visit. Re-prompts for the password specifically
+// if the worker rejects it (wrong or since-changed password).
+function ensureTeamCredentials(forceRepromptPassword) {
+  let password = getStoredTeamPassword();
+  if (!password || forceRepromptPassword) {
+    password = window.prompt(
+      forceRepromptPassword ? "Team password incorrect — try again:" : "Enter the team password to sync:"
+    ) || "";
+    localStorage.setItem(TEAM_PASSWORD_KEY, password);
+  }
+  let name = getStoredDisplayName();
+  if (!name) {
+    name = window.prompt("Your name (shown to teammates while syncing):") || "Team member";
+    localStorage.setItem(DISPLAY_NAME_KEY, name);
+  }
+  return { password, name };
+}
 
 let liveblocksRoom = null;
 let liveblocksRoot = null;
+let LiveMapCtor = null;
+let LiveObjectCtor = null;
 let isLiveblocksUpdate = false;
 let syncPushTimer = null;
 let syncBadgeEls = null;
+
+let offlineBannerEl = null;
+let offlineSince = null;
+let offlineBannerShowTimer = null;
+let offlineBannerTickInterval = null;
+
+// Persistent, hard-to-miss banner — the corner badge and toasts are easy to miss
+// if you're not looking right at them, and a dropped connection could otherwise
+// go unnoticed for as long as someone keeps typing.
+function initOfflineBanner() {
+  const banner = document.createElement('div');
+  banner.id = 'offlineBanner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;background:#c0392b;color:#fff;font-family:"Segoe UI",system-ui,sans-serif;font-size:13px;font-weight:600;text-align:center;padding:9px 12px;display:none;align-items:center;justify-content:center;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,0.25);';
+  banner.innerHTML = '<span id="offlineBannerText">You\'re offline — changes aren\'t syncing</span>' +
+    '<button id="offlineBannerReload" style="background:#fff;color:#c0392b;border:none;border-radius:4px;padding:3px 11px;font-size:12px;font-weight:700;cursor:pointer;">Reload page</button>';
+  document.body.appendChild(banner);
+  banner.querySelector('#offlineBannerReload').addEventListener('click', function() { location.reload(); });
+  offlineBannerEl = banner;
+}
+
+function updateOfflineBannerText(customText) {
+  const textEl = document.getElementById('offlineBannerText');
+  if (!textEl) return;
+  if (customText) { textEl.textContent = customText; return; }
+  if (!offlineSince) return;
+  const secs = Math.round((Date.now() - offlineSince) / 1000);
+  const label = secs >= 60 ? (Math.floor(secs / 60) + 'm') : (secs + 's');
+  textEl.textContent = "You're offline — changes from the last " + label + " haven't synced yet";
+}
+
+function showOfflineBanner(customText) {
+  if (!offlineBannerEl) return;
+  if (!offlineSince) offlineSince = Date.now();
+  offlineBannerEl.style.display = 'flex';
+  updateOfflineBannerText(customText);
+  if (!offlineBannerTickInterval) {
+    offlineBannerTickInterval = setInterval(function() { updateOfflineBannerText(); }, 15000);
+  }
+}
+
+function hideOfflineBanner() {
+  clearTimeout(offlineBannerShowTimer);
+  if (offlineBannerEl) offlineBannerEl.style.display = 'none';
+  offlineSince = null;
+  if (offlineBannerTickInterval) { clearInterval(offlineBannerTickInterval); offlineBannerTickInterval = null; }
+}
+
+// Debounced so a one-second wifi blip doesn't flash the banner — only shows once
+// the connection has actually stayed down for a bit.
+function scheduleOfflineBanner() {
+  clearTimeout(offlineBannerShowTimer);
+  offlineBannerShowTimer = setTimeout(function() { showOfflineBanner(); }, 8000);
+}
 
 function initSyncBadge() {
   const badge = document.createElement('div');
@@ -4197,47 +4320,101 @@ function queueSharedSync() {
 
 async function setupLiveblocksSync() {
   initSyncBadge();
+  initOfflineBanner();
   setSyncStatus('connecting…', true);
 
   try {
-    const { createClient, LiveObject } = await import('https://esm.sh/@liveblocks/client@2.12.0');
+    const { createClient, LiveObject, LiveMap } = await import('https://esm.sh/@liveblocks/client@2.12.0');
+    LiveObjectCtor = LiveObject;
+    LiveMapCtor = LiveMap;
 
     const client = createClient({
-      publicApiKey: LIVEBLOCKS_PUBLIC_KEY
+      authEndpoint: async () => {
+        const { password, name } = ensureTeamCredentials(false);
+        let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: password, name: name })
+        });
+
+        // Wrong or changed password — clear it, ask again, retry once.
+        if (res.status === 401) {
+          localStorage.removeItem(TEAM_PASSWORD_KEY);
+          const retry = ensureTeamCredentials(true);
+          res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: retry.password, name: retry.name })
+          });
+        }
+
+        if (!res.ok) throw new Error('Liveblocks auth failed: ' + res.status);
+        return res.json();
+      }
     });
 
-    // Liveblocks v2 uses enterRoom()
+    // Liveblocks v2 uses enterRoom(). Storage is namespaced per project:
+    // root.projects is a LiveMap keyed by project id, and each entry holds its
+    // own tasksMap/boardCardsMap/boardColumns/fieldOptions/header — so editing
+    // or deleting one project can never touch another project's data, and two
+    // people on different projects at the same time can't stomp on each other.
+    // Tasks/cards within a project are LiveMaps keyed by their stable id, NOT
+    // plain arrays — this lets Liveblocks merge concurrent edits to different
+    // tasks/cards in the *same* project at the individual-item level instead of
+    // one full save silently overwriting another's.
     const { room } = client.enterRoom(LIVEBLOCKS_ROOM_ID, {
       initialStorage: new LiveObject({
-        tasks: [],
-        boardCards: [],
-        boardColumns: [],
-        fieldOptions: {},
-        header: new LiveObject({
-          title: 'APS Production',
-          subtitle: '',
-          theme: DEFAULT_THEME
-        })
+        projects: new LiveMap()
       })
     });
 
     liveblocksRoom = room;
 
+    // Show real connection state instead of assuming "live" forever once connected.
+    // Liveblocks' client retries connecting on its own with backoff — this just makes
+    // sure the *person* can't miss it if that retry is taking a while.
+    room.subscribe('status', function(status) {
+      if (status === 'connected') {
+        setSyncStatus('live', false);
+        hideOfflineBanner();
+      } else if (status === 'reconnecting' || status === 'connecting') {
+        setSyncStatus('reconnecting…', true);
+        scheduleOfflineBanner();
+      } else if (status === 'disconnected') {
+        setSyncStatus('offline', true);
+        scheduleOfflineBanner();
+      }
+    });
+    room.subscribe('lost-connection', function(event) {
+      if (event === 'lost') showToast('Connection lost — trying to reconnect…', 'error');
+      if (event === 'restored') { showToast('Back online — synced', 'success'); hideOfflineBanner(); }
+      if (event === 'failed') {
+        showToast('Could not reconnect. Reload the page to keep syncing.', 'error');
+        showOfflineBanner("Couldn't reconnect — reload the page to keep syncing");
+      }
+    });
+
+    // Backstop for the case where the OS/browser reports the network dropping
+    // outright (e.g. wifi toggled off) — belt and suspenders alongside the
+    // Liveblocks status events above.
+    window.addEventListener('offline', function() { scheduleOfflineBanner(); });
+
     const { root } = await room.getStorage();
     liveblocksRoot = root;
+    migrateLegacyStorageShape(root, LiveMap, LiveObject);
 
     // Subscribe to deep storage changes on the root LiveObject
     room.subscribe(root, () => {
       if (isLiveblocksUpdate) return;
-      const data = liveblocksRoot.toObject();
-      applyLiveblocksState(data);
+      applyLiveblocksState(root);
     }, { isDeep: true });
 
-    // On first connect, if remote has data use it; otherwise seed with local state
-    const data = root.toObject();
-    const hasData = data && Array.isArray(data.tasks) && data.tasks.length > 0;
+    // On first connect, if remote has any projects use them; otherwise seed
+    // the room with whatever's in this browser's local project list.
+    const projectsMap = root.get('projects');
+    const hasData = projectsMap && projectsMap.size > 0;
     if (hasData) {
-      applyLiveblocksState(data);
+      applyLiveblocksState(root);
     } else {
       pushLiveblocksState();
     }
@@ -4251,6 +4428,147 @@ async function setupLiveblocksSync() {
   }
 }
 
+// This room may currently be in one of three shapes: brand new (nothing yet),
+// the old flat v2 schema (tasksMap/boardCardsMap/boardColumns/header at root,
+// from before project-scoping), or the oldest schema (plain 'tasks'/'boardCards'
+// arrays). This folds either legacy shape into a single project entry under a
+// fixed, well-known id so whatever was already being shared doesn't disappear
+// when this update ships — every client converges on the same id instead of
+// each one seeding its own copy. Safe to run every connect: it only acts if
+// root.projects doesn't exist yet, and is a no-op after the first successful run.
+const LEGACY_MIGRATION_PROJECT_ID = 'aps-shared-legacy';
+
+function migrateLegacyStorageShape(root, LiveMap, LiveObject) {
+  if (root.get('projects') instanceof LiveMap) return; // already migrated
+
+  liveblocksRoom.batch(() => {
+    const projectsMap = new LiveMap();
+
+    const flatTasksMap = root.get('tasksMap');
+    const flatCardsMap = root.get('boardCardsMap');
+    const flatHeader = root.get('header');
+    const legacyTasks = root.get('tasks');
+    const legacyCards = root.get('boardCards');
+    const hadAnyLegacyData = (flatTasksMap instanceof LiveMap) || (flatCardsMap instanceof LiveMap) ||
+      (flatHeader instanceof LiveObject) || Array.isArray(legacyTasks) || Array.isArray(legacyCards);
+
+    if (hadAnyLegacyData) {
+      const tasksMap = new LiveMap();
+      if (flatTasksMap instanceof LiveMap) {
+        flatTasksMap.forEach(function(v, k) { tasksMap.set(k, v); });
+      } else if (Array.isArray(legacyTasks)) {
+        ensureTaskIdsAndOrder(legacyTasks);
+        legacyTasks.forEach(function(t) { tasksMap.set(String(t.id), t); });
+      }
+
+      const cardsMap = new LiveMap();
+      if (flatCardsMap instanceof LiveMap) {
+        flatCardsMap.forEach(function(v, k) { cardsMap.set(k, v); });
+      } else if (Array.isArray(legacyCards)) {
+        ensureCardIds(legacyCards);
+        legacyCards.forEach(function(c) { cardsMap.set(String(c.id), c); });
+      }
+
+      const headerTitle = flatHeader && flatHeader.get ? flatHeader.get('title') : 'APS Production';
+      const headerSubtitle = flatHeader && flatHeader.get ? flatHeader.get('subtitle') : '';
+      const headerTheme = (flatHeader && flatHeader.get ? flatHeader.get('theme') : null) || DEFAULT_THEME;
+
+      projectsMap.set(LEGACY_MIGRATION_PROJECT_ID, new LiveObject({
+        name: headerTitle || 'APS Production',
+        tasksMap: tasksMap,
+        boardCardsMap: cardsMap,
+        boardColumns: root.get('boardColumns') || [],
+        fieldOptions: root.get('fieldOptions') || {},
+        header: new LiveObject({
+          title: headerTitle || 'APS Production',
+          subtitle: headerSubtitle || '',
+          theme: headerTheme
+        })
+      }));
+    }
+
+    root.set('projects', projectsMap);
+
+    // Clean up the old root-level keys now that they live under projects/<id>.
+    ['tasksMap', 'boardCardsMap', 'boardColumns', 'fieldOptions', 'header', 'tasks', 'boardCards'].forEach(function(k) {
+      if (root.get(k) !== undefined) root.delete(k);
+    });
+  });
+}
+
+// Upserts one project's full data into its own entry under root.projects.
+// Scoped to a single project id, so this can never delete or overwrite another
+// project's tasks/cards/columns/header — only this project's own map entries.
+function pushProjectToShared(projectId, headerOverride) {
+  if (!liveblocksRoot || !liveblocksRoom) return;
+  const proj = projects[projectId];
+  if (!proj) return;
+  const header = headerOverride || proj.header;
+
+  isLiveblocksUpdate = true;
+  try {
+    liveblocksRoom.batch(() => {
+      const projectsMap = liveblocksRoot.get('projects');
+      let entry = projectsMap.get(projectId);
+      if (!(entry instanceof LiveObjectCtor)) {
+        entry = new LiveObjectCtor({
+          name: proj.name,
+          tasksMap: new LiveMapCtor(),
+          boardCardsMap: new LiveMapCtor(),
+          boardColumns: [],
+          fieldOptions: {},
+          header: new LiveObjectCtor({ title: header.title || proj.name, subtitle: header.subtitle || '', theme: header.theme || DEFAULT_THEME })
+        });
+        projectsMap.set(projectId, entry);
+      }
+      entry.set('name', proj.name);
+
+      // Upsert each task/card as its own map entry, and drop any map entries
+      // whose task/card no longer exists locally. Because this touches one key
+      // per item instead of replacing the whole array, a concurrent edit to a
+      // *different* task from another user in this same project merges cleanly
+      // instead of getting clobbered by this save (or clobbering it).
+      const tasksMap = entry.get('tasksMap');
+      const liveTaskIds = new Set(proj.tasks.map(function(t) { return String(t.id); }));
+      proj.tasks.forEach(function(t) { tasksMap.set(String(t.id), t); });
+      Array.from(tasksMap.keys()).forEach(function(key) {
+        if (!liveTaskIds.has(key)) tasksMap.delete(key);
+      });
+
+      const cardsMap = entry.get('boardCardsMap');
+      const liveCardIds = new Set(proj.boardCards.map(function(c) { return String(c.id); }));
+      proj.boardCards.forEach(function(c) { cardsMap.set(String(c.id), c); });
+      Array.from(cardsMap.keys()).forEach(function(key) {
+        if (!liveCardIds.has(key)) cardsMap.delete(key);
+      });
+
+      entry.set('boardColumns', proj.boardColumns);
+      entry.set('fieldOptions', proj.fieldOptions);
+
+      const headerObj = entry.get('header');
+      headerObj.set('title', header.title);
+      headerObj.set('subtitle', header.subtitle);
+      headerObj.set('theme', header.theme);
+    });
+  } finally {
+    setTimeout(() => { isLiveblocksUpdate = false; }, 50);
+  }
+}
+
+// Removes a project's entry entirely — used when someone deletes a project,
+// so it disappears from everyone's shared list instead of lingering.
+function removeProjectFromShared(projectId) {
+  if (!liveblocksRoot || !liveblocksRoom) return;
+  isLiveblocksUpdate = true;
+  try {
+    liveblocksRoom.batch(() => {
+      liveblocksRoot.get('projects').delete(projectId);
+    });
+  } finally {
+    setTimeout(() => { isLiveblocksUpdate = false; }, 50);
+  }
+}
+
 function pushLiveblocksState() {
   if (!liveblocksRoot || !liveblocksRoom) return;
   clearTimeout(syncPushTimer);
@@ -4259,81 +4577,117 @@ function pushLiveblocksState() {
   const p = getActiveProject();
   if (!p) return;
 
-  isLiveblocksUpdate = true;
   try {
-    liveblocksRoom.batch(() => {
-      liveblocksRoot.set('tasks', p.tasks);
-      liveblocksRoot.set('boardCards', p.boardCards);
-      liveblocksRoot.set('boardColumns', p.boardColumns);
-      liveblocksRoot.set('fieldOptions', p.fieldOptions);
-      liveblocksRoot.set('header', {
-        title: document.getElementById('headerTitle').textContent.trim(),
-        subtitle: document.getElementById('headerSubtitle').textContent.trim(),
-        theme: getSavedTheme()
-      });
+    // Read straight from the DOM for the active project's header, since that's
+    // the freshest source (p.header is only updated on blur via saveActiveProject).
+    pushProjectToShared(p.id, {
+      title: document.getElementById('headerTitle').textContent.trim(),
+      subtitle: document.getElementById('headerSubtitle').textContent.trim(),
+      theme: getSavedTheme()
     });
     setSyncStatus('live', false);
   } catch (e) {
     console.error(e);
     setSyncStatus('save failed', true);
-  } finally {
-    setTimeout(() => { isLiveblocksUpdate = false; }, 50);
   }
 }
 
-function applyLiveblocksState(data) {
-  if (!data) return;
-  if (isBusyEditing()) return;
+function applyLiveblocksState(root) {
+  if (!root) return;
+  const projectsMap = root.get('projects');
+  if (!projectsMap) return;
 
-  let changed = false;
+  const remoteIds = new Set();
+  let activeDataChanged = false;
+  let listChanged = false;
 
-  if (Array.isArray(data.tasks)) {
-    tasks = data.tasks;
-    tasks.forEach(function(t) { if (!t.notes) t.notes = ''; });
-    changed = true;
-  }
-  if (Array.isArray(data.boardColumns) && data.boardColumns.length) {
-    BOARD_COLUMNS = data.boardColumns;
-    changed = true;
-  }
-  if (Array.isArray(data.boardCards)) {
-    boardCards = data.boardCards;
-    changed = true;
-  }
-  if (data.fieldOptions) {
-    fieldOptions = Object.assign({}, fieldOptions, data.fieldOptions);
-    changed = true;
-  }
-  if (data.header) {
-    if (typeof data.header.title === 'string') document.getElementById('headerTitle').textContent = data.header.title;
-    if (typeof data.header.subtitle === 'string') document.getElementById('headerSubtitle').textContent = data.header.subtitle;
-    if (data.header.theme) {
-      localStorage.setItem('gantt_header_theme_v1', JSON.stringify(data.header.theme));
-      applyHeaderVisual();
+  projectsMap.forEach(function(entry, projectId) {
+    remoteIds.add(projectId);
+    const isActive = projectId === activeProjectId;
+
+    // Don't yank data out from under someone mid-edit on the project they have
+    // open right now — but still take the update for every OTHER project and
+    // for the project list itself, so those stay live in the background and
+    // the person catches up the moment they blur out or close the modal.
+    if (isActive && isBusyEditing()) return;
+
+    const remoteName = entry.get('name');
+    const remoteTasksMap = entry.get('tasksMap');
+    const remoteCardsMap = entry.get('boardCardsMap');
+    const remoteColumns = entry.get('boardColumns');
+    const remoteFieldOpts = entry.get('fieldOptions');
+    const remoteHeader = entry.get('header');
+
+    let local = projects[projectId];
+    if (!local) {
+      local = {
+        id: projectId,
+        name: remoteName || 'Untitled Project',
+        tasks: [],
+        boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
+        boardCards: [],
+        fieldOptions: {},
+        header: { title: remoteName || 'Untitled Project', subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
+      };
+      projects[projectId] = local;
+      listChanged = true;
     }
-    changed = true;
-  }
 
-  if (changed) {
-    const p = getActiveProject();
-    if (p) {
-      p.tasks = tasks;
-      p.boardColumns = BOARD_COLUMNS;
-      p.boardCards = boardCards;
-      p.fieldOptions = fieldOptions;
-      p.header.title = document.getElementById('headerTitle').textContent.trim();
-      p.header.subtitle = document.getElementById('headerSubtitle').textContent.trim();
-      p.header.theme = getSavedTheme();
-      saveProjects();
+    if (typeof remoteName === 'string' && remoteName !== local.name) {
+      local.name = remoteName;
+      listChanged = true;
     }
+
+    if (remoteTasksMap) {
+      const t = Array.from(remoteTasksMap.values());
+      ensureTaskIdsAndOrder(t);
+      t.forEach(function(task) { if (!task.notes) task.notes = ''; });
+      t.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+      local.tasks = t;
+    }
+    if (Array.isArray(remoteColumns) && remoteColumns.length) local.boardColumns = remoteColumns;
+    if (remoteCardsMap) {
+      const c = Array.from(remoteCardsMap.values());
+      ensureCardIds(c);
+      local.boardCards = c;
+    }
+    if (remoteFieldOpts) local.fieldOptions = Object.assign({}, local.fieldOptions, remoteFieldOpts);
+    if (remoteHeader) {
+      const title = remoteHeader.get ? remoteHeader.get('title') : remoteHeader.title;
+      const subtitle = remoteHeader.get ? remoteHeader.get('subtitle') : remoteHeader.subtitle;
+      const theme = remoteHeader.get ? remoteHeader.get('theme') : remoteHeader.theme;
+      if (typeof title === 'string') local.header.title = title;
+      if (typeof subtitle === 'string') local.header.subtitle = subtitle;
+      if (theme) local.header.theme = theme;
+    }
+
+    if (isActive) activeDataChanged = true;
+  });
+
+  // Someone deleted a project elsewhere — drop it locally too, unless it's the
+  // last project left in this browser, or the one currently open on screen
+  // (never yank the open project out from under whoever's looking at it).
+  Object.keys(projects).forEach(function(localId) {
+    if (remoteIds.has(localId)) return;
+    if (Object.keys(projects).length <= 1) return;
+    if (localId === activeProjectId) return;
+    delete projects[localId];
+    listChanged = true;
+  });
+
+  saveProjects();
+
+  if (activeDataChanged) {
+    loadActiveProjectData(); // syncs the now-updated active project into tasks/BOARD_COLUMNS/boardCards/fieldOptions/DOM
     renderGantt();
     renderJobList();
     updateJobCount();
     renderBoard();
     renderCalendar();
-    updateProjectSelectorLabel();
     updateGhostBtnState();
   }
+  if (listChanged) renderProjectDropdown();
+  if (activeDataChanged || listChanged) updateProjectSelectorLabel();
 }
 
 // Initialize
