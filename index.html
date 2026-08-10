@@ -4542,6 +4542,15 @@ async function setupLiveblocksSync() {
       }
     });
 
+    // A Storage write can be silently rejected by Liveblocks (e.g. a token
+    // permission problem) without the WebSocket ever disconnecting — status
+    // stays 'connected' the whole time. Surface that loudly instead of
+    // letting edits vanish with no visible error.
+    room.subscribe('error', function(err) {
+      console.error('Liveblocks room error:', err);
+      showToast('Sync error: ' + (err && err.message ? err.message : String(err)), 'error');
+    });
+
     // Backstop for the case where the OS/browser reports the network dropping
     // outright (e.g. wifi toggled off) — belt and suspenders alongside the
     // Liveblocks status events above.
