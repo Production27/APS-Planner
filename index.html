@@ -913,6 +913,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
@@ -4840,39 +4841,52 @@ async function setupLiveblocksSync() {
 const LEGACY_MIGRATION_PROJECT_ID = 'aps-shared-legacy';
 
 function migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList) {
-  if (root.get('projects') instanceof LiveMap) return; // already migrated
+  const projects = root.get('projects');
+
+  // instanceof can lie across realms/bundles — also check for LiveMap methods
+  const looksLikeLiveMap = projects &&
+    typeof projects.get === 'function' &&
+    typeof projects.set === 'function' &&
+    typeof projects.forEach === 'function';
+
+  if (looksLikeLiveMap) return; // already migrated
 
   liveblocksRoom.batch(() => {
     const projectsMap = new LiveMap();
 
     const flatTasksMap = root.get('tasksMap');
     const flatCardsMap = root.get('boardCardsMap');
-    const flatHeader = root.get('header');
+    const flatHeader  = root.get('header');
     const legacyTasks = root.get('tasks');
     const legacyCards = root.get('boardCards');
-    const hadAnyLegacyData = (flatTasksMap instanceof LiveMap) || (flatCardsMap instanceof LiveMap) ||
-      (flatHeader instanceof LiveObject) || Array.isArray(legacyTasks) || Array.isArray(legacyCards);
+
+    const hadAnyLegacyData =
+      (flatTasksMap && typeof flatTasksMap.forEach === 'function') ||
+      (flatCardsMap && typeof flatCardsMap.forEach === 'function') ||
+      (flatHeader && typeof flatHeader.get === 'function') ||
+      Array.isArray(legacyTasks) ||
+      Array.isArray(legacyCards);
 
     if (hadAnyLegacyData) {
       const tasksMap = new LiveMap();
-      if (flatTasksMap instanceof LiveMap) {
-        flatTasksMap.forEach(function(v, k) { tasksMap.set(k, v); });
+      if (flatTasksMap && typeof flatTasksMap.forEach === 'function') {
+        flatTasksMap.forEach(function (v, k) { tasksMap.set(String(k), v); });
       } else if (Array.isArray(legacyTasks)) {
         ensureTaskIdsAndOrder(legacyTasks);
-        legacyTasks.forEach(function(t) { tasksMap.set(String(t.id), t); });
+        legacyTasks.forEach(function (t) { tasksMap.set(String(t.id), t); });
       }
 
       const cardsMap = new LiveMap();
-      if (flatCardsMap instanceof LiveMap) {
-        flatCardsMap.forEach(function(v, k) { cardsMap.set(k, v); });
+      if (flatCardsMap && typeof flatCardsMap.forEach === 'function') {
+        flatCardsMap.forEach(function (v, k) { cardsMap.set(String(k), v); });
       } else if (Array.isArray(legacyCards)) {
         ensureCardIds(legacyCards);
-        legacyCards.forEach(function(c) { cardsMap.set(String(c.id), c); });
+        legacyCards.forEach(function (c) { cardsMap.set(String(c.id), c); });
       }
 
-      const headerTitle = flatHeader && flatHeader.get ? flatHeader.get('title') : 'APS Production';
+      const headerTitle    = flatHeader && flatHeader.get ? flatHeader.get('title')    : 'APS Production';
       const headerSubtitle = flatHeader && flatHeader.get ? flatHeader.get('subtitle') : '';
-      const headerTheme = (flatHeader && flatHeader.get ? flatHeader.get('theme') : null) || DEFAULT_THEME;
+      const headerTheme    = (flatHeader && flatHeader.get ? flatHeader.get('theme') : null) || DEFAULT_THEME;
 
       projectsMap.set(LEGACY_MIGRATION_PROJECT_ID, new LiveObject({
         name: headerTitle || 'APS Production',
@@ -4885,14 +4899,14 @@ function migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList) {
           subtitle: headerSubtitle || '',
           theme: headerTheme
         }),
-        activityLog: new LiveList()
+        activityLog: new LiveList([])
       }));
     }
 
     root.set('projects', projectsMap);
 
-    // Clean up the old root-level keys now that they live under projects/<id>.
-    ['tasksMap', 'boardCardsMap', 'boardColumns', 'fieldOptions', 'header', 'tasks', 'boardCards'].forEach(function(k) {
+    // clean up old root keys
+    ['tasksMap','boardCardsMap','boardColumns','fieldOptions','header','tasks','boardCards'].forEach(function (k) {
       if (root.get(k) !== undefined) root.delete(k);
     });
   });
@@ -4909,8 +4923,16 @@ function pushProjectToShared(projectId, headerOverride) {
 
   liveblocksUpdateDepth++;
   try {
-    liveblocksRoom.batch(() => {
+    liveblocksRoom.batch(function () {
       const projectsMap = liveblocksRoot.get('projects');
+
+      // Guard: if projectsMap got corrupted, recreate it
+      if (!projectsMap || typeof projectsMap.get !== 'function') {
+        const freshMap = new LiveMapCtor();
+        liveblocksRoot.set('projects', freshMap);
+        return; // next push will populate it
+      }
+
       let entry = projectsMap.get(projectId);
       if (!(entry instanceof LiveObjectCtor)) {
         entry = new LiveObjectCtor({
@@ -4919,41 +4941,53 @@ function pushProjectToShared(projectId, headerOverride) {
           boardCardsMap: new LiveMapCtor(),
           boardColumns: [],
           fieldOptions: {},
-          header: new LiveObjectCtor({ title: header.title || proj.name, subtitle: header.subtitle || '', theme: header.theme || DEFAULT_THEME })
+          header: new LiveObjectCtor({
+            title: header.title || proj.name,
+            subtitle: header.subtitle || '',
+            theme: header.theme || DEFAULT_THEME
+          })
         });
         projectsMap.set(projectId, entry);
       }
+
       entry.set('name', proj.name);
 
-      // Upsert each task/card as its own map entry, and drop any map entries
-      // whose task/card no longer exists locally. Because this touches one key
-      // per item instead of replacing the whole array, a concurrent edit to a
-      // *different* task from another user in this same project merges cleanly
-      // instead of getting clobbered by this save (or clobbering it).
+      // tasks
       const tasksMap = entry.get('tasksMap');
-      const liveTaskIds = new Set(proj.tasks.map(function(t) { return String(t.id); }));
-      proj.tasks.forEach(function(t) { tasksMap.set(String(t.id), t); });
-      Array.from(tasksMap.keys()).forEach(function(key) {
-        if (!liveTaskIds.has(key)) tasksMap.delete(key);
-      });
+      if (tasksMap && typeof tasksMap.set === 'function') {
+        const liveTaskIds = new Set(proj.tasks.map(function (t) { return String(t.id); }));
+        proj.tasks.forEach(function (t) { tasksMap.set(String(t.id), t); });
+        if (typeof tasksMap.keys === 'function') {
+          Array.from(tasksMap.keys()).forEach(function (key) {
+            if (!liveTaskIds.has(key)) tasksMap.delete(key);
+          });
+        }
+      }
 
+      // cards
       const cardsMap = entry.get('boardCardsMap');
-      const liveCardIds = new Set(proj.boardCards.map(function(c) { return String(c.id); }));
-      proj.boardCards.forEach(function(c) { cardsMap.set(String(c.id), c); });
-      Array.from(cardsMap.keys()).forEach(function(key) {
-        if (!liveCardIds.has(key)) cardsMap.delete(key);
-      });
+      if (cardsMap && typeof cardsMap.set === 'function') {
+        const liveCardIds = new Set(proj.boardCards.map(function (c) { return String(c.id); }));
+        proj.boardCards.forEach(function (c) { cardsMap.set(String(c.id), c); });
+        if (typeof cardsMap.keys === 'function') {
+          Array.from(cardsMap.keys()).forEach(function (key) {
+            if (!liveCardIds.has(key)) cardsMap.delete(key);
+          });
+        }
+      }
 
       entry.set('boardColumns', proj.boardColumns);
       entry.set('fieldOptions', proj.fieldOptions);
 
       const headerObj = entry.get('header');
-      headerObj.set('title', header.title);
-      headerObj.set('subtitle', header.subtitle);
-      headerObj.set('theme', header.theme);
+      if (headerObj && typeof headerObj.set === 'function') {
+        headerObj.set('title', header.title);
+        headerObj.set('subtitle', header.subtitle);
+        headerObj.set('theme', header.theme);
+      }
     });
   } finally {
-    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
+    Promise.resolve().then(function () { liveblocksUpdateDepth--; });
   }
 }
 
@@ -5039,21 +5073,33 @@ function applyLiveblocksState(root) {
   const projectsMap = root.get('projects');
   if (!projectsMap) return;
 
+  // Guard: if projects is not map-like, bail instead of crashing
+  if (typeof projectsMap.forEach !== 'function') {
+    console.warn('applyLiveblocksState: projects is not a LiveMap', projectsMap);
+    return;
+  }
+
   const remoteIds = new Set();
   let activeDataChanged = false;
   let listChanged = false;
   const busy = isBusyEditing();
 
-  projectsMap.forEach(function(entry, projectId) {
+  projectsMap.forEach(function (entry, projectId) {
     remoteIds.add(projectId);
     const isActive = projectId === activeProjectId;
 
-    const remoteName = entry.get('name');
-    const remoteTasksMap = entry.get('tasksMap');
-    const remoteCardsMap = entry.get('boardCardsMap');
-    const remoteColumns = entry.get('boardColumns');
+    // Guard: skip malformed entries
+    if (!entry || typeof entry.get !== 'function') {
+      console.warn('applyLiveblocksState: skipping malformed entry for', projectId);
+      return;
+    }
+
+    const remoteName      = entry.get('name');
+    const remoteTasksMap  = entry.get('tasksMap');
+    const remoteCardsMap  = entry.get('boardCardsMap');
+    const remoteColumns   = entry.get('boardColumns');
     const remoteFieldOpts = entry.get('fieldOptions');
-    const remoteHeader = entry.get('header');
+    const remoteHeader    = entry.get('header');
 
     let local = projects[projectId];
     if (!local) {
@@ -5075,24 +5121,40 @@ function applyLiveblocksState(root) {
       listChanged = true;
     }
 
-    if (remoteTasksMap) {
+    // ── tasks ──
+    if (remoteTasksMap && typeof remoteTasksMap.values === 'function') {
       const t = Array.from(remoteTasksMap.values());
       ensureTaskIdsAndOrder(t);
-      t.forEach(function(task) { if (!task.notes) task.notes = ''; });
-      t.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+      t.forEach(function (task) { if (!task.notes) task.notes = ''; });
+      t.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
       local.tasks = t;
+    } else if (Array.isArray(remoteTasksMap)) {
+      // fallback: plain array (shouldn't happen, but protects against corruption)
+      ensureTaskIdsAndOrder(remoteTasksMap);
+      local.tasks = remoteTasksMap.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     }
+
+    // ── columns ──
     if (Array.isArray(remoteColumns) && remoteColumns.length) local.boardColumns = remoteColumns;
-    if (remoteCardsMap) {
+
+    // ── cards ──
+    if (remoteCardsMap && typeof remoteCardsMap.values === 'function') {
       const c = Array.from(remoteCardsMap.values());
       ensureCardIds(c);
       local.boardCards = c;
+    } else if (Array.isArray(remoteCardsMap)) {
+      ensureCardIds(remoteCardsMap);
+      local.boardCards = remoteCardsMap.slice();
     }
+
+    // ── fields ──
     if (remoteFieldOpts) local.fieldOptions = Object.assign({}, local.fieldOptions, remoteFieldOpts);
+
+    // ── header ──
     if (remoteHeader) {
-      const title = remoteHeader.get ? remoteHeader.get('title') : remoteHeader.title;
+      const title    = remoteHeader.get ? remoteHeader.get('title')    : remoteHeader.title;
       const subtitle = remoteHeader.get ? remoteHeader.get('subtitle') : remoteHeader.subtitle;
-      const theme = remoteHeader.get ? remoteHeader.get('theme') : remoteHeader.theme;
+      const theme    = remoteHeader.get ? remoteHeader.get('theme')    : remoteHeader.theme;
       if (typeof title === 'string') local.header.title = title;
       if (typeof subtitle === 'string') local.header.subtitle = subtitle;
       if (theme) local.header.theme = theme;
@@ -5101,8 +5163,8 @@ function applyLiveblocksState(root) {
     if (isActive) activeDataChanged = true;
   });
 
-  // Someone deleted a project elsewhere
-  Object.keys(projects).forEach(function(localId) {
+  // prune deleted projects
+  Object.keys(projects).forEach(function (localId) {
     if (remoteIds.has(localId)) return;
     if (Object.keys(projects).length <= 1) return;
     if (localId === activeProjectId) return;
@@ -5112,7 +5174,6 @@ function applyLiveblocksState(root) {
 
   saveProjects();
 
-  // Only re-render the active project UI if the user isn't mid-edit
   if (activeDataChanged && !busy) {
     loadActiveProjectData();
     renderGantt();
@@ -5124,13 +5185,9 @@ function applyLiveblocksState(root) {
     showToast('Synced latest changes', 'info');
   }
   if (activeDataChanged || listChanged) updateProjectToggle();
+
   const sidebar = document.getElementById('activitySidebar');
-  if (sidebar && !sidebar.classList.contains('collapsed')) {
-    renderActivityLogSidebar();
-  }
-  // Don't aggressively clear localActivityLog here — deduplication in
-  // renderActivityLogSidebar handles overlap. Only clear if we can confirm
-  // all local entries exist in the remote log (same count or more).
+  if (sidebar && !sidebar.classList.contains('collapsed')) renderActivityLogSidebar();
 }
 
 // Initialize
