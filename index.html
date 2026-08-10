@@ -4266,6 +4266,12 @@ function timeAgo(ts) {
   return day + 'd ago';
 }
 
+function getLogProp(item, key) {
+  // LiveList items stored via push() come back as LiveObject instances
+  if (item && typeof item.get === 'function') return item.get(key);
+  return item ? item[key] : undefined;
+}
+
 function renderActivityLogSidebar() {
   const bodyEl = document.getElementById('activitySidebarBody');
   const p = getActiveProject();
@@ -4291,7 +4297,7 @@ function renderActivityLogSidebar() {
   const seen = new Set();
   const unique = [];
   items.forEach(function(item) {
-    const key = (item.who || '') + '|' + (item.what || '') + '|' + (item.when || 0);
+    const key = (getLogProp(item, 'who') || '') + '|' + (getLogProp(item, 'what') || '') + '|' + (getLogProp(item, 'when') || 0);
     if (!seen.has(key)) { seen.add(key); unique.push(item); }
   });
 
@@ -4304,12 +4310,12 @@ function renderActivityLogSidebar() {
   }
 
   // Sort by time descending
-  unique.sort(function(a, b) { return (b.when || 0) - (a.when || 0); });
+  unique.sort(function(a, b) { return (getLogProp(b, 'when') || 0) - (getLogProp(a, 'when') || 0); });
 
   const html = unique.slice(0, 50).map(function(item) {
-    const when = item.when || Date.now();
-    const who = escapeHtml(item.who || 'Someone');
-    const what = escapeHtml(item.what || '');
+    const when = getLogProp(item, 'when') || Date.now();
+    const who = escapeHtml(getLogProp(item, 'who') || 'Someone');
+    const what = escapeHtml(getLogProp(item, 'what') || '');
     return '<div class="activity-log-item">' +
       '<div class="activity-log-time">' + timeAgo(when) + '</div>' +
       '<div><span class="activity-log-who">' + who + '</span> <span class="activity-log-what">' + what + '</span></div>' +
@@ -5083,10 +5089,9 @@ function applyLiveblocksState(root) {
   if (sidebar && !sidebar.classList.contains('collapsed')) {
     renderActivityLogSidebar();
   }
-  // Also clear local fallback once Liveblocks syncs (avoid duplicates)
-  if (liveblocksRoot && localActivityLog.length > 0) {
-    localActivityLog = [];
-  }
+  // Don't aggressively clear localActivityLog here — deduplication in
+  // renderActivityLogSidebar handles overlap. Only clear if we can confirm
+  // all local entries exist in the remote log (same count or more).
 }
 
 // Initialize
