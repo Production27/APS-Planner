@@ -4584,7 +4584,7 @@ function subscribeToActiveProjectLog() {
     // silently skipping the subscription (which never gets retried).
     liveblocksUpdateDepth++;
     try {
-      log = new LiveListCtor();
+      log = new LiveListCtor([]);
       entry.set('activityLog', log);
     } finally {
       Promise.resolve().then(() => { liveblocksUpdateDepth--; });
@@ -5025,7 +5025,7 @@ function logActivity(actionText) {
         if (!projEntry) return;
         let log = projEntry.get('activityLog');
         if (!(log instanceof LiveListCtor)) {
-          log = new LiveListCtor();
+          log = new LiveListCtor([]);
           projEntry.set('activityLog', log);
         }
         log.push(entry);
