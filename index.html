@@ -4734,9 +4734,9 @@ async function setupLiveblocksSync() {
     // tasks/cards in the *same* project at the individual-item level instead of
     // one full save silently overwriting another's.
     const { room } = client.enterRoom(LIVEBLOCKS_ROOM_ID, {
-      initialStorage: new LiveObject({
+      initialStorage: {
         projects: new LiveMap()
-      })
+      }
     });
 
     liveblocksRoom = room;
