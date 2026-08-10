@@ -912,6 +912,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
@@ -1462,6 +1463,11 @@ function switchProject(projectId) {
   saveProjects();
   loadActiveProjectData();
   renderAll();
+  subscribeToActiveProjectLog();
+  const sidebar = document.getElementById('activitySidebar');
+  if (sidebar && !sidebar.classList.contains('collapsed')) {
+    renderActivityLogSidebar();
+  }
   logActivity('switched to project "' + projects[projectId].name + '"');
   showToast('Switched to "' + projects[projectId].name + '"', 'success');
 }
@@ -4552,7 +4558,9 @@ let liveblocksRoot = null;
 let LiveMapCtor = null;
 let LiveListCtor = null;
 let LiveObjectCtor = null;
-let isLiveblocksUpdate = false;
+let liveblocksUpdateDepth = 0;
+let unsubActivityLog = null;
+let subscribedProjectId = null;
 let syncPushTimer = null;
 let syncBadgeEls = null;
 
@@ -4560,6 +4568,36 @@ let offlineBannerEl = null;
 let offlineSince = null;
 let offlineBannerShowTimer = null;
 let offlineBannerTickInterval = null;
+
+function subscribeToActiveProjectLog() {
+  if (!liveblocksRoom || !liveblocksRoot) return;
+  const p = getActiveProject();
+  if (!p) return;
+  if (subscribedProjectId === p.id) return;
+  const entry = liveblocksRoot.get('projects').get(p.id);
+  if (!entry) return;
+  let log = entry.get('activityLog');
+  if (!(log instanceof LiveListCtor)) {
+    // Nobody has logged an activity for this project yet this session —
+    // create the list now so we have something to subscribe to, instead of
+    // silently skipping the subscription (which never gets retried).
+    liveblocksUpdateDepth++;
+    try {
+      log = new LiveListCtor();
+      entry.set('activityLog', log);
+    } finally {
+      Promise.resolve().then(() => { liveblocksUpdateDepth--; });
+    }
+  }
+  if (unsubActivityLog) unsubActivityLog();
+  unsubActivityLog = liveblocksRoom.subscribe(log, () => {
+    const sidebar = document.getElementById('activitySidebar');
+    if (sidebar && !sidebar.classList.contains('collapsed')) {
+      renderActivityLogSidebar();
+    }
+  });
+  subscribedProjectId = p.id;
+}
 
 // Persistent, hard-to-miss banner — the corner badge and toasts are easy to miss
 // if you're not looking right at them, and a dropped connection could otherwise
@@ -4734,12 +4772,13 @@ async function setupLiveblocksSync() {
     const { root } = await room.getStorage();
     liveblocksRoot = root;
     migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList);
+    subscribeToActiveProjectLog();
 
-    // Subscribe to deep storage changes on the root LiveObject
-    room.subscribe(root, () => {
-      if (isLiveblocksUpdate) return;
+    // Subscribe to all storage changes (more reliable than deep root for nested LiveLists)
+    room.subscribe("storage", () => {
+      if (liveblocksUpdateDepth > 0) return;
       applyLiveblocksState(root);
-    }, { isDeep: true });
+    });
 
     // On first connect, if remote has any projects use them; otherwise seed
     // the room with whatever's in this browser's local project list.
@@ -4868,7 +4907,7 @@ function pushProjectToShared(projectId, headerOverride) {
   if (!proj) return;
   const header = headerOverride || proj.header;
 
-  isLiveblocksUpdate = true;
+  liveblocksUpdateDepth++;
   try {
     liveblocksRoom.batch(() => {
       const projectsMap = liveblocksRoot.get('projects');
@@ -4914,7 +4953,7 @@ function pushProjectToShared(projectId, headerOverride) {
       headerObj.set('theme', header.theme);
     });
   } finally {
-    setTimeout(() => { isLiveblocksUpdate = false; }, 50);
+    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
   }
 }
 
@@ -4922,13 +4961,13 @@ function pushProjectToShared(projectId, headerOverride) {
 // so it disappears from everyone's shared list instead of lingering.
 function removeProjectFromShared(projectId) {
   if (!liveblocksRoot || !liveblocksRoom) return;
-  isLiveblocksUpdate = true;
+  liveblocksUpdateDepth++;
   try {
     liveblocksRoom.batch(() => {
       liveblocksRoot.get('projects').delete(projectId);
     });
   } finally {
-    setTimeout(() => { isLiveblocksUpdate = false; }, 50);
+    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
   }
 }
 
@@ -4944,7 +4983,7 @@ function logActivity(actionText) {
 
   // Also push to Liveblocks if connected
   if (liveblocksRoot && liveblocksRoom) {
-    isLiveblocksUpdate = true;
+    liveblocksUpdateDepth++;
     try {
       liveblocksRoom.batch(() => {
         const projectsMap = liveblocksRoot.get('projects');
@@ -4961,7 +5000,7 @@ function logActivity(actionText) {
     } catch (e) {
       console.error('logActivity Liveblocks push failed', e);
     } finally {
-      setTimeout(() => { isLiveblocksUpdate = false; }, 50);
+      Promise.resolve().then(() => { liveblocksUpdateDepth--; });
     }
   }
 
