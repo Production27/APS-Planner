@@ -4378,6 +4378,9 @@ let offlineSince = null;
 let offlineBannerShowTimer = null;
 let offlineBannerTickInterval = null;
 
+let storageStuckTimer = null;
+let hasUnsyncedStorageChanges = false;
+
 // Persistent, hard-to-miss banner — the corner badge and toasts are easy to miss
 // if you're not looking right at them, and a dropped connection could otherwise
 // go unnoticed for as long as someone keeps typing.
@@ -4549,6 +4552,42 @@ async function setupLiveblocksSync() {
     room.subscribe('error', function(err) {
       console.error('Liveblocks room error:', err);
       showToast('Sync error: ' + (err && err.message ? err.message : String(err)), 'error');
+    });
+
+    // This is the actual source of truth for "did my edit really save" —
+    // 'connected' (above) only means the WebSocket is open, not that local
+    // changes have been acknowledged by the server. 'synchronizing' means
+    // there ARE unsaved local edits; 'synchronized' means the server has
+    // confirmed all of them. If it's stuck on 'synchronizing' for too long
+    // (stale token, silently-rejected write, etc.) this escalates from the
+    // easy-to-miss corner badge to the same hard-to-miss banner used for
+    // being offline, and blocks the tab from closing (see beforeunload below)
+    // so someone can't keep typing into a tab that's quietly not saving.
+    room.subscribe('storage-status', function(status) {
+      if (status === 'synchronizing') {
+        hasUnsyncedStorageChanges = true;
+        setSyncStatus('saving…', true);
+        clearTimeout(storageStuckTimer);
+        storageStuckTimer = setTimeout(function() {
+          showToast("Your changes aren't saving — don't close this tab", 'error');
+          showOfflineBanner("Changes aren't saving — reload once reconnected or you may lose recent edits");
+        }, 12000);
+      } else if (status === 'synchronized') {
+        hasUnsyncedStorageChanges = false;
+        clearTimeout(storageStuckTimer);
+        setSyncStatus('live', false);
+        hideOfflineBanner();
+      }
+    });
+
+    // Blocks the tab from closing/reloading while there are edits the
+    // server hasn't confirmed yet — the direct fix for "I edited and lost
+    // my work because it looked synced but wasn't."
+    window.addEventListener('beforeunload', function(e) {
+      if (hasUnsyncedStorageChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
     });
 
     // Backstop for the case where the OS/browser reports the network dropping
@@ -4772,7 +4811,11 @@ function pushLiveblocksState() {
       subtitle: document.getElementById('headerSubtitle').textContent.trim(),
       theme: getSavedTheme()
     });
-    setSyncStatus('live', false);
+    // Don't set 'live' here — this call succeeding only means the local CRDT
+    // was updated optimistically, not that the server has acknowledged it.
+    // The room's 'storage-status' subscription (see setupLiveblocksSync)
+    // is the real source of truth and will flip the badge to 'live' once
+    // the server actually confirms the write.
   } catch (e) {
     console.error(e);
     setSyncStatus('save failed', true);
