@@ -4775,11 +4775,12 @@ async function setupLiveblocksSync() {
     migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList);
     subscribeToActiveProjectLog();
 
-    // Subscribe to all storage changes (more reliable than deep root for nested LiveLists)
-    room.subscribe("storage", () => {
+    // Subscribe to all storage changes, deep, so nested LiveMap/LiveList/LiveObject
+    // changes anywhere in the tree bubble up here too (not just top-level root changes).
+    room.subscribe(root, () => {
       if (liveblocksUpdateDepth > 0) return;
       applyLiveblocksState(root);
-    });
+    }, { isDeep: true });
 
     // On first connect, if remote has any projects use them; otherwise seed
     // the room with whatever's in this browser's local project list.
