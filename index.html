@@ -896,6 +896,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openThemeModal();">🎨 Header Color</div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openHeaderBgModal();">🖼️ Header Background</div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBoardBgModal();">🗂️ Board Background</div>
+        <div class="settings-dropdown-divider"></div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBackupsModal();">🗄️ Backups</div>
       </div>
     </div>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
@@ -1095,6 +1097,23 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <input type="file" id="boardBgFileInput" accept="image/*" style="display:none" onchange="handleBoardBgUpload(event)">
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="closeBoardBgModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- BACKUPS MODAL -->
+<div class="modal-overlay" id="backupsModal">
+  <div class="modal-box" style="max-width:560px;">
+    <h4>🗄️ Backups</h4>
+    <p>Automatic backups run every 6 hours. You can also trigger one manually, download one, or restore the shared project back to an earlier point.</p>
+    <div style="display:flex; gap:10px; margin:10px 0 16px;">
+      <button class="btn btn-secondary" onclick="triggerBackupNow()">💾 Backup Now</button>
+      <button class="btn btn-secondary" onclick="loadBackupsList()">🔄 Refresh List</button>
+    </div>
+    <div id="backupsListStatus" style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;"></div>
+    <div id="backupsList" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeBackupsModal()">Close</button>
     </div>
   </div>
 </div>
@@ -3308,6 +3327,123 @@ function importData(input) {
   };
   reader.readAsText(file);
   input.value = '';
+}
+
+// ===== BACKUPS (shared room, via the Cloudflare Worker) =====
+// Reuses the same team password already stored for Liveblocks sync
+// (see ensureTeamCredentials / TEAM_PASSWORD_KEY further down this file)
+// so people aren't asked to type it again just to view backups.
+function getBackupsAuthPassword() {
+  let pw = getStoredTeamPassword();
+  if (!pw) {
+    pw = window.prompt("Enter the team password:") || "";
+    if (pw) localStorage.setItem(TEAM_PASSWORD_KEY, pw);
+  }
+  return pw;
+}
+
+function openBackupsModal() {
+  document.getElementById('backupsModal').classList.add('show');
+  loadBackupsList();
+}
+function closeBackupsModal() {
+  document.getElementById('backupsModal').classList.remove('show');
+}
+
+async function triggerBackupNow() {
+  const pw = getBackupsAuthPassword();
+  if (!pw) return;
+  const statusEl = document.getElementById('backupsListStatus');
+  statusEl.textContent = 'Running backup…';
+  try {
+    const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}trigger-backup?password=${encodeURIComponent(pw)}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Backup failed');
+    showToast('Backup saved', 'success');
+    loadBackupsList();
+  } catch (err) {
+    statusEl.textContent = '';
+    showToast('Backup failed: ' + err.message, 'error');
+  }
+}
+
+async function loadBackupsList() {
+  const pw = getBackupsAuthPassword();
+  if (!pw) return;
+  const statusEl = document.getElementById('backupsListStatus');
+  const listEl = document.getElementById('backupsList');
+  statusEl.textContent = 'Loading…';
+  listEl.innerHTML = '';
+  try {
+    const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}list-backups?password=${encodeURIComponent(pw)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not load backups');
+    statusEl.textContent = `${data.backups.length} backup(s) — most recent first`;
+    if (!data.backups.length) {
+      listEl.innerHTML = '<div style="padding:14px; color:var(--text-secondary);">No backups yet.</div>';
+      return;
+    }
+    data.backups.forEach(b => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--border); gap:8px;';
+      const isSafety = b.key.includes('pre-restore-safety');
+      row.innerHTML = `
+        <div style="min-width:0;">
+          <div style="font-size:13px; font-weight:600;">${isSafety ? '🛟 Safety snapshot' : '📦 Backup'}</div>
+          <div style="font-size:12px; color:var(--text-secondary);">${b.date}</div>
+        </div>
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="download">⬇️</button>
+          <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="restore">↩️ Restore</button>
+        </div>`;
+      row.querySelector('[data-action="download"]').onclick = () => downloadBackupFile(b.key);
+      row.querySelector('[data-action="restore"]').onclick = () => restoreBackupFile(b.key, b.date);
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    statusEl.textContent = '';
+    showToast('Could not load backups: ' + err.message, 'error');
+  }
+}
+
+function downloadBackupFile(key) {
+  const pw = getBackupsAuthPassword();
+  if (!pw) return;
+  const url = `${LIVEBLOCKS_AUTH_ENDPOINT}download-backup?password=${encodeURIComponent(pw)}&key=${encodeURIComponent(key)}`;
+  window.open(url, '_blank');
+}
+
+async function restoreBackupFile(key, dateLabel) {
+  const pw = getBackupsAuthPassword();
+  if (!pw) return;
+
+  const step1 = window.confirm(
+    `Restore the SHARED project back to the backup from:\n\n${dateLabel}\n\n` +
+    `This replaces the live data for everyone and briefly disconnects the team while it happens. ` +
+    `A safety snapshot of today's current data is saved automatically first, so this can be undone. Continue?`
+  );
+  if (!step1) return;
+
+  const typed = window.prompt('Type RESTORE (all caps) to confirm this action:');
+  if (typed !== 'RESTORE') {
+    showToast('Restore cancelled', 'error');
+    return;
+  }
+
+  const statusEl = document.getElementById('backupsListStatus');
+  statusEl.textContent = 'Restoring… please wait';
+  try {
+    const res = await fetch(
+      `${LIVEBLOCKS_AUTH_ENDPOINT}restore-backup?password=${encodeURIComponent(pw)}&key=${encodeURIComponent(key)}&confirm=RESTORE`
+    );
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Restore failed');
+    showToast('Restore complete — reloading…', 'success');
+    setTimeout(() => window.location.reload(), 1500);
+  } catch (err) {
+    statusEl.textContent = '';
+    showToast('Restore failed: ' + err.message, 'error');
+  }
 }
 
 // ===== BOARD: STORAGE =====
