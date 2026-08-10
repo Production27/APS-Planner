@@ -2,9 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>APS Production | Live Gantt + Job Manager</title>
 <style>
@@ -114,8 +111,8 @@
   .tab-btn:active { transform: translateY(1px); }
   .tab-btn .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; }
 
-  .tab-panel { display: none; height: calc(100vh - 115px); overflow: hidden; }
-  .tab-panel.active { display: block; }
+  .tab-panel { display: none; height: 100%; overflow: hidden; }
+    .tab-panel.active { display: block; }
 
   /* ===== CALENDAR TAB ===== */
   .calendar-wrapper { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
@@ -725,6 +722,46 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .modal-box p { font-size: 13px; color: var(--text-light); margin-bottom: 20px; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
+  .activity-log-item { display:flex; gap:10px; padding:10px 12px; border-bottom:1px solid var(--border); font-size:12px; align-items:flex-start; }
+  .activity-log-item:last-child { border-bottom:none; }
+  .activity-log-time { color:var(--text-light); font-size:11px; white-space:nowrap; min-width:70px; text-align:right; flex-shrink:0; }
+  .activity-log-who { font-weight:700; color:var(--primary-light); }
+  .activity-log-what { color:var(--text); }
+  .activity-log-empty { padding:20px; text-align:center; color:#999; font-size:13px; }
+  body.dark-mode .activity-log-item { border-bottom-color:var(--border); }
+  body.dark-mode .activity-log-empty { color:#777; }
+
+
+  /* ===== MAIN AREA & ACTIVITY SIDEBAR ===== */
+  .main-area { display: flex; height: calc(100vh - 108px); overflow: hidden; }
+  .panels-container { flex: 1; min-width: 0; overflow: hidden; position: relative; }
+
+  .activity-sidebar {
+    width: 300px; min-width: 300px; background: var(--card);
+    border-left: 1px solid var(--border); display: flex; flex-direction: column;
+    transition: width 0.25s ease, min-width 0.25s ease, opacity 0.2s ease;
+    z-index: 20;
+  }
+  .activity-sidebar.collapsed { width: 0; min-width: 0; opacity: 0; border-left: none; overflow: hidden; }
+  .activity-sidebar-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    font-size: 13px; font-weight: 700; color: var(--text); flex-shrink: 0;
+    background: #fafafa;
+  }
+  .activity-sidebar-close {
+    background: none; border: none; color: #aaa; font-size: 14px; cursor: pointer;
+    width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; line-height: 1;
+  }
+  .activity-sidebar-close:hover { background: #ffebee; color: var(--danger); }
+  .activity-sidebar-body { flex: 1; overflow-y: auto; padding: 10px; }
+
+  body.dark-mode .activity-sidebar { background: var(--card); border-left-color: var(--border); }
+  body.dark-mode .activity-sidebar-header { background: #1a1d25; border-bottom-color: var(--border); color: var(--text); }
+  body.dark-mode .activity-sidebar-close { color: #777; }
+  body.dark-mode .activity-sidebar-close:hover { background: rgba(220,53,69,0.18); color: var(--danger); }
+
   @media (max-width: 1100px) { .left-panel { width: 400px; min-width: 400px; } .manager-sidebar { width: 300px; min-width: 300px; } }
 
   /* ===== DARK MODE ===== */
@@ -874,6 +911,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
@@ -886,6 +924,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   </div>
   <div class="header-actions">
     <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
+    <button class="activity-toggle-btn" id="activityToggleBtn" onclick="toggleActivitySidebar()" title="Activity Log">📜</button>
     <div class="settings-menu-wrap">
       <button class="settings-dots-btn" onclick="toggleSettingsMenu()" title="Settings">⋮</button>
       <div class="settings-dropdown" id="settingsDropdown">
@@ -901,6 +940,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBoardBgModal();">🗂️ Board Background</div>
         <div class="settings-dropdown-divider"></div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBackupsModal();">🗄️ Backups</div>
+
       </div>
     </div>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
@@ -926,121 +966,136 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   </div>
 </div>
 
-<!-- CALENDAR TAB -->
-<div class="tab-panel" id="panel-calendar">
-  <div class="calendar-wrapper">
-    <div class="calendar-toolbar">
-      <button class="btn btn-secondary" onclick="calendarPrev()">‹ Prev</button>
-      <h3 id="calendarLabel"></h3>
-      <button class="btn btn-secondary" onclick="calendarNext()">Next ›</button>
-      <button class="btn btn-secondary" onclick="calendarToday()" style="margin-left:8px;">Today</button>
-      <div style="margin-left:auto;display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
-        <button class="btn btn-secondary" id="calViewMonth" onclick="setCalendarView('month')" style="padding:6px 14px;font-size:12px;">Month</button>
-        <button class="btn btn-secondary" id="calViewWeek" onclick="setCalendarView('week')" style="padding:6px 14px;font-size:12px;">Week</button>
-      </div>
-    </div>
-    <div class="calendar-grid" id="calendarWeekdays"></div>
-    <div class="calendar-grid calendar-days" id="calendarDays"></div>
-  </div>
-</div>
-
-<!-- GANTT TAB -->
-<div class="tab-panel active" id="panel-gantt">
-  <div class="gantt-wrapper">
-    <div class="left-panel">
-      <div class="left-header">
-        <div class="col col-start">Start</div>
-        <div class="col col-finish">Finish</div>
-        <div class="col col-percent">% Complete</div>
-        <div class="col col-jobs">Jobs</div>
-      </div>
-      <div class="left-body" id="leftBody"></div>
-    </div>
-    <div class="right-panel">
-      <!-- Header wrap scrolls horizontally with body -->
-      <div class="timeline-header-wrap" id="timelineHeaderWrap">
-        <div class="timeline-header" id="timelineHeader"></div>
-      </div>
-      <div class="timeline-body" id="timelineBody">
-        <div class="timeline-grid" id="timelineGrid"></div>
-        <div class="date-popover" id="datePopover"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- JOB MANAGER TAB -->
-<div class="tab-panel" id="panel-manager">
-  <div class="manager-wrapper">
-    <div class="manager-sidebar">
-      <div class="manager-sidebar-header">
-        <h2>📝 All Jobs</h2>
-        <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
-      </div>
-      <div class="job-list" id="jobList"></div>
-      <div class="manager-toolbar">
-        <button class="btn btn-success" onclick="addNewJob()">+ Add Job</button>
-        <button class="btn btn-secondary" onclick="clearAllJobs()">Clear All</button>
-      </div>
-    </div>
-    <div class="manager-form-area" id="formArea">
-      <div class="empty-state" id="emptyState">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
-        <h4>No Job Selected</h4>
-        <p>Select a job from the list or click "Add Job" to create a new one.</p>
-      </div>
-      <div class="form-container" id="jobForm" style="display:none;">
-        <h3 id="formTitle">✏️ Edit Job</h3>
-        <div class="form-group">
-          <label>Job Name *</label>
-          <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
-        </div>
-        <div class="form-group">
-          <label>Lead</label>
-          <input type="text" id="f_company" placeholder="e.g. John Smith">
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Start Date *</label>
-            <input type="date" id="f_start">
-          </div>
-          <div class="form-group">
-            <label>Finish Date *</label>
-            <input type="date" id="f_finish">
+<div class="main-area" id="mainArea">
+  <div class="panels-container" id="panelsContainer">
+    <!-- CALENDAR TAB -->
+    <div class="tab-panel" id="panel-calendar">
+      <div class="calendar-wrapper">
+        <div class="calendar-toolbar">
+          <button class="btn btn-secondary" onclick="calendarPrev()">‹ Prev</button>
+          <h3 id="calendarLabel"></h3>
+          <button class="btn btn-secondary" onclick="calendarNext()">Next ›</button>
+          <button class="btn btn-secondary" onclick="calendarToday()" style="margin-left:8px;">Today</button>
+          <div style="margin-left:auto;display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
+            <button class="btn btn-secondary" id="calViewMonth" onclick="setCalendarView('month')" style="padding:6px 14px;font-size:12px;">Month</button>
+            <button class="btn btn-secondary" id="calViewWeek" onclick="setCalendarView('week')" style="padding:6px 14px;font-size:12px;">Week</button>
           </div>
         </div>
-        <div class="form-group">
-          <div class="color-toggle-row" onclick="toggleJobColorPanel()">
-            <label>Bar Color</label>
-            <div class="color-toggle-swatch-wrap">
-              <span class="color-toggle-swatch" id="jobColorToggleSwatch" style="background:#3949ab;"></span>
-              <span class="color-toggle-arrow" id="jobColorToggleArrow">▾</span>
+        <div class="calendar-grid" id="calendarWeekdays"></div>
+        <div class="calendar-grid calendar-days" id="calendarDays"></div>
+      </div>
+    </div>
+
+    <!-- GANTT TAB -->
+    <div class="tab-panel active" id="panel-gantt">
+      <div class="gantt-wrapper">
+        <div class="left-panel">
+          <div class="left-header">
+            <div class="col col-start">Start</div>
+            <div class="col col-finish">Finish</div>
+            <div class="col col-percent">% Complete</div>
+            <div class="col col-jobs">Jobs</div>
+          </div>
+          <div class="left-body" id="leftBody"></div>
+        </div>
+        <div class="right-panel">
+          <!-- Header wrap scrolls horizontally with body -->
+          <div class="timeline-header-wrap" id="timelineHeaderWrap">
+            <div class="timeline-header" id="timelineHeader"></div>
+          </div>
+          <div class="timeline-body" id="timelineBody">
+            <div class="timeline-grid" id="timelineGrid"></div>
+            <div class="date-popover" id="datePopover"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOB MANAGER TAB -->
+    <div class="tab-panel" id="panel-manager">
+      <div class="manager-wrapper">
+        <div class="manager-sidebar">
+          <div class="manager-sidebar-header">
+            <h2>📝 All Jobs</h2>
+            <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
+          </div>
+          <div class="job-list" id="jobList"></div>
+          <div class="manager-toolbar">
+            <button class="btn btn-success" onclick="addNewJob()">+ Add Job</button>
+            <button class="btn btn-secondary" onclick="clearAllJobs()">Clear All</button>
+          </div>
+        </div>
+        <div class="manager-form-area" id="formArea">
+          <div class="empty-state" id="emptyState">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
+            <h4>No Job Selected</h4>
+            <p>Select a job from the list or click "Add Job" to create a new one.</p>
+          </div>
+          <div class="form-container" id="jobForm" style="display:none;">
+            <h3 id="formTitle">✏️ Edit Job</h3>
+            <div class="form-group">
+              <label>Job Name *</label>
+              <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
+            </div>
+            <div class="form-group">
+              <label>Lead</label>
+              <input type="text" id="f_company" placeholder="e.g. John Smith">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Start Date *</label>
+                <input type="date" id="f_start">
+              </div>
+              <div class="form-group">
+                <label>Finish Date *</label>
+                <input type="date" id="f_finish">
+              </div>
+            </div>
+            <div class="form-group">
+              <div class="color-toggle-row" onclick="toggleJobColorPanel()">
+                <label>Bar Color</label>
+                <div class="color-toggle-swatch-wrap">
+                  <span class="color-toggle-swatch" id="jobColorToggleSwatch" style="background:#3949ab;"></span>
+                  <span class="color-toggle-arrow" id="jobColorToggleArrow">▾</span>
+                </div>
+              </div>
+              <div class="color-picker-panel" id="jobColorPickerPanel">
+                <div class="color-picker-wrapper">
+                  <input type="color" id="f_color" value="#3949ab" oninput="updateJobColorSwatch()">
+                  <div class="color-presets" id="colorPresets"></div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="f_notes" placeholder="Add any notes, dependencies, or details about this job..."></textarea>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="saveJob()">💾 Save Job</button>
+              <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
+              <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;">🗑 Delete</button>
             </div>
           </div>
-          <div class="color-picker-panel" id="jobColorPickerPanel">
-            <div class="color-picker-wrapper">
-              <input type="color" id="f_color" value="#3949ab" oninput="updateJobColorSwatch()">
-              <div class="color-presets" id="colorPresets"></div>
-            </div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Notes</label>
-          <textarea id="f_notes" placeholder="Add any notes, dependencies, or details about this job..."></textarea>
-        </div>
-        <div class="form-actions">
-          <button class="btn btn-primary" onclick="saveJob()">💾 Save Job</button>
-          <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
-          <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;">🗑 Delete</button>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- BOARD TAB -->
-<div class="tab-panel" id="panel-board">
-  <div class="board-wrapper" id="boardWrapper"></div>
+    <!-- BOARD TAB -->
+    <div class="tab-panel" id="panel-board">
+      <div class="board-wrapper" id="boardWrapper"></div>
+    </div>
+  </div>
+
+  <!-- ACTIVITY SIDEBAR -->
+  <div class="activity-sidebar collapsed" id="activitySidebar">
+    <div class="activity-sidebar-header">
+      <span>📜 Activity Log</span>
+      <button class="activity-sidebar-close" onclick="toggleActivitySidebar()" title="Close">✕</button>
+    </div>
+    <div class="activity-sidebar-body" id="activitySidebarBody">
+      <div class="activity-log-empty">Open to see recent changes</div>
+    </div>
+  </div>
 </div>
 
 <!-- HEADER THEME MODAL -->
@@ -1303,7 +1358,9 @@ const DEFAULT_BOARD_COLUMNS = [
 let BOARD_COLUMNS = [];
 let boardCards = [];
 let editingCardId = null;
+let draggedCardId = null;
 let draftChecklist = [];
+let localActivityLog = [];
 let draftAttachments = [];
 
 const CUSTOM_FIELD_DEFS = [
@@ -1405,6 +1462,7 @@ function switchProject(projectId) {
   saveProjects();
   loadActiveProjectData();
   renderAll();
+  logActivity('switched to project "' + projects[projectId].name + '"');
   showToast('Switched to "' + projects[projectId].name + '"', 'success');
 }
 
@@ -1623,7 +1681,7 @@ function saveTasks() {
 function saveBoardColumns() { saveActiveProject(); queueSharedSync(); }
 function saveBoardCards() { ensureCardIds(boardCards); saveActiveProject(); queueSharedSync(); }
 function saveFieldOptions() { saveActiveProject(); queueSharedSync(); }
-function saveHeader() { saveActiveProject(); queueSharedSync(); }
+function saveHeader() { saveActiveProject(); logActivity('updated header'); queueSharedSync(); }
 
 // ===== GHOST OVERLAY =====
 let ghostProjectId = null;
@@ -1859,6 +1917,7 @@ function applyTheme() {
   applyHeaderVisual();
   closeThemeModal();
   showToast('Header color updated', 'success');
+  logActivity('changed header theme');
   queueSharedSync();
 }
 
@@ -1867,6 +1926,7 @@ function resetThemeDefault() {
   applyHeaderVisual();
   closeThemeModal();
   showToast('Header reset to default', 'info');
+  logActivity('reset header theme to default');
   queueSharedSync();
 }
 
@@ -1909,6 +1969,7 @@ function handleHeaderBgUpload(e) {
     localStorage.setItem('gantt_header_bg_photo_v1', evt.target.result);
     updateHeaderBgPreview(evt.target.result);
     applyHeaderVisual();
+    logActivity('changed header background photo');
     showToast('Header background updated', 'success');
   };
   reader.readAsDataURL(file);
@@ -1919,6 +1980,7 @@ function removeHeaderBgPhoto() {
   localStorage.removeItem('gantt_header_bg_photo_v1');
   updateHeaderBgPreview(null);
   applyHeaderVisual();
+  logActivity('removed header background photo');
   showToast('Header background photo removed', 'info');
 }
 
@@ -1961,6 +2023,7 @@ function handleBoardBgUpload(e) {
     localStorage.setItem('gantt_board_bg_photo_v1', evt.target.result);
     updateBoardBgPreview(evt.target.result);
     applyBoardBgVisual();
+    logActivity('changed board background photo');
     showToast('Board background updated', 'success');
   };
   reader.readAsDataURL(file);
@@ -1971,6 +2034,7 @@ function removeBoardBgPhoto() {
   localStorage.removeItem('gantt_board_bg_photo_v1');
   updateBoardBgPreview(null);
   applyBoardBgVisual();
+  logActivity('removed board background photo');
   showToast('Board background photo removed', 'info');
 }
 
@@ -2470,6 +2534,7 @@ function handleCalBarMouseUp(e) {
       finish: newFinish.toISOString().split('T')[0]
     });
     saveTasks();
+    logActivity('rescheduled job "' + task.job + '"');
     renderGantt();
     renderJobList();
     renderBoard();
@@ -2480,6 +2545,7 @@ function handleCalBarMouseUp(e) {
     newFinish.setDate(newFinish.getDate() + newDuration - 1);
     tasks[idx] = Object.assign({}, task, { finish: newFinish.toISOString().split('T')[0] });
     saveTasks();
+    logActivity('rescheduled job "' + task.job + '"');
     renderGantt();
     renderJobList();
     renderBoard();
@@ -2490,6 +2556,7 @@ function handleCalBarMouseUp(e) {
     newStart.setDate(newStart.getDate() - (newDuration - 1));
     tasks[idx] = Object.assign({}, task, { start: newStart.toISOString().split('T')[0] });
     saveTasks();
+    logActivity('rescheduled job "' + task.job + '"');
     renderGantt();
     renderJobList();
     renderBoard();
@@ -2806,6 +2873,7 @@ function onBarResizeEnd(e) {
       tasks[idx] = Object.assign({}, task, { start: newStart.toISOString().split('T')[0] });
     }
     saveTasks();
+    logActivity('rescheduled job "' + tasks[idx].job + '"');
     renderJobList();
     showToast(side === 'right' ? 'Finish date updated' : 'Start date updated', 'success');
   }
@@ -2903,6 +2971,7 @@ function onBarMoveEnd(e) {
       const [task] = tasks.splice(idx, 1);
       tasks.splice(newIndex, 0, task);
       saveTasks();
+      logActivity('reordered job "' + task.job + '"');
       renderGantt();
       renderJobList();
       showToast('Job reordered', 'success');
@@ -2925,6 +2994,7 @@ function onBarMoveEnd(e) {
       finish: newFinish.toISOString().split('T')[0]
     });
     saveTasks();
+    logActivity('moved job "' + tasks[idx].job + '"');
     renderJobList();
     showToast('Job dates updated', 'success');
     bar.dataset.dragged = 'true';
@@ -3211,6 +3281,8 @@ function saveJob() {
   }
 
   saveTasks();
+  const action = editingIndex >= 0 ? 'updated job' : 'added job';
+  logActivity(action + ' "' + job + '"');
   renderJobList();
 }
 
@@ -3233,8 +3305,10 @@ function confirmDelete() {
 
 function executeDelete() {
   if (deleteTarget >= 0 && deleteTarget < tasks.length) {
+    const jobName = tasks[deleteTarget].job;
     tasks.splice(deleteTarget, 1);
     saveTasks();
+    logActivity('deleted job "' + jobName + '"');
     if (editingIndex === deleteTarget) {
       editingIndex = -1;
       document.getElementById('emptyState').style.display = 'block';
@@ -3257,6 +3331,7 @@ function clearAllJobs() {
   if (confirm('Are you sure you want to clear ALL jobs? This cannot be undone.')) {
     tasks = [];
     saveTasks();
+    logActivity('cleared all jobs');
     editingIndex = -1;
     document.getElementById('emptyState').style.display = 'block';
     document.getElementById('jobForm').style.display = 'none';
@@ -3299,6 +3374,7 @@ function importData(input) {
         saveProjects();
         loadActiveProjectData();
         renderAll();
+        logActivity('imported projects');
         showToast('Projects imported successfully', 'success');
       } else if (data.header || Array.isArray(data.tasks) || Array.isArray(data)) {
         // Legacy single-project import — create as new project
@@ -3320,6 +3396,7 @@ function importData(input) {
         saveProjects();
         loadActiveProjectData();
         renderAll();
+        logActivity('imported projects');
         showToast('Project imported successfully', 'success');
       } else {
         showToast('Unrecognized file format', 'error');
@@ -3362,6 +3439,7 @@ async function triggerBackupNow() {
     const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}trigger-backup?password=${encodeURIComponent(pw)}`);
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || 'Backup failed');
+    logActivity('triggered manual backup');
     showToast('Backup saved', 'success');
     loadBackupsList();
   } catch (err) {
@@ -3441,6 +3519,7 @@ async function restoreBackupFile(key, dateLabel) {
     );
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || 'Restore failed');
+    logActivity('restored from backup');
     showToast('Restore complete — reloading…', 'success');
     setTimeout(() => window.location.reload(), 1500);
   } catch (err) {
@@ -3501,6 +3580,7 @@ function submitAddColumn() {
 function addBoardColumn(label) {
   BOARD_COLUMNS.push({ id: slugifyColumnId(label), label: label });
   saveBoardColumns();
+  logActivity('added board "' + label + '"');
   renderBoard();
   showToast('Board "' + label + '" added', 'success');
   setTimeout(() => {
@@ -3529,6 +3609,7 @@ function deleteBoardColumn(colId, event) {
   }
   BOARD_COLUMNS = remaining;
   saveBoardColumns();
+  logActivity('added board "' + label + '"');
   renderBoard();
   showToast('Board deleted', 'info');
 }
@@ -3788,6 +3869,7 @@ function syncColumnsFromDOM() {
   BOARD_COLUMNS.forEach(c => { if (!orderedIds.includes(c.id)) newColumns.push(c); });
   BOARD_COLUMNS = newColumns;
   saveBoardColumns();
+  logActivity('added board "' + label + '"');
   renderBoard();
   showToast('Board reordered', 'success');
 }
@@ -3795,6 +3877,7 @@ function syncColumnsFromDOM() {
 // ===== BOARD: DRAG & DROP =====
 function handleCardDragStart(e) {
   e.stopPropagation();
+  draggedCardId = e.currentTarget.dataset.id;
   e.dataTransfer.setData('text/plain', e.currentTarget.dataset.id);
   e.dataTransfer.effectAllowed = 'move';
   e.currentTarget.classList.add('dragging');
@@ -3802,6 +3885,7 @@ function handleCardDragStart(e) {
 
 function handleCardDragEnd(e) {
   e.stopPropagation();
+  draggedCardId = null;
   e.currentTarget.classList.remove('dragging');
   document.querySelectorAll('.board-column-body').forEach(b => b.classList.remove('drag-over'));
   document.querySelectorAll('.board-column').forEach(c => c.classList.remove('card-drag-over'));
@@ -3848,6 +3932,11 @@ function handleColumnDrop(e) {
   if (col) col.classList.remove('card-drag-over');
   syncBoardCardsFromDOM();
   saveBoardCards();
+  if (draggedCardId) {
+    const movedCard = boardCards.find(c => String(c.id) === String(draggedCardId));
+    if (movedCard) logActivity('moved card "' + movedCard.title + '"');
+    draggedCardId = null;
+  }
   requestAnimationFrame(() => renderBoard());
 }
 
@@ -3914,9 +4003,11 @@ function changeColumnColor(colId, color, event) {
   if (col) {
     if (color) {
       col.color = color;
+      logActivity('changed board "' + col.label + '" color');
       showToast('Board color updated', 'success');
     } else {
       delete col.color;
+      logActivity('reset board "' + col.label + '" color');
       showToast('Board color reset to default', 'info');
     }
     saveBoardColumns();
@@ -3948,6 +4039,7 @@ function quickChangeCardColor(cardId, color, event) {
   if (card) {
     card.color = color;
     saveBoardCards();
+    logActivity('changed card color for "' + card.title + '"');
     renderBoard();
     showToast('Card color updated', 'success');
   }
@@ -4154,6 +4246,81 @@ function removeAttachment(id) {
   renderAttachments();
 }
 
+function toggleActivitySidebar() {
+  const sidebar = document.getElementById('activitySidebar');
+  const btn = document.getElementById('activityToggleBtn');
+  sidebar.classList.toggle('collapsed');
+  const isOpen = !sidebar.classList.contains('collapsed');
+  btn.classList.toggle('active', isOpen);
+  if (isOpen) renderActivityLogSidebar();
+}
+
+function timeAgo(ts) {
+  const sec = Math.round((Date.now() - ts) / 1000);
+  if (sec < 60) return sec + 's ago';
+  const min = Math.round(sec / 60);
+  if (min < 60) return min + 'm ago';
+  const hr = Math.round(min / 60);
+  if (hr < 24) return hr + 'h ago';
+  const day = Math.round(hr / 24);
+  return day + 'd ago';
+}
+
+function renderActivityLogSidebar() {
+  const bodyEl = document.getElementById('activitySidebarBody');
+  const p = getActiveProject();
+  const items = [];
+
+  // Merge local fallback entries
+  localActivityLog.forEach(function(item) { items.push(item); });
+
+  // Merge Liveblocks entries if connected
+  if (liveblocksRoot && p) {
+    const entry = liveblocksRoot.get('projects').get(p.id);
+    if (entry) {
+      const log = entry.get('activityLog');
+      if (log && log.toArray) {
+        log.toArray().forEach(function(item) { items.push(item); });
+      } else if (log && log.length) {
+        for (let i = 0; i < log.length; i++) items.push(log.get(i));
+      }
+    }
+  }
+
+  // Deduplicate by exact who+what+when match
+  const seen = new Set();
+  const unique = [];
+  items.forEach(function(item) {
+    const key = (item.who || '') + '|' + (item.what || '') + '|' + (item.when || 0);
+    if (!seen.has(key)) { seen.add(key); unique.push(item); }
+  });
+
+  if (!unique.length) {
+    const status = (!liveblocksRoot)
+      ? 'Make an edit to see activity here.<br><span style="font-size:11px;color:#999;">(Connect to Liveblocks to share with the team)</span>'
+      : 'No activity yet.';
+    bodyEl.innerHTML = '<div class="activity-log-empty">' + status + '</div>';
+    return;
+  }
+
+  // Sort by time descending
+  unique.sort(function(a, b) { return (b.when || 0) - (a.when || 0); });
+
+  const html = unique.slice(0, 50).map(function(item) {
+    const when = item.when || Date.now();
+    const who = escapeHtml(item.who || 'Someone');
+    const what = escapeHtml(item.what || '');
+    return '<div class="activity-log-item">' +
+      '<div class="activity-log-time">' + timeAgo(when) + '</div>' +
+      '<div><span class="activity-log-who">' + who + '</span> <span class="activity-log-what">' + what + '</span></div>' +
+    '</div>';
+  }).join('');
+  bodyEl.innerHTML = html;
+}
+
+// Alias for any legacy calls
+function renderActivityLog() { renderActivityLogSidebar(); }
+
 // ----- Open / save / delete card -----
 function openNewCard(columnId) {
   editingCardId = null;
@@ -4235,14 +4402,20 @@ function saveCard() {
   }
 
   saveBoardCards();
+  const action = editingCardId != null ? 'updated card' : 'added card';
+  logActivity(action + ' "' + title + '"');
   renderBoard();
   closeCardModal();
 }
 
 function deleteCardFromModal() {
   if (editingCardId == null) return;
+  const card = boardCards.find(c => c.id === editingCardId);
+  if (card) logActivity('deleted card "' + card.title + '"');
   boardCards = boardCards.filter(c => c.id !== editingCardId);
   saveBoardCards();
+  const action = editingCardId != null ? 'updated card' : 'added card';
+  logActivity(action + ' "' + title + '"');
   renderBoard();
   closeCardModal();
   showToast('Card deleted', 'info');
@@ -4371,6 +4544,7 @@ function ensureTeamCredentials(forceRepromptPassword) {
 let liveblocksRoom = null;
 let liveblocksRoot = null;
 let LiveMapCtor = null;
+let LiveListCtor = null;
 let LiveObjectCtor = null;
 let isLiveblocksUpdate = false;
 let syncPushTimer = null;
@@ -4380,9 +4554,6 @@ let offlineBannerEl = null;
 let offlineSince = null;
 let offlineBannerShowTimer = null;
 let offlineBannerTickInterval = null;
-
-let storageStuckTimer = null;
-let hasUnsyncedStorageChanges = false;
 
 // Persistent, hard-to-miss banner — the corner badge and toasts are easy to miss
 // if you're not looking right at them, and a dropped connection could otherwise
@@ -4478,9 +4649,10 @@ async function setupLiveblocksSync() {
   setSyncStatus('connecting…', true);
 
   try {
-    const { createClient, LiveObject, LiveMap } = await import('https://esm.sh/@liveblocks/client@2.12.0');
+    const { createClient, LiveObject, LiveMap, LiveList } = await import('https://esm.sh/@liveblocks/client@2.12.0');
     LiveObjectCtor = LiveObject;
     LiveMapCtor = LiveMap;
+    LiveListCtor = LiveList;
 
     const client = createClient({
       authEndpoint: async () => {
@@ -4548,51 +4720,6 @@ async function setupLiveblocksSync() {
       }
     });
 
-    // A Storage write can be silently rejected by Liveblocks (e.g. a token
-    // permission problem) without the WebSocket ever disconnecting — status
-    // stays 'connected' the whole time. Surface that loudly instead of
-    // letting edits vanish with no visible error.
-    room.subscribe('error', function(err) {
-      console.error('Liveblocks room error:', err);
-      showToast('Sync error: ' + (err && err.message ? err.message : String(err)), 'error');
-    });
-
-    // This is the actual source of truth for "did my edit really save" —
-    // 'connected' (above) only means the WebSocket is open, not that local
-    // changes have been acknowledged by the server. 'synchronizing' means
-    // there ARE unsaved local edits; 'synchronized' means the server has
-    // confirmed all of them. If it's stuck on 'synchronizing' for too long
-    // (stale token, silently-rejected write, etc.) this escalates from the
-    // easy-to-miss corner badge to the same hard-to-miss banner used for
-    // being offline, and blocks the tab from closing (see beforeunload below)
-    // so someone can't keep typing into a tab that's quietly not saving.
-    room.subscribe('storage-status', function(status) {
-      if (status === 'synchronizing') {
-        hasUnsyncedStorageChanges = true;
-        setSyncStatus('saving…', true);
-        clearTimeout(storageStuckTimer);
-        storageStuckTimer = setTimeout(function() {
-          showToast("Your changes aren't saving — don't close this tab", 'error');
-          showOfflineBanner("Changes aren't saving — reload once reconnected or you may lose recent edits");
-        }, 12000);
-      } else if (status === 'synchronized') {
-        hasUnsyncedStorageChanges = false;
-        clearTimeout(storageStuckTimer);
-        setSyncStatus('live', false);
-        hideOfflineBanner();
-      }
-    });
-
-    // Blocks the tab from closing/reloading while there are edits the
-    // server hasn't confirmed yet — the direct fix for "I edited and lost
-    // my work because it looked synced but wasn't."
-    window.addEventListener('beforeunload', function(e) {
-      if (hasUnsyncedStorageChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    });
-
     // Backstop for the case where the OS/browser reports the network dropping
     // outright (e.g. wifi toggled off) — belt and suspenders alongside the
     // Liveblocks status events above.
@@ -4600,7 +4727,7 @@ async function setupLiveblocksSync() {
 
     const { root } = await room.getStorage();
     liveblocksRoot = root;
-    migrateLegacyStorageShape(root, LiveMap, LiveObject);
+    migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList);
 
     // Subscribe to deep storage changes on the root LiveObject
     room.subscribe(root, () => {
@@ -4667,7 +4794,7 @@ async function setupLiveblocksSync() {
 // root.projects doesn't exist yet, and is a no-op after the first successful run.
 const LEGACY_MIGRATION_PROJECT_ID = 'aps-shared-legacy';
 
-function migrateLegacyStorageShape(root, LiveMap, LiveObject) {
+function migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList) {
   if (root.get('projects') instanceof LiveMap) return; // already migrated
 
   liveblocksRoom.batch(() => {
@@ -4712,7 +4839,8 @@ function migrateLegacyStorageShape(root, LiveMap, LiveObject) {
           title: headerTitle || 'APS Production',
           subtitle: headerSubtitle || '',
           theme: headerTheme
-        })
+        }),
+        activityLog: new LiveList()
       }));
     }
 
@@ -4798,6 +4926,46 @@ function removeProjectFromShared(projectId) {
   }
 }
 
+function logActivity(actionText) {
+  const p = getActiveProject();
+  if (!p) return;
+  const name = getStoredDisplayName() || 'Someone';
+  const entry = { who: name, what: actionText, when: Date.now() };
+
+  // Always keep a local copy so it works even when offline
+  localActivityLog.push(entry);
+  while (localActivityLog.length > 50) localActivityLog.shift();
+
+  // Also push to Liveblocks if connected
+  if (liveblocksRoot && liveblocksRoom) {
+    isLiveblocksUpdate = true;
+    try {
+      liveblocksRoom.batch(() => {
+        const projectsMap = liveblocksRoot.get('projects');
+        let projEntry = projectsMap.get(p.id);
+        if (!projEntry) return;
+        let log = projEntry.get('activityLog');
+        if (!(log instanceof LiveListCtor)) {
+          log = new LiveListCtor();
+          projEntry.set('activityLog', log);
+        }
+        log.push(entry);
+        while (log.length > 50) log.delete(0);
+      });
+    } catch (e) {
+      console.error('logActivity Liveblocks push failed', e);
+    } finally {
+      setTimeout(() => { isLiveblocksUpdate = false; }, 50);
+    }
+  }
+
+  // Refresh sidebar if it's open
+  const sidebar = document.getElementById('activitySidebar');
+  if (sidebar && !sidebar.classList.contains('collapsed')) {
+    renderActivityLogSidebar();
+  }
+}
+
 function pushLiveblocksState() {
   if (!liveblocksRoot || !liveblocksRoom) return;
   clearTimeout(syncPushTimer);
@@ -4814,11 +4982,7 @@ function pushLiveblocksState() {
       subtitle: document.getElementById('headerSubtitle').textContent.trim(),
       theme: getSavedTheme()
     });
-    // Don't set 'live' here — this call succeeding only means the local CRDT
-    // was updated optimistically, not that the server has acknowledged it.
-    // The room's 'storage-status' subscription (see setupLiveblocksSync)
-    // is the real source of truth and will flip the badge to 'live' once
-    // the server actually confirms the write.
+    setSyncStatus('live', false);
   } catch (e) {
     console.error(e);
     setSyncStatus('save failed', true);
@@ -4915,6 +5079,14 @@ function applyLiveblocksState(root) {
     showToast('Synced latest changes', 'info');
   }
   if (activeDataChanged || listChanged) updateProjectToggle();
+  const sidebar = document.getElementById('activitySidebar');
+  if (sidebar && !sidebar.classList.contains('collapsed')) {
+    renderActivityLogSidebar();
+  }
+  // Also clear local fallback once Liveblocks syncs (avoid duplicates)
+  if (liveblocksRoot && localActivityLog.length > 0) {
+    localActivityLog = [];
+  }
 }
 
 // Initialize
