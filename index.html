@@ -190,6 +190,8 @@
   .progress-pct { font-size: 10px; font-weight: 700; color: #666; width: 30px; text-align: right; flex-shrink: 0; }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
   .task-row .col-jobs .company-tag { display: inline-block; font-size: 9px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: 600; color: white; vertical-align: middle; }
+  .task-row .col-jobs .task-row-jobname { display: inline-block; font-size: 10px; font-weight: 600; color: #fff; margin-left: 6px; padding: 1px 8px; border-radius: 10px; vertical-align: middle; line-height: 1.5; }
+  body.dark-mode .task-row .col-jobs .task-row-jobname { color: #fff; }
   .task-row .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); margin-left: 6px; display: inline-block; }
 
   .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -283,6 +285,13 @@
   body.dark-mode .task-bar.reordering { opacity: 0.25; }
   body.dark-mode .task-row.reorder-target { background: rgba(92,107,192,0.45) !important; }
   .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; }
+  .task-bar-job-tag {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+    border-top-left-radius: 4px; border-bottom-left-radius: 4px;
+    pointer-events: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
+  }
+  .task-bar.has-job-tag { padding-left: 15px; }
+  .task-bar.milestone .task-bar-job-tag { display: none; }
   .task-bar-resize-handle {
     position: absolute; top: 0; bottom: 0; width: 10px;
     cursor: ew-resize; z-index: 5;
@@ -371,9 +380,10 @@
   .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   .form-group textarea { resize: vertical; min-height: 80px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .task-edit-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .task-edit-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
   .task-edit-row input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
   .task-edit-row input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
+  .task-row-color { width: 36px !important; height: 36px; padding: 2px !important; cursor: pointer; }
   .task-row-delete {
     width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: white;
     color: var(--text-light); font-size: 15px; line-height: 1; cursor: pointer; transition: all 0.15s;
@@ -2988,7 +2998,7 @@ function renderGantt() {
       row.className = 'task-row' + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '');
       row.dataset.jobId = job.id;
       row.dataset.taskId = task.id;
-      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + escapeHtml(task.name) + noteDot + '</div>';
+      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + escapeHtml(task.name) + ' <span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>' + noteDot + '</div>';
       row.addEventListener('click', () => { switchTab('manager'); editJob(job.id, task.id); });
       leftBody.appendChild(row);
       visibleRowIdx++;
@@ -3023,8 +3033,16 @@ function renderGantt() {
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
       bar.style.top = (ghostVisibleIdx * 34 + 6) + 'px';
-      bar.style.background = job.color || '#999';
-      bar.textContent = duration > 2 ? job.name : '';
+      bar.style.background = task.color || job.color || '#999';
+      bar.textContent = duration > 2 ? task.name : '';
+      if (duration !== 1) {
+        bar.classList.add('has-job-tag');
+        const jobTag = document.createElement('span');
+        jobTag.className = 'task-bar-job-tag';
+        jobTag.style.background = job.color || '#999';
+        jobTag.title = job.name;
+        bar.appendChild(jobTag);
+      }
       grid.appendChild(bar);
       ghostVisibleIdx++;
     });
@@ -3046,8 +3064,16 @@ function renderGantt() {
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
       bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
-      bar.style.background = job.color;
-      bar.textContent = duration > 2 ? job.name : '';
+      bar.style.background = task.color || job.color;
+      bar.textContent = duration > 2 ? task.name : '';
+      if (duration !== 1) {
+        bar.classList.add('has-job-tag');
+        const jobTag = document.createElement('span');
+        jobTag.className = 'task-bar-job-tag';
+        jobTag.style.background = job.color;
+        jobTag.title = job.name;
+        bar.appendChild(jobTag);
+      }
       bar.addEventListener('mouseenter', e => showTooltip(e, job, task));
       bar.addEventListener('mouseleave', hideTooltip);
       bar.addEventListener('mousemove', moveTooltip);
@@ -3098,7 +3124,7 @@ function renderGantt() {
       const y2 = b.top + 11;
       const path = document.createElementNS(svgNs, 'path');
       const midX = (x1 + x2) / 2;
-      path.setAttribute('d', 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + 10) + ' ' + y1 + ', ' + (midX) + ' ' + y2 + ', ' + x2 + ' ' + y2);
+      path.setAttribute('d', 'M ' + x1 + ' ' + y1 + ' L ' + midX + ' ' + y1 + ' L ' + midX + ' ' + y2 + ' L ' + x2 + ' ' + y2);
       path.setAttribute('stroke', 'rgba(100,100,100,0.35)');
       path.setAttribute('stroke-width', '2');
       path.setAttribute('fill', 'none');
@@ -3620,9 +3646,9 @@ function updateJobCount() {
 // Sets the working state from a job's tasks (or one blank row for a new
 // job) and draws it. Call this when the form opens; use renderTaskRows()
 // alone after that to redraw from the current editingTaskRows state.
-function initTaskRows(taskList) {
-  editingTaskRows = (taskList && taskList.length ? taskList : [{ name: '', start: '', finish: '' }])
-    .map(function(t) { return { id: t.id || null, name: t.name || '', start: t.start || '', finish: t.finish || '' }; });
+function initTaskRows(taskList, defaultColor) {
+  editingTaskRows = (taskList && taskList.length ? taskList : [{ name: '', start: '', finish: '', color: defaultColor }])
+    .map(function(t) { return { id: t.id || null, name: t.name || '', start: t.start || '', finish: t.finish || '', color: t.color || defaultColor || '#3949ab' }; });
   renderTaskRows();
 }
 
@@ -3657,6 +3683,13 @@ function renderTaskRows() {
     finishInput.value = t.finish || '';
     finishInput.addEventListener('input', function() { editingTaskRows[i].finish = finishInput.value; });
 
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'task-row-color';
+    colorInput.title = 'Task color';
+    colorInput.value = t.color || '#3949ab';
+    colorInput.addEventListener('input', function() { editingTaskRows[i].color = colorInput.value; });
+
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'task-row-delete';
@@ -3668,13 +3701,15 @@ function renderTaskRows() {
     row.appendChild(nameInput);
     row.appendChild(startInput);
     row.appendChild(finishInput);
+    row.appendChild(colorInput);
     row.appendChild(delBtn);
     container.appendChild(row);
   });
 }
 
 function addTaskRow() {
-  editingTaskRows.push({ id: null, name: '', start: '', finish: '' });
+  const jobColor = (document.getElementById('f_color') || {}).value || '#3949ab';
+  editingTaskRows.push({ id: null, name: '', start: '', finish: '', color: jobColor });
   renderTaskRows();
 }
 
@@ -3698,7 +3733,7 @@ function addNewJob() {
   document.getElementById('f_job').value = '';
   document.getElementById('f_color').value = '#3949ab';
   document.getElementById('f_notes').value = '';
-  initTaskRows([{ name: '', start: '', finish: '' }]);
+  initTaskRows([{ name: '', start: '', finish: '' }], '#3949ab');
   document.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
   updateJobColorSwatch();
   toggleJobColorPanel(false);
@@ -3721,7 +3756,7 @@ function editJob(jobId) {
   document.getElementById('f_job').value = job.name;
   document.getElementById('f_color').value = job.color;
   document.getElementById('f_notes').value = job.notes || '';
-  initTaskRows(job.tasks);
+  initTaskRows(job.tasks, job.color);
   document.querySelectorAll('.color-preset').forEach(p => {
     p.classList.toggle('selected', p.dataset.color === job.color);
   });
@@ -3767,6 +3802,7 @@ function saveJob() {
       start: rowStart,
       finish: rowFinish,
       notes: notes,
+      color: row.color || color,
       order: i
     });
   }
