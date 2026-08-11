@@ -947,22 +947,22 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   </div>
   <div class="header-actions">
     <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
-    <button class="activity-toggle-btn" id="activityToggleBtn" onclick="toggleActivitySidebar()" title="Activity Log">📜</button>
+    <button class="activity-toggle-btn" id="activityToggleBtn" onclick="toggleActivitySidebar()" title="Activity Log"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button>
     <div class="settings-menu-wrap">
       <button class="settings-dots-btn" onclick="toggleSettingsMenu()" title="Settings">⋮</button>
       <div class="settings-dropdown" id="settingsDropdown">
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); exportData();">📥 Export</div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); document.getElementById('importFile').click();">📤 Import</div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); exportData();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-5-5m5 5l5-5" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="19" width="16" height="2.5" rx="1.25" fill="#28a745"/></svg> Export</div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); document.getElementById('importFile').click();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 21V9m0 0l-5 5m5-5l5 5" stroke="#3949ab" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="2.5" width="16" height="2.5" rx="1.25" fill="#3949ab"/></svg> Import</div>
         <div class="settings-dropdown-divider"></div>
         <div class="settings-dropdown-item toggle-item" onclick="toggleDarkMode()">
-          <span>🌙 Dark Mode</span>
+          <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
           <span class="mini-toggle" id="darkModeToggle"></span>
         </div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openThemeModal();">🎨 Header Color</div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openHeaderBgModal();">🖼️ Header Background</div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBoardBgModal();">🗂️ Board Background</div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openThemeModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Header Color</div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openHeaderBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Header Background</div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBoardBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board Background</div>
         <div class="settings-dropdown-divider"></div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBackupsModal();">🗄️ Backups</div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
 
       </div>
     </div>
@@ -972,21 +972,21 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
 <!-- TABS -->
 <div class="tab-bar">
-  <button class="tab-btn" onclick="switchTab('calendar')" id="tab-calendar">📅 Calendar</button>
-  <button class="tab-btn active" onclick="switchTab('gantt')" id="tab-gantt">📊 Gantt Chart</button>
-  <button class="tab-btn" onclick="switchTab('manager')" id="tab-manager">📝 Job Manager <span class="badge" id="jobCount">0</span></button>
-  <button class="tab-btn" onclick="switchTab('board')" id="tab-board">🗂️ Board <span class="badge" id="boardCount">0</span></button>
+  <button class="tab-btn" onclick="switchTab('calendar')" id="tab-calendar"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> Calendar</button>
+  <button class="tab-btn active" onclick="switchTab('gantt')" id="tab-gantt"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Gantt Chart</button>
+  <button class="tab-btn" onclick="switchTab('manager')" id="tab-manager"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Job Manager <span class="badge" id="jobCount">0</span></button>
+  <button class="tab-btn" onclick="switchTab('board')" id="tab-board"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board <span class="badge" id="boardCount">0</span></button>
   <div class="gantt-toolbar" id="ganttToolbar">
     <div style="position:relative;">
-      <button class="ghost-toggle-btn" id="ghostToggleBtn" onclick="toggleGhostDropdown(event)" title="Ghost overlay">👻 Ghost</button>
+      <button class="ghost-toggle-btn" id="ghostToggleBtn" onclick="toggleGhostDropdown(event)" title="Ghost overlay"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a7 7 0 00-7 7v9.5l2-2 2 2 2-2 1 1 2-2 2 2 1-1 2 2V10a7 7 0 00-7-7z" fill="#b39ddb"/><circle cx="9.5" cy="10.5" r="1" fill="#fff"/><circle cx="14.5" cy="10.5" r="1" fill="#fff"/></svg></button>
       <div class="ghost-dropdown" id="ghostDropdown"></div>
     </div>
-    <button class="archive-toggle-btn" id="archiveToggleBtn" onclick="toggleShowArchived()" title="Show archived jobs">📦 Archived</button>
+    <button class="archive-toggle-btn" id="archiveToggleBtn" onclick="toggleShowArchived()" title="Show archived jobs"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg></button>
     <button onclick="zoomIn()" title="Zoom in">+</button>
     <button onclick="zoomOut()" title="Zoom out">−</button>
     <button onclick="resetZoom()" title="Reset zoom">⟲</button>
     <button onclick="fitToView()" title="Fit to view">⤢</button>
-    <button onclick="scrollToToday()" title="Jump to today">📍</button>
+    <button onclick="scrollToToday()" title="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
   </div>
 </div>
 
@@ -1040,7 +1040,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="manager-wrapper">
         <div class="manager-sidebar">
           <div class="manager-sidebar-header">
-            <h2>📝 All Jobs</h2>
+            <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> All Jobs</h2>
             <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
           </div>
           <div class="job-list" id="jobList"></div>
@@ -1056,7 +1056,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <p>Select a job from the list or click "Add Job" to create a new one.</p>
           </div>
           <div class="form-container" id="jobForm" style="display:none;">
-            <h3 id="formTitle">✏️ Edit Job</h3>
+            <h3 id="formTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job</h3>
             <div class="form-group">
               <label>Job Name *</label>
               <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
@@ -1095,10 +1095,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
               <textarea id="f_notes" placeholder="Add any notes, dependencies, or details about this job..."></textarea>
             </div>
             <div class="form-actions">
-              <button class="btn btn-primary" onclick="saveJob()">💾 Save Job</button>
+              <button class="btn btn-primary" onclick="saveJob()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Save Job</button>
               <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
-              <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;">📦 Archive</button>
-              <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;">🗑 Delete</button>
+              <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
+              <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>
             </div>
           </div>
         </div>
@@ -1114,8 +1114,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   <!-- ACTIVITY SIDEBAR -->
   <div class="activity-sidebar collapsed" id="activitySidebar">
     <div class="activity-sidebar-header">
-      <span>📜 Activity Log</span>
-      <button class="activity-sidebar-close" onclick="toggleActivitySidebar()" title="Close">✕</button>
+      <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Activity Log</span>
+      <button class="activity-sidebar-close" onclick="toggleActivitySidebar()" title="Close"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div class="activity-sidebar-body" id="activitySidebarBody">
       <div class="activity-log-empty">Open to see recent changes</div>
@@ -1126,7 +1126,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <!-- HEADER THEME MODAL -->
 <div class="modal-overlay" id="themeModal">
   <div class="modal-box">
-    <h4>🎨 Customize Header</h4>
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Customize Header</h4>
     <p>Pick a preset or set your own gradient colors.</p>
     <div class="theme-presets" id="themePresets"></div>
     <div class="theme-custom-row">
@@ -1144,7 +1144,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <button class="btn btn-secondary" onclick="resetThemeDefault()">Reset to Default</button>
       <div style="display:flex; gap:10px;">
         <button class="btn btn-secondary" onclick="closeThemeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="applyTheme()">💾 Apply</button>
+        <button class="btn btn-primary" onclick="applyTheme()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Apply</button>
       </div>
     </div>
   </div>
@@ -1153,12 +1153,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <!-- HEADER BACKGROUND PHOTO MODAL -->
 <div class="modal-overlay" id="headerBgModal">
   <div class="modal-box">
-    <h4>🖼️ Header Background Photo</h4>
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Header Background Photo</h4>
     <p>Upload a photo to use behind the header. A dark overlay is added automatically so the title stays readable.</p>
     <div class="header-bg-preview" id="headerBgPreview">No photo selected</div>
     <div style="display:flex; gap:10px; margin-top:14px;">
-      <button class="btn btn-secondary" onclick="document.getElementById('headerBgFileInput').click()">📤 Choose Photo</button>
-      <button class="btn btn-danger" id="headerBgRemoveBtn" onclick="removeHeaderBgPhoto()" style="display:none;">🗑 Remove Photo</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('headerBgFileInput').click()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 21V9m0 0l-5 5m5-5l5 5" stroke="#3949ab" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="2.5" width="16" height="2.5" rx="1.25" fill="#3949ab"/></svg> Choose Photo</button>
+      <button class="btn btn-danger" id="headerBgRemoveBtn" onclick="removeHeaderBgPhoto()" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Remove Photo</button>
     </div>
     <input type="file" id="headerBgFileInput" accept="image/*" style="display:none" onchange="handleHeaderBgUpload(event)">
     <div class="modal-actions">
@@ -1170,12 +1170,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <!-- BOARD BACKGROUND PHOTO MODAL -->
 <div class="modal-overlay" id="boardBgModal">
   <div class="modal-box">
-    <h4>🗂️ Board Background Photo</h4>
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board Background Photo</h4>
     <p>Upload a photo to use behind the board columns. A soft overlay is added automatically so the columns and cards stay easy to read.</p>
     <div class="header-bg-preview" id="boardBgPreview">No photo selected</div>
     <div style="display:flex; gap:10px; margin-top:14px;">
-      <button class="btn btn-secondary" onclick="document.getElementById('boardBgFileInput').click()">📤 Choose Photo</button>
-      <button class="btn btn-danger" id="boardBgRemoveBtn" onclick="removeBoardBgPhoto()" style="display:none;">🗑 Remove Photo</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('boardBgFileInput').click()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 21V9m0 0l-5 5m5-5l5 5" stroke="#3949ab" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="2.5" width="16" height="2.5" rx="1.25" fill="#3949ab"/></svg> Choose Photo</button>
+      <button class="btn btn-danger" id="boardBgRemoveBtn" onclick="removeBoardBgPhoto()" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Remove Photo</button>
     </div>
     <input type="file" id="boardBgFileInput" accept="image/*" style="display:none" onchange="handleBoardBgUpload(event)">
     <div class="modal-actions">
@@ -1187,11 +1187,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <!-- BACKUPS MODAL -->
 <div class="modal-overlay" id="backupsModal">
   <div class="modal-box" style="max-width:560px;">
-    <h4>🗄️ Backups</h4>
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</h4>
     <p>Automatic backups run every 6 hours. You can also trigger one manually, download one, or restore the shared project back to an earlier point.</p>
     <div style="display:flex; gap:10px; margin:10px 0 16px;">
-      <button class="btn btn-secondary" onclick="triggerBackupNow()">💾 Backup Now</button>
-      <button class="btn btn-secondary" onclick="loadBackupsList()">🔄 Refresh List</button>
+      <button class="btn btn-secondary" onclick="triggerBackupNow()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Backup Now</button>
+      <button class="btn btn-secondary" onclick="loadBackupsList()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 12a8 8 0 0113.7-5.7L20 8M20 8V4M20 8h-4M20 12a8 8 0 01-13.7 5.7L4 16m0 0v4m0-4h4" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Refresh List</button>
     </div>
     <div id="backupsListStatus" style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;"></div>
     <div id="backupsList" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
@@ -1205,7 +1205,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <div class="modal-overlay" id="cardModal">
   <div class="modal-box card-modal-box">
     <div class="card-modal-scroll">
-      <h4 id="cardModalTitle">➕ New Card</h4>
+      <h4 id="cardModalTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><rect x="11" y="6.5" width="2" height="11" rx="1" fill="#fff"/><rect x="6.5" y="11" width="11" height="2" rx="1" fill="#fff"/></svg>New Card</h4>
       <div class="form-group">
         <label>Title *</label>
         <input type="text" id="c_title" placeholder="e.g. Follow up on change order">
@@ -1243,7 +1243,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <!-- CUSTOM FIELDS -->
       <div class="card-section">
         <div class="card-section-header">
-          <h5>🏷️ Custom Fields</h5>
+          <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> Custom Fields</h5>
           <button class="btn btn-secondary" onclick="openManageFields()">Edit</button>
         </div>
         <div class="custom-fields-grid" id="customFieldsGrid"></div>
@@ -1252,7 +1252,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <!-- CHECKLIST -->
       <div class="card-section">
         <div class="card-section-header">
-          <h5>☑️ Checklist</h5>
+          <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>️ Checklist</h5>
         </div>
         <div class="checklist-progress-row">
           <div class="checklist-progress-bar"><div class="checklist-progress-fill" id="checklistProgressFill" style="width:0%;"></div></div>
@@ -1268,7 +1268,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <!-- ATTACHMENTS -->
       <div class="card-section">
         <div class="card-section-header">
-          <h5>📎 Attachments</h5>
+          <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Attachments</h5>
           <button class="btn btn-secondary" onclick="document.getElementById('c_attachment_input').click()">+ Add</button>
           <input type="file" id="c_attachment_input" multiple style="display:none" onchange="handleAttachmentUpload(event)">
         </div>
@@ -1276,10 +1276,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       </div>
 
       <div class="modal-actions" style="justify-content:space-between; margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
-        <button class="btn btn-danger" id="cardDeleteBtn" onclick="deleteCardFromModal()" style="display:none;">🗑 Delete</button>
+        <button class="btn btn-danger" id="cardDeleteBtn" onclick="deleteCardFromModal()" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>
         <div style="display:flex; gap:10px;">
           <button class="btn btn-secondary" onclick="closeCardModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveCard()">💾 Save Card</button>
+          <button class="btn btn-primary" onclick="saveCard()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Save Card</button>
         </div>
       </div>
     </div>
@@ -1289,7 +1289,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <!-- MANAGE CUSTOM FIELDS MODAL -->
 <div class="modal-overlay" id="manageFieldsModal">
   <div class="modal-box manage-fields-box">
-    <h4>🏷️ Manage Custom Field Options</h4>
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> Manage Custom Field Options</h4>
     <p>Add or remove the choices available in each dropdown field.</p>
     <div id="manageFieldsBody"></div>
     <div class="modal-actions">
@@ -1307,7 +1307,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <!-- DELETE MODAL -->
 <div class="modal-overlay" id="deleteModal">
   <div class="modal-box">
-    <h4>🗑 Delete Job?</h4>
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete Job?</h4>
     <p>Are you sure you want to delete "<span id="deleteJobName"></span>"? This action cannot be undone.</p>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -1821,10 +1821,10 @@ function renderGhostDropdown() {
     if (p.id === activeProjectId) return;
     const isGhost = p.id === ghostProjectId;
     html += '<div class="ghost-dropdown-item' + (isGhost ? ' active' : '') + '" onclick="setGhostProject(\'' + p.id + '\')">' +
-      (isGhost ? '👻 ' : '  ') + escapeHtml(p.name) + '</div>';
+      (isGhost ? '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a7 7 0 00-7 7v9.5l2-2 2 2 2-2 1 1 2-2 2 2 1-1 2 2V10a7 7 0 00-7-7z" fill="#b39ddb"/><circle cx="9.5" cy="10.5" r="1" fill="#fff"/><circle cx="14.5" cy="10.5" r="1" fill="#fff"/></svg> ' : '  ') + escapeHtml(p.name) + '</div>';
   });
   html += '<div class="ghost-dropdown-divider"></div>' +
-    '<div class="ghost-dropdown-off" onclick="clearGhostProject()">✕ Turn off overlay</div>';
+    '<div class="ghost-dropdown-off" onclick="clearGhostProject()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Turn off overlay</div>';
   dd.innerHTML = html;
 }
 
@@ -3264,7 +3264,7 @@ function showTooltip(e, task) {
   html += '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' + f.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
   html += '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' + dur + ' day' + (dur>1?'s':'') + '</span></div>';
   if (task.company) html += '<div class="tt-row"><span class="tt-label">Lead:</span><span class="tt-value">' + task.company + '</span></div>';
-  if (task.notes) html += '<div class="tt-notes">📝 ' + task.notes + '</div>';
+  if (task.notes) html += '<div class="tt-notes"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> ' + task.notes + '</div>';
   tt.innerHTML = html;
   tt.classList.add('show');
   moveTooltip(e);
@@ -3326,8 +3326,8 @@ function renderJobList() {
     card.innerHTML = '<div class="color-strip" style="background:' + task.color + ';"></div>' +
       '<div class="job-card-title">' + task.job + (task.archived ? ' <span style="font-size:10px;color:#888;">(archived)</span>' : '') + '</div>' +
       '<div class="job-card-meta">' +
-      '<span>📅 ' + s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + f.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>' +
-      '<span>⏱ ' + dur + 'd</span>' + (task.notes ? '<span class="note-icon">📝</span>' : '') + '</div>' +
+      '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + f.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>' +
+      '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + dur + 'd</span>' + (task.notes ? '<span class="note-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></span>' : '') + '</div>' +
       '<button class="delete-btn" onclick="event.stopPropagation(); promptDelete(' + idx + ')" title="Delete">×</button>';
     card.onclick = () => editJob(idx);
     list.appendChild(card);
@@ -3347,7 +3347,7 @@ function addNewJob() {
   editingIndex = -1;
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('jobForm').style.display = 'block';
-  document.getElementById('formTitle').textContent = '➕ Add New Job';
+  document.getElementById('formTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><rect x="11" y="6.5" width="2" height="11" rx="1" fill="#fff"/><rect x="6.5" y="11" width="11" height="2" rx="1" fill="#fff"/></svg>Add New Job';
   document.getElementById('deleteBtn').style.display = 'none';
   document.getElementById('archiveBtn').style.display = 'none';
   document.getElementById('f_job').value = '';
@@ -3367,7 +3367,7 @@ function editJob(idx) {
   const task = tasks[idx];
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('jobForm').style.display = 'block';
-  document.getElementById('formTitle').textContent = '✏️ Edit Job';
+  document.getElementById('formTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job';
   document.getElementById('deleteBtn').style.display = 'inline-flex';
   document.getElementById('f_job').value = task.job;
   document.getElementById('f_company').value = task.company;
@@ -3384,10 +3384,10 @@ function editJob(idx) {
   const archiveBtn = document.getElementById('archiveBtn');
   archiveBtn.style.display = 'inline-flex';
   if (task.archived) {
-    archiveBtn.innerHTML = '↩️ Restore';
+    archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore';
     archiveBtn.onclick = function() { restoreJob(idx); };
   } else {
-    archiveBtn.innerHTML = '📦 Archive';
+    archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive';
     archiveBtn.onclick = function() { archiveJob(idx); };
   }
 
@@ -3613,12 +3613,12 @@ async function loadBackupsList() {
       const isSafety = b.key.includes('pre-restore-safety');
       row.innerHTML = `
         <div style="min-width:0;">
-          <div style="font-size:13px; font-weight:600;">${isSafety ? '🛟 Safety snapshot' : '📦 Backup'}</div>
+          <div style="font-size:13px; font-weight:600;">${isSafety ? '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Safety snapshot' : '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Backup'}</div>
           <div style="font-size:12px; color:var(--text-secondary);">${b.date}</div>
         </div>
         <div style="display:flex; gap:6px; flex-shrink:0;">
-          <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="download">⬇️</button>
-          <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="restore">↩️ Restore</button>
+          <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="download"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-5-5m5 5l5-5" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="19" width="16" height="2.5" rx="1.25" fill="#28a745"/></svg></button>
+          <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="restore"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore</button>
         </div>`;
       row.querySelector('[data-action="download"]').onclick = () => downloadBackupFile(b.key);
       row.querySelector('[data-action="restore"]').onclick = () => restoreBackupFile(b.key, b.date);
@@ -3775,7 +3775,7 @@ function renderBoard() {
           '<button class="board-col-settings-btn" draggable="false" onclick="toggleColSettings(\'' + col.id + '\', event)" title="Settings">⋮</button>' +
           '<div class="board-col-settings-dropdown" id="col-settings-' + col.id + '">' +
             '<div class="board-col-color-toggle" onclick="toggleColColorPanel(\'' + col.id + '\', event)">' +
-              '<span>🎨 Color</span>' +
+              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Color</span>' +
               '<span style="display:flex;align-items:center;gap:6px;">' +
                 '<span class="col-color-swatch" id="col-swatch-' + col.id + '" style="background:' + (col.color || '#eceef4') + ';"></span>' +
                 '<span class="col-color-arrow" id="col-arrow-' + col.id + '">▾</span>' +
@@ -3785,7 +3785,7 @@ function renderBoard() {
               '<div class="board-col-color-grid" id="col-colors-' + col.id + '"></div>' +
             '</div>' +
             '<div class="board-col-settings-divider"></div>' +
-            '<div class="board-col-settings-item danger" onclick="deleteBoardColumn(\'' + col.id + '\', event)">🗑 Delete</div>' +
+            '<div class="board-col-settings-item danger" onclick="deleteBoardColumn(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -3833,7 +3833,7 @@ function renderBoard() {
     if (colorGrid) {
       colorGrid.innerHTML =
         '<div class="board-col-color-option' + (!col.color ? ' selected' : '') + '" style="background:linear-gradient(135deg,#f5f5f5 0%,#e0e0e0 100%);position:relative;" onclick="changeColumnColor(\'' + col.id + '\', \'' + '\', event)" title="Default (no color)">' +
-        '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#888;">✕</span></div>' +
+        '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#888;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span></div>' +
         COLOR_PRESETS.map(c =>
         '<div class="board-col-color-option' + (col.color === c ? ' selected' : '') + '" style="background:' + c + ';" onclick="changeColumnColor(\'' + col.id + '\', \'' + c + '\', event)"></div>'
       ).join('');
@@ -3866,30 +3866,30 @@ function buildCardEl(card) {
   if (card.due) {
     const isOverdue = card.column !== 'complete' && card.column !== 'invoiced' && new Date(card.due + 'T00:00:00') < new Date(new Date().toDateString());
     const dueLabel = new Date(card.due + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    badges.push('<span class="board-card-due' + (isOverdue ? ' overdue' : '') + '">📅 ' + dueLabel + '</span>');
+    badges.push('<span class="board-card-due' + (isOverdue ? ' overdue' : '') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + dueLabel + '</span>');
   }
 
   const cf = card.customFields || {};
   const cfBadges = [];
-  if (cf.pm) cfBadges.push('<span class="cf-pill">👤 ' + escapeHtml(cf.pm) + '</span>');
-  if (cf.foreman) cfBadges.push('<span class="cf-pill">🔧 ' + escapeHtml(cf.foreman) + '</span>');
-  if (cf.jobType) cfBadges.push('<span class="cf-pill">🏷️ ' + escapeHtml(cf.jobType) + '</span>');
-  if (cf.timeframe) cfBadges.push('<span class="cf-pill">📆 ' + escapeHtml(cf.timeframe) + '</span>');
-  if (cf.incentivePeriod) cfBadges.push('<span class="cf-pill">💰 ' + escapeHtml(cf.incentivePeriod) + '</span>');
+  if (cf.pm) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" fill="#3949ab"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" fill="#3949ab"/></svg> ' + escapeHtml(cf.pm) + '</span>');
+  if (cf.foreman) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M17 3a5 5 0 00-6.6 6l-7 7 2.6 2.6 7-7A5 5 0 0017 3z" fill="#78909c"/></svg> ' + escapeHtml(cf.foreman) + '</span>');
+  if (cf.jobType) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> ' + escapeHtml(cf.jobType) + '</span>');
+  if (cf.timeframe) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + escapeHtml(cf.timeframe) + '</span>');
+  if (cf.incentivePeriod) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><text x="12" y="16.3" font-size="11" font-weight="700" fill="#fff" text-anchor="middle" font-family="Arial,sans-serif">$</text></svg> ' + escapeHtml(cf.incentivePeriod) + '</span>');
 
   const metaLines = [];
-  if (cf.poNumber) metaLines.push('<div class="board-card-meta-line">📋 ' + escapeHtml(cf.poNumber) + '</div>');
-  if (cf.location) metaLines.push('<div class="board-card-meta-line">📍 ' + escapeHtml(cf.location) + '</div>');
+  if (cf.poNumber) metaLines.push('<div class="board-card-meta-line"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> ' + escapeHtml(cf.poNumber) + '</div>');
+  if (cf.location) metaLines.push('<div class="board-card-meta-line"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg> ' + escapeHtml(cf.location) + '</div>');
 
   const checklist = card.checklist || [];
   if (checklist.length) {
     const doneCount = checklist.filter(i => i.done).length;
     const allDone = doneCount === checklist.length;
-    badges.push('<span class="mini-badge' + (allDone ? ' checklist-complete' : '') + '">☑ ' + doneCount + '/' + checklist.length + '</span>');
+    badges.push('<span class="mini-badge' + (allDone ? ' checklist-complete' : '') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + doneCount + '/' + checklist.length + '</span>');
   }
 
   const attachments = card.attachments || [];
-  if (attachments.length) badges.push('<span class="mini-badge">📎 ' + attachments.length + '</span>');
+  if (attachments.length) badges.push('<span class="mini-badge"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> ' + attachments.length + '</span>');
 
   const colorPickerId = 'card-color-' + card.id;
   const colorOptions = COLOR_PRESETS.map(c =>
@@ -4343,7 +4343,7 @@ function renderAttachments() {
   container.innerHTML = draftAttachments.map(att => {
     const thumb = att.isImage
       ? '<img class="att-thumb" src="' + att.dataUrl + '">'
-      : '<div class="att-icon">📄</div>';
+      : '<div class="att-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
     return '<div class="attachment-item">' +
       '<a href="' + att.dataUrl + '" download="' + escapeHtml(att.name) + '" target="_blank" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;">' +
       thumb +
@@ -4475,7 +4475,7 @@ function openNewCard(columnId) {
   editingCardId = null;
   draftChecklist = [];
   draftAttachments = [];
-  document.getElementById('cardModalTitle').textContent = '➕ New Card';
+  document.getElementById('cardModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><rect x="11" y="6.5" width="2" height="11" rx="1" fill="#fff"/><rect x="6.5" y="11" width="11" height="2" rx="1" fill="#fff"/></svg>New Card';
   document.getElementById('cardDeleteBtn').style.display = 'none';
   document.getElementById('c_title').value = '';
   document.getElementById('c_description').value = '';
@@ -4498,7 +4498,7 @@ function openEditCard(id) {
   editingCardId = card.id;
   draftChecklist = JSON.parse(JSON.stringify(card.checklist || []));
   draftAttachments = JSON.parse(JSON.stringify(card.attachments || []));
-  document.getElementById('cardModalTitle').textContent = '✏️ Edit Card';
+  document.getElementById('cardModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Card';
   document.getElementById('cardDeleteBtn').style.display = 'inline-flex';
   document.getElementById('c_title').value = card.title;
   document.getElementById('c_description').value = card.description || '';
@@ -4575,8 +4575,8 @@ function showToast(msg, type) {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = 'toast ' + (type || 'info');
-  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
-  toast.innerHTML = '<span>' + (icons[type] || 'ℹ️') + '</span><span>' + msg + '</span>';
+  const icons = { success: '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>', error: '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>', info: '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#3949ab"/><rect x="11" y="10" width="2" height="7" rx="1" fill="#fff"/><circle cx="12" cy="7.3" r="1.3" fill="#fff"/></svg>' };
+  toast.innerHTML = '<span>' + (icons[type] || '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#3949ab"/><rect x="11" y="10" width="2" height="7" rx="1" fill="#fff"/><circle cx="12" cy="7.3" r="1.3" fill="#fff"/></svg>') + '</span><span>' + msg + '</span>';
   container.appendChild(toast);
   setTimeout(() => {
     toast.style.animation = 'none';
