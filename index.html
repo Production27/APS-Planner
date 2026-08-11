@@ -2904,6 +2904,11 @@ function calendarOpenJob(jobId, taskId) {
 }
 
 function renderGantt() {
+  // Row order within a job: earliest start date first. Ties broken by the
+  // task's stored order so identical start dates stay stable/predictable.
+  function byStartDate(a, b) {
+    return (new Date(a.start) - new Date(b.start)) || ((a.order || 0) - (b.order || 0));
+  }
   computeDateRange();
   const totalDays = getDaysDiff(startDate, endDate) + 1;
   const containerW = document.getElementById('timelineBody').clientWidth;
@@ -2983,7 +2988,7 @@ function renderGantt() {
 
   jobs.forEach(function(job, jobIdx) {
     if (!showArchived && job.archived) return;
-    (job.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    (job.tasks || []).sort(byStartDate);
     job.tasks.forEach(function(task, taskIdx) {
       const bg = document.createElement('div');
       bg.className = 'row-bg';
@@ -3056,7 +3061,7 @@ function renderGantt() {
   let barVisibleIdx = 0;
   jobs.forEach(function(job, jobIdx) {
     if (!showArchived && job.archived) return;
-    (job.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    (job.tasks || []).sort(byStartDate);
     job.tasks.forEach(function(task, taskIdx) {
       const s = new Date(task.start + 'T00:00:00');
       const f = new Date(task.finish + 'T00:00:00');
