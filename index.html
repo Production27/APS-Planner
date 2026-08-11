@@ -359,6 +359,7 @@
   .job-card .job-card-meta { font-size: 11px; color: var(--text-light); display: flex; gap: 12px; align-items: center; }
   .job-card .color-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); }
   .job-card .note-icon { font-size: 10px; color: var(--warning); }
+  .job-card .task-count-tag { font-size: 10px; font-weight: 600; color: var(--primary-light); background: #eef1fa; padding: 1px 7px; border-radius: 10px; }
   .job-card .delete-btn { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
   .job-card .delete-btn:hover { background: #ffebee; color: var(--danger); }
   .manager-form-area { flex: 1; padding: 24px 32px; overflow-y: auto; background: var(--bg); }
@@ -370,6 +371,16 @@
   .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   .form-group textarea { resize: vertical; min-height: 80px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .task-edit-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .task-edit-row input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
+  .task-edit-row input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
+  .task-row-delete {
+    width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: white;
+    color: var(--text-light); font-size: 15px; line-height: 1; cursor: pointer; transition: all 0.15s;
+  }
+  .task-row-delete:hover:not(:disabled) { background: #fdecea; border-color: var(--danger); color: var(--danger); }
+  .task-row-delete:disabled { opacity: 0.35; cursor: not-allowed; }
+
   .color-picker-wrapper { display: flex; align-items: center; gap: 12px; }
   .color-picker-wrapper input[type="color"] { width: 50px; height: 40px; padding: 2px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); }
   .color-presets { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -935,6 +946,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
+<base target="_blank">
+<base target="_blank">
+<base target="_blank">
+<base target="_blank">
 </head>
 <body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
@@ -1018,7 +1034,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="col col-start">Start</div>
             <div class="col col-finish">Finish</div>
             <div class="col col-percent">% Complete</div>
-            <div class="col col-jobs">Jobs</div>
+            <div class="col col-jobs">Task</div>
           </div>
           <div class="left-body" id="leftBody"></div>
         </div>
@@ -1062,18 +1078,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
               <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
             </div>
             <div class="form-group">
-              <label>Lead</label>
-              <input type="text" id="f_company" placeholder="e.g. John Smith">
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Start Date *</label>
-                <input type="date" id="f_start">
-              </div>
-              <div class="form-group">
-                <label>Finish Date *</label>
-                <input type="date" id="f_finish">
-              </div>
+              <label>Tasks</label>
+              <div id="taskRows"></div>
+              <button type="button" class="btn btn-secondary" id="addTaskRowBtn" onclick="addTaskRow()" style="margin-top:6px;">+ Add Task</button>
             </div>
             <div class="form-group">
               <div class="color-toggle-row" onclick="toggleJobColorPanel()">
@@ -1317,27 +1324,167 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 </div>
 
 <script>
-const DEFAULT_TASKS = [
-  {"start":"2026-08-03","finish":"2026-11-06","company":"","job":"Project Summary 1","color":"#6c757d","notes":""},
-  {"start":"2026-08-03","finish":"2026-11-06","company":"","job":"Project Summary 2","color":"#6c757d","notes":""},
-  {"start":"2026-08-03","finish":"2026-08-07","company":"APS Production","job":"Initial Setup","color":"#9b7edc","notes":"Foundation and site prep coordination"},
-  {"start":"2026-08-11","finish":"2026-08-27","company":"","job":"Phase 1 Work","color":"#6c757d","notes":""},
-  {"start":"2026-08-03","finish":"2026-08-27","company":"","job":"Phase 1 Continuation","color":"#6c757d","notes":""},
-  {"start":"2026-08-19","finish":"2026-09-23","company":"","job":"Phase 2 Work","color":"#6c757d","notes":""},
-  {"start":"2026-08-31","finish":"2026-09-09","company":"","job":"Phase 2A Work","color":"#6c757d","notes":""},
-  {"start":"2026-09-10","finish":"2026-09-23","company":"","job":"Phase 2B Work","color":"#6c757d","notes":""},
-  {"start":"2026-09-23","finish":"2026-10-07","company":"","job":"Phase 3 Work","color":"#6c757d","notes":""},
-  {"start":"2026-10-07","finish":"2026-10-08","company":"","job":"Phase 3A Work","color":"#6c757d","notes":""},
-  {"start":"2026-09-14","finish":"2026-10-15","company":"","job":"Phase 4 Work","color":"#6c757d","notes":""},
-  {"start":"2026-09-21","finish":"2026-10-27","company":"","job":"Phase 5 Work","color":"#6c757d","notes":""},
-  {"start":"2026-10-06","finish":"2026-10-07","company":"Breth-Zenzen Fire Pro","job":"Fire Protection Setup","color":"#9b7edc","notes":"Fire alarm rough-in and testing"},
-  {"start":"2026-09-21","finish":"2026-09-28","company":"Air Force Mechanical","job":"Mechanical Rough-in","color":"#d4a5d4","notes":"HVAC ductwork and piping"},
-  {"start":"2026-09-21","finish":"2026-09-22","company":"Breth-Zenzen Fire Pro","job":"Fire Pro Rough-in","color":"#9b7edc","notes":"Sprinkler line installation"},
-  {"start":"2026-09-23","finish":"2026-09-25","company":"Tru Industries","job":"Electrical Prep","color":"#2c3e80","notes":"Conduit and wire pulls"},
-  {"start":"2026-09-30","finish":"2026-10-02","company":"Tru Industries","job":"Electrical Continuation","color":"#2c3e80","notes":"Panel rough-in"},
-  {"start":"2026-10-06","finish":"2026-10-13","company":"Tru Industries","job":"Electrical shop area","color":"#2c3e80","notes":"Shop electrical layout and rough"},
-  {"start":"2026-10-14","finish":"2026-10-21","company":"Tru Industries","job":"Electrical shop area (cont.)","color":"#2c3e80","notes":"Continued shop electrical work"},
-  {"start":"2026-10-22","finish":"2026-10-27","company":"Tru Industries","job":"Shop lighting, RTUs","color":"#2c3e80","notes":"Light fixture and RTU electrical connections"}
+const DEFAULT_JOBS = [
+  {
+    id: 'job-1',
+    name: 'Project Summary 1',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-1-1', name: 'Project Summary 1', start: '2026-08-03', finish: '2026-11-06', notes: '', order: 0}]
+  },
+  {
+    id: 'job-2',
+    name: 'Project Summary 2',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-2-1', name: 'Project Summary 2', start: '2026-08-03', finish: '2026-11-06', notes: '', order: 0}]
+  },
+  {
+    id: 'job-3',
+    name: 'Initial Setup',
+    color: '#9b7edc',
+    archived: false,
+    notes: 'Foundation and site prep coordination',
+    tasks: [{id: 'task-3-1', name: 'Initial Setup', start: '2026-08-03', finish: '2026-08-07', notes: 'Foundation and site prep coordination', order: 0}]
+  },
+  {
+    id: 'job-4',
+    name: 'Phase 1 Work',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-4-1', name: 'Phase 1 Work', start: '2026-08-11', finish: '2026-08-27', notes: '', order: 0}]
+  },
+  {
+    id: 'job-5',
+    name: 'Phase 1 Continuation',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-5-1', name: 'Phase 1 Continuation', start: '2026-08-03', finish: '2026-08-27', notes: '', order: 0}]
+  },
+  {
+    id: 'job-6',
+    name: 'Phase 2 Work',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-6-1', name: 'Phase 2 Work', start: '2026-08-19', finish: '2026-09-23', notes: '', order: 0}]
+  },
+  {
+    id: 'job-7',
+    name: 'Phase 2A Work',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-7-1', name: 'Phase 2A Work', start: '2026-08-31', finish: '2026-09-09', notes: '', order: 0}]
+  },
+  {
+    id: 'job-8',
+    name: 'Phase 2B Work',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-8-1', name: 'Phase 2B Work', start: '2026-09-10', finish: '2026-09-23', notes: '', order: 0}]
+  },
+  {
+    id: 'job-9',
+    name: 'Phase 3 Work',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-9-1', name: 'Phase 3 Work', start: '2026-09-23', finish: '2026-10-07', notes: '', order: 0}]
+  },
+  {
+    id: 'job-10',
+    name: 'Phase 3A Work',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-10-1', name: 'Phase 3A Work', start: '2026-10-07', finish: '2026-10-08', notes: '', order: 0}]
+  },
+  {
+    id: 'job-11',
+    name: 'Phase 4 Work',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-11-1', name: 'Phase 4 Work', start: '2026-09-14', finish: '2026-10-15', notes: '', order: 0}]
+  },
+  {
+    id: 'job-12',
+    name: 'Phase 5 Work',
+    color: '#6c757d',
+    archived: false,
+    notes: '',
+    tasks: [{id: 'task-12-1', name: 'Phase 5 Work', start: '2026-09-21', finish: '2026-10-27', notes: '', order: 0}]
+  },
+  {
+    id: 'job-13',
+    name: 'Fire Protection Setup',
+    color: '#9b7edc',
+    archived: false,
+    notes: 'Fire alarm rough-in and testing',
+    tasks: [{id: 'task-13-1', name: 'Fire Protection Setup', start: '2026-10-06', finish: '2026-10-07', notes: 'Fire alarm rough-in and testing', order: 0}]
+  },
+  {
+    id: 'job-14',
+    name: 'Mechanical Rough-in',
+    color: '#d4a5d4',
+    archived: false,
+    notes: 'HVAC ductwork and piping',
+    tasks: [{id: 'task-14-1', name: 'Mechanical Rough-in', start: '2026-09-21', finish: '2026-09-28', notes: 'HVAC ductwork and piping', order: 0}]
+  },
+  {
+    id: 'job-15',
+    name: 'Fire Pro Rough-in',
+    color: '#9b7edc',
+    archived: false,
+    notes: 'Sprinkler line installation',
+    tasks: [{id: 'task-15-1', name: 'Fire Pro Rough-in', start: '2026-09-21', finish: '2026-09-22', notes: 'Sprinkler line installation', order: 0}]
+  },
+  {
+    id: 'job-16',
+    name: 'Electrical Prep',
+    color: '#2c3e80',
+    archived: false,
+    notes: 'Conduit and wire pulls',
+    tasks: [{id: 'task-16-1', name: 'Electrical Prep', start: '2026-09-23', finish: '2026-09-25', notes: 'Conduit and wire pulls', order: 0}]
+  },
+  {
+    id: 'job-17',
+    name: 'Electrical Continuation',
+    color: '#2c3e80',
+    archived: false,
+    notes: 'Panel rough-in',
+    tasks: [{id: 'task-17-1', name: 'Electrical Continuation', start: '2026-09-30', finish: '2026-10-02', notes: 'Panel rough-in', order: 0}]
+  },
+  {
+    id: 'job-18',
+    name: 'Electrical shop area',
+    color: '#2c3e80',
+    archived: false,
+    notes: 'Shop electrical layout and rough',
+    tasks: [{id: 'task-18-1', name: 'Electrical shop area', start: '2026-10-06', finish: '2026-10-13', notes: 'Shop electrical layout and rough', order: 0}]
+  },
+  {
+    id: 'job-19',
+    name: 'Electrical shop area (cont.)',
+    color: '#2c3e80',
+    archived: false,
+    notes: 'Continued shop electrical work',
+    tasks: [{id: 'task-19-1', name: 'Electrical shop area (cont.)', start: '2026-10-14', finish: '2026-10-21', notes: 'Continued shop electrical work', order: 0}]
+  },
+  {
+    id: 'job-20',
+    name: 'Shop lighting, RTUs',
+    color: '#2c3e80',
+    archived: false,
+    notes: 'Light fixture and RTU electrical connections',
+    tasks: [{id: 'task-20-1', name: 'Shop lighting, RTUs', start: '2026-10-22', finish: '2026-10-27', notes: 'Light fixture and RTU electrical connections', order: 0}]
+  }
 ];
 
 const COLOR_PRESETS = [
@@ -1353,13 +1500,41 @@ function genId() {
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 }
 
-function ensureTaskIdsAndOrder(arr) {
-  (arr || []).forEach(function(t, i) {
-    if (!t.id) t.id = genId();
-    if (typeof t.order !== 'number') t.order = i;
-    if (typeof t.archived !== 'boolean') t.archived = false;
+function ensureJobAndTaskIds(arr) {
+  (arr || []).forEach(function(job, i) {
+    if (!job.id) job.id = genId();
+    if (typeof job.order !== 'number') job.order = i;
+    if (typeof job.archived !== 'boolean') job.archived = false;
+    (job.tasks || []).forEach(function(task, j) {
+      if (!task.id) task.id = genId();
+      if (typeof task.order !== 'number') task.order = j;
+    });
   });
   return arr;
+}
+
+function flattenJobs(jobsArr, includeArchived) {
+  const rows = [];
+  (jobsArr || []).forEach(function(job, jobIdx) {
+    if (!includeArchived && job.archived) return;
+    (job.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    (job.tasks || []).forEach(function(task, taskIdx) {
+      rows.push({job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx});
+    });
+  });
+  return rows;
+}
+
+function findJob(jobId) {
+  for (let i = 0; i < jobs.length; i++) { if (jobs[i].id === jobId) return {job: jobs[i], idx: i}; }
+  return null;
+}
+
+function findTask(jobId, taskId) {
+  const j = findJob(jobId);
+  if (!j) return null;
+  for (let i = 0; i < j.job.tasks.length; i++) { if (j.job.tasks[i].id === taskId) return {job: j.job, jobIdx: j.idx, task: j.job.tasks[i], taskIdx: i}; }
+  return null;
 }
 
 function ensureCardIds(arr) {
@@ -1367,11 +1542,16 @@ function ensureCardIds(arr) {
   return arr;
 }
 
-let tasks = [];
-let editingIndex = -1;
+let jobs = [];
+let editingJobId = null;
+let editingTaskId = null;
+// Working copy of the task rows currently shown in the job form — edited
+// freely via addTaskRow()/removeTaskRow(), only committed to the job's
+// real tasks array when Save is clicked (wired up in Chunk 3).
+let editingTaskRows = [];
 let dayWidth = 28;
 let startDate, endDate;
-let deleteTarget = -1;
+let deleteTargetJobId = null;
 let showArchived = false;
 const ARCHIVE_CUTOFF_DAYS = 30;
 let ganttFirstRender = true;
@@ -1430,10 +1610,34 @@ function migrateFromLegacy() {
   const oldBoardBg = localStorage.getItem('gantt_board_bg_photo_v1');
 
   const defaultId = 'project-' + Date.now();
+  let jobList = [];
+  if (oldTasks) {
+    const parsed = JSON.parse(oldTasks);
+    parsed.forEach(function(t, i) {
+      jobList.push({
+        id: genId(),
+        name: t.job || 'Untitled Job',
+        color: t.color || '#3949ab',
+        archived: t.archived || false,
+        notes: t.notes || '',
+        tasks: [{
+          id: t.id || genId(),
+          name: t.job || 'Task',
+          start: t.start,
+          finish: t.finish,
+          notes: t.notes || '',
+          order: 0
+        }]
+      });
+    });
+  } else {
+    jobList = JSON.parse(JSON.stringify(DEFAULT_JOBS));
+  }
+
   const project = {
     id: defaultId,
     name: oldTitle || 'Default Project',
-    tasks: oldTasks ? JSON.parse(oldTasks) : JSON.parse(JSON.stringify(DEFAULT_TASKS)),
+    jobs: jobList,
     boardColumns: (oldColumns && JSON.parse(oldColumns).length) ? JSON.parse(oldColumns) : JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
     boardCards: oldCards ? JSON.parse(oldCards) : [],
     fieldOptions: oldFields ? JSON.parse(oldFields) : {
@@ -1450,15 +1654,11 @@ function migrateFromLegacy() {
       boardBgPhoto: oldBoardBg || null
     }
   };
-  project.tasks.forEach(t => { if (!t.notes) t.notes = ''; });
   projects[defaultId] = project;
   activeProjectId = defaultId;
   saveProjects();
   localStorage.setItem(ACTIVE_PROJECT_KEY, defaultId);
 
-  // No legacy keys at all (not even an old-format single project) means this
-  // truly is a brand-new browser with nothing worth keeping if the team is
-  // already sharing a project elsewhere.
   if (!oldTasks && !oldColumns && !oldCards && !oldFields && !oldTitle && !oldSub && !oldTheme && !oldBg && !oldBoardBg) {
     freshLocalSeed = true;
     freshLocalSeedProjectId = defaultId;
@@ -1579,7 +1779,7 @@ function enforceFixedProjectSet() {
       projects[id] = {
         id: id,
         name: FIXED_PROJECT_NAMES[0],
-        tasks: JSON.parse(JSON.stringify(DEFAULT_TASKS)),
+        jobs: JSON.parse(JSON.stringify(DEFAULT_JOBS)),
         boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
         boardCards: [],
         fieldOptions: {
@@ -1590,7 +1790,7 @@ function enforceFixedProjectSet() {
         },
         header: { title: FIXED_PROJECT_NAMES[0], subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
       };
-      projects[id].tasks.forEach(function(t) { if (!t.notes) t.notes = ''; });
+      projects[id].jobs.forEach(function(j) { if (!j.notes) j.notes = ''; });
       if (!activeProjectId) activeProjectId = id;
       changedIds.push(id);
     }
@@ -1601,7 +1801,7 @@ function enforceFixedProjectSet() {
     projects[id] = {
       id: id,
       name: FIXED_PROJECT_NAMES[1],
-      tasks: JSON.parse(JSON.stringify(DEFAULT_TASKS)),
+      jobs: JSON.parse(JSON.stringify(DEFAULT_JOBS)),
       boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
       boardCards: [],
       fieldOptions: {
@@ -1612,7 +1812,7 @@ function enforceFixedProjectSet() {
       },
       header: { title: FIXED_PROJECT_NAMES[1], subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
     };
-    projects[id].tasks.forEach(function(t) { if (!t.notes) t.notes = ''; });
+    projects[id].jobs.forEach(function(j) { if (!j.notes) j.notes = ''; });
     if (!activeProjectId) activeProjectId = id;
     changedIds.push(id);
   }
@@ -1624,7 +1824,29 @@ function enforceFixedProjectSet() {
 function loadActiveProjectData() {
   const p = getActiveProject();
   if (!p) return;
-  tasks = ensureTaskIdsAndOrder(p.tasks || []);
+  if (p.tasks && !p.jobs) {
+    p.jobs = [];
+    p.tasks.forEach(function(t) {
+      p.jobs.push({
+        id: genId(),
+        name: t.job || 'Untitled',
+        color: t.color || '#3949ab',
+        archived: t.archived || false,
+        notes: t.notes || '',
+        tasks: [{
+          id: t.id || genId(),
+          name: t.job || 'Task',
+          start: t.start,
+          finish: t.finish,
+          notes: t.notes || '',
+          order: 0
+        }]
+      });
+    });
+    delete p.tasks;
+    saveProjects();
+  }
+  jobs = ensureJobAndTaskIds(p.jobs || []);
   BOARD_COLUMNS = p.boardColumns || JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS));
   boardCards = ensureCardIds(p.boardCards || []);
   fieldOptions = p.fieldOptions || {};
@@ -1642,7 +1864,7 @@ function loadActiveProjectData() {
 function saveActiveProject() {
   const p = getActiveProject();
   if (!p) return;
-  p.tasks = tasks;
+  p.jobs = jobs;
   p.boardColumns = BOARD_COLUMNS;
   p.boardCards = boardCards;
   p.fieldOptions = fieldOptions;
@@ -1706,22 +1928,25 @@ function closeAllDropdowns() {
 }
 
 // Override old save functions to use project layer
-function saveTasks() {
-  ensureTaskIdsAndOrder(tasks);
-  tasks.forEach(function(t, i) { t.order = i; }); // keep order in sync with current array position
-  autoArchiveTasks();
+function saveJobs() {
+  ensureJobAndTaskIds(jobs);
+  jobs.forEach(function(job, i) { job.order = i; });
+  autoArchiveJobs();
   saveActiveProject();
   queueSharedSync();
 }
 
-function autoArchiveTasks() {
+function autoArchiveJobs() {
   const cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - ARCHIVE_CUTOFF_DAYS);
   let changed = false;
-  tasks.forEach(function(t) {
-    if (!t.archived && new Date(t.finish + 'T00:00:00') < cutoff) {
-      t.archived = true;
+  jobs.forEach(function(job) {
+    if (job.archived) return;
+    const finishes = (job.tasks || []).map(function(t) { return new Date(t.finish + 'T00:00:00').getTime(); });
+    const maxFinish = finishes.length ? Math.max.apply(null, finishes) : 0;
+    if (maxFinish && new Date(maxFinish) < cutoff) {
+      job.archived = true;
       changed = true;
     }
   });
@@ -1742,46 +1967,22 @@ function toggleShowArchived() {
   renderCalendar();
 }
 
-function archiveJob(idx) {
-  if (idx < 0 || idx >= tasks.length) return;
-  const task = tasks[idx];
-  task.archived = true;
-  saveTasks();
-  logActivity('archived job "' + task.job + '"');
-  renderJobList();
-  renderGantt();
-  renderCalendar();
-  showToast('Job archived', 'success');
-  // Refresh form if still editing this job
-  if (editingIndex === idx) editJob(idx);
-}
+/* Old flat-task archive/restore removed — hierarchical versions used instead */
 
-function restoreJob(idx) {
-  if (idx < 0 || idx >= tasks.length) return;
-  const task = tasks[idx];
-  task.archived = false;
-  saveTasks();
-  logActivity('restored job "' + task.job + '"');
-  renderJobList();
-  renderGantt();
-  renderCalendar();
-  showToast('Job restored', 'success');
-  if (editingIndex === idx) editJob(idx);
-}
-
-function archiveCurrentJob() {
-  if (editingIndex >= 0) {
-    const task = tasks[editingIndex];
-    if (task.archived) restoreJob(editingIndex);
-    else archiveJob(editingIndex);
-  }
-}
-
-function isJobFinished(task) {
-  if (task.archived) return false;
+function isTaskFinished(job, task) {
+  if (job.archived) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return new Date(task.finish + 'T00:00:00') < today;
+}
+
+// A job is "finished" only once every one of its tasks has finished —
+// used for the job-card styling in the Manager list, where a single
+// finished task shouldn't mark a still-in-progress multi-task job as done.
+function isJobFinished(job) {
+  if (job.archived) return false;
+  if (!job.tasks || !job.tasks.length) return false;
+  return job.tasks.every(function(t) { return isTaskFinished(job, t); });
 }
 
 function saveBoardColumns() { saveActiveProject(); queueSharedSync(); }
@@ -1851,9 +2052,9 @@ function updateGhostBtnState() {
   if (btn) btn.classList.toggle('active', !!ghostProjectId);
 }
 
-function getGhostTasks() {
+function getGhostJobs() {
   if (!ghostProjectId || !projects[ghostProjectId]) return [];
-  return projects[ghostProjectId].tasks || [];
+  return projects[ghostProjectId].jobs || [];
 }
 
 function init() {
@@ -1863,7 +2064,7 @@ function init() {
   loadDarkModePref();
   loadActiveProjectData();
   buildColorPresets();
-  autoArchiveTasks();
+  autoArchiveJobs();
   renderAll();
   setupScrollSync();
   buildCardColorPresets();
@@ -1881,11 +2082,7 @@ function loadFieldOptions() {
   fieldOptions = saved ? Object.assign(defaults, JSON.parse(saved)) : defaults;
 }
 
-function loadTasks() {
-  const saved = localStorage.getItem('gantt_jobs_v4');
-  tasks = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_TASKS));
-  tasks.forEach(t => { if (!t.notes) t.notes = ''; });
-}
+/* loadTasks() removed — hierarchical loadActiveProjectData() handles this */
 
 // ===== SETTINGS DROPDOWN =====
 function toggleSettingsMenu() {
@@ -2179,9 +2376,9 @@ function calcPercentComplete(task) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const totalDays = getDaysDiff(s, f);
+  const totalDays = getDaysDiff(s, f) + 1;
   if (totalDays <= 0) {
-    return today >= s ? 100 : 0;
+    return 0;
   }
 
   const elapsed = getDaysDiff(s, today);
@@ -2190,7 +2387,13 @@ function calcPercentComplete(task) {
 }
 
 function computeDateRange() {
-  const allTasks = tasks.concat(getGhostTasks());
+  const allJobs = jobs.concat(getGhostJobs());
+  let allTasks = [];
+  allJobs.forEach(function(job) {
+    (job.tasks || []).forEach(function(task) {
+      allTasks.push(task);
+    });
+  });
   if (allTasks.length === 0) {
     const today = new Date();
     startDate = new Date(today); startDate.setDate(today.getDate() - 14);
@@ -2199,8 +2402,8 @@ function computeDateRange() {
   }
   const starts = allTasks.map(t => new Date(t.start + 'T00:00:00'));
   const finishes = allTasks.map(t => new Date(t.finish + 'T00:00:00'));
-  startDate = new Date(Math.min(...starts));
-  endDate = new Date(Math.max(...finishes));
+  startDate = new Date(Math.min.apply(null, starts));
+  endDate = new Date(Math.max.apply(null, finishes));
   startDate.setDate(startDate.getDate() - 3);
   endDate.setDate(endDate.getDate() + 5);
 }
@@ -2322,12 +2525,13 @@ function renderMonthCalendar() {
     cellDates.push(cellDate);
   }
 
-  const allJobs = tasks.map((t, idx) => {
-    if (!showArchived && t.archived) return null;
-    const s = new Date(t.start + 'T00:00:00');
-    const f = new Date(t.finish + 'T00:00:00');
-    return { idx, task: t, start: s, finish: f };
-  }).filter(Boolean);
+  // Build flat list from jobs→tasks
+  const flatRows = flattenJobs(jobs, showArchived);
+  const allJobs = flatRows.map((row, flatIdx) => {
+    const s = new Date(row.task.start + 'T00:00:00');
+    const f = new Date(row.task.finish + 'T00:00:00');
+    return { flatIdx, job: row.job, task: row.task, start: s, finish: f };
+  });
 
   const numRows = 6;
   const rowLanes = [];
@@ -2341,7 +2545,7 @@ function renderMonthCalendar() {
         const clampedStart = j.start < rowStart ? rowStart : j.start;
         const clampedFinish = j.finish > rowEnd ? rowEnd : j.finish;
         return {
-          idx: j.idx, task: j.task,
+          flatIdx: j.flatIdx, job: j.job, task: j.task,
           colStart: Math.round((clampedStart - rowStart) / 86400000),
           colEnd: Math.round((clampedFinish - rowStart) / 86400000),
           isTrueStart: j.start.getTime() === clampedStart.getTime(),
@@ -2390,17 +2594,18 @@ function renderMonthCalendar() {
       const left = startCell.offsetLeft;
       const width = (endCell.offsetLeft + endCell.offsetWidth) - left;
       const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
-      const t = seg.task;
+      const job = seg.job;
+      const task = seg.task;
       const classes = ['cal-event-bar'];
       classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
       classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
-      if (isJobFinished(t)) classes.push('finished');
-      barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (t.color || '#3949ab') + ';" title="' +
-        escapeHtml(t.job) + (t.company ? ' — ' + escapeHtml(t.company) : '') + '" data-cal-idx="' + seg.idx + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+      if (isTaskFinished(job, task)) classes.push('finished');
+      barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (job.color || '#3949ab') + ';" title="' +
+        escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
         '<div class="cal-bar-drag-left" data-drag="left"></div>' +
         '<div class="cal-bar-drag-body" data-drag="move"></div>' +
         '<div class="cal-bar-drag-right" data-drag="right"></div>' +
-        escapeHtml(t.job) + '</div>';
+        escapeHtml(job.name) + '</div>';
     });
   }
 
@@ -2443,12 +2648,13 @@ function renderWeekCalendar() {
     cellDates.push(d);
   }
 
-  const allJobs = tasks.map((t, idx) => {
-    if (!showArchived && t.archived) return null;
-    const s = new Date(t.start + 'T00:00:00');
-    const f = new Date(t.finish + 'T00:00:00');
-    return { idx, task: t, start: s, finish: f };
-  }).filter(Boolean);
+  // Build flat list from jobs→tasks
+  const flatRows = flattenJobs(jobs, showArchived);
+  const allJobs = flatRows.map((row, flatIdx) => {
+    const s = new Date(row.task.start + 'T00:00:00');
+    const f = new Date(row.task.finish + 'T00:00:00');
+    return { flatIdx, job: row.job, task: row.task, start: s, finish: f };
+  });
 
   // Build day cells (single row, 7 columns)
   let html = '';
@@ -2471,7 +2677,7 @@ function renderWeekCalendar() {
       const clampedStart = j.start < weekStart ? weekStart : j.start;
       const clampedFinish = j.finish > weekEnd ? weekEnd : j.finish;
       return {
-        idx: j.idx, task: j.task,
+        flatIdx: j.flatIdx, job: j.job, task: j.task,
         colStart: Math.round((clampedStart - weekStart) / 86400000),
         colEnd: Math.round((clampedFinish - weekStart) / 86400000),
         isTrueStart: j.start.getTime() === clampedStart.getTime(),
@@ -2502,17 +2708,18 @@ function renderWeekCalendar() {
     const left = startCell.offsetLeft;
     const width = (endCell.offsetLeft + endCell.offsetWidth) - left;
     const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
-    const t = seg.task;
+    const job = seg.job;
+    const task = seg.task;
     const classes = ['cal-event-bar'];
     classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
     classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
-    if (isJobFinished(t)) classes.push('finished');
-    barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (t.color || '#3949ab') + ';" title="' +
-      escapeHtml(t.job) + (t.company ? ' — ' + escapeHtml(t.company) : '') + '" data-cal-idx="' + seg.idx + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+    if (isTaskFinished(job, task)) classes.push('finished');
+    barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (job.color || '#3949ab') + ';" title="' +
+      escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
       '<div class="cal-bar-drag-left" data-drag="left"></div>' +
       '<div class="cal-bar-drag-body" data-drag="move"></div>' +
       '<div class="cal-bar-drag-right" data-drag="right"></div>' +
-      escapeHtml(t.job) + '</div>';
+      escapeHtml(job.name) + '</div>';
   });
 
   let barsLayer = daysEl.querySelector('.cal-bars-layer');
@@ -2541,12 +2748,14 @@ function handleCalBarMouseDown(e) {
   const bar = e.target.closest('.cal-event-bar');
   if (!bar) return;
   e.preventDefault();
-  const idx = parseInt(bar.dataset.calIdx);
-  const task = tasks[idx];
-  if (!task) return;
+  const jobId = bar.dataset.calJobId;
+  const taskId = bar.dataset.calTaskId;
+  const found = findTask(jobId, taskId);
+  if (!found) return;
+  const task = found.task;
+  const job = found.job;
 
   const dragType = e.target.dataset.drag || 'move';
-  const rect = bar.getBoundingClientRect();
   const startX = e.clientX;
   const origLeft = parseFloat(bar.style.left);
   const origWidth = parseFloat(bar.style.width);
@@ -2556,7 +2765,7 @@ function handleCalBarMouseDown(e) {
   const duration = getDaysDiff(s, f) + 1;
 
   calDragState = {
-    idx, bar, dragType, startX, origLeft, origWidth,
+    jobId, taskId, job, task, bar, dragType, startX, origLeft, origWidth,
     startDateObj: s, finishDateObj: f, duration,
     moved: false
   };
@@ -2570,11 +2779,10 @@ function handleCalBarMouseDown(e) {
 
 function handleCalBarMouseMove(e) {
   if (!calDragState) return;
-  const { bar, dragType, startX, origLeft, origWidth, duration, startDateObj, finishDateObj } = calDragState;
+  const { bar, dragType, startX, origLeft, origWidth, duration, startDateObj, finishDateObj, job, task } = calDragState;
   const deltaX = e.clientX - startX;
-  const isWeek = calendarViewMode === 'week';
   const cellWidth = document.querySelector('.cal-day')?.offsetWidth || 1;
-  const deltaDays = isWeek ? Math.round(deltaX / cellWidth) : Math.round(deltaX / cellWidth);
+  const deltaDays = Math.round(deltaX / cellWidth);
 
   if (Math.abs(deltaX) > 3) calDragState.moved = true;
 
@@ -2586,7 +2794,7 @@ function handleCalBarMouseMove(e) {
     newStart.setDate(newStart.getDate() + deltaDays);
     const newFinish = new Date(newStart);
     newFinish.setDate(newFinish.getDate() + duration - 1);
-    tt.innerHTML = '<div class="tt-title">' + tasks[calDragState.idx].job + '</div>' +
+    tt.innerHTML = '<div class="tt-title">' + escapeHtml(job.name) + '</div>' +
       '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' + newStart.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>' +
       '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' + newFinish.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
     tt.classList.add('show');
@@ -2596,7 +2804,7 @@ function handleCalBarMouseMove(e) {
     bar.style.width = (origWidth + (newDuration - duration) * cellWidth) + 'px';
     const newFinish = new Date(startDateObj);
     newFinish.setDate(newFinish.getDate() + newDuration - 1);
-    tt.innerHTML = '<div class="tt-title">' + tasks[calDragState.idx].job + '</div>' +
+    tt.innerHTML = '<div class="tt-title">' + escapeHtml(job.name) + '</div>' +
       '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' + newFinish.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>' +
       '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' + newDuration + ' day' + (newDuration > 1 ? 's' : '') + '</span></div>';
     tt.classList.add('show');
@@ -2608,7 +2816,7 @@ function handleCalBarMouseMove(e) {
     bar.style.width = (origWidth - clampedDelta * cellWidth) + 'px';
     const newStart = new Date(finishDateObj);
     newStart.setDate(newStart.getDate() - (newDuration - 1));
-    tt.innerHTML = '<div class="tt-title">' + tasks[calDragState.idx].job + '</div>' +
+    tt.innerHTML = '<div class="tt-title">' + escapeHtml(job.name) + '</div>' +
       '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' + newStart.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>' +
       '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' + newDuration + ' day' + (newDuration > 1 ? 's' : '') + '</span></div>';
     tt.classList.add('show');
@@ -2618,14 +2826,14 @@ function handleCalBarMouseMove(e) {
 
 function handleCalBarMouseUp(e) {
   if (!calDragState) return;
-  const { idx, bar, dragType, moved, duration, startDateObj, finishDateObj } = calDragState;
+  const { jobId, taskId, bar, dragType, moved, duration, startDateObj, finishDateObj, task } = calDragState;
   document.removeEventListener('mousemove', handleCalBarMouseMove);
   document.removeEventListener('mouseup', handleCalBarMouseUp);
   bar.classList.remove('cal-dragging', 'cal-resizing');
   hideTooltip();
 
   if (!moved) {
-    calendarOpenJob(idx);
+    calendarOpenJob(jobId, taskId);
     calDragState = null;
     return;
   }
@@ -2633,19 +2841,16 @@ function handleCalBarMouseUp(e) {
   const cellWidth = document.querySelector('.cal-day')?.offsetWidth || 1;
   const deltaX = e.clientX - calDragState.startX;
   const deltaDays = Math.round(deltaX / cellWidth);
-  const task = tasks[idx];
 
   if (dragType === 'move' && deltaDays !== 0) {
     const newStart = new Date(startDateObj);
     newStart.setDate(newStart.getDate() + deltaDays);
     const newFinish = new Date(newStart);
     newFinish.setDate(newFinish.getDate() + duration - 1);
-    tasks[idx] = Object.assign({}, task, {
-      start: newStart.toISOString().split('T')[0],
-      finish: newFinish.toISOString().split('T')[0]
-    });
-    saveTasks();
-    logActivity('rescheduled job "' + task.job + '"');
+    task.start = newStart.toISOString().split('T')[0];
+    task.finish = newFinish.toISOString().split('T')[0];
+    saveJobs();
+    logActivity('rescheduled job "' + task.name + '"');
     renderGantt();
     renderJobList();
     renderBoard();
@@ -2654,9 +2859,9 @@ function handleCalBarMouseUp(e) {
     const newDuration = Math.max(1, duration + deltaDays);
     const newFinish = new Date(startDateObj);
     newFinish.setDate(newFinish.getDate() + newDuration - 1);
-    tasks[idx] = Object.assign({}, task, { finish: newFinish.toISOString().split('T')[0] });
-    saveTasks();
-    logActivity('rescheduled job "' + task.job + '"');
+    task.finish = newFinish.toISOString().split('T')[0];
+    saveJobs();
+    logActivity('rescheduled job "' + task.name + '"');
     renderGantt();
     renderJobList();
     renderBoard();
@@ -2665,9 +2870,9 @@ function handleCalBarMouseUp(e) {
     const newDuration = Math.max(1, duration - deltaDays);
     const newStart = new Date(finishDateObj);
     newStart.setDate(newStart.getDate() - (newDuration - 1));
-    tasks[idx] = Object.assign({}, task, { start: newStart.toISOString().split('T')[0] });
-    saveTasks();
-    logActivity('rescheduled job "' + task.job + '"');
+    task.start = newStart.toISOString().split('T')[0];
+    saveJobs();
+    logActivity('rescheduled job "' + task.name + '"');
     renderGantt();
     renderJobList();
     renderBoard();
@@ -2678,9 +2883,9 @@ function handleCalBarMouseUp(e) {
   renderCalendar();
 }
 
-function calendarOpenJob(idx) {
+function calendarOpenJob(jobId, taskId) {
   switchTab('manager');
-  editJob(idx);
+  editJob(jobId);
 }
 
 function renderGantt() {
@@ -2693,7 +2898,6 @@ function renderGantt() {
   const headerWrap = document.getElementById('timelineHeaderWrap');
   const leftBody = document.getElementById('leftBody');
 
-  // Remember scroll positions
   const savedScrollLeft = headerWrap ? headerWrap.scrollLeft : 0;
   const savedScrollTop = document.getElementById('timelineBody') ? document.getElementById('timelineBody').scrollTop : 0;
 
@@ -2715,7 +2919,6 @@ function renderGantt() {
     const isWknd = current.getDay() === 0 || current.getDay() === 6;
     const isToday = current.getTime() === today.getTime();
 
-    // Day header
     const dayDiv = document.createElement('div');
     dayDiv.className = 'day-header' + (isWknd ? ' weekend' : '') + (isToday ? ' today-header' : '');
     dayDiv.style.left = dayLeft + 'px';
@@ -2727,13 +2930,11 @@ function renderGantt() {
     dayDiv.addEventListener('mouseleave', hideDatePopover);
     header.appendChild(dayDiv);
 
-    // Grid line
     const line = document.createElement('div');
     line.className = 'grid-line' + (isWknd ? ' weekend-line' : '');
     line.style.left = dayLeft + 'px';
     grid.appendChild(line);
 
-    // Today column highlight
     if (isToday) {
       const todayBg = document.createElement('div');
       todayBg.className = 'grid-line today-line-bg';
@@ -2742,7 +2943,6 @@ function renderGantt() {
       grid.appendChild(todayBg);
     }
 
-    // Week header
     if (current.getDay() === 6 || i === totalDays - 1) {
       const wDays = getDaysDiff(weekStart, current) + 1;
       const wLeft = getDaysDiff(startDate, weekStart) * dayWidth;
@@ -2763,42 +2963,44 @@ function renderGantt() {
     current.setDate(current.getDate() + 1);
   }
 
-  // Row backgrounds & left panel
   let visibleRowIdx = 0;
-  tasks.forEach((task, idx) => {
-    if (!showArchived && task.archived) return;
-    const bg = document.createElement('div');
-    bg.className = 'row-bg';
-    bg.style.top = (visibleRowIdx * 34) + 'px';
-    bg.style.width = gridWidth + 'px';
-    grid.appendChild(bg);
+  const jobBarMap = {};
 
-    const s = new Date(task.start + 'T00:00:00');
-    const f = new Date(task.finish + 'T00:00:00');
-    const startStr = s.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const finishStr = f.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const tag = task.company ? '<span class="company-tag" style="background:' + task.color + ';">' + task.company + '</span>' : '';
-    const noteDot = task.notes ? '<span class="note-dot" title="Has notes"></span>' : '';
-    const pct = calcPercentComplete(task);
-    const pctHtml = '<div class="progress-track"><div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + pct + '%;"></div></div><span class="progress-pct">' + pct + '%</span>';
+  jobs.forEach(function(job, jobIdx) {
+    if (!showArchived && job.archived) return;
+    (job.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    job.tasks.forEach(function(task, taskIdx) {
+      const bg = document.createElement('div');
+      bg.className = 'row-bg';
+      bg.style.top = (visibleRowIdx * 34) + 'px';
+      bg.style.width = gridWidth + 'px';
+      grid.appendChild(bg);
 
-    const row = document.createElement('div');
-    row.className = 'task-row' + (task.archived ? ' archived' : '') + (isJobFinished(task) ? ' finished' : '');
-    row.dataset.index = idx;
-    row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + task.job + tag + noteDot + '</div>';
-    row.addEventListener('click', () => { switchTab('manager'); editJob(idx); });
-    leftBody.appendChild(row);
-    visibleRowIdx++;
+      const s = new Date(task.start + 'T00:00:00');
+      const f = new Date(task.finish + 'T00:00:00');
+      const startStr = s.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const finishStr = f.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const noteDot = task.notes ? '<span class="note-dot" title="Has notes"></span>' : '';
+      const pct = calcPercentComplete(task);
+      const pctHtml = '<div class="progress-track"><div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + pct + '%;"></div></div><span class="progress-pct">' + pct + '%</span>';
+
+      const row = document.createElement('div');
+      row.className = 'task-row' + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '');
+      row.dataset.jobId = job.id;
+      row.dataset.taskId = task.id;
+      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + escapeHtml(task.name) + noteDot + '</div>';
+      row.addEventListener('click', () => { switchTab('manager'); editJob(job.id, task.id); });
+      leftBody.appendChild(row);
+      visibleRowIdx++;
+    });
   });
 
-  // LIVE Today line
   const todayIdx = getDaysDiff(startDate, today);
   if (todayIdx >= 0 && todayIdx < totalDays) {
     const tl = document.createElement('div');
     tl.className = 'today-line';
     tl.style.left = (todayIdx * dayWidth + dayWidth / 2) + 'px';
     grid.appendChild(tl);
-
     const tlbl = document.createElement('div');
     tlbl.className = 'today-label';
     tlbl.style.left = (todayIdx * dayWidth + dayWidth / 2 + 6) + 'px';
@@ -2806,13 +3008,11 @@ function renderGantt() {
     grid.appendChild(tlbl);
   }
 
-  // Ghost task bars (rendered from row 0, overlapping real tasks)
-  const ghostTasks = getGhostTasks();
-  if (ghostTasks.length > 0) {
-    const gp = projects[ghostProjectId];
-
-    let ghostVisibleIdx = 0;
-    ghostTasks.forEach((task, gidx) => {
+  const ghostJobs = getGhostJobs();
+  let ghostVisibleIdx = 0;
+  ghostJobs.forEach(function(job) {
+    if (!showArchived && job.archived) return;
+    (job.tasks || []).forEach(function(task) {
       const s = new Date(task.start + 'T00:00:00');
       const f = new Date(task.finish + 'T00:00:00');
       const startIdx = getDaysDiff(startDate, s);
@@ -2823,58 +3023,90 @@ function renderGantt() {
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
       bar.style.top = (ghostVisibleIdx * 34 + 6) + 'px';
-      bar.style.background = task.color || '#999';
-      bar.textContent = duration > 2 ? task.job : '';
+      bar.style.background = job.color || '#999';
+      bar.textContent = duration > 2 ? job.name : '';
       grid.appendChild(bar);
       ghostVisibleIdx++;
     });
-  }
-
-  // Task bars
-  let barVisibleIdx = 0;
-  tasks.forEach((task, idx) => {
-    if (!showArchived && task.archived) return;
-    const s = new Date(task.start + 'T00:00:00');
-    const f = new Date(task.finish + 'T00:00:00');
-    const startIdx = getDaysDiff(startDate, s);
-    const duration = getDaysDiff(s, f) + 1;
-    const bar = document.createElement('div');
-    bar.className = 'task-bar' + (isJobFinished(task) ? ' finished' : '');
-    bar.dataset.dragged = 'false';
-    if (duration === 1) bar.classList.add('milestone');
-    bar.style.left = (startIdx * dayWidth) + 'px';
-    bar.style.width = (duration * dayWidth) + 'px';
-    bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
-    bar.style.background = task.color;
-    bar.textContent = duration > 2 ? task.job : '';
-    bar.addEventListener('mouseenter', e => showTooltip(e, task));
-    bar.addEventListener('mouseleave', hideTooltip);
-    bar.addEventListener('mousemove', moveTooltip);
-    bar.addEventListener('mousedown', e => startBarMove(e, idx, bar));
-    bar.addEventListener('click', () => {
-      if (bar.dataset.dragged === 'true') { bar.dataset.dragged = 'false'; return; }
-      switchTab('manager'); editJob(idx);
-    });
-
-    const handleLeft = document.createElement('div');
-    handleLeft.className = 'task-bar-resize-handle task-bar-resize-handle-left';
-    handleLeft.title = 'Drag to change start date';
-    handleLeft.addEventListener('mousedown', e => startBarResizeLeft(e, idx, bar));
-    handleLeft.addEventListener('click', e => e.stopPropagation());
-    bar.appendChild(handleLeft);
-
-    const handleRight = document.createElement('div');
-    handleRight.className = 'task-bar-resize-handle task-bar-resize-handle-right';
-    handleRight.title = 'Drag to change finish date';
-    handleRight.addEventListener('mousedown', e => startBarResizeRight(e, idx, bar));
-    handleRight.addEventListener('click', e => e.stopPropagation());
-    bar.appendChild(handleRight);
-
-    grid.appendChild(bar);
-    barVisibleIdx++;
   });
 
-  // Restore scroll positions
+  let barVisibleIdx = 0;
+  jobs.forEach(function(job, jobIdx) {
+    if (!showArchived && job.archived) return;
+    (job.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    job.tasks.forEach(function(task, taskIdx) {
+      const s = new Date(task.start + 'T00:00:00');
+      const f = new Date(task.finish + 'T00:00:00');
+      const startIdx = getDaysDiff(startDate, s);
+      const duration = getDaysDiff(s, f) + 1;
+      const bar = document.createElement('div');
+      bar.className = 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '');
+      bar.dataset.dragged = 'false';
+      if (duration === 1) bar.classList.add('milestone');
+      bar.style.left = (startIdx * dayWidth) + 'px';
+      bar.style.width = (duration * dayWidth) + 'px';
+      bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
+      bar.style.background = job.color;
+      bar.textContent = duration > 2 ? job.name : '';
+      bar.addEventListener('mouseenter', e => showTooltip(e, job, task));
+      bar.addEventListener('mouseleave', hideTooltip);
+      bar.addEventListener('mousemove', moveTooltip);
+      bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar));
+      bar.addEventListener('click', () => {
+        if (bar.dataset.dragged === 'true') { bar.dataset.dragged = 'false'; return; }
+        switchTab('manager'); editJob(job.id, task.id);
+      });
+
+      const handleLeft = document.createElement('div');
+      handleLeft.className = 'task-bar-resize-handle task-bar-resize-handle-left';
+      handleLeft.title = 'Drag to change start date';
+      handleLeft.addEventListener('mousedown', e => startBarResizeLeft(e, job.id, task.id, bar));
+      handleLeft.addEventListener('click', e => e.stopPropagation());
+      bar.appendChild(handleLeft);
+
+      const handleRight = document.createElement('div');
+      handleRight.className = 'task-bar-resize-handle task-bar-resize-handle-right';
+      handleRight.title = 'Drag to change finish date';
+      handleRight.addEventListener('mousedown', e => startBarResizeRight(e, job.id, task.id, bar));
+      handleRight.addEventListener('click', e => e.stopPropagation());
+      bar.appendChild(handleRight);
+
+      grid.appendChild(bar);
+
+      if (!jobBarMap[job.id]) jobBarMap[job.id] = [];
+      jobBarMap[job.id].push({
+        left: startIdx * dayWidth,
+        width: duration * dayWidth,
+        top: barVisibleIdx * 34 + 6,
+        bar: bar
+      });
+
+      barVisibleIdx++;
+    });
+  });
+
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  svg.style.cssText = 'position:absolute;top:0;left:0;width:' + gridWidth + 'px;height:100%;pointer-events:none;z-index:30;overflow:visible;';
+  Object.values(jobBarMap).forEach(function(bars) {
+    if (bars.length < 2) return;
+    for (let i = 0; i < bars.length - 1; i++) {
+      const a = bars[i], b = bars[i+1];
+      const x1 = a.left + a.width;
+      const y1 = a.top + 11;
+      const x2 = b.left;
+      const y2 = b.top + 11;
+      const path = document.createElementNS(svgNs, 'path');
+      const midX = (x1 + x2) / 2;
+      path.setAttribute('d', 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + 10) + ' ' + y1 + ', ' + (midX) + ' ' + y2 + ', ' + x2 + ' ' + y2);
+      path.setAttribute('stroke', 'rgba(100,100,100,0.35)');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('fill', 'none');
+      svg.appendChild(path);
+    }
+  });
+  grid.appendChild(svg);
+
   requestAnimationFrame(() => {
     const tb = document.getElementById('timelineBody');
     if (ganttFirstRender) {
@@ -2899,16 +3131,43 @@ let reorderGhostEl = null;
 let reorderIndicatorEl = null;
 
 // --- Right edge: drag to change finish date ---
-function startBarResizeRight(e, idx, bar) {
+// Shifts every task that comes after the given task in the same job (by
+// task.order) by the same number of days — keeps each later task's own
+// duration and any gaps between tasks intact. Call this whenever a
+// task's finish date moves: a whole-bar drag, or a right-edge resize.
+// Left-edge resize deliberately does NOT call this, since it only moves
+// the dragged task's start date — its finish (and so the next task's
+// dependency) hasn't changed.
+function cascadeShiftLaterTasks(jobId, taskId, deltaDays) {
+  if (!deltaDays) return;
+  const found = findJob(jobId);
+  if (!found) return;
+  const sorted = (found.job.tasks || []).slice().sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+  const idx = sorted.findIndex(function(t) { return t.id === taskId; });
+  if (idx === -1) return;
+  for (let i = idx + 1; i < sorted.length; i++) {
+    const t = sorted[i];
+    const newStart = new Date(t.start + 'T00:00:00');
+    newStart.setDate(newStart.getDate() + deltaDays);
+    const newFinish = new Date(t.finish + 'T00:00:00');
+    newFinish.setDate(newFinish.getDate() + deltaDays);
+    t.start = newStart.toISOString().split('T')[0];
+    t.finish = newFinish.toISOString().split('T')[0];
+  }
+}
+
+function startBarResizeRight(e, jobId, taskId, bar) {
   e.preventDefault();
   e.stopPropagation();
-  const task = tasks[idx];
+  const found = findTask(jobId, taskId);
+  if (!found) return;
+  const task = found.task;
   const s = new Date(task.start + 'T00:00:00');
   const f = new Date(task.finish + 'T00:00:00');
   const initialDuration = getDaysDiff(s, f) + 1;
 
   barResizeState = {
-    side: 'right', idx, bar, startX: e.clientX,
+    side: 'right', jobId, taskId, task, bar, startX: e.clientX,
     startDateObj: s, initialDuration, currentDuration: initialDuration
   };
 
@@ -2919,16 +3178,18 @@ function startBarResizeRight(e, idx, bar) {
 }
 
 // --- Left edge: drag to change start date ---
-function startBarResizeLeft(e, idx, bar) {
+function startBarResizeLeft(e, jobId, taskId, bar) {
   e.preventDefault();
   e.stopPropagation();
-  const task = tasks[idx];
+  const found = findTask(jobId, taskId);
+  if (!found) return;
+  const task = found.task;
   const s = new Date(task.start + 'T00:00:00');
   const f = new Date(task.finish + 'T00:00:00');
   const initialDuration = getDaysDiff(s, f) + 1;
 
   barResizeState = {
-    side: 'left', idx, bar, startX: e.clientX,
+    side: 'left', jobId, taskId, task, bar, startX: e.clientX,
     finishDateObj: f, initialDuration, currentDuration: initialDuration,
     origLeftPx: parseFloat(bar.style.left)
   };
@@ -2944,6 +3205,7 @@ function onBarResizeMove(e) {
   const deltaX = e.clientX - barResizeState.startX;
   const rawDeltaDays = Math.round(deltaX / dayWidth);
   const tt = document.getElementById('tooltip');
+  const task = barResizeState.task;
 
   if (barResizeState.side === 'right') {
     const newDuration = Math.max(1, barResizeState.initialDuration + rawDeltaDays);
@@ -2953,7 +3215,7 @@ function onBarResizeMove(e) {
     const newFinish = new Date(barResizeState.startDateObj);
     newFinish.setDate(newFinish.getDate() + newDuration - 1);
 
-    tt.innerHTML = '<div class="tt-title">' + tasks[barResizeState.idx].job + '</div>' +
+    tt.innerHTML = '<div class="tt-title">' + escapeHtml(task.name) + '</div>' +
       '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' +
       newFinish.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>' +
       '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' +
@@ -2968,7 +3230,7 @@ function onBarResizeMove(e) {
     const newStart = new Date(barResizeState.finishDateObj);
     newStart.setDate(newStart.getDate() - (newDuration - 1));
 
-    tt.innerHTML = '<div class="tt-title">' + tasks[barResizeState.idx].job + '</div>' +
+    tt.innerHTML = '<div class="tt-title">' + escapeHtml(task.name) + '</div>' +
       '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' +
       newStart.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>' +
       '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' +
@@ -2981,25 +3243,25 @@ function onBarResizeMove(e) {
 
 function onBarResizeEnd(e) {
   if (!barResizeState) return;
-  const { side, idx, currentDuration, initialDuration, bar } = barResizeState;
+  const { side, jobId, taskId, task, currentDuration, initialDuration, bar } = barResizeState;
   document.removeEventListener('mousemove', onBarResizeMove);
   document.removeEventListener('mouseup', onBarResizeEnd);
   bar.classList.remove('resizing');
   hideTooltip();
 
   if (currentDuration !== initialDuration) {
-    const task = tasks[idx];
     if (side === 'right') {
       const newFinish = new Date(barResizeState.startDateObj);
       newFinish.setDate(newFinish.getDate() + currentDuration - 1);
-      tasks[idx] = Object.assign({}, task, { finish: newFinish.toISOString().split('T')[0] });
+      task.finish = newFinish.toISOString().split('T')[0];
+      cascadeShiftLaterTasks(jobId, taskId, currentDuration - initialDuration);
     } else {
       const newStart = new Date(barResizeState.finishDateObj);
       newStart.setDate(newStart.getDate() - (currentDuration - 1));
-      tasks[idx] = Object.assign({}, task, { start: newStart.toISOString().split('T')[0] });
+      task.start = newStart.toISOString().split('T')[0];
     }
-    saveTasks();
-    logActivity('rescheduled job "' + tasks[idx].job + '"');
+    saveJobs();
+    logActivity('rescheduled task "' + task.name + '"');
     renderJobList();
     showToast(side === 'right' ? 'Finish date updated' : 'Start date updated', 'success');
   }
@@ -3008,15 +3270,17 @@ function onBarResizeEnd(e) {
   renderGantt();
 }
 
-// --- Bar body: drag to move the whole job (both dates shift together) ---
-function startBarMove(e, idx, bar) {
-  const task = tasks[idx];
+// --- Bar body: drag to move the whole task (both dates shift together) ---
+function startBarMove(e, jobId, taskId, bar) {
+  const found = findTask(jobId, taskId);
+  if (!found) return;
+  const task = found.task;
   const s = new Date(task.start + 'T00:00:00');
   const f = new Date(task.finish + 'T00:00:00');
   const duration = getDaysDiff(s, f) + 1;
 
   barMoveState = {
-    idx, bar, startX: e.clientX, startY: e.clientY,
+    jobId, taskId, task, bar, startX: e.clientX, startY: e.clientY,
     startDateObj: s, duration, deltaDays: 0, moved: false,
     origLeftPx: parseFloat(bar.style.left),
     origTopPx: parseFloat(bar.style.top),
@@ -3032,27 +3296,13 @@ function onBarMoveMove(e) {
   const deltaX = e.clientX - barMoveState.startX;
   const deltaY = e.clientY - barMoveState.startY;
 
-  // Detect vertical reorder mode first
+  // Detect vertical reorder mode first — disabled in Phase 1A, will be implemented in Phase 1B
   if (!barMoveState.moved && !barMoveState.reorderMode && Math.abs(deltaY) > 8 && Math.abs(deltaY) > Math.abs(deltaX)) {
-    barMoveState.reorderMode = true;
-    barMoveState.bar.classList.add('reordering');
-    hideTooltip();
-    createReorderGhost(barMoveState.bar, e);
-    createReorderIndicator();
+    barMoveState.reorderMode = false;
   }
 
   if (barMoveState.reorderMode) {
-    updateReorderGhost(e);
-    const rowHeight = 34;
-    const grid = document.getElementById('timelineGrid');
-    const gridRect = grid.getBoundingClientRect();
-    const scrollTop = document.getElementById('timelineBody').scrollTop;
-    const relativeY = e.clientY - gridRect.top + scrollTop;
-    let newIndex = Math.floor((relativeY) / rowHeight);
-    newIndex = Math.max(0, Math.min(tasks.length - 1, newIndex));
-    barMoveState.newIndex = newIndex;
-    updateReorderIndicator(newIndex);
-    highlightReorderRow(newIndex);
+    // Phase 1B: linked drag / reorder interactions
     return;
   }
 
@@ -3072,7 +3322,7 @@ function onBarMoveMove(e) {
   newFinish.setDate(newFinish.getDate() + barMoveState.duration - 1);
 
   const tt = document.getElementById('tooltip');
-  tt.innerHTML = '<div class="tt-title">' + tasks[barMoveState.idx].job + '</div>' +
+  tt.innerHTML = '<div class="tt-title">' + escapeHtml(barMoveState.task.name) + '</div>' +
     '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' +
     newStart.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>' +
     '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' +
@@ -3083,7 +3333,7 @@ function onBarMoveMove(e) {
 
 function onBarMoveEnd(e) {
   if (!barMoveState) return;
-  const { idx, deltaDays, moved, duration, startDateObj, bar, reorderMode, newIndex } = barMoveState;
+  const { task, taskId, deltaDays, moved, duration, startDateObj, bar, reorderMode, jobId, newJobIndex } = barMoveState;
   document.removeEventListener('mousemove', onBarMoveMove);
   document.removeEventListener('mouseup', onBarMoveEnd);
   bar.classList.remove('moving', 'reordering');
@@ -3093,36 +3343,39 @@ function onBarMoveEnd(e) {
     removeReorderGhost();
     removeReorderIndicator();
     unhighlightReorderRows();
-    if (typeof newIndex === 'number' && newIndex !== idx) {
-      const [task] = tasks.splice(idx, 1);
-      tasks.splice(newIndex, 0, task);
-      saveTasks();
-      logActivity('reordered job "' + task.job + '"');
-      renderGantt();
-      renderJobList();
-      showToast('Job reordered', 'success');
-    } else {
-      renderGantt();
+
+    if (newJobIndex !== null) {
+      const found = findJob(jobId);
+      if (found) {
+        const currentIdx = found.idx;
+        if (currentIdx !== newJobIndex) {
+          const [movedJob] = jobs.splice(currentIdx, 1);
+          jobs.splice(newJobIndex, 0, movedJob);
+          saveJobs();
+          logActivity('reordered job "' + movedJob.name + '"');
+          showToast('Job reordered', 'success');
+        }
+      }
     }
+
     bar.dataset.dragged = 'true';
     barMoveState = null;
+    renderGantt();
     return;
   }
 
   if (moved && deltaDays !== 0) {
-    const task = tasks[idx];
     const newStart = new Date(startDateObj);
     newStart.setDate(newStart.getDate() + deltaDays);
     const newFinish = new Date(newStart);
     newFinish.setDate(newFinish.getDate() + duration - 1);
-    tasks[idx] = Object.assign({}, task, {
-      start: newStart.toISOString().split('T')[0],
-      finish: newFinish.toISOString().split('T')[0]
-    });
-    saveTasks();
-    logActivity('moved job "' + tasks[idx].job + '"');
+    task.start = newStart.toISOString().split('T')[0];
+    task.finish = newFinish.toISOString().split('T')[0];
+    cascadeShiftLaterTasks(jobId, taskId, deltaDays);
+    saveJobs();
+    logActivity('moved task "' + task.name + '"');
     renderJobList();
-    showToast('Job dates updated', 'success');
+    showToast('Task dates updated', 'success');
     bar.dataset.dragged = 'true';
   } else {
     bar.dataset.dragged = 'false';
@@ -3179,7 +3432,6 @@ function highlightReorderRow(newIndex) {
 function unhighlightReorderRows() {
   document.querySelectorAll('#leftBody .task-row.reorder-target').forEach(r => r.classList.remove('reorder-target'));
 }
-
 function scrollToToday() {
   const today = new Date();
   today.setHours(0,0,0,0);
@@ -3209,11 +3461,14 @@ function fitToView() {
 
 function buildLegend() {
   const legend = document.getElementById('legend');
-  const companies = {};
-  tasks.forEach(t => { if (t.company) companies[t.company] = t.color; });
-  let html = '<div class="legend-float-title">Leads</div>';
-  Object.entries(companies).sort().forEach(([name, color]) => {
-    html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + name + '</div></div>';
+  const jobColors = {};
+  jobs.forEach(job => {
+    if (!showArchived && job.archived) return;
+    jobColors[job.name] = job.color;
+  });
+  let html = '<div class="legend-float-title">Jobs</div>';
+  Object.entries(jobColors).sort().forEach(([name, color]) => {
+    html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + escapeHtml(name) + '</div></div>';
   });
   legend.innerHTML = html;
 }
@@ -3222,10 +3477,14 @@ function buildLegend() {
 function showDatePopover(e, date) {
   const popover = document.getElementById('datePopover');
   const dateStr = date.toISOString().split('T')[0];
-  const dayJobs = tasks.filter(t => {
-    const s = new Date(t.start + 'T00:00:00');
-    const f = new Date(t.finish + 'T00:00:00');
-    return date >= s && date <= f;
+  const dayJobs = [];
+  jobs.forEach(job => {
+    if (!showArchived && job.archived) return;
+    (job.tasks || []).forEach(task => {
+      const s = new Date(task.start + 'T00:00:00');
+      const f = new Date(task.finish + 'T00:00:00');
+      if (date >= s && date <= f) dayJobs.push({job: job, task: task});
+    });
   });
 
   let html = '<h5>' + date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + '</h5>';
@@ -3233,8 +3492,8 @@ function showDatePopover(e, date) {
     html += '<div class="dp-row"><span class="dp-label">No jobs</span></div>';
   } else {
     html += '<div class="dp-row"><span class="dp-label">Jobs:</span><span class="dp-value">' + dayJobs.length + '</span></div>';
-    dayJobs.slice(0, 5).forEach(j => {
-      html += '<div class="dp-row" style="margin-top:4px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + j.color + ';margin-right:6px;"></span>' + j.job + '</div>';
+    dayJobs.slice(0, 5).forEach(jt => {
+      html += '<div class="dp-row" style="margin-top:4px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + jt.job.color + ';margin-right:6px;"></span>' + escapeHtml(jt.job.name) + '</div>';
     });
     if (dayJobs.length > 5) html += '<div class="dp-row" style="color:#888;font-size:10px;">+' + (dayJobs.length - 5) + ' more...</div>';
   }
@@ -3254,17 +3513,17 @@ function hideDatePopover() {
 }
 
 // ===== TOOLTIP =====
-function showTooltip(e, task) {
+function showTooltip(e, job, task) {
   const tt = document.getElementById('tooltip');
   const s = new Date(task.start + 'T00:00:00');
   const f = new Date(task.finish + 'T00:00:00');
   const dur = getDaysDiff(s, f) + 1;
-  let html = '<div class="tt-title">' + task.job + '</div>';
+  let html = '<div class="tt-title">' + escapeHtml(job.name) + '</div>';
+  html += '<div class="tt-row"><span class="tt-label">Task:</span><span class="tt-value">' + escapeHtml(task.name) + '</span></div>';
   html += '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' + s.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
   html += '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' + f.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
   html += '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' + dur + ' day' + (dur>1?'s':'') + '</span></div>';
-  if (task.company) html += '<div class="tt-row"><span class="tt-label">Lead:</span><span class="tt-value">' + task.company + '</span></div>';
-  if (task.notes) html += '<div class="tt-notes"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> ' + task.notes + '</div>';
+  if (task.notes) html += '<div class="tt-notes">' + escapeHtml(task.notes) + '</div>';
   tt.innerHTML = html;
   tt.classList.add('show');
   moveTooltip(e);
@@ -3314,22 +3573,32 @@ function renderJobList() {
   const search = document.getElementById('jobSearch').value.toLowerCase();
   list.innerHTML = '';
 
-  tasks.forEach((task, idx) => {
-    if (!showArchived && task.archived) return;
-    if (search && !task.job.toLowerCase().includes(search) && !task.company.toLowerCase().includes(search)) return;
+  jobs.forEach((job) => {
+    if (!showArchived && job.archived) return;
+    if (search && !job.name.toLowerCase().includes(search)) return;
 
-    const s = new Date(task.start + 'T00:00:00');
-    const f = new Date(task.finish + 'T00:00:00');
-    const dur = getDaysDiff(s, f) + 1;
+    const taskList = job.tasks || [];
+    let s = null, f = null;
+    taskList.forEach(function(t) {
+      const ts = new Date(t.start + 'T00:00:00');
+      const tf = new Date(t.finish + 'T00:00:00');
+      if (!s || ts < s) s = ts;
+      if (!f || tf > f) f = tf;
+    });
+    const dur = (s && f) ? getDaysDiff(s, f) + 1 : 0;
+    const taskCountLabel = taskList.length + (taskList.length === 1 ? ' task' : ' tasks');
+
     const card = document.createElement('div');
-    card.className = 'job-card' + (editingIndex === idx ? ' active' : '') + (task.archived ? ' archived' : '') + (isJobFinished(task) ? ' finished' : '');
-    card.innerHTML = '<div class="color-strip" style="background:' + task.color + ';"></div>' +
-      '<div class="job-card-title">' + task.job + (task.archived ? ' <span style="font-size:10px;color:#888;">(archived)</span>' : '') + '</div>' +
+    card.className = 'job-card' + (editingJobId === job.id ? ' active' : '') + (job.archived ? ' archived' : '') + (isJobFinished(job) ? ' finished' : '');
+    card.innerHTML = '<div class="color-strip" style="background:' + job.color + ';"></div>' +
+      '<div class="job-card-title">' + job.name + (job.archived ? ' <span style="font-size:10px;color:#888;">(archived)</span>' : '') + '</div>' +
       '<div class="job-card-meta">' +
-      '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + f.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>' +
-      '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + dur + 'd</span>' + (task.notes ? '<span class="note-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></span>' : '') + '</div>' +
-      '<button class="delete-btn" onclick="event.stopPropagation(); promptDelete(' + idx + ')" title="Delete">×</button>';
-    card.onclick = () => editJob(idx);
+      (s && f ? '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + f.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>' +
+      '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + dur + 'd</span>' : '') +
+      '<span class="task-count-tag">' + taskCountLabel + '</span>' +
+      (job.notes ? '<span class="note-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></span>' : '') + '</div>' +
+      '<button class="delete-btn" onclick="event.stopPropagation(); promptDeleteJob(\'' + job.id + '\')" title="Delete">×</button>';
+    card.onclick = () => editJob(job.id);
     list.appendChild(card);
   });
 
@@ -3338,128 +3607,276 @@ function renderJobList() {
 
 function filterJobList() { renderJobList(); }
 function updateJobCount() {
-  const visible = tasks.filter(t => showArchived || !t.archived).length;
-  const archived = tasks.filter(t => t.archived).length;
-  document.getElementById('jobCount').textContent = visible + (archived > 0 ? ' / ' + tasks.length : '');
+  const visible = jobs.filter(j => showArchived || !j.archived).length;
+  const archived = jobs.filter(j => j.archived).length;
+  document.getElementById('jobCount').textContent = visible + (archived > 0 ? ' / ' + jobs.length : '');
+}
+
+// ===== TASK LIST EDITOR (Chunk 1: read-only rendering) =====
+// Draws one row per task in the job form. The name/date inputs and the
+// delete button are rendered now so Chunk 2 can wire them up without
+// touching markup again, but they're inert (disabled) until then —
+// editing still happens through the top job form, same as before.
+// Sets the working state from a job's tasks (or one blank row for a new
+// job) and draws it. Call this when the form opens; use renderTaskRows()
+// alone after that to redraw from the current editingTaskRows state.
+function initTaskRows(taskList) {
+  editingTaskRows = (taskList && taskList.length ? taskList : [{ name: '', start: '', finish: '' }])
+    .map(function(t) { return { id: t.id || null, name: t.name || '', start: t.start || '', finish: t.finish || '' }; });
+  renderTaskRows();
+}
+
+// Draws #taskRows from the current editingTaskRows state. Typing in a
+// row updates editingTaskRows directly (no full re-render on keystroke);
+// add/remove rebuild the whole list since row count changed.
+function renderTaskRows() {
+  const container = document.getElementById('taskRows');
+  if (!container) return;
+  container.innerHTML = '';
+  editingTaskRows.forEach(function(t, i) {
+    const row = document.createElement('div');
+    row.className = 'task-edit-row';
+    row.dataset.index = i;
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'task-row-name';
+    nameInput.placeholder = 'Task name';
+    nameInput.value = t.name || '';
+    nameInput.addEventListener('input', function() { editingTaskRows[i].name = nameInput.value; });
+
+    const startInput = document.createElement('input');
+    startInput.type = 'date';
+    startInput.className = 'task-row-start';
+    startInput.value = t.start || '';
+    startInput.addEventListener('input', function() { editingTaskRows[i].start = startInput.value; });
+
+    const finishInput = document.createElement('input');
+    finishInput.type = 'date';
+    finishInput.className = 'task-row-finish';
+    finishInput.value = t.finish || '';
+    finishInput.addEventListener('input', function() { editingTaskRows[i].finish = finishInput.value; });
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'task-row-delete';
+    delBtn.title = 'Remove task';
+    delBtn.textContent = '×';
+    delBtn.disabled = editingTaskRows.length <= 1;
+    delBtn.addEventListener('click', function() { removeTaskRow(i); });
+
+    row.appendChild(nameInput);
+    row.appendChild(startInput);
+    row.appendChild(finishInput);
+    row.appendChild(delBtn);
+    container.appendChild(row);
+  });
+}
+
+function addTaskRow() {
+  editingTaskRows.push({ id: null, name: '', start: '', finish: '' });
+  renderTaskRows();
+}
+
+function removeTaskRow(index) {
+  if (editingTaskRows.length <= 1) {
+    showToast('A job needs at least one task', 'error');
+    return;
+  }
+  editingTaskRows.splice(index, 1);
+  renderTaskRows();
 }
 
 function addNewJob() {
-  editingIndex = -1;
+  editingJobId = null;
+  editingTaskId = null;
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('jobForm').style.display = 'block';
   document.getElementById('formTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><rect x="11" y="6.5" width="2" height="11" rx="1" fill="#fff"/><rect x="6.5" y="11" width="11" height="2" rx="1" fill="#fff"/></svg>Add New Job';
   document.getElementById('deleteBtn').style.display = 'none';
   document.getElementById('archiveBtn').style.display = 'none';
   document.getElementById('f_job').value = '';
-  document.getElementById('f_company').value = '';
-  document.getElementById('f_start').value = '';
-  document.getElementById('f_finish').value = '';
   document.getElementById('f_color').value = '#3949ab';
   document.getElementById('f_notes').value = '';
+  initTaskRows([{ name: '', start: '', finish: '' }]);
   document.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
   updateJobColorSwatch();
   toggleJobColorPanel(false);
   renderJobList();
 }
 
-function editJob(idx) {
-  editingIndex = idx;
-  const task = tasks[idx];
+function editJob(jobId) {
+  const found = findJob(jobId);
+  if (!found) return;
+  const job = found.job;
+  const task = job.tasks && job.tasks[0];
+
+  editingJobId = jobId;
+  editingTaskId = task ? task.id : null;
+
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('jobForm').style.display = 'block';
   document.getElementById('formTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job';
   document.getElementById('deleteBtn').style.display = 'inline-flex';
-  document.getElementById('f_job').value = task.job;
-  document.getElementById('f_company').value = task.company;
-  document.getElementById('f_start').value = task.start;
-  document.getElementById('f_finish').value = task.finish;
-  document.getElementById('f_color').value = task.color;
-  document.getElementById('f_notes').value = task.notes || '';
+  document.getElementById('f_job').value = job.name;
+  document.getElementById('f_color').value = job.color;
+  document.getElementById('f_notes').value = job.notes || '';
+  initTaskRows(job.tasks);
   document.querySelectorAll('.color-preset').forEach(p => {
-    p.classList.toggle('selected', p.dataset.color === task.color);
+    p.classList.toggle('selected', p.dataset.color === job.color);
   });
   updateJobColorSwatch();
   toggleJobColorPanel(false);
 
   const archiveBtn = document.getElementById('archiveBtn');
   archiveBtn.style.display = 'inline-flex';
-  if (task.archived) {
+  if (job.archived) {
     archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore';
-    archiveBtn.onclick = function() { restoreJob(idx); };
+    archiveBtn.onclick = function() { restoreJob(jobId); };
   } else {
     archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive';
-    archiveBtn.onclick = function() { archiveJob(idx); };
+    archiveBtn.onclick = function() { archiveJob(jobId); };
   }
 
   renderJobList();
 }
 
 function saveJob() {
-  const job = document.getElementById('f_job').value.trim();
-  const company = document.getElementById('f_company').value.trim();
-  const start = document.getElementById('f_start').value;
-  const finish = document.getElementById('f_finish').value;
+  const name = document.getElementById('f_job').value.trim();
   const color = document.getElementById('f_color').value;
   const notes = document.getElementById('f_notes').value.trim();
 
-  if (!job) { showToast('Job name is required', 'error'); return; }
-  if (!start) { showToast('Start date is required', 'error'); return; }
-  if (!finish) { showToast('Finish date is required', 'error'); return; }
-  if (new Date(start) > new Date(finish)) { showToast('Start date must be before finish date', 'error'); return; }
+  if (!name) { showToast('Job name is required', 'error'); return; }
+  if (!editingTaskRows.length) { showToast('A job needs at least one task', 'error'); return; }
 
-  const existing = editingIndex >= 0 ? tasks[editingIndex] : null;
-  const taskData = {
-    job, company, start, finish, color, notes,
-    id: existing ? existing.id : genId(),
-    order: existing ? existing.order : tasks.length
-  };
+  // Validate every task row and build the real tasks array up front —
+  // bail out on the first problem without touching job/jobs state.
+  const cleanedTasks = [];
+  for (let i = 0; i < editingTaskRows.length; i++) {
+    const row = editingTaskRows[i];
+    const rowStart = (row.start || '').trim();
+    const rowFinish = (row.finish || '').trim();
+    const label = 'Task ' + (i + 1);
+    if (!rowStart) { showToast(label + ' is missing a start date', 'error'); return; }
+    if (!rowFinish) { showToast(label + ' is missing a finish date', 'error'); return; }
+    if (new Date(rowStart) > new Date(rowFinish)) { showToast(label + ': start date must be before finish date', 'error'); return; }
+    const rowName = (row.name || '').trim() || (editingTaskRows.length === 1 ? name : label);
+    cleanedTasks.push({
+      id: row.id || genId(),
+      name: rowName,
+      start: rowStart,
+      finish: rowFinish,
+      notes: notes,
+      order: i
+    });
+  }
 
-  if (editingIndex >= 0) {
-    tasks[editingIndex] = taskData;
+  if (editingJobId) {
+    const found = findJob(editingJobId);
+    if (!found) return;
+    const job = found.job;
+    job.name = name;
+    job.color = color;
+    job.notes = notes;
+    job.tasks = cleanedTasks;
     showToast('Job updated successfully', 'success');
   } else {
-    tasks.push(taskData);
-    editingIndex = tasks.length - 1;
+    const newJob = {
+      id: genId(),
+      name: name,
+      color: color,
+      archived: false,
+      notes: notes,
+      tasks: cleanedTasks
+    };
+    jobs.push(newJob);
+    editingJobId = newJob.id;
+    editingTaskId = newJob.tasks[0].id;
     showToast('Job added successfully', 'success');
   }
 
-  saveTasks();
-  const action = editingIndex >= 0 ? 'updated job' : 'added job';
-  logActivity(action + ' "' + job + '"');
+  saveJobs();
+  const action = editingJobId ? 'updated job' : 'added job';
+  logActivity(action + ' "' + name + '"');
   renderJobList();
+  renderGantt();
+  renderCalendar();
 }
 
 function cancelEdit() {
-  editingIndex = -1;
+  editingJobId = null;
+  editingTaskId = null;
   document.getElementById('emptyState').style.display = 'block';
   document.getElementById('jobForm').style.display = 'none';
   renderJobList();
 }
 
-function promptDelete(idx) {
-  deleteTarget = idx;
-  document.getElementById('deleteJobName').textContent = tasks[idx].job;
+function archiveJob(jobId) {
+  const found = findJob(jobId);
+  if (!found) return;
+  const job = found.job;
+  job.archived = true;
+  saveJobs();
+  logActivity('archived job "' + job.name + '"');
+  renderJobList();
+  renderGantt();
+  renderCalendar();
+  showToast('Job archived', 'success');
+  if (editingJobId === jobId) editJob(jobId);
+}
+
+function restoreJob(jobId) {
+  const found = findJob(jobId);
+  if (!found) return;
+  const job = found.job;
+  job.archived = false;
+  saveJobs();
+  logActivity('restored job "' + job.name + '"');
+  renderJobList();
+  renderGantt();
+  renderCalendar();
+  showToast('Job restored', 'success');
+  if (editingJobId === jobId) editJob(jobId);
+}
+
+function archiveCurrentJob() {
+  if (editingJobId) {
+    const found = findJob(editingJobId);
+    if (!found) return;
+    if (found.job.archived) restoreJob(editingJobId);
+    else archiveJob(editingJobId);
+  }
+}
+
+function promptDeleteJob(jobId) {
+  deleteTargetJobId = jobId;
+  const found = findJob(jobId);
+  document.getElementById('deleteJobName').textContent = found ? found.job.name : '';
   document.getElementById('deleteModal').classList.add('show');
 }
 
 function confirmDelete() {
-  if (editingIndex >= 0) promptDelete(editingIndex);
+  if (editingJobId) promptDeleteJob(editingJobId);
 }
 
 function executeDelete() {
-  if (deleteTarget >= 0 && deleteTarget < tasks.length) {
-    const jobName = tasks[deleteTarget].job;
-    tasks.splice(deleteTarget, 1);
-    saveTasks();
+  if (deleteTargetJobId) {
+    const found = findJob(deleteTargetJobId);
+    if (!found) return;
+    const jobName = found.job.name;
+    const idx = found.idx;
+    jobs.splice(idx, 1);
+    saveJobs();
     logActivity('deleted job "' + jobName + '"');
-    if (editingIndex === deleteTarget) {
-      editingIndex = -1;
+    if (editingJobId === deleteTargetJobId) {
+      editingJobId = null;
+      editingTaskId = null;
       document.getElementById('emptyState').style.display = 'block';
       document.getElementById('jobForm').style.display = 'none';
-    } else if (editingIndex > deleteTarget) {
-      editingIndex--;
     }
     renderJobList();
+    renderGantt();
+    renderCalendar();
     showToast('Job deleted', 'info');
   }
   closeModal();
@@ -3467,26 +3884,28 @@ function executeDelete() {
 
 function closeModal() {
   document.getElementById('deleteModal').classList.remove('show');
-  deleteTarget = -1;
+  deleteTargetJobId = null;
 }
 
 function clearAllJobs() {
   if (confirm('Are you sure you want to clear ALL jobs? This cannot be undone.')) {
-    tasks = [];
-    saveTasks();
+    jobs = [];
+    saveJobs();
     logActivity('cleared all jobs');
-    editingIndex = -1;
+    editingJobId = null;
+    editingTaskId = null;
     document.getElementById('emptyState').style.display = 'block';
     document.getElementById('jobForm').style.display = 'none';
     renderJobList();
+    renderGantt();
+    renderCalendar();
     showToast('All jobs cleared', 'info');
   }
 }
 
-// ===== EXPORT / IMPORT =====
 function exportData() {
   const data = {
-    version: 2,
+    version: 3,
     projects: projects,
     activeProjectId: activeProjectId
   };
@@ -3510,17 +3929,41 @@ function importData(input) {
   reader.onload = function(e) {
     try {
       const data = JSON.parse(e.target.result);
-      if (data.version === 2 && data.projects) {
-        // Multi-project import
+      if ((data.version === 2 || data.version === 3) && data.projects) {
+        // Multi-project import (v2 flat tasks or v3 nested jobs)
         projects = data.projects;
+        Object.values(projects).forEach(function(p) {
+          if (p.tasks && !p.jobs) {
+            p.jobs = [];
+            p.tasks.forEach(function(t) {
+              p.jobs.push({
+                id: genId(),
+                name: t.job || 'Untitled',
+                color: t.color || '#3949ab',
+                archived: t.archived || false,
+                notes: t.notes || '',
+                tasks: [{
+                  id: t.id || genId(),
+                  name: t.job || 'Task',
+                  start: t.start,
+                  finish: t.finish,
+                  notes: t.notes || '',
+                  order: 0
+                }]
+              });
+            });
+            delete p.tasks;
+          }
+          ensureJobAndTaskIds(p.jobs || []);
+        });
         activeProjectId = data.activeProjectId && projects[data.activeProjectId] ? data.activeProjectId : Object.keys(projects)[0];
         saveProjects();
         loadActiveProjectData();
         renderAll();
         logActivity('imported projects');
         showToast('Projects imported successfully', 'success');
-      } else if (data.header || Array.isArray(data.tasks) || Array.isArray(data)) {
-        // Legacy single-project import — create as new project
+      } else if (data.header || Array.isArray(data.tasks) || Array.isArray(data.jobs) || Array.isArray(data)) {
+        // Legacy single-project import
         const name = data.header && data.header.title ? data.header.title : 'Imported Project';
         createNewProject(name);
         const p = getActiveProject();
@@ -3531,9 +3974,30 @@ function importData(input) {
           p.header.bgPhoto = data.header.bgPhoto || null;
           p.header.boardBgPhoto = data.header.boardBgPhoto || null;
         }
-        const importedTasks = Array.isArray(data.tasks) ? data.tasks : (Array.isArray(data) ? data : []);
-        importedTasks.forEach(t => { if (!t.notes) t.notes = ''; });
-        p.tasks = importedTasks;
+        if (Array.isArray(data.jobs)) {
+          p.jobs = data.jobs;
+          ensureJobAndTaskIds(p.jobs);
+        } else {
+          const importedTasks = Array.isArray(data.tasks) ? data.tasks : (Array.isArray(data) ? data : []);
+          p.jobs = [];
+          importedTasks.forEach(function(t) {
+            p.jobs.push({
+              id: genId(),
+              name: t.job || 'Untitled',
+              color: t.color || '#3949ab',
+              archived: t.archived || false,
+              notes: t.notes || '',
+              tasks: [{
+                id: t.id || genId(),
+                name: t.job || 'Task',
+                start: t.start,
+                finish: t.finish,
+                notes: t.notes || '',
+                order: 0
+              }]
+            });
+          });
+        }
         if (Array.isArray(data.boardColumns) && data.boardColumns.length) p.boardColumns = data.boardColumns;
         if (Array.isArray(data.boardCards)) p.boardCards = data.boardCards;
         saveProjects();
@@ -5005,12 +5469,45 @@ function migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList) {
       Array.isArray(legacyCards);
 
     if (hadAnyLegacyData) {
-      const tasksMap = new LiveMap();
+      const jobsMap = new LiveMap();
       if (flatTasksMap && typeof flatTasksMap.forEach === 'function') {
-        flatTasksMap.forEach(function (v, k) { tasksMap.set(String(k), v); });
+        flatTasksMap.forEach(function (v, k) {
+          const job = {
+            id: genId(),
+            name: v.job || 'Untitled',
+            color: v.color || '#3949ab',
+            archived: v.archived || false,
+            notes: v.notes || '',
+            tasks: [{
+              id: v.id || genId(),
+              name: v.job || 'Task',
+              start: v.start,
+              finish: v.finish,
+              notes: v.notes || '',
+              order: 0
+            }]
+          };
+          jobsMap.set(String(k), job);
+        });
       } else if (Array.isArray(legacyTasks)) {
-        ensureTaskIdsAndOrder(legacyTasks);
-        legacyTasks.forEach(function (t) { tasksMap.set(String(t.id), t); });
+        legacyTasks.forEach(function (t) {
+          const job = {
+            id: genId(),
+            name: t.job || 'Untitled',
+            color: t.color || '#3949ab',
+            archived: t.archived || false,
+            notes: t.notes || '',
+            tasks: [{
+              id: t.id || genId(),
+              name: t.job || 'Task',
+              start: t.start,
+              finish: t.finish,
+              notes: t.notes || '',
+              order: 0
+            }]
+          };
+          jobsMap.set(String(t.id), job);
+        });
       }
 
       const cardsMap = new LiveMap();
@@ -5027,7 +5524,7 @@ function migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList) {
 
       projectsMap.set(LEGACY_MIGRATION_PROJECT_ID, new LiveObject({
         name: headerTitle || 'APS Production',
-        tasksMap: tasksMap,
+        jobsMap: jobsMap,
         boardCardsMap: cardsMap,
         boardColumns: root.get('boardColumns') || [],
         fieldOptions: root.get('fieldOptions') || {},
@@ -5074,7 +5571,7 @@ function pushProjectToShared(projectId, headerOverride) {
       if (!(entry instanceof LiveObjectCtor)) {
         entry = new LiveObjectCtor({
           name: proj.name,
-          tasksMap: new LiveMapCtor(),
+          jobsMap: new LiveMapCtor(),
           boardCardsMap: new LiveMapCtor(),
           boardColumns: [],
           fieldOptions: {},
@@ -5089,14 +5586,14 @@ function pushProjectToShared(projectId, headerOverride) {
 
       entry.set('name', proj.name);
 
-      // tasks
-      const tasksMap = entry.get('tasksMap');
-      if (tasksMap && typeof tasksMap.set === 'function') {
-        const liveTaskIds = new Set(proj.tasks.map(function (t) { return String(t.id); }));
-        proj.tasks.forEach(function (t) { tasksMap.set(String(t.id), t); });
-        if (typeof tasksMap.keys === 'function') {
-          Array.from(tasksMap.keys()).forEach(function (key) {
-            if (!liveTaskIds.has(key)) tasksMap.delete(key);
+      // jobs (nested model)
+      const jobsMap = entry.get('jobsMap');
+      if (jobsMap && typeof jobsMap.set === 'function') {
+        const liveJobIds = new Set(proj.jobs.map(function (j) { return String(j.id); }));
+        proj.jobs.forEach(function (j) { jobsMap.set(String(j.id), j); });
+        if (typeof jobsMap.keys === 'function') {
+          Array.from(jobsMap.keys()).forEach(function (key) {
+            if (!liveJobIds.has(key)) jobsMap.delete(key);
           });
         }
       }
@@ -5232,7 +5729,7 @@ function applyLiveblocksState(root) {
     }
 
     const remoteName      = entry.get('name');
-    const remoteTasksMap  = entry.get('tasksMap');
+    const remoteJobsMap   = entry.get('jobsMap');
     const remoteCardsMap  = entry.get('boardCardsMap');
     const remoteColumns   = entry.get('boardColumns');
     const remoteFieldOpts = entry.get('fieldOptions');
@@ -5243,7 +5740,7 @@ function applyLiveblocksState(root) {
       local = {
         id: projectId,
         name: remoteName || 'Untitled Project',
-        tasks: [],
+        jobs: [],
         boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
         boardCards: [],
         fieldOptions: {},
@@ -5258,17 +5755,16 @@ function applyLiveblocksState(root) {
       listChanged = true;
     }
 
-    // ── tasks ──
-    if (remoteTasksMap && typeof remoteTasksMap.values === 'function') {
-      const t = Array.from(remoteTasksMap.values());
-      ensureTaskIdsAndOrder(t);
-      t.forEach(function (task) { if (!task.notes) task.notes = ''; });
-      t.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
-      local.tasks = t;
-    } else if (Array.isArray(remoteTasksMap)) {
-      // fallback: plain array (shouldn't happen, but protects against corruption)
-      ensureTaskIdsAndOrder(remoteTasksMap);
-      local.tasks = remoteTasksMap.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    // ── jobs ──
+    if (remoteJobsMap && typeof remoteJobsMap.values === 'function') {
+      const j = Array.from(remoteJobsMap.values());
+      ensureJobAndTaskIds(j);
+      j.forEach(function (job) { if (!job.notes) job.notes = ''; });
+      j.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      local.jobs = j;
+    } else if (Array.isArray(remoteJobsMap)) {
+      ensureJobAndTaskIds(remoteJobsMap);
+      local.jobs = remoteJobsMap.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     }
 
     // ── columns ──
