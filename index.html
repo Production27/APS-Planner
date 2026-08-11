@@ -135,6 +135,11 @@
     pointer-events: auto; box-shadow: 0 1px 2px rgba(0,0,0,0.15);
   }
   .cal-event-bar:hover { filter: brightness(1.1); z-index: 5; }
+  .cal-event-bar .cal-jobname-tag {
+    display: inline-block; font-size: 8.5px; font-weight: 700; color: #fff;
+    padding: 0 5px; border-radius: 7px; margin-left: 4px; vertical-align: middle;
+    line-height: 12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3);
+  }
   .cal-event-bar.cap-start { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
   .cal-event-bar.cap-end { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
   .cal-event-bar.cont-start::before {
@@ -2610,12 +2615,12 @@ function renderMonthCalendar() {
       classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
       classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
       if (isTaskFinished(job, task)) classes.push('finished');
-      barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (job.color || '#3949ab') + ';" title="' +
-        escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+      barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (task.color || job.color || '#3949ab') + ';" title="' +
+        escapeHtml(task.name) + ' — ' + escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
         '<div class="cal-bar-drag-left" data-drag="left"></div>' +
         '<div class="cal-bar-drag-body" data-drag="move"></div>' +
         '<div class="cal-bar-drag-right" data-drag="right"></div>' +
-        escapeHtml(job.name) + '</div>';
+        escapeHtml(task.name) + ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(job.name) + '</span></div>';
     });
   }
 
@@ -2724,12 +2729,12 @@ function renderWeekCalendar() {
     classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
     classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
     if (isTaskFinished(job, task)) classes.push('finished');
-    barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (job.color || '#3949ab') + ';" title="' +
-      escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+    barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (task.color || job.color || '#3949ab') + ';" title="' +
+      escapeHtml(task.name) + ' — ' + escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
       '<div class="cal-bar-drag-left" data-drag="left"></div>' +
       '<div class="cal-bar-drag-body" data-drag="move"></div>' +
       '<div class="cal-bar-drag-right" data-drag="right"></div>' +
-      escapeHtml(job.name) + '</div>';
+      escapeHtml(task.name) + ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(job.name) + '</span></div>';
   });
 
   let barsLayer = daysEl.querySelector('.cal-bars-layer');
@@ -3123,8 +3128,23 @@ function renderGantt() {
       const x2 = b.left;
       const y2 = b.top + 11;
       const path = document.createElementNS(svgNs, 'path');
-      const midX = (x1 + x2) / 2;
-      path.setAttribute('d', 'M ' + x1 + ' ' + y1 + ' L ' + midX + ' ' + y1 + ' L ' + midX + ' ' + y2 + ' L ' + x2 + ' ' + y2);
+      let d;
+      if (x2 >= x1) {
+        // Normal case: successor starts at/after predecessor ends — the
+        // gap between the bars is empty, so a simple mid-point elbow is fine.
+        const midX = (x1 + x2) / 2;
+        d = 'M ' + x1 + ' ' + y1 + ' L ' + midX + ' ' + y1 + ' L ' + midX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
+      } else {
+        // Overlap case: successor starts before predecessor ends, so a
+        // straight-through elbow would cut across one or both bars. Route
+        // it out to the right of the predecessor, through the empty gap
+        // between the rows, then down/up into the left of the successor.
+        const laneY = Math.min(a.top, b.top) + 31;
+        const rightX = x1 + 10;
+        const leftX = x2 - 10;
+        d = 'M ' + x1 + ' ' + y1 + ' L ' + rightX + ' ' + y1 + ' L ' + rightX + ' ' + laneY + ' L ' + leftX + ' ' + laneY + ' L ' + leftX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
+      }
+      path.setAttribute('d', d);
       path.setAttribute('stroke', 'rgba(100,100,100,0.35)');
       path.setAttribute('stroke-width', '2');
       path.setAttribute('fill', 'none');
