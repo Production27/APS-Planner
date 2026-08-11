@@ -903,7 +903,28 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .legend-float-title { color: var(--text); }
   body.dark-mode .legend-text { color: var(--text-light); }
   body.dark-mode .modal-box p { color: var(--text-light); }
+
+  /* ===== ARCHIVE ===== */
+  .archive-toggle-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-light);
+    padding: 0 10px; height: 26px; border-radius: 6px; cursor: pointer;
+    font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;
+    transition: all 0.15s;
+  }
+  .archive-toggle-btn:hover { background: #eef1fa; color: var(--primary); border-color: var(--primary-light); }
+  .archive-toggle-btn.active { background: rgba(57,73,171,0.12); color: var(--primary); border-color: var(--primary-light); }
+  body.dark-mode .archive-toggle-btn { border-color: var(--border); color: var(--text-light); }
+  body.dark-mode .archive-toggle-btn:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
+  body.dark-mode .archive-toggle-btn.active { background: rgba(57,73,171,0.25); color: #cfd4e0; border-color: var(--primary-light); }
+  .job-card.archived { opacity: 0.55; }
+  .task-row.archived { opacity: 0.55; }
+  .job-card.finished { opacity: 0.65; }
+  .task-row.finished { opacity: 0.65; }
+  .cal-event-bar.finished { opacity: 0.65; }
+  .task-bar.finished { opacity: 0.65; }
+
 </style>
+<base target="_blank">
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
@@ -960,6 +981,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <button class="ghost-toggle-btn" id="ghostToggleBtn" onclick="toggleGhostDropdown(event)" title="Ghost overlay">👻 Ghost</button>
       <div class="ghost-dropdown" id="ghostDropdown"></div>
     </div>
+    <button class="archive-toggle-btn" id="archiveToggleBtn" onclick="toggleShowArchived()" title="Show archived jobs">📦 Archived</button>
     <button onclick="zoomIn()" title="Zoom in">+</button>
     <button onclick="zoomOut()" title="Zoom out">−</button>
     <button onclick="resetZoom()" title="Reset zoom">⟲</button>
@@ -1075,6 +1097,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="form-actions">
               <button class="btn btn-primary" onclick="saveJob()">💾 Save Job</button>
               <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
+              <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;">📦 Archive</button>
               <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;">🗑 Delete</button>
             </div>
           </div>
@@ -1334,6 +1357,7 @@ function ensureTaskIdsAndOrder(arr) {
   (arr || []).forEach(function(t, i) {
     if (!t.id) t.id = genId();
     if (typeof t.order !== 'number') t.order = i;
+    if (typeof t.archived !== 'boolean') t.archived = false;
   });
   return arr;
 }
@@ -1348,6 +1372,9 @@ let editingIndex = -1;
 let dayWidth = 28;
 let startDate, endDate;
 let deleteTarget = -1;
+let showArchived = false;
+const ARCHIVE_CUTOFF_DAYS = 30;
+let ganttFirstRender = true;
 
 // ===== TRELLO-STYLE BOARD =====
 const DEFAULT_BOARD_COLUMNS = [
@@ -1682,9 +1709,81 @@ function closeAllDropdowns() {
 function saveTasks() {
   ensureTaskIdsAndOrder(tasks);
   tasks.forEach(function(t, i) { t.order = i; }); // keep order in sync with current array position
+  autoArchiveTasks();
   saveActiveProject();
   queueSharedSync();
 }
+
+function autoArchiveTasks() {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - ARCHIVE_CUTOFF_DAYS);
+  let changed = false;
+  tasks.forEach(function(t) {
+    if (!t.archived && new Date(t.finish + 'T00:00:00') < cutoff) {
+      t.archived = true;
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveActiveProject();
+    queueSharedSync();
+    logActivity('auto-archived old jobs');
+    showToast('Old jobs auto-archived', 'info');
+  }
+}
+
+function toggleShowArchived() {
+  showArchived = !showArchived;
+  const btn = document.getElementById('archiveToggleBtn');
+  if (btn) btn.classList.toggle('active', showArchived);
+  renderGantt();
+  renderJobList();
+  renderCalendar();
+}
+
+function archiveJob(idx) {
+  if (idx < 0 || idx >= tasks.length) return;
+  const task = tasks[idx];
+  task.archived = true;
+  saveTasks();
+  logActivity('archived job "' + task.job + '"');
+  renderJobList();
+  renderGantt();
+  renderCalendar();
+  showToast('Job archived', 'success');
+  // Refresh form if still editing this job
+  if (editingIndex === idx) editJob(idx);
+}
+
+function restoreJob(idx) {
+  if (idx < 0 || idx >= tasks.length) return;
+  const task = tasks[idx];
+  task.archived = false;
+  saveTasks();
+  logActivity('restored job "' + task.job + '"');
+  renderJobList();
+  renderGantt();
+  renderCalendar();
+  showToast('Job restored', 'success');
+  if (editingIndex === idx) editJob(idx);
+}
+
+function archiveCurrentJob() {
+  if (editingIndex >= 0) {
+    const task = tasks[editingIndex];
+    if (task.archived) restoreJob(editingIndex);
+    else archiveJob(editingIndex);
+  }
+}
+
+function isJobFinished(task) {
+  if (task.archived) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(task.finish + 'T00:00:00') < today;
+}
+
 function saveBoardColumns() { saveActiveProject(); queueSharedSync(); }
 function saveBoardCards() { ensureCardIds(boardCards); saveActiveProject(); queueSharedSync(); }
 function saveFieldOptions() { saveActiveProject(); queueSharedSync(); }
@@ -1764,6 +1863,7 @@ function init() {
   loadDarkModePref();
   loadActiveProjectData();
   buildColorPresets();
+  autoArchiveTasks();
   renderAll();
   setupScrollSync();
   buildCardColorPresets();
@@ -2223,10 +2323,11 @@ function renderMonthCalendar() {
   }
 
   const allJobs = tasks.map((t, idx) => {
+    if (!showArchived && t.archived) return null;
     const s = new Date(t.start + 'T00:00:00');
     const f = new Date(t.finish + 'T00:00:00');
     return { idx, task: t, start: s, finish: f };
-  });
+  }).filter(Boolean);
 
   const numRows = 6;
   const rowLanes = [];
@@ -2293,6 +2394,7 @@ function renderMonthCalendar() {
       const classes = ['cal-event-bar'];
       classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
       classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
+      if (isJobFinished(t)) classes.push('finished');
       barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (t.color || '#3949ab') + ';" title="' +
         escapeHtml(t.job) + (t.company ? ' — ' + escapeHtml(t.company) : '') + '" data-cal-idx="' + seg.idx + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
         '<div class="cal-bar-drag-left" data-drag="left"></div>' +
@@ -2342,10 +2444,11 @@ function renderWeekCalendar() {
   }
 
   const allJobs = tasks.map((t, idx) => {
+    if (!showArchived && t.archived) return null;
     const s = new Date(t.start + 'T00:00:00');
     const f = new Date(t.finish + 'T00:00:00');
     return { idx, task: t, start: s, finish: f };
-  });
+  }).filter(Boolean);
 
   // Build day cells (single row, 7 columns)
   let html = '';
@@ -2403,6 +2506,7 @@ function renderWeekCalendar() {
     const classes = ['cal-event-bar'];
     classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
     classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
+    if (isJobFinished(t)) classes.push('finished');
     barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (t.color || '#3949ab') + ';" title="' +
       escapeHtml(t.job) + (t.company ? ' — ' + escapeHtml(t.company) : '') + '" data-cal-idx="' + seg.idx + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
       '<div class="cal-bar-drag-left" data-drag="left"></div>' +
@@ -2660,10 +2764,12 @@ function renderGantt() {
   }
 
   // Row backgrounds & left panel
+  let visibleRowIdx = 0;
   tasks.forEach((task, idx) => {
+    if (!showArchived && task.archived) return;
     const bg = document.createElement('div');
     bg.className = 'row-bg';
-    bg.style.top = (idx * 34) + 'px';
+    bg.style.top = (visibleRowIdx * 34) + 'px';
     bg.style.width = gridWidth + 'px';
     grid.appendChild(bg);
 
@@ -2677,11 +2783,12 @@ function renderGantt() {
     const pctHtml = '<div class="progress-track"><div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + pct + '%;"></div></div><span class="progress-pct">' + pct + '%</span>';
 
     const row = document.createElement('div');
-    row.className = 'task-row';
+    row.className = 'task-row' + (task.archived ? ' archived' : '') + (isJobFinished(task) ? ' finished' : '');
     row.dataset.index = idx;
     row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + task.job + tag + noteDot + '</div>';
     row.addEventListener('click', () => { switchTab('manager'); editJob(idx); });
     leftBody.appendChild(row);
+    visibleRowIdx++;
   });
 
   // LIVE Today line
@@ -2704,6 +2811,7 @@ function renderGantt() {
   if (ghostTasks.length > 0) {
     const gp = projects[ghostProjectId];
 
+    let ghostVisibleIdx = 0;
     ghostTasks.forEach((task, gidx) => {
       const s = new Date(task.start + 'T00:00:00');
       const f = new Date(task.finish + 'T00:00:00');
@@ -2714,26 +2822,29 @@ function renderGantt() {
       bar.className = 'task-bar ghost';
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
-      bar.style.top = (gidx * 34 + 6) + 'px';
+      bar.style.top = (ghostVisibleIdx * 34 + 6) + 'px';
       bar.style.background = task.color || '#999';
       bar.textContent = duration > 2 ? task.job : '';
       grid.appendChild(bar);
+      ghostVisibleIdx++;
     });
   }
 
   // Task bars
+  let barVisibleIdx = 0;
   tasks.forEach((task, idx) => {
+    if (!showArchived && task.archived) return;
     const s = new Date(task.start + 'T00:00:00');
     const f = new Date(task.finish + 'T00:00:00');
     const startIdx = getDaysDiff(startDate, s);
     const duration = getDaysDiff(s, f) + 1;
     const bar = document.createElement('div');
-    bar.className = 'task-bar';
+    bar.className = 'task-bar' + (isJobFinished(task) ? ' finished' : '');
     bar.dataset.dragged = 'false';
     if (duration === 1) bar.classList.add('milestone');
     bar.style.left = (startIdx * dayWidth) + 'px';
     bar.style.width = (duration * dayWidth) + 'px';
-    bar.style.top = (idx * 34 + 6) + 'px';
+    bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
     bar.style.background = task.color;
     bar.textContent = duration > 2 ? task.job : '';
     bar.addEventListener('mouseenter', e => showTooltip(e, task));
@@ -2760,13 +2871,21 @@ function renderGantt() {
     bar.appendChild(handleRight);
 
     grid.appendChild(bar);
+    barVisibleIdx++;
   });
 
   // Restore scroll positions
   requestAnimationFrame(() => {
-    if (headerWrap) headerWrap.scrollLeft = savedScrollLeft;
     const tb = document.getElementById('timelineBody');
-    if (tb) tb.scrollTop = savedScrollTop;
+    if (ganttFirstRender) {
+      ganttFirstRender = false;
+      if (tb) tb.scrollTop = savedScrollTop;
+      scrollToToday();
+      if (headerWrap) headerWrap.scrollLeft = tb ? tb.scrollLeft : savedScrollLeft;
+    } else {
+      if (headerWrap) headerWrap.scrollLeft = savedScrollLeft;
+      if (tb) tb.scrollTop = savedScrollTop;
+    }
     setupScrollSync();
   });
 
@@ -3196,15 +3315,16 @@ function renderJobList() {
   list.innerHTML = '';
 
   tasks.forEach((task, idx) => {
+    if (!showArchived && task.archived) return;
     if (search && !task.job.toLowerCase().includes(search) && !task.company.toLowerCase().includes(search)) return;
 
     const s = new Date(task.start + 'T00:00:00');
     const f = new Date(task.finish + 'T00:00:00');
     const dur = getDaysDiff(s, f) + 1;
     const card = document.createElement('div');
-    card.className = 'job-card' + (editingIndex === idx ? ' active' : '');
+    card.className = 'job-card' + (editingIndex === idx ? ' active' : '') + (task.archived ? ' archived' : '') + (isJobFinished(task) ? ' finished' : '');
     card.innerHTML = '<div class="color-strip" style="background:' + task.color + ';"></div>' +
-      '<div class="job-card-title">' + task.job + '</div>' +
+      '<div class="job-card-title">' + task.job + (task.archived ? ' <span style="font-size:10px;color:#888;">(archived)</span>' : '') + '</div>' +
       '<div class="job-card-meta">' +
       '<span>📅 ' + s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + f.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>' +
       '<span>⏱ ' + dur + 'd</span>' + (task.notes ? '<span class="note-icon">📝</span>' : '') + '</div>' +
@@ -3217,7 +3337,11 @@ function renderJobList() {
 }
 
 function filterJobList() { renderJobList(); }
-function updateJobCount() { document.getElementById('jobCount').textContent = tasks.length; }
+function updateJobCount() {
+  const visible = tasks.filter(t => showArchived || !t.archived).length;
+  const archived = tasks.filter(t => t.archived).length;
+  document.getElementById('jobCount').textContent = visible + (archived > 0 ? ' / ' + tasks.length : '');
+}
 
 function addNewJob() {
   editingIndex = -1;
@@ -3225,6 +3349,7 @@ function addNewJob() {
   document.getElementById('jobForm').style.display = 'block';
   document.getElementById('formTitle').textContent = '➕ Add New Job';
   document.getElementById('deleteBtn').style.display = 'none';
+  document.getElementById('archiveBtn').style.display = 'none';
   document.getElementById('f_job').value = '';
   document.getElementById('f_company').value = '';
   document.getElementById('f_start').value = '';
@@ -3255,6 +3380,17 @@ function editJob(idx) {
   });
   updateJobColorSwatch();
   toggleJobColorPanel(false);
+
+  const archiveBtn = document.getElementById('archiveBtn');
+  archiveBtn.style.display = 'inline-flex';
+  if (task.archived) {
+    archiveBtn.innerHTML = '↩️ Restore';
+    archiveBtn.onclick = function() { restoreJob(idx); };
+  } else {
+    archiveBtn.innerHTML = '📦 Archive';
+    archiveBtn.onclick = function() { archiveJob(idx); };
+  }
+
   renderJobList();
 }
 
