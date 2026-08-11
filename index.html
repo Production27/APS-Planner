@@ -2904,10 +2904,22 @@ function calendarOpenJob(jobId, taskId) {
 }
 
 function renderGantt() {
-  // Row order within a job: earliest start date first. Ties broken by the
-  // task's stored order so identical start dates stay stable/predictable.
+  // Row order across the WHOLE board: earliest start date first, regardless
+  // of which job a task belongs to. Ties broken by job order then task's
+  // stored order so identical start dates stay stable/predictable.
   function byStartDate(a, b) {
     return (new Date(a.start) - new Date(b.start)) || ((a.order || 0) - (b.order || 0));
+  }
+  function buildVisibleTaskRows() {
+    const rows = [];
+    jobs.forEach(function(job) {
+      if (!showArchived && job.archived) return;
+      (job.tasks || []).forEach(function(task) { rows.push({ job: job, task: task }); });
+    });
+    rows.sort(function(a, b) {
+      return byStartDate(a.task, b.task) || ((a.job.order || 0) - (b.job.order || 0));
+    });
+    return rows;
   }
   computeDateRange();
   const totalDays = getDaysDiff(startDate, endDate) + 1;
@@ -2985,11 +2997,11 @@ function renderGantt() {
 
   let visibleRowIdx = 0;
   const jobBarMap = {};
+  const visibleRows = buildVisibleTaskRows();
 
-  jobs.forEach(function(job, jobIdx) {
-    if (!showArchived && job.archived) return;
-    (job.tasks || []).sort(byStartDate);
-    job.tasks.forEach(function(task, taskIdx) {
+  visibleRows.forEach(function(entry) {
+    const job = entry.job, task = entry.task;
+    {
       const bg = document.createElement('div');
       bg.className = 'row-bg';
       bg.style.top = (visibleRowIdx * 34) + 'px';
@@ -3012,7 +3024,7 @@ function renderGantt() {
       row.addEventListener('click', () => { switchTab('manager'); editJob(job.id, task.id); });
       leftBody.appendChild(row);
       visibleRowIdx++;
-    });
+    }
   });
 
   const todayIdx = getDaysDiff(startDate, today);
@@ -3059,10 +3071,9 @@ function renderGantt() {
   });
 
   let barVisibleIdx = 0;
-  jobs.forEach(function(job, jobIdx) {
-    if (!showArchived && job.archived) return;
-    (job.tasks || []).sort(byStartDate);
-    job.tasks.forEach(function(task, taskIdx) {
+  visibleRows.forEach(function(entry) {
+    const job = entry.job, task = entry.task;
+    {
       const s = new Date(task.start + 'T00:00:00');
       const f = new Date(task.finish + 'T00:00:00');
       const startIdx = getDaysDiff(startDate, s);
@@ -3118,7 +3129,7 @@ function renderGantt() {
       });
 
       barVisibleIdx++;
-    });
+    }
   });
 
   const svgNs = 'http://www.w3.org/2000/svg';
@@ -3184,11 +3195,11 @@ let reorderIndicatorEl = null;
 // --- Right edge: drag to change finish date ---
 // Shifts every task that comes after the given task in the same job (by
 // task.order) by the same number of days — keeps each later task's own
-// duration and any gaps between tasks intact. Call this whenever a
-// task's finish date moves: a whole-bar drag, or a right-edge resize.
-// Left-edge resize deliberately does NOT call this, since it only moves
-// the dragged task's start date — its finish (and so the next task's
-// dependency) hasn't changed.
+// duration and any gaps between tasks intact. Used for right-edge resize
+// (extending/shortening a task's finish pushes the rest of the schedule
+// with it). Deliberately NOT used for whole-bar moves or left-edge resize,
+// since those change a task's start date and should be free to cross over
+// neighboring tasks so the Gantt can reorder rows by start date.
 function cascadeShiftLaterTasks(jobId, taskId, deltaDays) {
   if (!deltaDays) return;
   const found = findJob(jobId);
@@ -3422,7 +3433,6 @@ function onBarMoveEnd(e) {
     newFinish.setDate(newFinish.getDate() + duration - 1);
     task.start = newStart.toISOString().split('T')[0];
     task.finish = newFinish.toISOString().split('T')[0];
-    cascadeShiftLaterTasks(jobId, taskId, deltaDays);
     saveJobs();
     logActivity('moved task "' + task.name + '"');
     renderJobList();
