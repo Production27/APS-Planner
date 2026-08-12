@@ -3981,11 +3981,23 @@ function updateJobCount() {
 // the task's board column (see ensureJobTasksMatchColumns / changeColumnColor).
 // Call ensureJobTasksMatchColumns(job) before this so job.tasks is already
 // aligned to BOARD_COLUMNS in the same order.
+// Holds the full per-column task list (including any hidden-from-schedule
+// columns that don't get a row below) so saveJob() can carry their data
+// forward untouched instead of trying to read a row that was never rendered.
+let currentGridTasks = [];
+
 function renderFixedTaskGrid(taskList) {
+  currentGridTasks = taskList || [];
   const container = document.getElementById('taskRows');
   if (!container) return;
   container.innerHTML = '';
   (taskList || []).forEach(function(t, i) {
+    const col = BOARD_COLUMNS[i];
+    // A board hidden from the Gantt/Calendar is hidden here too — its data
+    // (dates/notes) is untouched, it just isn't editable from this grid
+    // while hidden. Un-hide the board to edit it again.
+    if (col && col.hideFromSchedule) return;
+
     const row = document.createElement('div');
     row.className = 'task-fixed-row';
     row.dataset.index = i;
@@ -4092,19 +4104,30 @@ function saveJob() {
 
   if (!name) { showToast('Job name is required', 'error'); return; }
 
-  const gridRows = document.querySelectorAll('#taskRows .task-fixed-row');
-  if (!gridRows.length) { showToast('A job needs at least one task', 'error'); return; }
+  if (!BOARD_COLUMNS.length) { showToast('A job needs at least one task', 'error'); return; }
 
-  // Rows are locked 1:1 to BOARD_COLUMNS by position — read dates/notes
-  // straight out of the fixed grid; name/color/order come from the column.
+  // Iterate BOARD_COLUMNS (not the rendered rows) since hidden-from-schedule
+  // columns don't get a row in the grid at all — their task data is carried
+  // forward untouched from currentGridTasks instead of read from the DOM.
   const cleanedTasks = [];
-  for (let i = 0; i < gridRows.length; i++) {
-    const row = gridRows[i];
+  for (let i = 0; i < BOARD_COLUMNS.length; i++) {
+    const col = BOARD_COLUMNS[i];
+    const label = col.label;
+
+    if (col.hideFromSchedule) {
+      const existing = currentGridTasks[i];
+      cleanedTasks.push(existing ? Object.assign({}, existing, { order: i }) : {
+        id: genId(), name: label, start: '', finish: '', notes: '', color: col.color || '#3949ab', order: i
+      });
+      continue;
+    }
+
+    const row = document.querySelector('#taskRows .task-fixed-row[data-index="' + i + '"]');
+    if (!row) continue; // shouldn't happen while col is visible, but don't block save over it
+
     const rowStart = (row.querySelector('.task-fixed-start').value || '').trim();
     const rowFinish = (row.querySelector('.task-fixed-finish').value || '').trim();
     const rowNotes = (row.querySelector('.task-fixed-notes').value || '').trim();
-    const col = BOARD_COLUMNS[i];
-    const label = col ? col.label : ('Task ' + (i + 1));
     // Section 4 taught the Gantt to render tasks with blank dates
     // gracefully, so dates are no longer required to save — a row can
     // sit empty until you're ready to schedule it.
@@ -4619,7 +4642,7 @@ function renderBoard() {
               '<div class="board-col-color-grid" id="col-colors-' + col.id + '"></div>' +
             '</div>' +
             '<div class="board-col-gantt-toggle" onclick="toggleColumnScheduleVisibility(\'' + col.id + '\', event)">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Show on Gantt/Calendar</span>' +
+              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Show in Schedule</span>' +
               '<span class="board-col-gantt-switch' + (col.hideFromSchedule ? '' : ' on') + '"><span class="knob"></span></span>' +
             '</div>' +
             '<div class="board-col-settings-divider"></div>' +
@@ -5035,22 +5058,27 @@ function closeAllColSettings() {
   document.querySelectorAll('.board-col-settings-dropdown').forEach(d => d.classList.remove('show'));
 }
 
-// A hidden board still exists as a real column — jobs still get a task row
-// for it, dates still save, cards still sit in it on the Kanban board. This
-// only controls whether that column's task shows up as a row/bar on the
-// Gantt chart and a row on the Calendar (e.g. hide "Bid" so bidding jobs
-// don't clutter either schedule view until they're actually scheduled).
+// A hidden board still exists as a real column — jobs still get a task for
+// it and its dates/notes are preserved untouched. This just controls
+// whether that column's task shows up: as a row/bar on the Gantt, a row on
+// the Calendar, and (since it can't be scheduled from either of those while
+// hidden) as an editable row in the Job Manager's fixed grid too. Un-hide
+// the board to see and edit it again everywhere.
 function toggleColumnScheduleVisibility(colId, event) {
   if (event) event.stopPropagation();
   const col = BOARD_COLUMNS.find(c => c.id === colId);
   if (!col) return;
   col.hideFromSchedule = !col.hideFromSchedule;
   saveBoardColumns();
-  logActivity((col.hideFromSchedule ? 'hid' : 'showed') + ' board "' + col.label + '" on the Gantt/Calendar');
+  logActivity((col.hideFromSchedule ? 'hid' : 'showed') + ' board "' + col.label + '" on the Gantt/Calendar/Job Manager');
   renderBoard();
   renderGantt();
   renderCalendar();
-  showToast('"' + col.label + '" ' + (col.hideFromSchedule ? 'hidden from' : 'shown on') + ' the Gantt & Calendar', 'success');
+  if (editingJobId) {
+    const found = findJob(editingJobId);
+    if (found) renderFixedTaskGrid(found.job.tasks);
+  }
+  showToast('"' + col.label + '" ' + (col.hideFromSchedule ? 'hidden from' : 'shown on') + ' the Gantt, Calendar & Job Manager', 'success');
   closeAllColSettings();
 }
 
