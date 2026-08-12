@@ -377,7 +377,8 @@
   .job-card .delete-btn { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
   .job-card .delete-btn:hover { background: #ffebee; color: var(--danger); }
   .manager-form-area { flex: 1; padding: 24px 32px; overflow-y: auto; background: var(--bg); }
-  .form-container { max-width: 700px; margin: 0 auto; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 32px; }
+  .job-edit-row { display: flex; gap: 24px; align-items: flex-start; max-width: 1080px; margin: 0 auto; }
+  .form-container { max-width: 700px; margin: 0; flex: 1 1 700px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 32px; }
   .form-container h3 { font-size: 18px; font-weight: 700; margin-bottom: 24px; color: var(--text); display: flex; align-items: center; gap: 10px; }
   .form-group { margin-bottom: 18px; }
   .form-group label { display: block; font-size: 12px; font-weight: 700; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
@@ -385,6 +386,34 @@
   .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   .form-group textarea { resize: vertical; min-height: 80px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* Per-job comment thread — sits beside the job edit box in Job Manager */
+  .job-comments-panel {
+    flex: 0 0 340px; width: 340px; max-height: calc(100vh - 220px);
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px 22px; display: none; flex-direction: column;
+  }
+  .job-comments-panel h4 { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--text); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .job-comments-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; min-height: 60px; }
+  .job-comments-empty { font-size: 12px; color: var(--text-light); text-align: center; padding: 24px 0; }
+  .job-comment-item { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+  .job-comment-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+  .job-comment-author { font-size: 12px; font-weight: 700; color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .job-comment-when { font-size: 11px; color: var(--text-light); flex-shrink: 0; }
+  .job-comment-text { font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .job-comment-delete { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
+  .job-comment-delete:hover { color: var(--danger); background: #ffebee; }
+  .job-comments-input-row { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+  .job-comments-input-row textarea {
+    width: 100%; min-height: 60px; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-family: inherit; font-size: 13px; resize: vertical; outline: none;
+    background: var(--card); color: var(--text);
+  }
+  .job-comments-input-row textarea:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
+  @media (max-width: 1440px) {
+    .job-edit-row { flex-direction: column; max-width: 700px; }
+    .job-comments-panel { width: 100%; max-width: 700px; flex: none; max-height: 400px; }
+  }
 
   /* Section 3: fixed task grid — rows locked to board columns */
   .task-fixed-row { display: grid; grid-template-columns: auto 1.2fr 1fr 0.7fr 1fr 1.4fr; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -897,6 +926,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   body.dark-mode .job-card.active { background: rgba(57,73,171,0.16); }
   body.dark-mode .job-card .delete-btn:hover { background: rgba(220,53,69,0.18); }
+  body.dark-mode .job-comment-delete:hover { background: rgba(220,53,69,0.18); }
 
   body.dark-mode .form-group label { color: var(--text-light); }
   body.dark-mode .form-group input,
@@ -1119,41 +1149,47 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <h4>No Job Selected</h4>
             <p>Select a job from the list or click "Add Job" to create a new one.</p>
           </div>
-          <div class="form-container" id="jobForm" style="display:none;">
-            <h3 id="formTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job</h3>
-            <div class="form-group">
-              <label>Job Name *</label>
-              <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
-            </div>
-            <div class="form-group">
-              <label>Tasks</label>
-              <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Duration</span><span>Finish</span><span>Notes</span></div>
-              <div id="taskRows"></div>
-            </div>
-            <div class="form-group">
-              <div class="color-toggle-row" onclick="toggleJobColorPanel()">
-                <label>Bar Color</label>
-                <div class="color-toggle-swatch-wrap">
-                  <span class="color-toggle-swatch" id="jobColorToggleSwatch" style="background:#3949ab;"></span>
-                  <span class="color-toggle-arrow" id="jobColorToggleArrow">▾</span>
+          <div class="job-edit-row" id="jobEditRow">
+            <div class="form-container" id="jobForm" style="display:none;">
+              <h3 id="formTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job</h3>
+              <div class="form-group">
+                <label>Job Name *</label>
+                <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
+              </div>
+              <div class="form-group">
+                <label>Tasks</label>
+                <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Duration</span><span>Finish</span><span>Notes</span></div>
+                <div id="taskRows"></div>
+              </div>
+              <div class="form-group">
+                <div class="color-toggle-row" onclick="toggleJobColorPanel()">
+                  <label>Bar Color</label>
+                  <div class="color-toggle-swatch-wrap">
+                    <span class="color-toggle-swatch" id="jobColorToggleSwatch" style="background:#3949ab;"></span>
+                    <span class="color-toggle-arrow" id="jobColorToggleArrow">▾</span>
+                  </div>
+                </div>
+                <div class="color-picker-panel" id="jobColorPickerPanel">
+                  <div class="color-picker-wrapper">
+                    <input type="color" id="f_color" value="#3949ab" oninput="updateJobColorSwatch()">
+                    <div class="color-presets" id="colorPresets"></div>
+                  </div>
                 </div>
               </div>
-              <div class="color-picker-panel" id="jobColorPickerPanel">
-                <div class="color-picker-wrapper">
-                  <input type="color" id="f_color" value="#3949ab" oninput="updateJobColorSwatch()">
-                  <div class="color-presets" id="colorPresets"></div>
-                </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" onclick="saveJob()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Save Job</button>
+                <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
+                <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
+                <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>
               </div>
             </div>
-            <div class="form-group">
-              <label>Notes</label>
-              <textarea id="f_notes" placeholder="Add any notes, dependencies, or details about this job..."></textarea>
-            </div>
-            <div class="form-actions">
-              <button class="btn btn-primary" onclick="saveJob()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Save Job</button>
-              <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
-              <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
-              <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>
+            <div class="job-comments-panel" id="jobCommentsPanel" style="display:none;">
+              <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> Comments</h4>
+              <div class="job-comments-list" id="jobCommentsList"></div>
+              <div class="job-comments-input-row">
+                <textarea id="newJobCommentText" placeholder="Add a note or comment..." onkeydown="handleJobCommentKey(event)"></textarea>
+                <button class="btn btn-primary" onclick="addJobComment()" style="align-self:flex-end;">Post</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1565,6 +1601,15 @@ function ensureJobAndTaskIds(arr) {
     if (!job.id) job.id = genId();
     if (typeof job.order !== 'number') job.order = i;
     if (typeof job.archived !== 'boolean') job.archived = false;
+    if (!Array.isArray(job.comments)) {
+      // The old single free-text notes field became a comment thread —
+      // carry any existing text forward as the first entry instead of
+      // silently dropping it. Runs once per job: after this, job.comments
+      // is always an array, so it's never re-migrated.
+      job.comments = (job.notes && job.notes.trim())
+        ? [{ id: genId(), author: 'Imported note', text: job.notes.trim(), when: null }]
+        : [];
+    }
     (job.tasks || []).forEach(function(task, j) {
       if (!task.id) task.id = genId();
       if (typeof task.order !== 'number') task.order = j;
@@ -4011,7 +4056,7 @@ function renderJobList() {
       (s && f ? '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + f.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>' +
       '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + dur + 'd</span>' : '') +
       '<span class="task-count-tag">' + taskCountLabel + '</span>' +
-      (job.notes ? '<span class="note-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></span>' : '') + '</div>' +
+      ((job.comments && job.comments.length) ? '<span class="note-icon" title="' + job.comments.length + ' comment' + (job.comments.length === 1 ? '' : 's') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> ' + job.comments.length + '</span>' : '') + '</div>' +
       '<button class="delete-btn" onclick="event.stopPropagation(); promptDeleteJob(\'' + job.id + '\')" title="Delete">×</button>';
     card.onclick = () => editJob(job.id);
     list.appendChild(card);
@@ -4164,7 +4209,9 @@ function addNewJob() {
   document.getElementById('archiveBtn').style.display = 'none';
   document.getElementById('f_job').value = '';
   document.getElementById('f_color').value = '#3949ab';
-  document.getElementById('f_notes').value = '';
+  // No job exists yet to attach comments to — the panel reappears once
+  // saveJob() gives this job an id (see the end of saveJob()).
+  document.getElementById('jobCommentsPanel').style.display = 'none';
   var defaultTasks = BOARD_COLUMNS.map(function(col, i) {
     return { id: genId(), name: col.label, start: '', finish: '', notes: '', color: col.color || '#3949ab', order: i };
   });
@@ -4190,7 +4237,9 @@ function editJob(jobId) {
   document.getElementById('deleteBtn').style.display = 'inline-flex';
   document.getElementById('f_job').value = job.name;
   document.getElementById('f_color').value = job.color;
-  document.getElementById('f_notes').value = job.notes || '';
+  document.getElementById('jobCommentsPanel').style.display = 'flex';
+  document.getElementById('newJobCommentText').value = '';
+  renderJobComments(job);
   ensureJobTasksMatchColumns(job);
   renderFixedTaskGrid(job.tasks);
   document.querySelectorAll('.color-preset').forEach(p => {
@@ -4212,10 +4261,82 @@ function editJob(jobId) {
   renderJobList();
 }
 
+// ===== JOB COMMENTS =====
+// Newest first, like the activity log. Each entry is attributed to
+// getStoredDisplayName() (the same name used for Liveblocks sync/activity
+// log) and rides along with the rest of the job object through the normal
+// job sync path — no separate Liveblocks plumbing needed.
+function renderJobComments(job) {
+  const listEl = document.getElementById('jobCommentsList');
+  if (!listEl) return;
+  const comments = (job.comments || []).slice().sort(function(a, b) { return (b.when || 0) - (a.when || 0); });
+  if (!comments.length) {
+    listEl.innerHTML = '<div class="job-comments-empty">No comments yet.</div>';
+    return;
+  }
+  listEl.innerHTML = comments.map(function(c) {
+    const whenLabel = c.when
+      ? new Date(c.when).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : 'Imported';
+    return '<div class="job-comment-item">' +
+      '<div class="job-comment-meta">' +
+        '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
+        '<span style="display:flex;align-items:center;gap:4px;">' +
+          '<span class="job-comment-when">' + whenLabel + '</span>' +
+          '<button class="job-comment-delete" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="job-comment-text">' + escapeHtml(c.text) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function addJobComment() {
+  if (!editingJobId) return;
+  const found = findJob(editingJobId);
+  if (!found) return;
+  const textarea = document.getElementById('newJobCommentText');
+  const text = (textarea.value || '').trim();
+  if (!text) return;
+
+  let author = getStoredDisplayName();
+  if (!author) {
+    author = window.prompt('Your name (shown on comments):') || 'Team member';
+    localStorage.setItem(DISPLAY_NAME_KEY, author);
+  }
+
+  const job = found.job;
+  if (!Array.isArray(job.comments)) job.comments = [];
+  job.comments.push({ id: genId(), author: author, text: text, when: Date.now() });
+  textarea.value = '';
+  saveJobs();
+  logActivity('commented on job "' + job.name + '"');
+  renderJobComments(job);
+  renderJobList();
+}
+
+function deleteJobComment(jobId, commentId) {
+  const found = findJob(jobId);
+  if (!found) return;
+  const job = found.job;
+  job.comments = (job.comments || []).filter(function(c) { return c.id !== commentId; });
+  saveJobs();
+  renderJobComments(job);
+  renderJobList();
+}
+
+// Ctrl/Cmd+Enter posts — plain Enter still inserts a newline, since comments
+// are often more than one line.
+function handleJobCommentKey(event) {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    addJobComment();
+  }
+}
+
 function saveJob() {
   const name = document.getElementById('f_job').value.trim();
   const color = document.getElementById('f_color').value;
-  const notes = document.getElementById('f_notes').value.trim();
 
   if (!name) { showToast('Job name is required', 'error'); return; }
 
@@ -4271,7 +4392,6 @@ function saveJob() {
     const job = found.job;
     job.name = name;
     job.color = color;
-    job.notes = notes;
     job.tasks = cleanedTasks;
     // Saving the schedule counts as "the dates changed" (Section 5) — release
     // any manual column override so auto-sync resumes right away instead of
@@ -4285,7 +4405,7 @@ function saveJob() {
       name: name,
       color: color,
       archived: false,
-      notes: notes,
+      comments: [],
       tasks: cleanedTasks
     };
     jobs.push(newJob);
@@ -4306,6 +4426,13 @@ function saveJob() {
   // waiting on the 60s interval or a tab switch.
   syncCardColumns();
   renderBoard();
+  // A brand-new job only gets an id here, so the comments panel (hidden by
+  // addNewJob since there was nothing to attach comments to yet) opens now.
+  const savedJob = findJob(editingJobId);
+  if (savedJob) {
+    document.getElementById('jobCommentsPanel').style.display = 'flex';
+    renderJobComments(savedJob.job);
+  }
 }
 
 function cancelEdit() {
@@ -4313,6 +4440,7 @@ function cancelEdit() {
   editingTaskId = null;
   document.getElementById('emptyState').style.display = 'block';
   document.getElementById('jobForm').style.display = 'none';
+  document.getElementById('jobCommentsPanel').style.display = 'none';
   renderJobList();
 }
 
@@ -4416,6 +4544,7 @@ function executeDelete() {
       editingTaskId = null;
       document.getElementById('emptyState').style.display = 'block';
       document.getElementById('jobForm').style.display = 'none';
+      document.getElementById('jobCommentsPanel').style.display = 'none';
     }
     renderJobList();
     renderGantt();
@@ -4440,6 +4569,7 @@ function clearAllJobs() {
     editingTaskId = null;
     document.getElementById('emptyState').style.display = 'block';
     document.getElementById('jobForm').style.display = 'none';
+    document.getElementById('jobCommentsPanel').style.display = 'none';
     renderJobList();
     renderGantt();
     renderCalendar();
@@ -5955,7 +6085,9 @@ function isBusyEditing() {
     const tag = active.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
       // Only block if the focused input is actually inside the job form
-      if (active.closest && active.closest('#jobForm')) return true;
+      // (or the comments panel beside it, so a mid-draft comment isn't
+      // disrupted by a remote refresh either)
+      if (active.closest && (active.closest('#jobForm') || active.closest('#jobCommentsPanel'))) return true;
     }
   }
   return false;
