@@ -385,6 +385,7 @@
   body.dark-mode .job-card-board-tag { background: rgba(57,73,171,0.18); }
   .job-card-board-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .job-current-board-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-light); margin: -14px 0 20px; }
+  .field-error-hint { display: block; font-size: 11px; font-weight: 600; color: var(--danger); margin-top: 6px; }
   .job-current-board-indicator strong { color: var(--text); font-weight: 700; }
   .manager-form-area { flex: 1; padding: 24px 32px; overflow-y: auto; background: var(--bg); }
   .job-edit-row { display: flex; gap: 24px; align-items: flex-start; max-width: 1080px; margin: 0 auto; }
@@ -1181,11 +1182,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
               <div class="form-group">
                 <label>Job Name *</label>
                 <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
+                <span class="field-error-hint" id="f_job_hint" style="display:none;">Name required to save</span>
               </div>
               <div class="form-group">
                 <label>Tasks</label>
                 <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Duration</span><span>Finish</span><span>Notes</span></div>
                 <div id="taskRows"></div>
+                <div class="field-error-hint" id="taskRowsWarning" style="display:none;"></div>
               </div>
               <div class="form-group">
                 <div class="color-toggle-row" onclick="toggleJobColorPanel()">
@@ -1247,8 +1250,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
               </div>
 
               <div class="form-actions">
-                <button class="btn btn-primary" onclick="saveJob()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Save Job</button>
-                <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
+                <button class="btn btn-secondary" onclick="cancelEdit()">Close</button>
                 <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
                 <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>
               </div>
@@ -1382,6 +1384,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="form-group">
         <label>Title *</label>
         <input type="text" id="c_title" placeholder="e.g. Follow up on change order">
+        <span class="field-error-hint" id="c_title_hint" style="display:none;">Title required to save</span>
       </div>
       <div class="form-group">
         <label>Description</label>
@@ -1451,8 +1454,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="modal-actions" style="justify-content:space-between; margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
         <button class="btn btn-danger" id="cardDeleteBtn" onclick="deleteCardFromModal()" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>
         <div style="display:flex; gap:10px;">
-          <button class="btn btn-secondary" onclick="closeCardModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveCard()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Save Card</button>
+          <button class="btn btn-secondary" onclick="closeCardModal()">Close</button>
         </div>
       </div>
     </div>
@@ -2508,6 +2510,8 @@ function init() {
   renderAll();
   setupScrollSync();
   buildCardColorPresets();
+  initJobFormAutosaveListeners();
+  initCardFormAutosaveListeners();
   setInterval(() => {
     if (document.getElementById('panel-gantt').classList.contains('active') && !barMoveState) renderGantt();
     syncCardColumns();
@@ -2798,6 +2802,10 @@ function applyBoardBgVisual() {
 }
 
 function switchTab(tab) {
+  // Navigating away from Job Manager (or anywhere) shouldn't leave a
+  // debounced edit stranded — commit it now. Harmless no-op if the job
+  // form isn't open or nothing changed since the last save.
+  flushAutoSaveJobForm();
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
@@ -4178,6 +4186,7 @@ function buildColorPresets() {
       container.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
       div.classList.add('selected');
       updateJobColorSwatch();
+      scheduleAutoSaveJobForm();
     };
     container.appendChild(div);
   });
@@ -4257,8 +4266,9 @@ function updateJobCount() {
 // Call ensureJobTasksMatchColumns(job) before this so job.tasks is already
 // aligned to BOARD_COLUMNS in the same order.
 // Holds the full per-column task list (including any hidden-from-schedule
-// columns that don't get a row below) so saveJob() can carry their data
-// forward untouched instead of trying to read a row that was never rendered.
+// columns that don't get a row below) so autoSaveJobForm() can carry their
+// data forward untouched instead of trying to read a row that was never
+// rendered.
 let currentGridTasks = [];
 
 // Dragging/resizing a bar on the Gantt or Calendar edits job.tasks directly,
@@ -4372,15 +4382,17 @@ function renderFixedTaskGrid(taskList) {
       }
       if (durationInput.value) applyDurationToFinish();
       else applyFinishToDuration();
+      scheduleAutoSaveJobForm();
     });
-    durationInput.addEventListener('change', applyDurationToFinish);
-    finishInput.addEventListener('change', applyFinishToDuration);
+    durationInput.addEventListener('change', function() { applyDurationToFinish(); scheduleAutoSaveJobForm(); });
+    finishInput.addEventListener('change', function() { applyFinishToDuration(); scheduleAutoSaveJobForm(); });
 
     const notesInput = document.createElement('input');
     notesInput.type = 'text';
     notesInput.className = 'task-fixed-notes';
     notesInput.placeholder = 'Notes...';
     notesInput.value = t.notes || '';
+    notesInput.addEventListener('input', scheduleAutoSaveJobForm);
 
     row.appendChild(swatch);
     row.appendChild(nameLabel);
@@ -4407,6 +4419,11 @@ function updateJobCurrentBoardIndicator(job) {
 }
 
 function addNewJob() {
+  // Whatever job was open before (if any) gets its pending autosave
+  // committed before we swap the form over to a blank draft.
+  flushAutoSaveJobForm();
+  setJobNameHint(false);
+  showTaskRowWarnings([]);
   editingJobId = null;
   editingTaskId = null;
   document.getElementById('emptyState').style.display = 'none';
@@ -4424,7 +4441,7 @@ function addNewJob() {
   renderJobChecklist();
   renderJobAttachments();
   // No job exists yet to attach comments to — the panel reappears once
-  // saveJob() gives this job an id (see the end of saveJob()).
+  // autoSaveJobForm() materializes this draft into a real job with an id.
   document.getElementById('jobCommentsPanel').style.display = 'none';
   updateJobCurrentBoardIndicator(null);
   var defaultTasks = BOARD_COLUMNS.map(function(col, i) {
@@ -4438,6 +4455,9 @@ function addNewJob() {
 }
 
 function editJob(jobId) {
+  // Whatever job was open before (if any, and if different) gets its
+  // pending autosave committed before we swap the form to this one.
+  if (editingJobId !== jobId) flushAutoSaveJobForm();
   const found = findJob(jobId);
   if (!found) return;
   const job = found.job;
@@ -4445,6 +4465,8 @@ function editJob(jobId) {
 
   editingJobId = jobId;
   editingTaskId = task ? task.id : null;
+  setJobNameHint(false);
+  showTaskRowWarnings([]);
 
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('jobForm').style.display = 'block';
@@ -4646,25 +4668,82 @@ function handleJobCommentKey(event) {
   }
 }
 
-function saveJob() {
+// ===== JOB FORM AUTOSAVE =====
+// Replaces the old explicit "Save Job" button. Every field change schedules
+// a debounced save; leaving a field, switching jobs, changing tabs, or the
+// tab closing/hiding all flush it immediately (see the listener wiring
+// below and the visibilitychange/pagehide handlers near queueSharedSync).
+// Bulletproofing rules, since nothing here is gated by a button anymore:
+//  - A brand-new job is never pushed into `jobs` (and never synced to the
+//    team) until it has a non-blank name — so an abandoned "+ Add Job"
+//    with nothing typed leaves no trace.
+//  - An EXISTING job's name is never overwritten with blank — clearing the
+//    field just shows a hint and keeps the last saved name until it's
+//    fixed, instead of corrupting shared data other people can see.
+//  - A task row with an invalid date pairing (only one of start/finish
+//    set, or start after finish) is skipped — that row keeps its last
+//    valid start/finish rather than saving the bad value — while every
+//    other valid row still saves normally.
+let jobAutosaveTimer = null;
+function scheduleAutoSaveJobForm() {
+  clearTimeout(jobAutosaveTimer);
+  jobAutosaveTimer = setTimeout(function() { jobAutosaveTimer = null; autoSaveJobForm(); }, 500);
+}
+function flushAutoSaveJobForm() {
+  if (jobAutosaveTimer) { clearTimeout(jobAutosaveTimer); jobAutosaveTimer = null; }
+  autoSaveJobForm();
+}
+// Use before destructive transitions (deleting/clearing the job this form
+// is open on) so a pending timer can't fire afterward and resurrect it
+// from whatever was still sitting in the form fields.
+function cancelPendingJobAutosave() {
+  if (jobAutosaveTimer) { clearTimeout(jobAutosaveTimer); jobAutosaveTimer = null; }
+}
+
+function setJobNameHint(show) {
+  const hint = document.getElementById('f_job_hint');
+  if (hint) hint.style.display = show ? 'block' : 'none';
+}
+function showTaskRowWarnings(labels) {
+  const el = document.getElementById('taskRowsWarning');
+  if (!el) return;
+  if (!labels.length) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block';
+  el.textContent = labels.join(', ') + (labels.length === 1 ? ' needs' : ' need') +
+    ' both a start and finish date (start before finish), or both left blank — not saved until fixed.';
+}
+
+function autoSaveJobForm() {
+  // Nothing to save against — either no job is open, or the panel that
+  // hosts these fields isn't even in the DOM (defensive; shouldn't happen).
+  if (document.getElementById('jobForm').style.display === 'none') return;
+  if (!BOARD_COLUMNS.length) return;
+
   const name = document.getElementById('f_job').value.trim();
   const color = document.getElementById('f_color').value;
+  const existing = editingJobId ? findJob(editingJobId) : null;
+  let job = existing ? existing.job : null;
+  const isNewDraft = !job;
 
-  if (!name) { showToast('Job name is required', 'error'); return; }
+  if (isNewDraft && !name) {
+    // Waiting on a name before this draft becomes a real, shared job.
+    setJobNameHint(true);
+    return;
+  }
+  setJobNameHint(false);
 
-  if (!BOARD_COLUMNS.length) { showToast('A job needs at least one task', 'error'); return; }
-
-  // Iterate BOARD_COLUMNS (not the rendered rows) since hidden-from-schedule
-  // columns don't get a row in the grid at all — their task data is carried
-  // forward untouched from currentGridTasks instead of read from the DOM.
+  const warnings = [];
   const cleanedTasks = [];
   for (let i = 0; i < BOARD_COLUMNS.length; i++) {
     const col = BOARD_COLUMNS[i];
     const label = col.label;
+    // Prior known-good value for this slot: the live job's task if one
+    // exists, otherwise whatever the grid was last rendered with (covers
+    // a still-unmaterialized draft, which has no job.tasks yet).
+    const priorTask = (job && job.tasks && job.tasks[i]) || currentGridTasks[i] || null;
 
     if (col.hideFromSchedule) {
-      const existing = currentGridTasks[i];
-      cleanedTasks.push(existing ? Object.assign({}, existing, { order: i }) : {
+      cleanedTasks.push(priorTask ? Object.assign({}, priorTask, { order: i }) : {
         id: genId(), name: label, start: '', finish: '', notes: '', color: col.color || '#3949ab', order: i
       });
       continue;
@@ -4676,62 +4755,52 @@ function saveJob() {
     const rowStart = (row.querySelector('.task-fixed-start').value || '').trim();
     const rowFinish = (row.querySelector('.task-fixed-finish').value || '').trim();
     const rowNotes = (row.querySelector('.task-fixed-notes').value || '').trim();
-    // Section 4 taught the Gantt to render tasks with blank dates
-    // gracefully, so dates are no longer required to save — a row can
-    // sit empty until you're ready to schedule it.
-    if (rowStart && rowFinish && new Date(rowStart) > new Date(rowFinish)) {
-      showToast(label + ': start date must be before finish date', 'error');
-      return;
+
+    let useStart = rowStart, useFinish = rowFinish;
+    const badRange = rowStart && rowFinish && new Date(rowStart) > new Date(rowFinish);
+    const halfSet = (rowStart && !rowFinish) || (!rowStart && rowFinish);
+    if (badRange || halfSet) {
+      warnings.push(label);
+      useStart = (priorTask && priorTask.start) || '';
+      useFinish = (priorTask && priorTask.finish) || '';
     }
-    if ((rowStart && !rowFinish) || (!rowStart && rowFinish)) {
-      showToast(label + ': enter both a start and finish date, or leave both blank', 'error');
-      return;
-    }
+
     cleanedTasks.push({
-      id: row.dataset.taskId || genId(),
+      id: row.dataset.taskId || (priorTask && priorTask.id) || genId(),
       name: label,
-      start: rowStart,
-      finish: rowFinish,
+      start: useStart,
+      finish: useFinish,
       notes: rowNotes,
       color: row.dataset.color || color,
       order: i
     });
   }
+  showTaskRowWarnings(warnings);
 
-  if (editingJobId) {
-    const found = findJob(editingJobId);
-    if (!found) return;
-    const job = found.job;
-    job.name = name;
+  let justCreated = false;
+  if (job) {
+    if (name) job.name = name; // never blank an existing job's name
     job.color = color;
     job.tasks = cleanedTasks;
-    // Saving the schedule counts as "the dates changed" (Section 5) — release
-    // any manual column override so auto-sync resumes right away instead of
-    // waiting out the 24h window.
+    // A date change counts as "the schedule changed" (Section 5) — release
+    // any manual column override so auto-sync resumes right away instead
+    // of waiting out the 24h window.
     const linkedCard = boardCards.find(function(c) { return c.jobId === job.id; });
     if (linkedCard) { linkedCard.manualColumn = null; linkedCard.manualColumnUntil = null; }
-    showToast('Job updated successfully', 'success');
   } else {
-    const newJob = {
-      id: genId(),
-      name: name,
-      color: color,
-      archived: false,
-      comments: [],
-      tasks: cleanedTasks
-    };
-    jobs.push(newJob);
-    editingJobId = newJob.id;
-    editingTaskId = newJob.tasks[0].id;
-    ensureJobHasCard(newJob); // give it a board card immediately, not just on next load
-    showToast('Job added successfully', 'success');
+    job = { id: genId(), name: name, color: color, archived: false, comments: [], tasks: cleanedTasks };
+    jobs.push(job);
+    editingJobId = job.id;
+    editingTaskId = job.tasks[0] ? job.tasks[0].id : null;
+    ensureJobHasCard(job); // give it a board card immediately, not just on next load
+    justCreated = true;
   }
 
   // The linked card carries description/due/custom fields/checklist/
   // attachments — the same fields the Board's quick-edit popup manages, so
   // whichever place last saved wins (same last-write-wins model already
   // used everywhere else in this app).
-  const cardToUpdate = boardCards.find(function(c) { return c.jobId === editingJobId; });
+  const cardToUpdate = boardCards.find(function(c) { return c.jobId === job.id; });
   if (cardToUpdate) {
     cardToUpdate.description = document.getElementById('f_description').value.trim();
     cardToUpdate.due = document.getElementById('f_due').value;
@@ -4741,29 +4810,65 @@ function saveJob() {
   }
 
   saveJobs();
-  const action = editingJobId ? 'updated job' : 'added job';
-  logActivity(action + ' "' + name + '"');
+  logActivity((justCreated ? 'added job' : 'updated job') + ' "' + job.name + '"');
   renderJobList();
   renderGantt();
   renderCalendar();
-  // Section 3 called for this and it was missed — sync board positions
-  // and repaint immediately so a saved date change is reflected without
-  // waiting on the 60s interval or a tab switch.
   syncCardColumns();
   renderBoard();
-  // A brand-new job only gets an id here, so the comments panel (hidden by
-  // addNewJob since there was nothing to attach comments to yet) opens now.
-  const savedJob = findJob(editingJobId);
-  if (savedJob) {
+  updateJobCurrentBoardIndicator(job);
+
+  if (justCreated) {
+    // These previously only appeared after the explicit Save Job click —
+    // now that the job is real, unlock them the same way.
+    document.getElementById('deleteBtn').style.display = 'inline-flex';
+    const archiveBtn = document.getElementById('archiveBtn');
+    archiveBtn.style.display = 'inline-flex';
+    archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive';
+    archiveBtn.onclick = function() { archiveJob(job.id); };
     document.getElementById('jobCommentsPanel').style.display = 'flex';
-    renderJobComments(savedJob.job);
-    updateJobCurrentBoardIndicator(savedJob.job);
+    renderJobComments(job);
+    showToast('Job created', 'success');
   }
 }
 
+// Attached once at init — these are static elements (f_job/f_color/etc.)
+// that never get recreated, unlike the task grid rows (which wire their
+// own listeners fresh on every renderFixedTaskGrid()). Using addEventListener
+// here — rather than an inline oninput= that also does other things —
+// means programmatic population in editJob()/addNewJob() (plain
+// `.value = ...`, which never fires input/change events) never triggers
+// a spurious autosave just from opening a job.
+function initJobFormAutosaveListeners() {
+  const nameEl = document.getElementById('f_job');
+  nameEl.addEventListener('input', function() {
+    setJobNameHint(!nameEl.value.trim());
+    scheduleAutoSaveJobForm();
+  });
+
+  document.getElementById('f_color').addEventListener('input', scheduleAutoSaveJobForm);
+  document.getElementById('f_description').addEventListener('input', scheduleAutoSaveJobForm);
+  document.getElementById('f_due').addEventListener('change', scheduleAutoSaveJobForm);
+
+  // Custom field inputs/selects are rebuilt on every renderJobCustomFieldsGrid()
+  // call, so delegate from the static parent instead of binding per-field.
+  const grid = document.getElementById('jmCustomFieldsGrid');
+  grid.addEventListener('input', function(e) { if (e.target.dataset.field) scheduleAutoSaveJobForm(); });
+  grid.addEventListener('change', function(e) { if (e.target.dataset.field) scheduleAutoSaveJobForm(); });
+
+  // Leaving any field in the form (tab/click to another field, or away
+  // entirely) flushes immediately instead of waiting out the debounce.
+  document.getElementById('jobForm').addEventListener('focusout', flushAutoSaveJobForm);
+}
+
 function cancelEdit() {
+  // Closing the form still commits whatever was last typed — there's no
+  // "discard" anymore now that edits save as you go.
+  flushAutoSaveJobForm();
   editingJobId = null;
   editingTaskId = null;
+  setJobNameHint(false);
+  showTaskRowWarnings([]);
   document.getElementById('emptyState').style.display = 'block';
   document.getElementById('jobForm').style.display = 'none';
   document.getElementById('jobCommentsPanel').style.display = 'none';
@@ -4858,6 +4963,11 @@ function confirmDelete() {
 
 function executeDelete() {
   if (deleteTargetJobId) {
+    // Cancel (not flush!) any pending autosave for the job about to be
+    // deleted — flushing here would just resave it a moment before the
+    // splice, and if the timer somehow survived the splice, it must never
+    // fire afterward and recreate it from stale form values.
+    if (editingJobId === deleteTargetJobId) cancelPendingJobAutosave();
     const found = findJob(deleteTargetJobId);
     if (!found) return;
     const jobName = found.job.name;
@@ -4868,6 +4978,8 @@ function executeDelete() {
     if (editingJobId === deleteTargetJobId) {
       editingJobId = null;
       editingTaskId = null;
+      setJobNameHint(false);
+      showTaskRowWarnings([]);
       document.getElementById('emptyState').style.display = 'block';
       document.getElementById('jobForm').style.display = 'none';
       document.getElementById('jobCommentsPanel').style.display = 'none';
@@ -4888,11 +5000,14 @@ function closeModal() {
 
 function clearAllJobs() {
   if (confirm('Are you sure you want to clear ALL jobs? This cannot be undone.')) {
+    cancelPendingJobAutosave();
     jobs = [];
     saveJobs();
     logActivity('cleared all jobs');
     editingJobId = null;
     editingTaskId = null;
+    setJobNameHint(false);
+    showTaskRowWarnings([]);
     document.getElementById('emptyState').style.display = 'block';
     document.getElementById('jobForm').style.display = 'none';
     document.getElementById('jobCommentsPanel').style.display = 'none';
@@ -5585,7 +5700,7 @@ function handleColumnDrop(e) {
   if (card.jobId) {
     // Job-linked cards are normally auto-positioned by date; a manual
     // drop overrides that for 24 hours, or until the job's dates are
-    // re-saved (see saveJob()), whichever comes first.
+    // re-saved (see autoSaveJobForm()), whichever comes first.
     card.manualColumn = targetColumnId;
     card.manualColumnUntil = Date.now() + 24 * 60 * 60 * 1000;
     const targetCol = BOARD_COLUMNS.find(function(c) { return c.id === targetColumnId; });
@@ -5800,6 +5915,7 @@ function buildCardColorPresets() {
       container.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
       div.classList.add('selected');
       updateColorSwatch();
+      scheduleCardAutosave();
     };
     container.appendChild(div);
   });
@@ -5902,17 +6018,20 @@ function addJobChecklistItem() {
   jmDraftChecklist.push({ id: Date.now(), text, done: false });
   input.value = '';
   renderJobChecklist();
+  flushAutoSaveJobForm();
 }
 
 function toggleJobChecklistItem(id) {
   const item = jmDraftChecklist.find(i => i.id === id);
   if (item) item.done = !item.done;
   renderJobChecklist();
+  flushAutoSaveJobForm();
 }
 
 function deleteJobChecklistItem(id) {
   jmDraftChecklist = jmDraftChecklist.filter(i => i.id !== id);
   renderJobChecklist();
+  flushAutoSaveJobForm();
 }
 
 function renderJobAttachments() {
@@ -5954,6 +6073,7 @@ function handleJobAttachmentUpload(e) {
         dataUrl: evt.target.result
       });
       renderJobAttachments();
+      flushAutoSaveJobForm();
     };
     reader.readAsDataURL(file);
   });
@@ -5963,6 +6083,7 @@ function handleJobAttachmentUpload(e) {
 function removeJobAttachment(id) {
   jmDraftAttachments = jmDraftAttachments.filter(a => a.id !== id);
   renderJobAttachments();
+  flushAutoSaveJobForm();
 }
 
 // ----- Manage custom field options -----
@@ -6037,17 +6158,20 @@ function addChecklistItem() {
   draftChecklist.push({ id: Date.now(), text, done: false });
   input.value = '';
   renderChecklist();
+  flushCardAutosave();
 }
 
 function toggleChecklistItem(id) {
   const item = draftChecklist.find(i => i.id === id);
   if (item) item.done = !item.done;
   renderChecklist();
+  flushCardAutosave();
 }
 
 function deleteChecklistItem(id) {
   draftChecklist = draftChecklist.filter(i => i.id !== id);
   renderChecklist();
+  flushCardAutosave();
 }
 
 // ----- Attachments -----
@@ -6095,6 +6219,7 @@ function handleAttachmentUpload(e) {
         dataUrl: evt.target.result
       });
       renderAttachments();
+      flushCardAutosave();
     };
     reader.readAsDataURL(file);
   });
@@ -6104,6 +6229,7 @@ function handleAttachmentUpload(e) {
 function removeAttachment(id) {
   draftAttachments = draftAttachments.filter(a => a.id !== id);
   renderAttachments();
+  flushCardAutosave();
 }
 
 function toggleActivitySidebar() {
@@ -6189,9 +6315,13 @@ function renderActivityLog() { renderActivityLogSidebar(); }
 
 // ----- Open / save / delete card -----
 function openEditCard(id) {
+  // Flush whatever card this modal was previously open on (defensive —
+  // normally you close before opening another).
+  if (editingCardId != null && editingCardId !== id) flushCardAutosave();
   const card = boardCards.find(c => String(c.id) === String(id));
   if (!card) return;
   editingCardId = card.id;
+  setCardTitleHint(false);
   draftChecklist = JSON.parse(JSON.stringify(card.checklist || []));
   draftAttachments = JSON.parse(JSON.stringify(card.attachments || []));
   document.getElementById('cardModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Card';
@@ -6213,18 +6343,48 @@ function openEditCard(id) {
 }
 
 function closeCardModal() {
+  // Flush while the modal is still marked open and editingCardId is still
+  // valid — autoSaveCardForm() bails out once either isn't true.
+  flushCardAutosave();
   document.getElementById('cardModal').classList.remove('show');
   editingCardId = null;
+  setCardTitleHint(false);
   draftChecklist = [];
   draftAttachments = [];
 }
 
-function saveCard() {
+// ===== CARD MODAL AUTOSAVE =====
+// Replaces the old explicit "Save Card" button. This modal only ever opens
+// via openEditCard() now (the Board's "+ Add a card" was replaced by
+// "+ New Job" — see addJobFromBoard — so there's no standalone-card-
+// creation path left; editingCardId is always set while this is open).
+let cardAutosaveTimer = null;
+function scheduleCardAutosave() {
+  clearTimeout(cardAutosaveTimer);
+  cardAutosaveTimer = setTimeout(function() { cardAutosaveTimer = null; autoSaveCardForm(); }, 500);
+}
+function flushCardAutosave() {
+  if (cardAutosaveTimer) { clearTimeout(cardAutosaveTimer); cardAutosaveTimer = null; }
+  autoSaveCardForm();
+}
+function cancelPendingCardAutosave() {
+  if (cardAutosaveTimer) { clearTimeout(cardAutosaveTimer); cardAutosaveTimer = null; }
+}
+function setCardTitleHint(show) {
+  const hint = document.getElementById('c_title_hint');
+  if (hint) hint.style.display = show ? 'block' : 'none';
+}
+
+function autoSaveCardForm() {
+  if (!document.getElementById('cardModal').classList.contains('show')) return;
+  if (editingCardId == null) return;
+  const idx = boardCards.findIndex(c => c.id === editingCardId);
+  if (idx < 0) return;
+
   const title = document.getElementById('c_title').value.trim();
-  if (!title) { showToast('Card title is required', 'error'); return; }
+  setCardTitleHint(!title);
 
   const cardData = {
-    title,
     description: document.getElementById('c_description').value.trim(),
     due: document.getElementById('c_due').value,
     color: document.getElementById('c_color').value,
@@ -6233,35 +6393,45 @@ function saveCard() {
     checklist: draftChecklist,
     attachments: draftAttachments
   };
+  if (title) cardData.title = title; // never blank out an already-saved title
 
-  let savedCard = null;
-  if (editingCardId != null) {
-    const idx = boardCards.findIndex(c => c.id === editingCardId);
-    if (idx >= 0) {
-      boardCards[idx] = Object.assign({}, boardCards[idx], cardData);
-      savedCard = boardCards[idx];
-      showToast('Card updated', 'success');
-    }
-  } else {
-    cardData.id = Date.now();
-    boardCards.push(cardData);
-    savedCard = cardData;
-    showToast('Card added', 'success');
-  }
+  boardCards[idx] = Object.assign({}, boardCards[idx], cardData);
+  const savedCard = boardCards[idx];
 
   saveBoardCards();
-  const action = editingCardId != null ? 'updated card' : 'added card';
-  logActivity(action + ' "' + title + '"');
+  logActivity('updated card "' + savedCard.title + '"');
   renderBoard();
   // This card's job might already be open in Job Manager — without this its
   // description/due/custom fields/checklist/attachments would keep showing
   // whatever was there when that form was first opened.
-  if (savedCard && savedCard.jobId) refreshJobFormIfOpen(savedCard.jobId);
-  closeCardModal();
+  if (savedCard.jobId) refreshJobFormIfOpen(savedCard.jobId);
+}
+
+// Attached once at init, same reasoning as initJobFormAutosaveListeners:
+// addEventListener-based listeners never fire from openEditCard()'s
+// programmatic `.value = ...` population, only from real user input.
+function initCardFormAutosaveListeners() {
+  const titleEl = document.getElementById('c_title');
+  titleEl.addEventListener('input', function() {
+    setCardTitleHint(!titleEl.value.trim());
+    scheduleCardAutosave();
+  });
+  document.getElementById('c_description').addEventListener('input', scheduleCardAutosave);
+  document.getElementById('c_due').addEventListener('change', scheduleCardAutosave);
+  document.getElementById('c_color').addEventListener('input', scheduleCardAutosave);
+  document.getElementById('c_column').addEventListener('change', scheduleCardAutosave);
+
+  const grid = document.getElementById('customFieldsGrid');
+  grid.addEventListener('input', function(e) { if (e.target.dataset.field) scheduleCardAutosave(); });
+  grid.addEventListener('change', function(e) { if (e.target.dataset.field) scheduleCardAutosave(); });
+
+  document.getElementById('cardModal').addEventListener('focusout', flushCardAutosave);
 }
 
 function deleteCardFromModal() {
   if (editingCardId == null) return;
+  // Cancel (not flush) — the card is about to be gone, nothing left to save.
+  cancelPendingCardAutosave();
   const card = boardCards.find(c => c.id === editingCardId);
   if (card) logActivity('deleted card "' + card.title + '"');
   boardCards = boardCards.filter(c => c.id !== editingCardId);
@@ -6538,6 +6708,11 @@ function queueSharedSync() {
 // any pending push the moment the tab is hidden or about to unload so it
 // actually reaches the shared project first.
 function flushPendingSync() {
+  // Commit any debounced form autosave first so it's captured in this same
+  // final push, rather than scheduling its own push that might not get a
+  // chance to fire before the tab actually closes.
+  flushAutoSaveJobForm();
+  flushCardAutosave();
   if (syncPushTimer) {
     clearTimeout(syncPushTimer);
     syncPushTimer = null;
