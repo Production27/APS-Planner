@@ -632,6 +632,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     box-shadow: 0 1px 2px rgba(0,0,0,0.3);
   }
   .board-col-gantt-switch.on .knob { left: 15px; }
+  .board-col-duration-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    color: var(--text); gap: 8px;
+  }
+  .board-col-duration-input {
+    width: 44px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12px; font-family: inherit; text-align: center; background: var(--card); color: var(--text);
+  }
+  .board-col-duration-input:focus { outline: none; border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   .board-col-color-panel {
     overflow: hidden; max-height: 0; transition: max-height 0.2s ease;
   }
@@ -1827,6 +1837,9 @@ let deleteTargetJobId = null;
 let showArchived = false;
 const ARCHIVE_CUTOFF_DAYS = 30;
 let ganttFirstRender = true;
+// Fallback only — per-board default lives on col.defaultDuration, set from
+// each board's ⋮ settings menu (see setColumnDefaultDuration).
+const DEFAULT_TASK_DURATION_DAYS = 5;
 
 // ===== TRELLO-STYLE BOARD =====
 const DEFAULT_BOARD_COLUMNS = [
@@ -4113,9 +4126,12 @@ function renderFixedTaskGrid(taskList) {
 
     startInput.addEventListener('change', function() {
       if (!startInput.value) return;
-      // A start date with nothing else set yet defaults to a 5-day task —
-      // otherwise keep whatever duration/finish relationship already exists.
-      if (!durationInput.value && !finishInput.value) durationInput.value = 5;
+      // A start date with nothing else set yet defaults to this board's
+      // configured duration (see the board's ⋮ settings) — otherwise keep
+      // whatever duration/finish relationship already exists.
+      if (!durationInput.value && !finishInput.value) {
+        durationInput.value = (col && col.defaultDuration) || DEFAULT_TASK_DURATION_DAYS;
+      }
       if (durationInput.value) applyDurationToFinish();
       else applyFinishToDuration();
     });
@@ -4798,6 +4814,10 @@ function renderBoard() {
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg> Disconnect from Schedule</span>' +
               '<span class="board-col-gantt-switch' + (col.scheduleDisconnected ? ' on' : '') + '"><span class="knob"></span></span>' +
             '</div>' +
+            '<div class="board-col-duration-row" title="How many days this board\'s task defaults to when only a start date is set in Job Manager">' +
+              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Duration</span>' +
+              '<input type="number" min="1" class="board-col-duration-input" value="' + (col.defaultDuration || DEFAULT_TASK_DURATION_DAYS) + '" onclick="event.stopPropagation()" onchange="setColumnDefaultDuration(\'' + col.id + '\', this.value, event)">' +
+            '</div>' +
             '<div class="board-col-settings-divider"></div>' +
             '<div class="board-col-settings-item danger" onclick="deleteBoardColumn(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</div>' +
           '</div>' +
@@ -5249,6 +5269,23 @@ function toggleColumnScheduleSync(colId, event) {
   renderBoard();
   showToast('"' + col.label + '" ' + (col.scheduleDisconnected ? 'disconnected from' : 'reconnected to') + ' the schedule', 'success');
   closeAllColSettings();
+}
+
+// Drives the auto-fill in renderFixedTaskGrid's startInput handler — setting
+// only a start date for this board's task defaults its duration to this
+// value instead of the app-wide DEFAULT_TASK_DURATION_DAYS fallback. Patches
+// the input in place (rather than a full renderBoard()) so the dropdown
+// stays open and the field reflects the clamped/normalized value.
+function setColumnDefaultDuration(colId, value, event) {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find(c => c.id === colId);
+  if (!col) return;
+  const days = parseInt(value, 10);
+  col.defaultDuration = (days && days > 0) ? days : DEFAULT_TASK_DURATION_DAYS;
+  saveBoardColumns();
+  if (event && event.target) event.target.value = col.defaultDuration;
+  logActivity('set board "' + col.label + '" default duration to ' + col.defaultDuration + ' day' + (col.defaultDuration === 1 ? '' : 's'));
+  showToast('Default duration updated', 'success');
 }
 
 // ===== CARD QUICK COLOR PICKER =====
