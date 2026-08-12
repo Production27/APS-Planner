@@ -3157,6 +3157,7 @@ function handleCalBarMouseUp(e) {
     renderGantt();
     renderJobList();
     renderBoard();
+    refreshJobFormIfOpen(jobId);
     showToast('Job dates updated', 'success');
   } else if (dragType === 'right') {
     const newDuration = Math.max(1, duration + deltaDays);
@@ -3168,6 +3169,7 @@ function handleCalBarMouseUp(e) {
     renderGantt();
     renderJobList();
     renderBoard();
+    refreshJobFormIfOpen(jobId);
     showToast('Finish date updated', 'success');
   } else if (dragType === 'left') {
     const newDuration = Math.max(1, duration - deltaDays);
@@ -3179,6 +3181,7 @@ function handleCalBarMouseUp(e) {
     renderGantt();
     renderJobList();
     renderBoard();
+    refreshJobFormIfOpen(jobId);
     showToast('Start date updated', 'success');
   }
 
@@ -3639,6 +3642,7 @@ function onBarResizeEnd(e) {
     saveJobs();
     logActivity('rescheduled task "' + task.name + '"');
     renderJobList();
+    refreshJobFormIfOpen(jobId);
     showToast(side === 'right' ? 'Finish date updated' : 'Start date updated', 'success');
   }
 
@@ -3750,6 +3754,7 @@ function onBarMoveEnd(e) {
     saveJobs();
     logActivity('moved task "' + task.name + '"');
     renderJobList();
+    refreshJobFormIfOpen(jobId);
     showToast('Task dates updated', 'success');
     bar.dataset.dragged = 'true';
   } else {
@@ -3998,6 +4003,16 @@ function updateJobCount() {
 // columns that don't get a row below) so saveJob() can carry their data
 // forward untouched instead of trying to read a row that was never rendered.
 let currentGridTasks = [];
+
+// Dragging/resizing a bar on the Gantt or Calendar edits job.tasks directly,
+// bypassing the Job Manager's own Save button. If that same job's form is
+// open, its date inputs would otherwise keep showing the pre-drag values
+// until the user closes and reopens it — so re-render the grid in place.
+function refreshJobFormIfOpen(jobId) {
+  if (editingJobId !== jobId) return;
+  const found = findJob(jobId);
+  if (found) renderFixedTaskGrid(found.job.tasks);
+}
 
 function renderFixedTaskGrid(taskList) {
   currentGridTasks = taskList || [];
