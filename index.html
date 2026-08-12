@@ -3203,6 +3203,11 @@ function renderGantt() {
       if (!showArchived && job.archived) return;
       (job.tasks || []).forEach(function(task) {
         if (hiddenOrders.has(task.order)) return;
+        // Unscheduled tasks (no start/finish yet) don't get a Gantt row at
+        // all — they still exist on the job and in the Job Manager grid,
+        // they just don't clutter the schedule until a date is set.
+        if (!task.start || !task.finish) return;
+        if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
         rows.push({ job: job, task: task });
       });
     });
