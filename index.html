@@ -6099,6 +6099,24 @@ function queueSharedSync() {
   syncPushTimer = setTimeout(pushLiveblocksState, 300);
 }
 
+// A page close/refresh within that 300ms window used to lose the edit
+// entirely: it's saved to localStorage synchronously, but the debounced
+// Liveblocks push never fires, so on reload applyLiveblocksState() pulls
+// the still-stale remote copy and overwrites the local one with it. Flush
+// any pending push the moment the tab is hidden or about to unload so it
+// actually reaches the shared project first.
+function flushPendingSync() {
+  if (syncPushTimer) {
+    clearTimeout(syncPushTimer);
+    syncPushTimer = null;
+    pushLiveblocksState();
+  }
+}
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'hidden') flushPendingSync();
+});
+window.addEventListener('pagehide', flushPendingSync);
+
 async function setupLiveblocksSync() {
   initSyncBadge();
   initOfflineBanner();
