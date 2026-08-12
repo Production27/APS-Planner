@@ -385,16 +385,15 @@
   .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   .form-group textarea { resize: vertical; min-height: 80px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .task-edit-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .task-edit-row input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
-  .task-edit-row input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
-  .task-row-color { width: 36px !important; height: 36px; padding: 2px !important; cursor: pointer; }
-  .task-row-delete {
-    width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: white;
-    color: var(--text-light); font-size: 15px; line-height: 1; cursor: pointer; transition: all 0.15s;
-  }
-  .task-row-delete:hover:not(:disabled) { background: #fdecea; border-color: var(--danger); color: var(--danger); }
-  .task-row-delete:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Section 3: fixed task grid — rows locked to board columns */
+  .task-fixed-row { display: grid; grid-template-columns: auto 1.2fr 1fr 1fr 1.4fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .task-fixed-row input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
+  .task-fixed-row input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
+  .task-fixed-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
+  .task-fixed-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-fixed-header { display: grid; grid-template-columns: auto 1.2fr 1fr 1fr 1.4fr; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; padding: 0 2px; }
+  .task-fixed-header span:first-child { width: 14px; }
 
   .color-picker-wrapper { display: flex; align-items: center; gap: 12px; }
   .color-picker-wrapper input[type="color"] { width: 50px; height: 40px; padding: 2px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); }
@@ -502,6 +501,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .board-card .board-card-meta-line { color: #98a0ae; }
   .board-card .board-card-due { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: #eef1fa; color: var(--text-light); }
   .board-card .board-card-due.overdue { background: #ffebee; color: var(--danger); }
+  .board-card.manual-override { border-left-style: dashed; box-shadow: 0 2px 5px rgba(0,0,0,0.14), inset 0 0 0 1px rgba(240,173,78,0.5); }
+  .board-card-override-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: #fff3e0; color: #b26a00; margin-bottom: 6px; cursor: help; }
+  body.dark-mode .board-card-override-badge { background: rgba(240,173,78,0.18); color: #f0ad4e; }
   .card-modal-box { max-width: 480px; }
 
   /* Collapsible label color picker */
@@ -966,6 +968,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
@@ -1094,8 +1097,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             </div>
             <div class="form-group">
               <label>Tasks</label>
+              <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Finish</span><span>Notes</span></div>
               <div id="taskRows"></div>
-              <button type="button" class="btn btn-secondary" id="addTaskRowBtn" onclick="addTaskRow()" style="margin-top:6px;">+ Add Task</button>
             </div>
             <div class="form-group">
               <div class="color-toggle-row" onclick="toggleJobColorPanel()">
@@ -1552,6 +1555,217 @@ function findTask(jobId, taskId) {
   return null;
 }
 
+function ensureJobTasksMatchColumns(job) {
+  if (!job.tasks) job.tasks = [];
+  const colCount = BOARD_COLUMNS.length;
+  if (colCount === 0) return;
+
+  const newTasks = [];
+  let changed = false;
+  const usedExisting = new Set();
+
+  BOARD_COLUMNS.forEach(function(col, i) {
+    const colName = col.label;
+    let existingIdx = -1;
+    for (let j = 0; j < job.tasks.length; j++) {
+      if (usedExisting.has(j)) continue;
+      if ((job.tasks[j].name || '').toLowerCase() === colName.toLowerCase()) {
+        existingIdx = j;
+        break;
+      }
+    }
+
+    const rowColor = col.color || job.color || '#3949ab';
+
+    if (existingIdx !== -1) {
+      usedExisting.add(existingIdx);
+      const t = job.tasks[existingIdx];
+      t.name = colName;
+      t.order = i;
+      t.color = rowColor; // task color always mirrors its board column
+      newTasks.push(t);
+    } else {
+      newTasks.push({
+        id: genId(),
+        name: colName,
+        start: '',
+        finish: '',
+        notes: '',
+        color: rowColor,
+        order: i
+      });
+      changed = true;
+    }
+  });
+
+  const unmatched = [];
+  for (let j = 0; j < job.tasks.length; j++) {
+    if (!usedExisting.has(j)) unmatched.push(job.tasks[j]);
+  }
+  if (unmatched.length > 0) {
+    const legacyNote = unmatched.map(function(t) {
+      return (t.name || 'Untitled') + (t.start ? ' (' + t.start + '–' + t.finish + ')' : '') + (t.notes ? ': ' + t.notes : '');
+    }).join('; ');
+    if (newTasks.length > 0) {
+      newTasks[0].notes = (newTasks[0].notes ? newTasks[0].notes + '\n\n' : '') + 'Legacy tasks: ' + legacyNote;
+    }
+    changed = true;
+  }
+
+  if (changed || job.tasks.length !== newTasks.length) {
+    job.tasks = newTasks;
+  }
+}
+
+function ensureJobHasCard(job) {
+  const linked = boardCards.filter(function(c) { return c.jobId === job.id; });
+  if (linked.length === 0) {
+    boardCards.push({
+      id: genId(),
+      title: job.name,
+      description: job.notes || '',
+      due: '',
+      color: job.color || '#3949ab',
+      column: BOARD_COLUMNS[0] ? BOARD_COLUMNS[0].id : '',
+      jobId: job.id,
+      manualColumn: null,
+      manualColumnUntil: null,
+      customFields: {},
+      checklist: [],
+      attachments: []
+    });
+  } else if (linked.length > 1) {
+    for (let i = 1; i < linked.length; i++) {
+      const idx = boardCards.indexOf(linked[i]);
+      if (idx !== -1) boardCards.splice(idx, 1);
+    }
+  }
+
+  if (linked.length > 0) {
+    const card = boardCards.find(function(c) { return c.jobId === job.id; });
+    if (card) {
+      card.title = job.name;
+      // Bug found in review: this previously read `job.color || card.color`,
+      // which is always truthy for job.color — so every save/load silently
+      // reverted any custom card color back to the job's bar color, making
+      // the card color picker (quickChangeCardColor) effectively non-
+      // functional. Keep whatever color the card already has; only fall
+      // back to the job's color for a card that doesn't have one yet.
+      card.color = card.color || job.color || '#3949ab';
+      if (!card.jobId) card.jobId = job.id;
+    }
+  }
+}
+
+// ===== Section 6: Migration — adopt cards that predate the jobId field =====
+// Run once per load, before the ensureJobTasksMatchColumns/ensureJobHasCard
+// pass, so any stub jobs created here get normalized in that same pass.
+// Idempotent: a card only qualifies while it has no jobId, so re-running
+// this on an already-migrated project is a no-op.
+function migrateOrphanedCards() {
+  const orphans = boardCards.filter(function(c) { return !c.jobId; });
+  orphans.forEach(function(card) {
+    const match = jobs.find(function(j) { return j.name === card.title; });
+    if (match) {
+      card.jobId = match.id;
+      logActivity('linked orphaned card "' + card.title + '" to matching job');
+    } else {
+      // No job shares this card's title — adopt it as a new job so it
+      // doesn't just vanish once every card is required to have one.
+      const stubJob = {
+        id: genId(),
+        name: card.title || 'Untitled',
+        color: card.color || '#3949ab',
+        archived: false,
+        notes: card.description || '',
+        tasks: []
+      };
+      jobs.push(stubJob);
+      card.jobId = stubJob.id;
+      logActivity('created job for orphaned card "' + card.title + '"');
+    }
+  });
+}
+
+// ===== Section 2: Auto-Derive Column from Dates =====
+// Section 5 adds an optional `card` argument: if that card has an active
+// manual override (drag-and-drop placement), it wins over the date-derived
+// column until the override expires or the job's dates are re-saved.
+function deriveColumnForJob(job, card) {
+  if (card && card.manualColumn && card.manualColumnUntil && Date.now() < card.manualColumnUntil) {
+    return card.manualColumn;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (!job.tasks || job.tasks.length === 0 || BOARD_COLUMNS.length === 0) {
+    return BOARD_COLUMNS[0] ? BOARD_COLUMNS[0].id : '';
+  }
+
+  let activeIdx = -1;
+  let lastFinishedIdx = -1;
+  let firstDatedIdx = -1;
+  let lastDatedIdx = -1;
+
+  for (let i = 0; i < job.tasks.length; i++) {
+    const t = job.tasks[i];
+    if (!t.start || !t.finish) continue;
+
+    const s = new Date(t.start + 'T00:00:00');
+    const f = new Date(t.finish + 'T00:00:00');
+    if (isNaN(s.getTime()) || isNaN(f.getTime())) continue;
+
+    if (firstDatedIdx === -1) firstDatedIdx = i;
+    lastDatedIdx = i;
+
+    if (today >= s && today <= f) {
+      activeIdx = i; // later overlapping tasks overwrite earlier ones
+    }
+    if (today > f) {
+      lastFinishedIdx = i;
+    }
+  }
+
+  if (activeIdx !== -1) {
+    return BOARD_COLUMNS[activeIdx] ? BOARD_COLUMNS[activeIdx].id : '';
+  }
+
+  if (firstDatedIdx === -1) {
+    // No dates at all
+    return BOARD_COLUMNS[0] ? BOARD_COLUMNS[0].id : '';
+  }
+
+  const firstStart = new Date(job.tasks[firstDatedIdx].start + 'T00:00:00');
+  const lastFinish = new Date(job.tasks[lastDatedIdx].finish + 'T00:00:00');
+
+  if (today < firstStart) {
+    return BOARD_COLUMNS[firstDatedIdx] ? BOARD_COLUMNS[firstDatedIdx].id : '';
+  }
+
+  if (today > lastFinish) {
+    return BOARD_COLUMNS[lastDatedIdx] ? BOARD_COLUMNS[lastDatedIdx].id : '';
+  }
+
+  // In a gap between tasks — park in the last finished task's column
+  if (lastFinishedIdx !== -1) {
+    return BOARD_COLUMNS[lastFinishedIdx] ? BOARD_COLUMNS[lastFinishedIdx].id : '';
+  }
+
+  return BOARD_COLUMNS[0] ? BOARD_COLUMNS[0].id : '';
+}
+
+function syncCardColumns() {
+  jobs.forEach(function(job) {
+    const card = boardCards.find(function(c) { return c.jobId === job.id; });
+    if (card) {
+      card.column = deriveColumnForJob(job, card);
+    }
+  });
+}
+
+
+
 function ensureCardIds(arr) {
   (arr || []).forEach(function(c) { if (!c.id) c.id = genId(); });
   return arr;
@@ -1560,10 +1774,6 @@ function ensureCardIds(arr) {
 let jobs = [];
 let editingJobId = null;
 let editingTaskId = null;
-// Working copy of the task rows currently shown in the job form — edited
-// freely via addTaskRow()/removeTaskRow(), only committed to the job's
-// real tasks array when Save is clicked (wired up in Chunk 3).
-let editingTaskRows = [];
 let dayWidth = 28;
 let startDate, endDate;
 let deleteTargetJobId = null;
@@ -1874,11 +2084,29 @@ function loadActiveProjectData() {
   else localStorage.removeItem('gantt_board_bg_photo_v1');
   applyHeaderVisual();
   applyBoardBgVisual();
+
+  // Section 6: link/adopt any cards that predate the jobId field, before
+  // the schema-lock pass normalizes tasks and cards for every job below.
+  migrateOrphanedCards();
+
+  // Section 1: Schema Lock — normalize tasks and cards on load
+  jobs.forEach(function(job) {
+    ensureJobTasksMatchColumns(job);
+    ensureJobHasCard(job);
+  });
+  saveActiveProject();
 }
 
 function saveActiveProject() {
   const p = getActiveProject();
   if (!p) return;
+
+  // Section 1: maintain schema invariant before saving
+  jobs.forEach(function(job) {
+    ensureJobTasksMatchColumns(job);
+    ensureJobHasCard(job);
+  });
+
   p.jobs = jobs;
   p.boardColumns = BOARD_COLUMNS;
   p.boardCards = boardCards;
@@ -2083,7 +2311,10 @@ function init() {
   renderAll();
   setupScrollSync();
   buildCardColorPresets();
-  setInterval(() => { if (document.getElementById('panel-gantt').classList.contains('active') && !barMoveState) renderGantt(); }, 60000);
+  setInterval(() => {
+    if (document.getElementById('panel-gantt').classList.contains('active') && !barMoveState) renderGantt();
+    syncCardColumns();
+  }, 60000);
 }
 
 function loadFieldOptions() {
@@ -2386,8 +2617,10 @@ function getDaysDiff(d1, d2) {
 }
 
 function calcPercentComplete(task) {
+  if (!task.start || !task.finish) return 0;
   const s = new Date(task.start + 'T00:00:00');
   const f = new Date(task.finish + 'T00:00:00');
+  if (isNaN(s.getTime()) || isNaN(f.getTime())) return 0;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -2403,20 +2636,26 @@ function calcPercentComplete(task) {
 
 function computeDateRange() {
   const allJobs = jobs.concat(getGhostJobs());
-  let allTasks = [];
+  let datedTasks = [];
   allJobs.forEach(function(job) {
     (job.tasks || []).forEach(function(task) {
-      allTasks.push(task);
+      if (!task.start || !task.finish) return;
+      const s = new Date(task.start + 'T00:00:00');
+      const f = new Date(task.finish + 'T00:00:00');
+      if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+      datedTasks.push(task);
     });
   });
-  if (allTasks.length === 0) {
+  if (datedTasks.length === 0) {
+    // No dated tasks anywhere (e.g. brand new jobs with blank grids) —
+    // give the chart a small window around today so rows still appear.
     const today = new Date();
-    startDate = new Date(today); startDate.setDate(today.getDate() - 14);
-    endDate = new Date(today); endDate.setDate(today.getDate() + 30);
+    startDate = new Date(today); startDate.setDate(today.getDate() - 7);
+    endDate = new Date(today); endDate.setDate(today.getDate() + 7);
     return;
   }
-  const starts = allTasks.map(t => new Date(t.start + 'T00:00:00'));
-  const finishes = allTasks.map(t => new Date(t.finish + 'T00:00:00'));
+  const starts = datedTasks.map(t => new Date(t.start + 'T00:00:00'));
+  const finishes = datedTasks.map(t => new Date(t.finish + 'T00:00:00'));
   startDate = new Date(Math.min.apply(null, starts));
   endDate = new Date(Math.max.apply(null, finishes));
   startDate.setDate(startDate.getDate() - 3);
@@ -2908,7 +3147,16 @@ function renderGantt() {
   // of which job a task belongs to. Ties broken by job order then task's
   // stored order so identical start dates stay stable/predictable.
   function byStartDate(a, b) {
-    return (new Date(a.start) - new Date(b.start)) || ((a.order || 0) - (b.order || 0));
+    const aValid = !!(a.start && a.finish && !isNaN(new Date(a.start + 'T00:00:00').getTime()));
+    const bValid = !!(b.start && b.finish && !isNaN(new Date(b.start + 'T00:00:00').getTime()));
+    if (aValid && bValid) {
+      const diff = new Date(a.start) - new Date(b.start);
+      if (diff !== 0) return diff;
+    } else if (aValid !== bValid) {
+      // Dated tasks sort above undated ones, which fall to the bottom.
+      return aValid ? -1 : 1;
+    }
+    return (a.order || 0) - (b.order || 0);
   }
   function buildVisibleTaskRows() {
     const rows = [];
@@ -3008,10 +3256,9 @@ function renderGantt() {
       bg.style.width = gridWidth + 'px';
       grid.appendChild(bg);
 
-      const s = new Date(task.start + 'T00:00:00');
-      const f = new Date(task.finish + 'T00:00:00');
-      const startStr = s.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      const finishStr = f.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const hasDates = !!(task.start && task.finish && !isNaN(new Date(task.start + 'T00:00:00').getTime()) && !isNaN(new Date(task.finish + 'T00:00:00').getTime()));
+      const startStr = hasDates ? new Date(task.start + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+      const finishStr = hasDates ? new Date(task.finish + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
       const noteDot = task.notes ? '<span class="note-dot" title="Has notes"></span>' : '';
       const pct = calcPercentComplete(task);
       const pctHtml = '<div class="progress-track"><div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + pct + '%;"></div></div><span class="progress-pct">' + pct + '%</span>';
@@ -3045,8 +3292,10 @@ function renderGantt() {
   ghostJobs.forEach(function(job) {
     if (!showArchived && job.archived) return;
     (job.tasks || []).forEach(function(task) {
+      if (!task.start || !task.finish) return;
       const s = new Date(task.start + 'T00:00:00');
       const f = new Date(task.finish + 'T00:00:00');
+      if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
       const startIdx = getDaysDiff(startDate, s);
       if (getDaysDiff(startDate, f) < 0) return;
       const duration = getDaysDiff(s, f) + 1;
@@ -3073,9 +3322,14 @@ function renderGantt() {
   let barVisibleIdx = 0;
   visibleRows.forEach(function(entry) {
     const job = entry.job, task = entry.task;
-    {
-      const s = new Date(task.start + 'T00:00:00');
-      const f = new Date(task.finish + 'T00:00:00');
+    const hasDates = !!(task.start && task.finish);
+    const s = hasDates ? new Date(task.start + 'T00:00:00') : null;
+    const f = hasDates ? new Date(task.finish + 'T00:00:00') : null;
+    const validDates = hasDates && !isNaN(s.getTime()) && !isNaN(f.getTime());
+
+    // Tasks without dates still occupy a row (drawn above in the left
+    // panel) but get no bar in the timeline grid — nothing to position.
+    if (validDates) {
       const startIdx = getDaysDiff(startDate, s);
       const duration = getDaysDiff(s, f) + 1;
       const bar = document.createElement('div');
@@ -3127,9 +3381,9 @@ function renderGantt() {
         top: barVisibleIdx * 34 + 6,
         bar: bar
       });
-
-      barVisibleIdx++;
     }
+
+    barVisibleIdx++;
   });
 
   const svgNs = 'http://www.w3.org/2000/svg';
@@ -3674,87 +3928,56 @@ function updateJobCount() {
 }
 
 // ===== TASK LIST EDITOR (Chunk 1: read-only rendering) =====
-// Draws one row per task in the job form. The name/date inputs and the
-// delete button are rendered now so Chunk 2 can wire them up without
-// touching markup again, but they're inert (disabled) until then —
-// editing still happens through the top job form, same as before.
-// Sets the working state from a job's tasks (or one blank row for a new
-// job) and draws it. Call this when the form opens; use renderTaskRows()
-// alone after that to redraw from the current editingTaskRows state.
-function initTaskRows(taskList, defaultColor) {
-  editingTaskRows = (taskList && taskList.length ? taskList : [{ name: '', start: '', finish: '', color: defaultColor }])
-    .map(function(t) { return { id: t.id || null, name: t.name || '', start: t.start || '', finish: t.finish || '', color: t.color || defaultColor || '#3949ab' }; });
-  renderTaskRows();
-}
-
-// Draws #taskRows from the current editingTaskRows state. Typing in a
-// row updates editingTaskRows directly (no full re-render on keystroke);
-// add/remove rebuild the whole list since row count changed.
-function renderTaskRows() {
+// Section 3: Fixed task grid — one row per BOARD_COLUMNS entry, locked
+// 1:1 to job.tasks by index. The column name is read-only; only dates
+// and notes are editable. Color isn't editable here — it always mirrors
+// the task's board column (see ensureJobTasksMatchColumns / changeColumnColor).
+// Call ensureJobTasksMatchColumns(job) before this so job.tasks is already
+// aligned to BOARD_COLUMNS in the same order.
+function renderFixedTaskGrid(taskList) {
   const container = document.getElementById('taskRows');
   if (!container) return;
   container.innerHTML = '';
-  editingTaskRows.forEach(function(t, i) {
+  (taskList || []).forEach(function(t, i) {
     const row = document.createElement('div');
-    row.className = 'task-edit-row';
+    row.className = 'task-fixed-row';
     row.dataset.index = i;
+    row.dataset.taskId = t.id;
+    row.dataset.color = t.color || '#3949ab';
 
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.className = 'task-row-name';
-    nameInput.placeholder = 'Task name';
-    nameInput.value = t.name || '';
-    nameInput.addEventListener('input', function() { editingTaskRows[i].name = nameInput.value; });
+    const swatch = document.createElement('span');
+    swatch.className = 'task-fixed-swatch';
+    swatch.style.background = t.color || '#3949ab';
+    swatch.title = 'Color follows the board column';
+
+    const nameLabel = document.createElement('span');
+    nameLabel.className = 'task-fixed-name';
+    nameLabel.textContent = t.name || '';
+    nameLabel.title = t.name || '';
 
     const startInput = document.createElement('input');
     startInput.type = 'date';
-    startInput.className = 'task-row-start';
+    startInput.className = 'task-fixed-start';
     startInput.value = t.start || '';
-    startInput.addEventListener('input', function() { editingTaskRows[i].start = startInput.value; });
 
     const finishInput = document.createElement('input');
     finishInput.type = 'date';
-    finishInput.className = 'task-row-finish';
+    finishInput.className = 'task-fixed-finish';
     finishInput.value = t.finish || '';
-    finishInput.addEventListener('input', function() { editingTaskRows[i].finish = finishInput.value; });
 
-    const colorInput = document.createElement('input');
-    colorInput.type = 'color';
-    colorInput.className = 'task-row-color';
-    colorInput.title = 'Task color';
-    colorInput.value = t.color || '#3949ab';
-    colorInput.addEventListener('input', function() { editingTaskRows[i].color = colorInput.value; });
+    const notesInput = document.createElement('input');
+    notesInput.type = 'text';
+    notesInput.className = 'task-fixed-notes';
+    notesInput.placeholder = 'Notes...';
+    notesInput.value = t.notes || '';
 
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'task-row-delete';
-    delBtn.title = 'Remove task';
-    delBtn.textContent = '×';
-    delBtn.disabled = editingTaskRows.length <= 1;
-    delBtn.addEventListener('click', function() { removeTaskRow(i); });
-
-    row.appendChild(nameInput);
+    row.appendChild(swatch);
+    row.appendChild(nameLabel);
     row.appendChild(startInput);
     row.appendChild(finishInput);
-    row.appendChild(colorInput);
-    row.appendChild(delBtn);
+    row.appendChild(notesInput);
     container.appendChild(row);
   });
-}
-
-function addTaskRow() {
-  const jobColor = (document.getElementById('f_color') || {}).value || '#3949ab';
-  editingTaskRows.push({ id: null, name: '', start: '', finish: '', color: jobColor });
-  renderTaskRows();
-}
-
-function removeTaskRow(index) {
-  if (editingTaskRows.length <= 1) {
-    showToast('A job needs at least one task', 'error');
-    return;
-  }
-  editingTaskRows.splice(index, 1);
-  renderTaskRows();
 }
 
 function addNewJob() {
@@ -3768,7 +3991,10 @@ function addNewJob() {
   document.getElementById('f_job').value = '';
   document.getElementById('f_color').value = '#3949ab';
   document.getElementById('f_notes').value = '';
-  initTaskRows([{ name: '', start: '', finish: '' }], '#3949ab');
+  var defaultTasks = BOARD_COLUMNS.map(function(col, i) {
+    return { id: genId(), name: col.label, start: '', finish: '', notes: '', color: col.color || '#3949ab', order: i };
+  });
+  renderFixedTaskGrid(defaultTasks);
   document.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
   updateJobColorSwatch();
   toggleJobColorPanel(false);
@@ -3791,7 +4017,8 @@ function editJob(jobId) {
   document.getElementById('f_job').value = job.name;
   document.getElementById('f_color').value = job.color;
   document.getElementById('f_notes').value = job.notes || '';
-  initTaskRows(job.tasks, job.color);
+  ensureJobTasksMatchColumns(job);
+  renderFixedTaskGrid(job.tasks);
   document.querySelectorAll('.color-preset').forEach(p => {
     p.classList.toggle('selected', p.dataset.color === job.color);
   });
@@ -3817,27 +4044,38 @@ function saveJob() {
   const notes = document.getElementById('f_notes').value.trim();
 
   if (!name) { showToast('Job name is required', 'error'); return; }
-  if (!editingTaskRows.length) { showToast('A job needs at least one task', 'error'); return; }
 
-  // Validate every task row and build the real tasks array up front —
-  // bail out on the first problem without touching job/jobs state.
+  const gridRows = document.querySelectorAll('#taskRows .task-fixed-row');
+  if (!gridRows.length) { showToast('A job needs at least one task', 'error'); return; }
+
+  // Rows are locked 1:1 to BOARD_COLUMNS by position — read dates/notes
+  // straight out of the fixed grid; name/color/order come from the column.
   const cleanedTasks = [];
-  for (let i = 0; i < editingTaskRows.length; i++) {
-    const row = editingTaskRows[i];
-    const rowStart = (row.start || '').trim();
-    const rowFinish = (row.finish || '').trim();
-    const label = 'Task ' + (i + 1);
-    if (!rowStart) { showToast(label + ' is missing a start date', 'error'); return; }
-    if (!rowFinish) { showToast(label + ' is missing a finish date', 'error'); return; }
-    if (new Date(rowStart) > new Date(rowFinish)) { showToast(label + ': start date must be before finish date', 'error'); return; }
-    const rowName = (row.name || '').trim() || (editingTaskRows.length === 1 ? name : label);
+  for (let i = 0; i < gridRows.length; i++) {
+    const row = gridRows[i];
+    const rowStart = (row.querySelector('.task-fixed-start').value || '').trim();
+    const rowFinish = (row.querySelector('.task-fixed-finish').value || '').trim();
+    const rowNotes = (row.querySelector('.task-fixed-notes').value || '').trim();
+    const col = BOARD_COLUMNS[i];
+    const label = col ? col.label : ('Task ' + (i + 1));
+    // Section 4 taught the Gantt to render tasks with blank dates
+    // gracefully, so dates are no longer required to save — a row can
+    // sit empty until you're ready to schedule it.
+    if (rowStart && rowFinish && new Date(rowStart) > new Date(rowFinish)) {
+      showToast(label + ': start date must be before finish date', 'error');
+      return;
+    }
+    if ((rowStart && !rowFinish) || (!rowStart && rowFinish)) {
+      showToast(label + ': enter both a start and finish date, or leave both blank', 'error');
+      return;
+    }
     cleanedTasks.push({
-      id: row.id || genId(),
-      name: rowName,
+      id: row.dataset.taskId || genId(),
+      name: label,
       start: rowStart,
       finish: rowFinish,
-      notes: notes,
-      color: row.color || color,
+      notes: rowNotes,
+      color: row.dataset.color || color,
       order: i
     });
   }
@@ -3850,6 +4088,11 @@ function saveJob() {
     job.color = color;
     job.notes = notes;
     job.tasks = cleanedTasks;
+    // Saving the schedule counts as "the dates changed" (Section 5) — release
+    // any manual column override so auto-sync resumes right away instead of
+    // waiting out the 24h window.
+    const linkedCard = boardCards.find(function(c) { return c.jobId === job.id; });
+    if (linkedCard) { linkedCard.manualColumn = null; linkedCard.manualColumnUntil = null; }
     showToast('Job updated successfully', 'success');
   } else {
     const newJob = {
@@ -3863,6 +4106,7 @@ function saveJob() {
     jobs.push(newJob);
     editingJobId = newJob.id;
     editingTaskId = newJob.tasks[0].id;
+    ensureJobHasCard(newJob); // give it a board card immediately, not just on next load
     showToast('Job added successfully', 'success');
   }
 
@@ -3872,6 +4116,11 @@ function saveJob() {
   renderJobList();
   renderGantt();
   renderCalendar();
+  // Section 3 called for this and it was missed — sync board positions
+  // and repaint immediately so a saved date change is reflected without
+  // waiting on the 60s interval or a tab switch.
+  syncCardColumns();
+  renderBoard();
 }
 
 function cancelEdit() {
@@ -4287,7 +4536,7 @@ function deleteBoardColumn(colId, event) {
   }
   BOARD_COLUMNS = remaining;
   saveBoardColumns();
-  logActivity('added board "' + label + '"');
+  logActivity('deleted board "' + col.label + '"');
   renderBoard();
   showToast('Board deleted', 'info');
 }
@@ -4300,6 +4549,9 @@ function escapeHtml(str) {
 
 // ===== BOARD: RENDER =====
 function renderBoard() {
+  // Column placement is date-derived (or manually overridden) — resolve it
+  // before reading card.column anywhere below (badge counts, DOM placement).
+  syncCardColumns();
   const wrapper = document.getElementById('boardWrapper');
   wrapper.innerHTML = BOARD_COLUMNS.map(col => {
     const count = boardCards.filter(c => c.column === col.id).length;
@@ -4391,12 +4643,19 @@ function renderBoard() {
 
 function buildCardEl(card) {
   const el = document.createElement('div');
-  el.className = 'board-card';
+  const hasOverride = !!(card.manualColumn && card.manualColumnUntil && Date.now() < card.manualColumnUntil);
+  el.className = 'board-card' + (hasOverride ? ' manual-override' : '');
   el.draggable = true;
   el.dataset.id = card.id;
   el.style.borderLeftColor = card.color || 'var(--primary-light)';
+  if (hasOverride) {
+    el.title = 'Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
 
   const badges = [];
+  const overrideBadge = hasOverride
+    ? '<span class="board-card-override-badge" title="Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '"><svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-2px" xmlns="http://www.w3.org/2000/svg"><path d="M13 3l-9 10h6l-1 8 9-10h-6l1-8z" fill="#f0ad4e"/></svg> Manual</span>'
+    : '';
 
   if (card.due) {
     const isOverdue = card.column !== 'complete' && card.column !== 'invoiced' && new Date(card.due + 'T00:00:00') < new Date(new Date().toDateString());
@@ -4431,7 +4690,8 @@ function buildCardEl(card) {
     '<div class="card-color-option" style="background:' + c + ';" onclick="quickChangeCardColor(' + card.id + ', \'' + c + '\', event)"></div>'
   ).join('');
 
-  el.innerHTML = '<div class="board-card-title">' + escapeHtml(card.title) + '</div>' +
+  el.innerHTML = overrideBadge +
+    '<div class="board-card-title">' + escapeHtml(card.title) + '</div>' +
     (card.description ? '<div class="board-card-desc">' + escapeHtml(card.description) + '</div>' : '') +
     (metaLines.length ? '<div class="board-card-meta">' + metaLines.join('') + '</div>' : '') +
     (cfBadges.length ? '<div class="board-card-badges">' + cfBadges.join('') + '</div>' : '') +
@@ -4547,7 +4807,7 @@ function syncColumnsFromDOM() {
   BOARD_COLUMNS.forEach(c => { if (!orderedIds.includes(c.id)) newColumns.push(c); });
   BOARD_COLUMNS = newColumns;
   saveBoardColumns();
-  logActivity('added board "' + label + '"');
+  logActivity('reordered boards');
   renderBoard();
   showToast('Board reordered', 'success');
 }
@@ -4605,16 +4865,32 @@ function handleColumnDragLeave(e) {
 function handleColumnDrop(e) {
   e.preventDefault();
   e.stopPropagation();
-  e.currentTarget.classList.remove('drag-over');
-  const col = e.currentTarget.closest('.board-column');
-  if (col) col.classList.remove('card-drag-over');
+  const body = e.currentTarget;
+  body.classList.remove('drag-over');
+  const colEl = body.closest('.board-column');
+  if (colEl) colEl.classList.remove('card-drag-over');
+
+  const targetColumnId = body.id.indexOf('col-body-') === 0 ? body.id.slice('col-body-'.length) : null;
+  const cardId = draggedCardId;
+  draggedCardId = null;
+  if (!cardId || !targetColumnId) return;
+
+  const card = boardCards.find(function(c) { return String(c.id) === String(cardId); });
+  if (!card) return;
+
+  card.column = targetColumnId;
+  if (card.jobId) {
+    // Job-linked cards are normally auto-positioned by date; a manual
+    // drop overrides that for 24 hours, or until the job's dates are
+    // re-saved (see saveJob()), whichever comes first.
+    card.manualColumn = targetColumnId;
+    card.manualColumnUntil = Date.now() + 24 * 60 * 60 * 1000;
+    const targetCol = BOARD_COLUMNS.find(function(c) { return c.id === targetColumnId; });
+    logActivity('manually moved "' + card.title + '" to "' + (targetCol ? targetCol.label : targetColumnId) + '"');
+  }
+
   syncBoardCardsFromDOM();
   saveBoardCards();
-  if (draggedCardId) {
-    const movedCard = boardCards.find(c => String(c.id) === String(draggedCardId));
-    if (movedCard) logActivity('moved card "' + movedCard.title + '"');
-    draggedCardId = null;
-  }
   requestAnimationFrame(() => renderBoard());
 }
 
@@ -4688,8 +4964,18 @@ function changeColumnColor(colId, color, event) {
       logActivity('reset board "' + col.label + '" color');
       showToast('Board color reset to default', 'info');
     }
+    // Task colors mirror their column, so a column recolor needs to
+    // propagate to every job's matching task (and the Gantt/board bars
+    // that read task.color).
+    jobs.forEach(function(job) { ensureJobTasksMatchColumns(job); });
+    saveJobs();
     saveBoardColumns();
     renderBoard();
+    renderGantt();
+    if (editingJobId) {
+      const found = findJob(editingJobId);
+      if (found) renderFixedTaskGrid(found.job.tasks);
+    }
   }
   closeAllColSettings();
 }
@@ -5098,8 +5384,6 @@ function deleteCardFromModal() {
   if (card) logActivity('deleted card "' + card.title + '"');
   boardCards = boardCards.filter(c => c.id !== editingCardId);
   saveBoardCards();
-  const action = editingCardId != null ? 'updated card' : 'added card';
-  logActivity(action + ' "' + title + '"');
   renderBoard();
   closeCardModal();
   showToast('Card deleted', 'info');
@@ -5235,6 +5519,10 @@ let unsubActivityLog = null;
 let subscribedProjectId = null;
 let syncPushTimer = null;
 let syncBadgeEls = null;
+// Section 7: set when a remote update to the active project arrives while
+// the user is mid-edit (isBusyEditing()); the deferred refresh runs once
+// they're done, see refreshActiveProjectFromShared() / the focusout listener.
+let pendingRemoteRefresh = false;
 
 let offlineBannerEl = null;
 let offlineSince = null;
@@ -5657,7 +5945,10 @@ function pushProjectToShared(projectId, headerOverride) {
 
       entry.set('name', proj.name);
 
-      // jobs (nested model)
+      // jobs (nested model) — each job object is pushed whole, so its fixed-
+      // shape tasks array (name/start/finish/notes/color/order, locked to
+      // BOARD_COLUMNS as of Section 3) travels automatically; no per-field
+      // enumeration needed here.
       const jobsMap = entry.get('jobsMap');
       if (jobsMap && typeof jobsMap.set === 'function') {
         const liveJobIds = new Set(proj.jobs.map(function (j) { return String(j.id); }));
@@ -5669,7 +5960,9 @@ function pushProjectToShared(projectId, headerOverride) {
         }
       }
 
-      // cards
+      // cards — likewise pushed whole, so jobId, manualColumn, and
+      // manualColumnUntil (Section 5's manual override) travel with every
+      // job-linked card automatically.
       const cardsMap = entry.get('boardCardsMap');
       if (cardsMap && typeof cardsMap.set === 'function') {
         const liveCardIds = new Set(proj.boardCards.map(function (c) { return String(c.id); }));
@@ -5878,21 +6171,54 @@ function applyLiveblocksState(root) {
 
   saveProjects();
 
-  if (activeDataChanged && !busy) {
-    loadActiveProjectData();
-    renderGantt();
-    renderJobList();
-    updateJobCount();
-    renderBoard();
-    renderCalendar();
-    updateGhostBtnState();
-    showToast('Synced latest changes', 'info');
+  if (activeDataChanged) {
+    if (busy) {
+      // The merge above already landed in projects[activeProjectId] — it's
+      // just not reflected in the live jobs/boardCards globals or the DOM
+      // yet, so we don't clobber whatever the user is mid-typing. Flag it
+      // so refreshActiveProjectFromShared() can catch up as soon as they're
+      // done, even if no further remote update arrives to retrigger this.
+      pendingRemoteRefresh = true;
+    } else {
+      pendingRemoteRefresh = false;
+      refreshActiveProjectFromShared();
+    }
   }
   if (activeDataChanged || listChanged) updateProjectToggle();
 
   const sidebar = document.getElementById('activitySidebar');
   if (sidebar && !sidebar.classList.contains('collapsed')) renderActivityLogSidebar();
 }
+
+// Section 6/1 schema-lock plus Section 5's card sync both already run as
+// part of this chain: loadActiveProjectData() normalizes every job's tasks
+// and its card (also adopting/migrating orphaned cards), and renderBoard()
+// calls syncCardColumns() as its first line — so a remote task-date or
+// board-column change is reflected here without any extra wiring.
+function refreshActiveProjectFromShared() {
+  loadActiveProjectData();
+  renderGantt();
+  renderJobList();
+  updateJobCount();
+  renderBoard();
+  renderCalendar();
+  updateGhostBtnState();
+  showToast('Synced latest changes', 'info');
+}
+
+// A remote update can land while the user is mid-edit (isBusyEditing()),
+// in which case applyLiveblocksState() defers the refresh above and sets
+// pendingRemoteRefresh. Catch up the moment focus leaves the form instead
+// of waiting on another remote change to retrigger the sync.
+document.addEventListener('focusout', function() {
+  if (!pendingRemoteRefresh) return;
+  setTimeout(function() {
+    if (pendingRemoteRefresh && !isBusyEditing()) {
+      pendingRemoteRefresh = false;
+      refreshActiveProjectFromShared();
+    }
+  }, 0);
+});
 
 // Initialize
 init();
