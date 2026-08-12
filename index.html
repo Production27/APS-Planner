@@ -289,7 +289,12 @@
   body.dark-mode .reorder-indicator { background: #5c6bc0; box-shadow: 0 0 0 3px rgba(92,107,192,0.35); }
   body.dark-mode .task-bar.reordering { opacity: 0.25; }
   body.dark-mode .task-row.reorder-target { background: rgba(92,107,192,0.45) !important; }
-  .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; }
+  .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; justify-content: center; font-size: 9px; }
+  .task-bar.due-marker-bar { border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935, 0 1px 3px rgba(0,0,0,0.25); }
+  .task-row.due-marker-row { font-style: italic; }
+  .task-row.due-marker-row .col-jobs { color: var(--text-light); }
+  .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
+  .cal-event-bar.due-marker .cal-jobname-tag { display: none; }
   .task-bar-job-tag {
     position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
     border-top-left-radius: 4px; border-bottom-left-radius: 4px;
@@ -1695,6 +1700,8 @@ function flattenJobs(jobsArr, includeArchived) {
       if (hiddenOrders.has(task.order)) return;
       rows.push({job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx});
     });
+    const dueTask = getJobDueMarkerTask(job);
+    if (dueTask) rows.push({job: job, jobIdx: jobIdx, task: dueTask, taskIdx: -1});
   });
   return rows;
 }
@@ -1709,6 +1716,21 @@ function findTask(jobId, taskId) {
   if (!j) return null;
   for (let i = 0; i < j.job.tasks.length; i++) { if (j.job.tasks[i].id === taskId) return {job: j.job, jobIdx: j.idx, task: j.job.tasks[i], taskIdx: i}; }
   return null;
+}
+
+// A job's due date (card.due) isn't a task — it doesn't live in job.tasks
+// and Job Manager never shows it as one — but it still needs to appear on
+// the Gantt/Calendar and be draggable like a task bar. This synthesizes a
+// single-day pseudo-task at render time (start === finish naturally gets
+// the app's existing "milestone" single-day styling) that the Gantt/
+// Calendar drag handlers special-case by id instead of writing through
+// findTask()/job.tasks.
+const DUE_MARKER_TASK_ID = '__due__';
+function getJobDueMarkerTask(job) {
+  const card = boardCards.find(function(c) { return c.jobId === job.id; });
+  if (!card || !card.due) return null;
+  if (isNaN(new Date(card.due + 'T00:00:00').getTime())) return null;
+  return { id: DUE_MARKER_TASK_ID, name: 'Due Date', start: card.due, finish: card.due, notes: '', color: job.color, order: -1, isDueMarker: true };
 }
 
 function ensureJobTasksMatchColumns(job) {
@@ -2835,6 +2857,11 @@ function computeDateRange() {
       if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
       datedTasks.push(task);
     });
+    // A due date can sit outside every task's date range (e.g. set well
+    // past the last task's finish) — without this the marker could fall
+    // off the edge of the chart entirely, with no grid to scroll into.
+    const dueTask = getJobDueMarkerTask(job);
+    if (dueTask) datedTasks.push(dueTask);
   });
   getGhostJobs().forEach(function(job) {
     (job.tasks || []).forEach(function(task) {
@@ -3058,16 +3085,19 @@ function renderMonthCalendar() {
       const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
       const job = seg.job;
       const task = seg.task;
+      const isDue = !!task.isDueMarker;
       const classes = ['cal-event-bar'];
+      if (isDue) classes.push('due-marker');
       classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
       classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
       if (isTaskFinished(job, task)) classes.push('finished');
       barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (task.color || job.color || '#3949ab') + ';" title="' +
         escapeHtml(task.name) + ' — ' + escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
-        '<div class="cal-bar-drag-left" data-drag="left"></div>' +
-        '<div class="cal-bar-drag-body" data-drag="move"></div>' +
-        '<div class="cal-bar-drag-right" data-drag="right"></div>' +
-        escapeHtml(task.name) + ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(job.name) + '</span></div>';
+        (isDue ? '' :
+          '<div class="cal-bar-drag-left" data-drag="left"></div>' +
+          '<div class="cal-bar-drag-body" data-drag="move"></div>' +
+          '<div class="cal-bar-drag-right" data-drag="right"></div>') +
+        (isDue ? '🚩' : escapeHtml(task.name)) + ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(job.name) + '</span></div>';
     });
   }
 
@@ -3172,16 +3202,19 @@ function renderWeekCalendar() {
     const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
     const job = seg.job;
     const task = seg.task;
+    const isDue = !!task.isDueMarker;
     const classes = ['cal-event-bar'];
+    if (isDue) classes.push('due-marker');
     classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
     classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
     if (isTaskFinished(job, task)) classes.push('finished');
     barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (task.color || job.color || '#3949ab') + ';" title="' +
       escapeHtml(task.name) + ' — ' + escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
-      '<div class="cal-bar-drag-left" data-drag="left"></div>' +
-      '<div class="cal-bar-drag-body" data-drag="move"></div>' +
-      '<div class="cal-bar-drag-right" data-drag="right"></div>' +
-      escapeHtml(task.name) + ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(job.name) + '</span></div>';
+      (isDue ? '' :
+        '<div class="cal-bar-drag-left" data-drag="left"></div>' +
+        '<div class="cal-bar-drag-body" data-drag="move"></div>' +
+        '<div class="cal-bar-drag-right" data-drag="right"></div>') +
+      (isDue ? '🚩' : escapeHtml(task.name)) + ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(job.name) + '</span></div>';
   });
 
   let barsLayer = daysEl.querySelector('.cal-bars-layer');
@@ -3212,11 +3245,24 @@ function handleCalBarMouseDown(e) {
   e.preventDefault();
   const jobId = bar.dataset.calJobId;
   const taskId = bar.dataset.calTaskId;
-  const found = findTask(jobId, taskId);
-  if (!found) return;
-  const task = found.task;
-  const job = found.job;
+  let task, job;
+  if (taskId === DUE_MARKER_TASK_ID) {
+    const jf = findJob(jobId);
+    if (!jf) return;
+    job = jf.job;
+    task = getJobDueMarkerTask(job);
+    if (!task) return;
+  } else {
+    const found = findTask(jobId, taskId);
+    if (!found) return;
+    task = found.task;
+    job = found.job;
+  }
 
+  // Due-marker bars render no drag-zone sub-elements (see renderMonthCalendar/
+  // renderWeekCalendar), so e.target IS the bar and has no data-drag —
+  // always resolves to 'move', which is the only drag type that makes
+  // sense for a single-day marker.
   const dragType = e.target.dataset.drag || 'move';
   const startX = e.clientX;
   const origLeft = parseFloat(bar.style.left);
@@ -3288,7 +3334,7 @@ function handleCalBarMouseMove(e) {
 
 function handleCalBarMouseUp(e) {
   if (!calDragState) return;
-  const { jobId, taskId, bar, dragType, moved, duration, startDateObj, finishDateObj, task } = calDragState;
+  const { jobId, taskId, job, bar, dragType, moved, duration, startDateObj, finishDateObj, task } = calDragState;
   document.removeEventListener('mousemove', handleCalBarMouseMove);
   document.removeEventListener('mouseup', handleCalBarMouseUp);
   bar.classList.remove('cal-dragging', 'cal-resizing');
@@ -3304,7 +3350,21 @@ function handleCalBarMouseUp(e) {
   const deltaX = e.clientX - calDragState.startX;
   const deltaDays = Math.round(deltaX / cellWidth);
 
-  if (dragType === 'move' && deltaDays !== 0) {
+  if (dragType === 'move' && deltaDays !== 0 && taskId === DUE_MARKER_TASK_ID) {
+    const newStart = new Date(startDateObj);
+    newStart.setDate(newStart.getDate() + deltaDays);
+    const card = boardCards.find(function(c) { return c.jobId === jobId; });
+    if (card) {
+      card.due = newStart.toISOString().split('T')[0];
+      saveJobs();
+      logActivity('rescheduled due date for job "' + job.name + '"');
+      renderGantt();
+      renderJobList();
+      renderBoard();
+      refreshJobFormIfOpen(jobId);
+      showToast('Due date updated', 'success');
+    }
+  } else if (dragType === 'move' && deltaDays !== 0) {
     const newStart = new Date(startDateObj);
     newStart.setDate(newStart.getDate() + deltaDays);
     const newFinish = new Date(newStart);
@@ -3385,6 +3445,8 @@ function renderGantt() {
         if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
         rows.push({ job: job, task: task });
       });
+      const dueTask = getJobDueMarkerTask(job);
+      if (dueTask) rows.push({ job: job, task: dueTask });
     });
     rows.sort(function(a, b) {
       return byStartDate(a.task, b.task) || ((a.job.order || 0) - (b.job.order || 0));
@@ -3486,10 +3548,10 @@ function renderGantt() {
       const pctHtml = '<div class="progress-track"><div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + pct + '%;"></div></div><span class="progress-pct">' + pct + '%</span>';
 
       const row = document.createElement('div');
-      row.className = 'task-row' + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '');
+      row.className = 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '');
       row.dataset.jobId = job.id;
       row.dataset.taskId = task.id;
-      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + escapeHtml(task.name) + ' <span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>' + noteDot + '</div>';
+      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + ' <span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>' + noteDot + '</div>';
       row.addEventListener('click', () => { switchTab('manager'); editJob(job.id, task.id); });
       leftBody.appendChild(row);
       visibleRowIdx++;
@@ -3555,14 +3617,14 @@ function renderGantt() {
       const startIdx = getDaysDiff(startDate, s);
       const duration = getDaysDiff(s, f) + 1;
       const bar = document.createElement('div');
-      bar.className = 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '');
+      bar.className = 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '') + (task.isDueMarker ? ' due-marker-bar' : '');
       bar.dataset.dragged = 'false';
       if (duration === 1) bar.classList.add('milestone');
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
       bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
       bar.style.background = task.color || job.color;
-      bar.textContent = duration > 2 ? task.name : '';
+      bar.textContent = task.isDueMarker ? '🚩' : (duration > 2 ? task.name : '');
       if (duration !== 1) {
         bar.classList.add('has-job-tag');
         const jobTag = document.createElement('span');
@@ -3580,19 +3642,23 @@ function renderGantt() {
         switchTab('manager'); editJob(job.id, task.id);
       });
 
-      const handleLeft = document.createElement('div');
-      handleLeft.className = 'task-bar-resize-handle task-bar-resize-handle-left';
-      handleLeft.title = 'Drag to change start date';
-      handleLeft.addEventListener('mousedown', e => startBarResizeLeft(e, job.id, task.id, bar));
-      handleLeft.addEventListener('click', e => e.stopPropagation());
-      bar.appendChild(handleLeft);
+      // A due date is a single point in time, not a range — only "move"
+      // makes sense, so it gets no resize handles.
+      if (!task.isDueMarker) {
+        const handleLeft = document.createElement('div');
+        handleLeft.className = 'task-bar-resize-handle task-bar-resize-handle-left';
+        handleLeft.title = 'Drag to change start date';
+        handleLeft.addEventListener('mousedown', e => startBarResizeLeft(e, job.id, task.id, bar));
+        handleLeft.addEventListener('click', e => e.stopPropagation());
+        bar.appendChild(handleLeft);
 
-      const handleRight = document.createElement('div');
-      handleRight.className = 'task-bar-resize-handle task-bar-resize-handle-right';
-      handleRight.title = 'Drag to change finish date';
-      handleRight.addEventListener('mousedown', e => startBarResizeRight(e, job.id, task.id, bar));
-      handleRight.addEventListener('click', e => e.stopPropagation());
-      bar.appendChild(handleRight);
+        const handleRight = document.createElement('div');
+        handleRight.className = 'task-bar-resize-handle task-bar-resize-handle-right';
+        handleRight.title = 'Drag to change finish date';
+        handleRight.addEventListener('mousedown', e => startBarResizeRight(e, job.id, task.id, bar));
+        handleRight.addEventListener('click', e => e.stopPropagation());
+        bar.appendChild(handleRight);
+      }
 
       grid.appendChild(bar);
 
@@ -3811,9 +3877,17 @@ function onBarResizeEnd(e) {
 
 // --- Bar body: drag to move the whole task (both dates shift together) ---
 function startBarMove(e, jobId, taskId, bar) {
-  const found = findTask(jobId, taskId);
-  if (!found) return;
-  const task = found.task;
+  let task;
+  if (taskId === DUE_MARKER_TASK_ID) {
+    const jf = findJob(jobId);
+    if (!jf) return;
+    task = getJobDueMarkerTask(jf.job);
+    if (!task) return;
+  } else {
+    const found = findTask(jobId, taskId);
+    if (!found) return;
+    task = found.task;
+  }
   const s = new Date(task.start + 'T00:00:00');
   const f = new Date(task.finish + 'T00:00:00');
   const duration = getDaysDiff(s, f) + 1;
@@ -3903,7 +3977,21 @@ function onBarMoveEnd(e) {
     return;
   }
 
-  if (moved && deltaDays !== 0) {
+  if (moved && deltaDays !== 0 && taskId === DUE_MARKER_TASK_ID) {
+    const newStart = new Date(startDateObj);
+    newStart.setDate(newStart.getDate() + deltaDays);
+    const card = boardCards.find(function(c) { return c.jobId === jobId; });
+    if (card) {
+      card.due = newStart.toISOString().split('T')[0];
+      saveJobs();
+      const jf = findJob(jobId);
+      logActivity('rescheduled due date for job "' + (jf ? jf.job.name : '') + '"');
+      renderJobList();
+      refreshJobFormIfOpen(jobId);
+      showToast('Due date updated', 'success');
+    }
+    bar.dataset.dragged = 'true';
+  } else if (moved && deltaDays !== 0) {
     const newStart = new Date(startDateObj);
     newStart.setDate(newStart.getDate() + deltaDays);
     const newFinish = new Date(newStart);
@@ -4180,7 +4268,13 @@ let currentGridTasks = [];
 function refreshJobFormIfOpen(jobId) {
   if (editingJobId !== jobId) return;
   const found = findJob(jobId);
-  if (found) renderFixedTaskGrid(found.job.tasks);
+  if (!found) return;
+  renderFixedTaskGrid(found.job.tasks);
+  // Dragging the due-date marker on the Gantt/Calendar bypasses the form's
+  // own Due Date field entirely, so it can go stale if this job is open.
+  const dueEl = document.getElementById('f_due');
+  const card = boardCards.find(function(c) { return c.jobId === jobId; });
+  if (dueEl && card) dueEl.value = card.due || '';
 }
 
 function renderFixedTaskGrid(taskList) {
