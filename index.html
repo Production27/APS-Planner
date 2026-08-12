@@ -4265,16 +4265,26 @@ let currentGridTasks = [];
 // bypassing the Job Manager's own Save button. If that same job's form is
 // open, its date inputs would otherwise keep showing the pre-drag values
 // until the user closes and reopens it — so re-render the grid in place.
+// Anything that edits a job's tasks or its linked card from outside the
+// job form itself (Gantt/Calendar drags, or the Board's quick-edit card
+// popup — saveCard()) needs to call this, or the open form keeps showing
+// whatever was there when it was first opened.
 function refreshJobFormIfOpen(jobId) {
   if (editingJobId !== jobId) return;
   const found = findJob(jobId);
   if (!found) return;
   renderFixedTaskGrid(found.job.tasks);
-  // Dragging the due-date marker on the Gantt/Calendar bypasses the form's
-  // own Due Date field entirely, so it can go stale if this job is open.
-  const dueEl = document.getElementById('f_due');
   const card = boardCards.find(function(c) { return c.jobId === jobId; });
-  if (dueEl && card) dueEl.value = card.due || '';
+  if (!card) return;
+  const dueEl = document.getElementById('f_due');
+  if (dueEl) dueEl.value = card.due || '';
+  const descEl = document.getElementById('f_description');
+  if (descEl) descEl.value = card.description || '';
+  renderJobCustomFieldsGrid(card.customFields || {});
+  jmDraftChecklist = JSON.parse(JSON.stringify(card.checklist || []));
+  jmDraftAttachments = JSON.parse(JSON.stringify(card.attachments || []));
+  renderJobChecklist();
+  renderJobAttachments();
 }
 
 function renderFixedTaskGrid(taskList) {
@@ -6224,15 +6234,18 @@ function saveCard() {
     attachments: draftAttachments
   };
 
+  let savedCard = null;
   if (editingCardId != null) {
     const idx = boardCards.findIndex(c => c.id === editingCardId);
     if (idx >= 0) {
       boardCards[idx] = Object.assign({}, boardCards[idx], cardData);
+      savedCard = boardCards[idx];
       showToast('Card updated', 'success');
     }
   } else {
     cardData.id = Date.now();
     boardCards.push(cardData);
+    savedCard = cardData;
     showToast('Card added', 'success');
   }
 
@@ -6240,6 +6253,10 @@ function saveCard() {
   const action = editingCardId != null ? 'updated card' : 'added card';
   logActivity(action + ' "' + title + '"');
   renderBoard();
+  // This card's job might already be open in Job Manager — without this its
+  // description/due/custom fields/checklist/attachments would keep showing
+  // whatever was there when that form was first opened.
+  if (savedCard && savedCard.jobId) refreshJobFormIfOpen(savedCard.jobId);
   closeCardModal();
 }
 
