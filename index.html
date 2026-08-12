@@ -410,6 +410,17 @@
     background: var(--card); color: var(--text);
   }
   .job-comments-input-row textarea:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
+  .job-comment-reply-btn { background: none; border: none; color: var(--primary); font-size: 11px; font-weight: 700; cursor: pointer; padding: 4px 0 0; }
+  .job-comment-reply-btn:hover { text-decoration: underline; }
+  .job-comment-replies { margin-top: 8px; padding-left: 12px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .job-comment-reply-item { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .job-comment-reply-input-row { display: none; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .job-comment-reply-input-row textarea {
+    width: 100%; min-height: 44px; padding: 6px 8px; border: 1px solid var(--border);
+    border-radius: 6px; font-family: inherit; font-size: 12px; resize: vertical; outline: none;
+    background: var(--card); color: var(--text);
+  }
+  .job-comment-reply-input-row textarea:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   @media (max-width: 1440px) {
     .job-edit-row { flex-direction: column; max-width: 700px; }
     .job-comments-panel { width: 100%; max-width: 700px; flex: none; max-height: 400px; }
@@ -4266,6 +4277,12 @@ function editJob(jobId) {
 // getStoredDisplayName() (the same name used for Liveblocks sync/activity
 // log) and rides along with the rest of the job object through the normal
 // job sync path — no separate Liveblocks plumbing needed.
+function formatCommentWhen(when) {
+  return when
+    ? new Date(when).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : 'Imported';
+}
+
 function renderJobComments(job) {
   const listEl = document.getElementById('jobCommentsList');
   if (!listEl) return;
@@ -4274,21 +4291,97 @@ function renderJobComments(job) {
     listEl.innerHTML = '<div class="job-comments-empty">No comments yet.</div>';
     return;
   }
-  listEl.innerHTML = comments.map(function(c) {
-    const whenLabel = c.when
-      ? new Date(c.when).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
-      : 'Imported';
-    return '<div class="job-comment-item">' +
+  listEl.innerHTML = comments.map(function(c) { return renderJobCommentItem(job, c); }).join('');
+}
+
+function renderJobCommentItem(job, c) {
+  // Oldest-first within a thread so a reply chain reads top-to-bottom.
+  const replies = (c.replies || []).slice().sort(function(a, b) { return (a.when || 0) - (b.when || 0); });
+  const repliesHtml = replies.map(function(r) {
+    return '<div class="job-comment-reply-item">' +
       '<div class="job-comment-meta">' +
-        '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
+        '<span class="job-comment-author" title="' + escapeHtml(r.author || 'Someone') + '">' + escapeHtml(r.author || 'Someone') + '</span>' +
         '<span style="display:flex;align-items:center;gap:4px;">' +
-          '<span class="job-comment-when">' + whenLabel + '</span>' +
-          '<button class="job-comment-delete" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
+          '<span class="job-comment-when">' + formatCommentWhen(r.when) + '</span>' +
+          '<button class="job-comment-delete" onclick="deleteJobReply(\'' + job.id + '\', \'' + c.id + '\', \'' + r.id + '\')" title="Delete reply">×</button>' +
         '</span>' +
       '</div>' +
-      '<div class="job-comment-text">' + escapeHtml(c.text) + '</div>' +
+      '<div class="job-comment-text">' + escapeHtml(r.text) + '</div>' +
     '</div>';
   }).join('');
+
+  return '<div class="job-comment-item">' +
+    '<div class="job-comment-meta">' +
+      '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
+      '<span style="display:flex;align-items:center;gap:4px;">' +
+        '<span class="job-comment-when">' + formatCommentWhen(c.when) + '</span>' +
+        '<button class="job-comment-delete" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
+      '</span>' +
+    '</div>' +
+    '<div class="job-comment-text">' + escapeHtml(c.text) + '</div>' +
+    (replies.length ? '<div class="job-comment-replies">' + repliesHtml + '</div>' : '') +
+    '<button class="job-comment-reply-btn" onclick="toggleReplyBox(\'' + c.id + '\', event)">Reply' + (replies.length ? ' (' + replies.length + ')' : '') + '</button>' +
+    '<div class="job-comment-reply-input-row" id="reply-row-' + c.id + '">' +
+      '<textarea id="reply-ta-' + c.id + '" placeholder="Write a reply..." onkeydown="handleReplyKey(event, \'' + job.id + '\', \'' + c.id + '\')"></textarea>' +
+      '<button class="btn btn-primary" style="align-self:flex-end;padding:4px 10px;font-size:12px;" onclick="addJobReply(\'' + job.id + '\', \'' + c.id + '\')">Post Reply</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function toggleReplyBox(commentId, event) {
+  if (event) event.stopPropagation();
+  const row = document.getElementById('reply-row-' + commentId);
+  if (!row) return;
+  const isOpen = row.style.display === 'flex';
+  // Only one reply box open at a time keeps the panel from getting cluttered.
+  document.querySelectorAll('.job-comment-reply-input-row').forEach(function(r) { r.style.display = 'none'; });
+  if (!isOpen) {
+    row.style.display = 'flex';
+    const ta = document.getElementById('reply-ta-' + commentId);
+    if (ta) ta.focus();
+  }
+}
+
+function addJobReply(jobId, commentId) {
+  const found = findJob(jobId);
+  if (!found) return;
+  const job = found.job;
+  const comment = (job.comments || []).find(function(c) { return c.id === commentId; });
+  if (!comment) return;
+  const ta = document.getElementById('reply-ta-' + commentId);
+  const text = ((ta && ta.value) || '').trim();
+  if (!text) return;
+
+  let author = getStoredDisplayName();
+  if (!author) {
+    author = window.prompt('Your name (shown on comments):') || 'Team member';
+    localStorage.setItem(DISPLAY_NAME_KEY, author);
+  }
+
+  if (!Array.isArray(comment.replies)) comment.replies = [];
+  comment.replies.push({ id: genId(), author: author, text: text, when: Date.now() });
+  saveJobs();
+  logActivity('replied to a comment on job "' + job.name + '"');
+  renderJobComments(job);
+}
+
+function deleteJobReply(jobId, commentId, replyId) {
+  const found = findJob(jobId);
+  if (!found) return;
+  const job = found.job;
+  const comment = (job.comments || []).find(function(c) { return c.id === commentId; });
+  if (!comment) return;
+  comment.replies = (comment.replies || []).filter(function(r) { return r.id !== replyId; });
+  saveJobs();
+  renderJobComments(job);
+}
+
+// Ctrl/Cmd+Enter posts the reply — mirrors handleJobCommentKey below.
+function handleReplyKey(event, jobId, commentId) {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    addJobReply(jobId, commentId);
+  }
 }
 
 function addJobComment() {
