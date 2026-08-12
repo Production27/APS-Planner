@@ -1652,6 +1652,12 @@ function ensureJobTasksMatchColumns(job) {
 }
 
 function ensureJobHasCard(job) {
+  // Archived jobs are hidden from the board (see renderBoard's
+  // isCardFromArchivedJob filter) and shouldn't have their card silently
+  // regenerated if the user deletes it while archived. Restoring the job
+  // re-enables this invariant, so a fresh card gets created then if needed.
+  if (job.archived) return;
+
   const linked = boardCards.filter(function(c) { return c.jobId === job.id; });
   if (linked.length === 0) {
     boardCards.push({
@@ -4244,6 +4250,7 @@ function archiveJob(jobId) {
   renderJobList();
   renderGantt();
   renderCalendar();
+  renderBoard();
   showToast('Job archived', 'success');
   if (editingJobId === jobId) editJob(jobId);
 }
@@ -4258,6 +4265,7 @@ function restoreJob(jobId) {
   renderJobList();
   renderGantt();
   renderCalendar();
+  renderBoard();
   showToast('Job restored', 'success');
   if (editingJobId === jobId) editJob(jobId);
   refreshArchivedJobsListIfOpen();
@@ -4687,6 +4695,15 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// A job's card follows it into the archive — same as it's already hidden
+// from the Gantt/Calendar/Job Manager once archived, it shouldn't keep
+// occupying a spot on the board. Restoring the job brings it back.
+function isCardFromArchivedJob(card) {
+  if (!card.jobId) return false;
+  const found = findJob(card.jobId);
+  return !!(found && found.job.archived);
+}
+
 // ===== BOARD: RENDER =====
 function renderBoard() {
   // Column placement is date-derived (or manually overridden) — resolve it
@@ -4694,7 +4711,7 @@ function renderBoard() {
   syncCardColumns();
   const wrapper = document.getElementById('boardWrapper');
   wrapper.innerHTML = BOARD_COLUMNS.map(col => {
-    const count = boardCards.filter(c => c.column === col.id).length;
+    const count = boardCards.filter(c => c.column === col.id && !isCardFromArchivedJob(c)).length;
     return '<div class="board-column" data-column="' + col.id + '">' +
       '<div class="board-column-header" data-col-header="' + col.id + '" draggable="true">' +
         '<div class="board-column-header-title"><span>' + escapeHtml(col.label) + '</span>' +
@@ -4743,7 +4760,7 @@ function renderBoard() {
 
   BOARD_COLUMNS.forEach(col => {
     const body = document.getElementById('col-body-' + col.id);
-    boardCards.filter(c => c.column === col.id).forEach(card => body.appendChild(buildCardEl(card)));
+    boardCards.filter(c => c.column === col.id && !isCardFromArchivedJob(c)).forEach(card => body.appendChild(buildCardEl(card)));
     body.addEventListener('dragover', handleColumnDragOver);
     body.addEventListener('dragleave', handleColumnDragLeave);
     body.addEventListener('drop', handleColumnDrop);
@@ -4788,7 +4805,7 @@ function renderBoard() {
     colEl.addEventListener('drop', handleColumnReorderDrop);
   });
 
-  document.getElementById('boardCount').textContent = boardCards.length;
+  document.getElementById('boardCount').textContent = boardCards.filter(c => !isCardFromArchivedJob(c)).length;
 }
 
 function buildCardEl(card) {
