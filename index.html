@@ -4823,7 +4823,7 @@ function buildCardEl(card) {
 
   const badges = [];
   const overrideBadge = hasOverride
-    ? '<span class="board-card-override-badge" onclick="reconnectCard(' + card.id + ', event)" title="Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '. Click to reconnect now."><svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-2px" xmlns="http://www.w3.org/2000/svg"><path d="M13 3l-9 10h6l-1 8 9-10h-6l1-8z" fill="#f0ad4e"/></svg> Manual <span style="text-decoration:underline;margin-left:2px;">Reconnect</span></span>'
+    ? '<span class="board-card-override-badge" onclick="reconnectCard(\'' + card.id + '\', event)" title="Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '. Click to reconnect now."><svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-2px" xmlns="http://www.w3.org/2000/svg"><path d="M13 3l-9 10h6l-1 8 9-10h-6l1-8z" fill="#f0ad4e"/></svg> Manual <span style="text-decoration:underline;margin-left:2px;">Reconnect</span></span>'
     : '';
 
   if (card.due) {
@@ -4856,7 +4856,7 @@ function buildCardEl(card) {
 
   const colorPickerId = 'card-color-' + card.id;
   const colorOptions = COLOR_PRESETS.map(c =>
-    '<div class="card-color-option" style="background:' + c + ';" onclick="quickChangeCardColor(' + card.id + ', \'' + c + '\', event)"></div>'
+    '<div class="card-color-option" style="background:' + c + ';" onclick="quickChangeCardColor(\'' + card.id + '\', \'' + c + '\', event)"></div>'
   ).join('');
 
   el.innerHTML = overrideBadge +
@@ -4867,7 +4867,7 @@ function buildCardEl(card) {
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;position:relative;">' +
       (badges.length ? '<div class="board-card-badges">' + badges.join('') + '</div>' : '<div></div>') +
       '<div style="position:relative;">' +
-        '<div class="card-color-swatch" style="background:' + (card.color || 'var(--primary-light)') + ';" onclick="toggleCardColorPicker(' + card.id + ', event)" title="Change color"></div>' +
+        '<div class="card-color-swatch" style="background:' + (card.color || 'var(--primary-light)') + ';" onclick="toggleCardColorPicker(\'' + card.id + '\', event)" title="Change color"></div>' +
         '<div class="card-color-picker" id="' + colorPickerId + '">' + colorOptions + '</div>' +
       '</div>' +
     '</div>';
@@ -5208,7 +5208,7 @@ function closeAllCardColorPickers() {
 
 function quickChangeCardColor(cardId, color, event) {
   event.stopPropagation();
-  const card = boardCards.find(c => c.id === cardId);
+  const card = boardCards.find(c => String(c.id) === String(cardId));
   if (card) {
     card.color = color;
     saveBoardCards();
