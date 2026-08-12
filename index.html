@@ -387,12 +387,12 @@
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
   /* Section 3: fixed task grid — rows locked to board columns */
-  .task-fixed-row { display: grid; grid-template-columns: auto 1.2fr 1fr 1fr 1.4fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .task-fixed-row { display: grid; grid-template-columns: auto 1.2fr 1fr 0.7fr 1fr 1.4fr; gap: 8px; align-items: center; margin-bottom: 8px; }
   .task-fixed-row input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
   .task-fixed-row input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   .task-fixed-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
   .task-fixed-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .task-fixed-header { display: grid; grid-template-columns: auto 1.2fr 1fr 1fr 1.4fr; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; padding: 0 2px; }
+  .task-fixed-header { display: grid; grid-template-columns: auto 1.2fr 1fr 0.7fr 1fr 1.4fr; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; padding: 0 2px; }
   .task-fixed-header span:first-child { width: 14px; }
 
   .color-picker-wrapper { display: flex; align-items: center; gap: 12px; }
@@ -1117,7 +1117,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             </div>
             <div class="form-group">
               <label>Tasks</label>
-              <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Finish</span><span>Notes</span></div>
+              <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Duration</span><span>Finish</span><span>Notes</span></div>
               <div id="taskRows"></div>
             </div>
             <div class="form-group">
@@ -4069,10 +4069,58 @@ function renderFixedTaskGrid(taskList) {
     startInput.className = 'task-fixed-start';
     startInput.value = t.start || '';
 
+    const durationInput = document.createElement('input');
+    durationInput.type = 'number';
+    durationInput.className = 'task-fixed-duration';
+    durationInput.min = '1';
+    durationInput.placeholder = 'Days';
+
     const finishInput = document.createElement('input');
     finishInput.type = 'date';
     finishInput.className = 'task-fixed-finish';
     finishInput.value = t.finish || '';
+
+    // Duration is never stored on the task itself — start/finish stay the
+    // single source of truth (unchanged schema). It's just derived here for
+    // display and re-applied to finish (or vice versa) as the user edits.
+    if (t.start && t.finish) {
+      const s0 = new Date(t.start + 'T00:00:00');
+      const f0 = new Date(t.finish + 'T00:00:00');
+      if (!isNaN(s0.getTime()) && !isNaN(f0.getTime())) {
+        const dur0 = getDaysDiff(s0, f0) + 1;
+        if (dur0 > 0) durationInput.value = dur0;
+      }
+    }
+
+    function applyDurationToFinish() {
+      const durVal = parseInt(durationInput.value, 10);
+      if (!startInput.value || !durVal || durVal < 1) return;
+      const s = new Date(startInput.value + 'T00:00:00');
+      if (isNaN(s.getTime())) return;
+      const f = new Date(s);
+      f.setDate(f.getDate() + durVal - 1);
+      finishInput.value = f.toISOString().split('T')[0];
+    }
+
+    function applyFinishToDuration() {
+      if (!startInput.value || !finishInput.value) return;
+      const s = new Date(startInput.value + 'T00:00:00');
+      const f = new Date(finishInput.value + 'T00:00:00');
+      if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+      const dur = getDaysDiff(s, f) + 1;
+      if (dur > 0) durationInput.value = dur;
+    }
+
+    startInput.addEventListener('change', function() {
+      if (!startInput.value) return;
+      // A start date with nothing else set yet defaults to a 5-day task —
+      // otherwise keep whatever duration/finish relationship already exists.
+      if (!durationInput.value && !finishInput.value) durationInput.value = 5;
+      if (durationInput.value) applyDurationToFinish();
+      else applyFinishToDuration();
+    });
+    durationInput.addEventListener('change', applyDurationToFinish);
+    finishInput.addEventListener('change', applyFinishToDuration);
 
     const notesInput = document.createElement('input');
     notesInput.type = 'text';
@@ -4083,6 +4131,7 @@ function renderFixedTaskGrid(taskList) {
     row.appendChild(swatch);
     row.appendChild(nameLabel);
     row.appendChild(startInput);
+    row.appendChild(durationInput);
     row.appendChild(finishInput);
     row.appendChild(notesInput);
     container.appendChild(row);
