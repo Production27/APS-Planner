@@ -2708,11 +2708,19 @@ function computeDateRange() {
       datedTasks.push(task);
     });
   });
+  // However the task dates work out, always leave room to scroll back at
+  // least ARCHIVE_CUTOFF_DAYS — otherwise a job that just auto-archived (or
+  // simply doesn't have anything scheduled that far back) leaves no grid to
+  // scroll into, even though the data's still there with "Show archived" on.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const minPastDate = new Date(today);
+  minPastDate.setDate(minPastDate.getDate() - ARCHIVE_CUTOFF_DAYS);
+
   if (datedTasks.length === 0) {
     // No dated tasks anywhere (e.g. brand new jobs with blank grids) —
     // give the chart a small window around today so rows still appear.
-    const today = new Date();
-    startDate = new Date(today); startDate.setDate(today.getDate() - 7);
+    startDate = new Date(minPastDate);
     endDate = new Date(today); endDate.setDate(today.getDate() + 7);
     return;
   }
@@ -2722,6 +2730,7 @@ function computeDateRange() {
   endDate = new Date(Math.max.apply(null, finishes));
   startDate.setDate(startDate.getDate() - 3);
   endDate.setDate(endDate.getDate() + 5);
+  if (startDate > minPastDate) startDate = minPastDate;
 }
 
 let isSyncingScroll = false;
