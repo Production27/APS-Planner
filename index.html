@@ -1726,6 +1726,11 @@ function migrateOrphanedCards() {
 // manual override (drag-and-drop placement), it wins over the date-derived
 // column until the override expires or the job's dates are re-saved.
 function deriveColumnForJob(job, card) {
+  if (card) {
+    const currentCol = BOARD_COLUMNS.find(function(c) { return c.id === card.column; });
+    if (currentCol && currentCol.scheduleDisconnected) return card.column;
+  }
+
   if (card && card.manualColumn && card.manualColumnUntil && Date.now() < card.manualColumnUntil) {
     return card.manualColumn;
   }
@@ -4692,7 +4697,9 @@ function renderBoard() {
     const count = boardCards.filter(c => c.column === col.id).length;
     return '<div class="board-column" data-column="' + col.id + '">' +
       '<div class="board-column-header" data-col-header="' + col.id + '" draggable="true">' +
-        '<div class="board-column-header-title"><span>' + escapeHtml(col.label) + '</span><span class="badge">' + count + '</span></div>' +
+        '<div class="board-column-header-title"><span>' + escapeHtml(col.label) + '</span>' +
+          (col.scheduleDisconnected ? '<span title="Disconnected from schedule — cards here no longer auto-move" style="display:inline-flex;flex-shrink:0;"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg></span>' : '') +
+          '<span class="badge">' + count + '</span></div>' +
         '<div class="board-col-settings-wrap">' +
           '<button class="board-col-settings-btn" draggable="false" onclick="toggleColSettings(\'' + col.id + '\', event)" title="Settings">⋮</button>' +
           '<div class="board-col-settings-dropdown" id="col-settings-' + col.id + '">' +
@@ -4709,6 +4716,10 @@ function renderBoard() {
             '<div class="board-col-gantt-toggle" onclick="toggleColumnScheduleVisibility(\'' + col.id + '\', event)">' +
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Show in Schedule</span>' +
               '<span class="board-col-gantt-switch' + (col.hideFromSchedule ? '' : ' on') + '"><span class="knob"></span></span>' +
+            '</div>' +
+            '<div class="board-col-gantt-toggle" onclick="toggleColumnScheduleSync(\'' + col.id + '\', event)" title="When on, cards sitting in this board stay put and stop auto-moving with the schedule, until dragged into a connected board.">' +
+              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg> Disconnect from Schedule</span>' +
+              '<span class="board-col-gantt-switch' + (col.scheduleDisconnected ? ' on' : '') + '"><span class="knob"></span></span>' +
             '</div>' +
             '<div class="board-col-settings-divider"></div>' +
             '<div class="board-col-settings-item danger" onclick="deleteBoardColumn(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</div>' +
@@ -5144,6 +5155,22 @@ function toggleColumnScheduleVisibility(colId, event) {
     if (found) renderFixedTaskGrid(found.job.tasks);
   }
   showToast('"' + col.label + '" ' + (col.hideFromSchedule ? 'hidden from' : 'shown on') + ' the Gantt, Calendar & Job Manager', 'success');
+  closeAllColSettings();
+}
+
+// While a board is disconnected, deriveColumnForJob() leaves any card that's
+// currently sitting in it alone — no expiry, unlike a normal manual drag's
+// 24h override. Dragging the card into a different, connected board is the
+// only way out (handleColumnDrop just sets card.column like any other move).
+function toggleColumnScheduleSync(colId, event) {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find(c => c.id === colId);
+  if (!col) return;
+  col.scheduleDisconnected = !col.scheduleDisconnected;
+  saveBoardColumns();
+  logActivity((col.scheduleDisconnected ? 'disconnected' : 'reconnected') + ' board "' + col.label + '" from the schedule');
+  renderBoard();
+  showToast('"' + col.label + '" ' + (col.scheduleDisconnected ? 'disconnected from' : 'reconnected to') + ' the schedule', 'success');
   closeAllColSettings();
 }
 
