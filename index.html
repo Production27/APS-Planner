@@ -334,7 +334,6 @@
   .row-bg { position: absolute; left: 0; right: 0; height: 34px; border-bottom: 1px solid #f5f5f5; }
   .row-bg:nth-child(even) { background: #fafafa; }
   .gantt-toolbar { display: flex; gap: 4px; align-items: center; margin-left: auto; padding-right: 4px; }
-  .board-toolbar { display: flex; gap: 8px; align-items: center; margin-left: auto; padding-right: 4px; }
   .gantt-toolbar button {
     background: transparent; border: 1px solid var(--border); color: var(--text-light);
     width: 26px; height: 26px; padding: 0; border-radius: 6px; cursor: pointer;
@@ -1099,9 +1098,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <button onclick="fitToView()" title="Fit to view">⤢</button>
     <button onclick="scrollToToday()" title="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
   </div>
-  <div class="board-toolbar" id="boardToolbar" style="display:none;">
-    <button class="btn btn-success" onclick="addJobFromBoard()" style="padding:6px 14px;font-size:12px;">+ Add Job</button>
-  </div>
 </div>
 
 <div class="main-area" id="mainArea">
@@ -1197,6 +1193,50 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
                   </div>
                 </div>
               </div>
+              <div class="form-group">
+                <label>Description</label>
+                <textarea id="f_description" placeholder="Add details, notes, or next steps..."></textarea>
+              </div>
+              <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" id="f_due">
+              </div>
+
+              <!-- CUSTOM FIELDS -->
+              <div class="card-section">
+                <div class="card-section-header">
+                  <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> Custom Fields</h5>
+                  <button class="btn btn-secondary" onclick="openManageFields()">Edit</button>
+                </div>
+                <div class="custom-fields-grid" id="jmCustomFieldsGrid"></div>
+              </div>
+
+              <!-- CHECKLIST -->
+              <div class="card-section">
+                <div class="card-section-header">
+                  <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Checklist</h5>
+                </div>
+                <div class="checklist-progress-row">
+                  <div class="checklist-progress-bar"><div class="checklist-progress-fill" id="jmChecklistProgressFill" style="width:0%;"></div></div>
+                  <span class="checklist-progress-pct" id="jmChecklistProgressPct">0%</span>
+                </div>
+                <div id="jmChecklistItems"></div>
+                <div class="checklist-add-row">
+                  <input type="text" id="jmChecklistNewItem" placeholder="Add an item..." onkeydown="if(event.key==='Enter'){event.preventDefault();addJobChecklistItem();}">
+                  <button class="btn btn-secondary" onclick="addJobChecklistItem()">Add</button>
+                </div>
+              </div>
+
+              <!-- ATTACHMENTS -->
+              <div class="card-section">
+                <div class="card-section-header">
+                  <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Attachments</h5>
+                  <button class="btn btn-secondary" onclick="document.getElementById('jm_attachment_input').click()">+ Add</button>
+                  <input type="file" id="jm_attachment_input" multiple style="display:none" onchange="handleJobAttachmentUpload(event)">
+                </div>
+                <div id="jmAttachmentItems"></div>
+              </div>
+
               <div class="form-actions">
                 <button class="btn btn-primary" onclick="saveJob()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Save Job</button>
                 <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
@@ -1922,6 +1962,11 @@ let draggedCardId = null;
 let draftChecklist = [];
 let localActivityLog = [];
 let draftAttachments = [];
+// Job Manager's own copies of the card modal's draft state — kept separate
+// so editing a job's checklist/attachments there can't collide with the
+// Board's quick-edit popup if both happen to hold stale drafts.
+let jmDraftChecklist = [];
+let jmDraftAttachments = [];
 
 const CUSTOM_FIELD_DEFS = [
   { key: 'pm', label: 'Project Manager', type: 'select' },
@@ -2732,17 +2777,16 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('panel-' + tab).classList.add('active');
   document.getElementById('ganttToolbar').style.display = (tab === 'gantt') ? 'flex' : 'none';
-  document.getElementById('boardToolbar').style.display = (tab === 'board') ? 'flex' : 'none';
   if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
   else if (tab === 'manager') { renderJobList(); }
   else if (tab === 'board') { renderBoard(); }
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
 }
 
-// The Board's own "+ Add a card" only creates a standalone card with no
-// linked job — it won't show up in Job Manager/Gantt/Calendar and won't
-// auto-move with dates. This reuses the real job form (Job Manager's own
-// addNewJob) instead of building a second, parallel creation flow.
+// Every board column's "+ New Job" button (formerly "+ Add a card", which
+// created a standalone card with no linked job — invisible to Job Manager/
+// Gantt/Calendar and never auto-moved with dates) opens the real job form
+// instead, so every card on the board is always backed by a job.
 function addJobFromBoard() {
   switchTab('manager');
   addNewJob();
@@ -4264,6 +4308,13 @@ function addNewJob() {
   document.getElementById('archiveBtn').style.display = 'none';
   document.getElementById('f_job').value = '';
   document.getElementById('f_color').value = '#3949ab';
+  document.getElementById('f_description').value = '';
+  document.getElementById('f_due').value = '';
+  jmDraftChecklist = [];
+  jmDraftAttachments = [];
+  renderJobCustomFieldsGrid({});
+  renderJobChecklist();
+  renderJobAttachments();
   // No job exists yet to attach comments to — the panel reappears once
   // saveJob() gives this job an id (see the end of saveJob()).
   document.getElementById('jobCommentsPanel').style.display = 'none';
@@ -4295,6 +4346,19 @@ function editJob(jobId) {
   document.getElementById('f_color').value = job.color;
   syncCardColumns();
   updateJobCurrentBoardIndicator(job);
+
+  // The job's linked card carries description/due/custom fields/checklist/
+  // attachments — the same fields the Board's quick-edit popup shows, kept
+  // in sync since both read/write this same card object.
+  const linkedCard = boardCards.find(function(c) { return c.jobId === job.id; });
+  document.getElementById('f_description').value = (linkedCard && linkedCard.description) || '';
+  document.getElementById('f_due').value = (linkedCard && linkedCard.due) || '';
+  renderJobCustomFieldsGrid((linkedCard && linkedCard.customFields) || {});
+  jmDraftChecklist = JSON.parse(JSON.stringify((linkedCard && linkedCard.checklist) || []));
+  jmDraftAttachments = JSON.parse(JSON.stringify((linkedCard && linkedCard.attachments) || []));
+  renderJobChecklist();
+  renderJobAttachments();
+
   document.getElementById('jobCommentsPanel').style.display = 'flex';
   document.getElementById('newJobCommentText').value = '';
   renderJobComments(job);
@@ -4553,6 +4617,19 @@ function saveJob() {
     editingTaskId = newJob.tasks[0].id;
     ensureJobHasCard(newJob); // give it a board card immediately, not just on next load
     showToast('Job added successfully', 'success');
+  }
+
+  // The linked card carries description/due/custom fields/checklist/
+  // attachments — the same fields the Board's quick-edit popup manages, so
+  // whichever place last saved wins (same last-write-wins model already
+  // used everywhere else in this app).
+  const cardToUpdate = boardCards.find(function(c) { return c.jobId === editingJobId; });
+  if (cardToUpdate) {
+    cardToUpdate.description = document.getElementById('f_description').value.trim();
+    cardToUpdate.due = document.getElementById('f_due').value;
+    cardToUpdate.customFields = collectJobCustomFieldValues();
+    cardToUpdate.checklist = jmDraftChecklist;
+    cardToUpdate.attachments = jmDraftAttachments;
   }
 
   saveJobs();
@@ -5095,7 +5172,7 @@ function renderBoard() {
         '</div>' +
       '</div>' +
       '<div class="board-column-body" id="col-body-' + col.id + '"></div>' +
-      '<button class="board-add-card-btn" onclick="openNewCard(\'' + col.id + '\')">+ Add a card</button>' +
+      '<button class="board-add-card-btn" onclick="addJobFromBoard()">+ New Job</button>' +
       '</div>';
   }).join('') +
   '<div class="board-add-column" id="addColumnContainer">' +
@@ -5663,6 +5740,123 @@ function collectCustomFieldValues() {
   return values;
 }
 
+// ===== JOB MANAGER: same card fields as the modal above, mirrored onto
+// the job form so a job's linked card can be fully edited from either
+// place. Both read/write the same boardCards entry, so edits made in one
+// show up in the other next time it's opened. =====
+function renderJobCustomFieldsGrid(values) {
+  values = values || {};
+  const grid = document.getElementById('jmCustomFieldsGrid');
+  if (!grid) return;
+  grid.innerHTML = CUSTOM_FIELD_DEFS.map(def => {
+    const val = values[def.key] || '';
+    if (def.type === 'select') {
+      const opts = (fieldOptions[def.key] || []);
+      const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
+        '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
+      ).join('');
+      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '">' + optionsHtml + '</select></div>';
+    }
+    return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
+  }).join('');
+}
+
+function collectJobCustomFieldValues() {
+  const values = {};
+  document.querySelectorAll('#jmCustomFieldsGrid [data-field]').forEach(el => {
+    values[el.dataset.field] = el.value.trim();
+  });
+  return values;
+}
+
+function renderJobChecklist() {
+  const container = document.getElementById('jmChecklistItems');
+  if (!container) return;
+  container.innerHTML = jmDraftChecklist.map(item =>
+    '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
+    '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(' + item.id + ')">' +
+    '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
+    '<button class="ci-delete" onclick="deleteJobChecklistItem(' + item.id + ')">×</button>' +
+    '</div>'
+  ).join('');
+
+  const total = jmDraftChecklist.length;
+  const done = jmDraftChecklist.filter(i => i.done).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  document.getElementById('jmChecklistProgressFill').style.width = pct + '%';
+  document.getElementById('jmChecklistProgressPct').textContent = pct + '%';
+}
+
+function addJobChecklistItem() {
+  const input = document.getElementById('jmChecklistNewItem');
+  const text = input.value.trim();
+  if (!text) return;
+  jmDraftChecklist.push({ id: Date.now(), text, done: false });
+  input.value = '';
+  renderJobChecklist();
+}
+
+function toggleJobChecklistItem(id) {
+  const item = jmDraftChecklist.find(i => i.id === id);
+  if (item) item.done = !item.done;
+  renderJobChecklist();
+}
+
+function deleteJobChecklistItem(id) {
+  jmDraftChecklist = jmDraftChecklist.filter(i => i.id !== id);
+  renderJobChecklist();
+}
+
+function renderJobAttachments() {
+  const container = document.getElementById('jmAttachmentItems');
+  if (!container) return;
+  if (!jmDraftAttachments.length) {
+    container.innerHTML = '<p style="font-size:11px;color:#999;">No attachments yet.</p>';
+    return;
+  }
+  container.innerHTML = jmDraftAttachments.map(att => {
+    const thumb = att.isImage
+      ? '<img class="att-thumb" src="' + att.dataUrl + '">'
+      : '<div class="att-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+    return '<div class="attachment-item">' +
+      '<a href="' + att.dataUrl + '" download="' + escapeHtml(att.name) + '" target="_blank" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;">' +
+      thumb +
+      '<div class="att-info"><span class="att-name">' + escapeHtml(att.name) + '</span><span class="att-size">' + formatFileSize(att.size) + '</span></div>' +
+      '</a>' +
+      '<button class="att-remove" onclick="removeJobAttachment(' + att.id + ')">×</button>' +
+      '</div>';
+  }).join('');
+}
+
+function handleJobAttachmentUpload(e) {
+  const files = Array.from(e.target.files || []);
+  const MAX_SIZE = 3 * 1024 * 1024; // 3MB — keep localStorage happy
+  files.forEach(file => {
+    if (file.size > MAX_SIZE) {
+      showToast('"' + file.name + '" is too large (max 3MB)', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      jmDraftAttachments.push({
+        id: Date.now() + Math.random(),
+        name: file.name,
+        size: file.size,
+        isImage: file.type.startsWith('image/'),
+        dataUrl: evt.target.result
+      });
+      renderJobAttachments();
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+}
+
+function removeJobAttachment(id) {
+  jmDraftAttachments = jmDraftAttachments.filter(a => a.id !== id);
+  renderJobAttachments();
+}
+
 // ----- Manage custom field options -----
 function openManageFields() {
   renderManageFieldsBody();
@@ -5672,7 +5866,10 @@ function openManageFields() {
 function closeManageFields() {
   document.getElementById('manageFieldsModal').classList.remove('show');
   saveFieldOptions();
-  renderCustomFieldsGrid(collectCustomFieldValues());
+  // Both the card modal and Job Manager can have this open behind it —
+  // refresh whichever grid(s) actually exist right now.
+  if (document.getElementById('customFieldsGrid')) renderCustomFieldsGrid(collectCustomFieldValues());
+  if (document.getElementById('jmCustomFieldsGrid')) renderJobCustomFieldsGrid(collectJobCustomFieldValues());
 }
 
 function renderManageFieldsBody() {
@@ -5883,27 +6080,6 @@ function renderActivityLogSidebar() {
 function renderActivityLog() { renderActivityLogSidebar(); }
 
 // ----- Open / save / delete card -----
-function openNewCard(columnId) {
-  editingCardId = null;
-  draftChecklist = [];
-  draftAttachments = [];
-  document.getElementById('cardModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><rect x="11" y="6.5" width="2" height="11" rx="1" fill="#fff"/><rect x="6.5" y="11" width="11" height="2" rx="1" fill="#fff"/></svg>New Card';
-  document.getElementById('cardDeleteBtn').style.display = 'none';
-  document.getElementById('c_title').value = '';
-  document.getElementById('c_description').value = '';
-  document.getElementById('c_due').value = '';
-  document.getElementById('c_color').value = '#3949ab';
-  document.querySelectorAll('#cardColorPresets .color-preset').forEach(p => p.classList.remove('selected'));
-  updateColorSwatch();
-  toggleColorPanel(false);
-  populateColumnSelect(columnId || BOARD_COLUMNS[0].id);
-  renderCustomFieldsGrid({});
-  renderChecklist();
-  renderAttachments();
-  document.getElementById('cardModal').classList.add('show');
-  setTimeout(() => document.getElementById('c_title').focus(), 50);
-}
-
 function openEditCard(id) {
   const card = boardCards.find(c => String(c.id) === String(id));
   if (!card) return;
