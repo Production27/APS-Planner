@@ -613,6 +613,23 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     display: inline-block; margin-left: 6px;
   }
   .board-col-color-toggle.open .col-color-arrow { transform: rotate(180deg); }
+  .board-col-gantt-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    color: var(--text); cursor: pointer; transition: background 0.15s;
+  }
+  .board-col-gantt-toggle:hover { background: #eef1fa; color: var(--primary); }
+  .board-col-gantt-switch {
+    width: 30px; height: 17px; border-radius: 10px; background: #ccc;
+    position: relative; flex-shrink: 0; transition: background 0.2s;
+  }
+  .board-col-gantt-switch.on { background: var(--success); }
+  .board-col-gantt-switch .knob {
+    position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+    border-radius: 50%; background: white; transition: left 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .board-col-gantt-switch.on .knob { left: 15px; }
   .board-col-color-panel {
     overflow: hidden; max-height: 0; transition: max-height 0.2s ease;
   }
@@ -1532,11 +1549,15 @@ function ensureJobAndTaskIds(arr) {
 }
 
 function flattenJobs(jobsArr, includeArchived) {
+  const hiddenOrders = new Set(
+    BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
+  );
   const rows = [];
   (jobsArr || []).forEach(function(job, jobIdx) {
     if (!includeArchived && job.archived) return;
     (job.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
     (job.tasks || []).forEach(function(task, taskIdx) {
+      if (hiddenOrders.has(task.order)) return;
       rows.push({job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx});
     });
   });
@@ -2635,9 +2656,24 @@ function calcPercentComplete(task) {
 }
 
 function computeDateRange() {
-  const allJobs = jobs.concat(getGhostJobs());
+  // Ghost jobs come from a different project with its own BOARD_COLUMNS, so
+  // hideFromSchedule indices (computed against the active project's columns)
+  // only apply to the active project's own jobs, not the ghost overlay.
+  const hiddenOrders = new Set(
+    BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
+  );
   let datedTasks = [];
-  allJobs.forEach(function(job) {
+  jobs.forEach(function(job) {
+    (job.tasks || []).forEach(function(task) {
+      if (hiddenOrders.has(task.order)) return;
+      if (!task.start || !task.finish) return;
+      const s = new Date(task.start + 'T00:00:00');
+      const f = new Date(task.finish + 'T00:00:00');
+      if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+      datedTasks.push(task);
+    });
+  });
+  getGhostJobs().forEach(function(job) {
     (job.tasks || []).forEach(function(task) {
       if (!task.start || !task.finish) return;
       const s = new Date(task.start + 'T00:00:00');
@@ -3159,10 +3195,16 @@ function renderGantt() {
     return (a.order || 0) - (b.order || 0);
   }
   function buildVisibleTaskRows() {
+    const hiddenOrders = new Set(
+      BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
+    );
     const rows = [];
     jobs.forEach(function(job) {
       if (!showArchived && job.archived) return;
-      (job.tasks || []).forEach(function(task) { rows.push({ job: job, task: task }); });
+      (job.tasks || []).forEach(function(task) {
+        if (hiddenOrders.has(task.order)) return;
+        rows.push({ job: job, task: task });
+      });
     });
     rows.sort(function(a, b) {
       return byStartDate(a.task, b.task) || ((a.job.order || 0) - (b.job.order || 0));
@@ -4571,6 +4613,10 @@ function renderBoard() {
             '<div class="board-col-color-panel" id="col-panel-' + col.id + '">' +
               '<div class="board-col-color-grid" id="col-colors-' + col.id + '"></div>' +
             '</div>' +
+            '<div class="board-col-gantt-toggle" onclick="toggleColumnScheduleVisibility(\'' + col.id + '\', event)">' +
+              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Show on Gantt/Calendar</span>' +
+              '<span class="board-col-gantt-switch' + (col.hideFromSchedule ? '' : ' on') + '"><span class="knob"></span></span>' +
+            '</div>' +
             '<div class="board-col-settings-divider"></div>' +
             '<div class="board-col-settings-item danger" onclick="deleteBoardColumn(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</div>' +
           '</div>' +
@@ -4982,6 +5028,25 @@ function changeColumnColor(colId, color, event) {
 
 function closeAllColSettings() {
   document.querySelectorAll('.board-col-settings-dropdown').forEach(d => d.classList.remove('show'));
+}
+
+// A hidden board still exists as a real column — jobs still get a task row
+// for it, dates still save, cards still sit in it on the Kanban board. This
+// only controls whether that column's task shows up as a row/bar on the
+// Gantt chart and a row on the Calendar (e.g. hide "Bid" so bidding jobs
+// don't clutter either schedule view until they're actually scheduled).
+function toggleColumnScheduleVisibility(colId, event) {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find(c => c.id === colId);
+  if (!col) return;
+  col.hideFromSchedule = !col.hideFromSchedule;
+  saveBoardColumns();
+  logActivity((col.hideFromSchedule ? 'hid' : 'showed') + ' board "' + col.label + '" on the Gantt/Calendar');
+  renderBoard();
+  renderGantt();
+  renderCalendar();
+  showToast('"' + col.label + '" ' + (col.hideFromSchedule ? 'hidden from' : 'shown on') + ' the Gantt & Calendar', 'success');
+  closeAllColSettings();
 }
 
 // ===== CARD QUICK COLOR PICKER =====
