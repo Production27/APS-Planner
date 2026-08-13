@@ -1630,21 +1630,23 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // the exact scenario that caused sync to look broken earlier: an old tab
 // running outdated merge/autosave logic against teammates on the current
 // version. Format is free-form; date+sequence keeps it human-scannable.
+// IMPORTANT: version.txt (repo root) must be bumped to this same value on
+// every deploy — checkForNewerVersion() compares against that file, not
+// this constant, to avoid re-fetching the whole page just to check.
 const APP_VERSION = '2026-08-13.1';
 
-// Fetches this page fresh (bypassing HTTP cache) and compares its embedded
-// APP_VERSION to this tab's own. On a mismatch, shows a persistent banner
-// rather than force-reloading — an unprompted reload could drop in-progress
+// Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
+// tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
+// than force-reloading — an unprompted reload could drop in-progress
 // typing, which would be a worse failure mode than a stale tab for a few
 // extra minutes. Called on visibilitychange (the tab-left-open-in-the-
 // background scenario) and on a periodic timer as a backstop.
 async function checkForNewerVersion() {
   try {
-    const res = await fetch(location.pathname + '?_v=' + Date.now(), { cache: 'no-store' });
+    const res = await fetch('version.txt?_v=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
-    const text = await res.text();
-    const match = text.match(/const APP_VERSION = '([^']+)'/);
-    if (match && match[1] && match[1] !== APP_VERSION) {
+    const text = (await res.text()).trim();
+    if (text && text !== APP_VERSION) {
       document.getElementById('newVersionBanner').classList.add('show');
     }
   } catch (err) {
