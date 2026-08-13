@@ -3324,7 +3324,7 @@ function computeDateRange() {
   startDate = new Date(Math.min.apply(null, starts));
   endDate = new Date(Math.max.apply(null, finishes));
   startDate.setDate(startDate.getDate() - 3);
-  endDate.setDate(endDate.getDate() + 5);
+  endDate.setDate(endDate.getDate() + 30);
   if (startDate > minPastDate) startDate = minPastDate;
 }
 
