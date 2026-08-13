@@ -417,11 +417,16 @@
   .date-popover .dp-label { color: #888; }
   .date-popover .dp-value { font-weight: 600; }
 
-  /* ===== JOB MANAGER ===== */
-  .manager-wrapper { display: flex; height: 100%; gap: 0; overflow: hidden; }
-  .manager-sidebar { width: 360px; min-width: 360px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
-  .manager-sidebar-header { padding: 16px 20px; border-bottom: 1px solid var(--border); background: #fafafa; }
-  .manager-sidebar-header h2 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  /* ===== JOB MANAGER =====
+     .manager-sidebar is now a permanent rail down the left of every tab
+     (Gantt/Board/Calendar) rather than its own tab — see #jobRail in
+     .main-area. .manager-form-area is the job editor, which instead of
+     living next to the rail now slides in as a drawer that overlays
+     whichever tab is active (position:absolute inside #panelsContainer,
+     see the rule below) so the rail stays visible while editing. */
+  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+  .manager-sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafafa; }
+  .manager-sidebar-header h2 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
   .search-box { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; transition: border-color 0.2s; }
   .search-box:focus { border-color: var(--primary-light); }
   .job-list { flex: 1; overflow-y: auto; padding: 8px; }
@@ -448,7 +453,13 @@
   .job-current-board-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-light); margin: -14px 0 20px; }
   .field-error-hint { display: block; font-size: 11px; font-weight: 600; color: var(--danger); margin-top: 6px; }
   .job-current-board-indicator strong { color: var(--text); font-weight: 700; }
-  .manager-form-area { flex: 1; padding: 24px 32px; overflow-y: auto; background: var(--bg); }
+  .manager-form-area {
+    position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    padding: 24px 32px; overflow-y: auto; background: var(--bg);
+    transform: translateX(100%); transition: transform 0.25s ease;
+    z-index: 50; box-shadow: -6px 0 20px rgba(0,0,0,0.1);
+  }
+  .manager-form-area.open { transform: translateX(0); }
   .job-edit-row { display: flex; gap: 24px; align-items: flex-start; max-width: 1080px; margin: 0 auto; }
   .form-container { max-width: 700px; margin: 0; flex: 1 1 700px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 32px; }
   .form-container h3 { font-size: 18px; font-weight: 700; margin-bottom: 0; color: var(--text); display: flex; align-items: center; gap: 10px; }
@@ -532,13 +543,7 @@
   .btn-danger { background: linear-gradient(135deg, #e53935 0%, #c62828 100%); color: white; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(198,40,40,0.25), 0 4px 10px rgba(198,40,40,0.25); }
   .btn-danger:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 3px 6px rgba(198,40,40,0.3), 0 8px 18px rgba(198,40,40,0.35); }
   .btn-danger:active { box-shadow: 0 -1px 0 rgba(255,255,255,0.12) inset, 0 2px 4px rgba(0,0,0,0.2) inset, 0 1px 3px rgba(198,40,40,0.35); }
-  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-light); cursor: pointer; border-radius: 8px; transition: background 0.15s; }
-  .empty-state:hover { background: rgba(57,73,171,0.06); }
-  .empty-state:hover svg { opacity: 0.5; }
-  .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; transition: opacity 0.15s; }
-  .empty-state h4 { font-size: 16px; margin-bottom: 6px; color: var(--text); }
-  .empty-state p { font-size: 13px; }
-  .manager-toolbar { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); background: #fafafa; }
+  .manager-toolbar { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: #fafafa; }
   .manager-toolbar .btn { padding: 8px 16px; font-size: 12px; }
 
   /* ===== TRELLO-STYLE BOARD ===== */
@@ -937,7 +942,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .activity-sidebar-close { color: #777; }
   body.dark-mode .activity-sidebar-close:hover { background: rgba(220,53,69,0.18); color: var(--danger); }
 
-  @media (max-width: 1100px) { .left-panel { width: 400px; min-width: 400px; } .manager-sidebar { width: 300px; min-width: 300px; } }
+  @media (max-width: 1100px) { .left-panel { width: 400px; min-width: 400px; } .manager-sidebar { width: 210px; min-width: 210px; } }
 
   /* ===== DARK MODE ===== */
   body.dark-mode {
@@ -1165,7 +1170,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <div class="tab-bar">
   <button class="tab-btn" onclick="switchTab('calendar')" id="tab-calendar"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> Calendar</button>
   <button class="tab-btn active" onclick="switchTab('gantt')" id="tab-gantt"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Gantt Chart</button>
-  <button class="tab-btn" onclick="switchTab('manager')" id="tab-manager"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Job Manager <span class="badge" id="jobCount">0</span></button>
   <button class="tab-btn" onclick="switchTab('board')" id="tab-board"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board <span class="badge" id="boardCount">0</span></button>
   <div class="gantt-toolbar" id="ganttToolbar">
     <div style="position:relative;">
@@ -1182,6 +1186,20 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 </div>
 
 <div class="main-area" id="mainArea">
+  <!-- JOB RAIL: permanent left-side job list, present regardless of which
+       of Gantt/Board/Calendar is active on the right. Clicking a job opens
+       the slide-out drawer (#formArea, inside panelsContainer) over
+       whichever panel is currently showing. -->
+  <div class="manager-sidebar" id="jobRail">
+    <div class="manager-sidebar-header">
+      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span></h2>
+      <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
+    </div>
+    <div class="job-list" id="jobList"></div>
+    <div class="manager-toolbar">
+      <button class="btn btn-success" onclick="addNewJob()">+ Add Job</button>
+    </div>
+  </div>
   <div class="panels-container" id="panelsContainer">
     <!-- CALENDAR TAB -->
     <div class="tab-panel" id="panel-calendar">
@@ -1230,116 +1248,100 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       </div>
     </div>
 
-    <!-- JOB MANAGER TAB -->
-    <div class="tab-panel" id="panel-manager">
-      <div class="manager-wrapper">
-        <div class="manager-sidebar">
-          <div class="manager-sidebar-header">
-            <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> All Jobs</h2>
-            <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
+    <!-- JOB DRAWER: slides in over whichever of Gantt/Board/Calendar is
+         active, opened by editJob()/addNewJob(), closed by cancelEdit().
+         Lives inside panelsContainer (position:relative) so it can overlay
+         it via position:absolute without needing to know about the rail. -->
+    <div class="manager-form-area" id="formArea">
+      <div class="job-edit-row" id="jobEditRow">
+        <div class="form-container" id="jobForm" style="display:none;">
+          <div class="form-title-row">
+            <h3 id="formTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job</h3>
+            <button class="duplicate-job-btn" id="duplicateJobBtn" onclick="duplicateJob(editingJobId, event)" title="Duplicate job" style="display:none;"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>
           </div>
-          <div class="job-list" id="jobList"></div>
-          <div class="manager-toolbar">
-            <button class="btn btn-success" onclick="addNewJob()">+ Add Job</button>
+          <div class="job-current-board-indicator" id="jobCurrentBoardIndicator" style="display:none;"></div>
+          <div class="form-group">
+            <label>Job Name *</label>
+            <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
+            <span class="field-error-hint" id="f_job_hint" style="display:none;">Name required to save</span>
+          </div>
+          <div class="form-group">
+            <label>Tasks</label>
+            <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Duration</span><span>Finish</span><span>Notes</span></div>
+            <div id="taskRows"></div>
+            <div class="field-error-hint" id="taskRowsWarning" style="display:none;"></div>
+          </div>
+          <div class="form-group">
+            <div class="color-toggle-row" onclick="toggleJobColorPanel()">
+              <label>Bar Color</label>
+              <div class="color-toggle-swatch-wrap">
+                <span class="color-toggle-swatch" id="jobColorToggleSwatch" style="background:#3949ab;"></span>
+                <span class="color-toggle-arrow" id="jobColorToggleArrow">▾</span>
+              </div>
+            </div>
+            <div class="color-picker-panel" id="jobColorPickerPanel">
+              <div class="color-picker-wrapper">
+                <input type="color" id="f_color" value="#3949ab" oninput="updateJobColorSwatch()">
+                <div class="color-presets" id="colorPresets"></div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="f_description" placeholder="Add details, notes, or next steps..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Due Date</label>
+            <input type="date" id="f_due">
+          </div>
+
+          <!-- CUSTOM FIELDS -->
+          <div class="card-section">
+            <div class="card-section-header">
+              <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> Custom Fields</h5>
+              <button class="btn btn-secondary" onclick="openManageFields()">Edit</button>
+            </div>
+            <div class="custom-fields-grid" id="jmCustomFieldsGrid"></div>
+          </div>
+
+          <!-- CHECKLIST -->
+          <div class="card-section">
+            <div class="card-section-header">
+              <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Checklist</h5>
+            </div>
+            <div class="checklist-progress-row">
+              <div class="checklist-progress-bar"><div class="checklist-progress-fill" id="jmChecklistProgressFill" style="width:0%;"></div></div>
+              <span class="checklist-progress-pct" id="jmChecklistProgressPct">0%</span>
+            </div>
+            <div id="jmChecklistItems"></div>
+            <div class="checklist-add-row">
+              <input type="text" id="jmChecklistNewItem" placeholder="Add an item..." onkeydown="if(event.key==='Enter'){event.preventDefault();addJobChecklistItem();}">
+              <button class="btn btn-secondary" onclick="addJobChecklistItem()">Add</button>
+            </div>
+          </div>
+
+          <!-- ATTACHMENTS -->
+          <div class="card-section">
+            <div class="card-section-header">
+              <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Attachments</h5>
+              <button class="btn btn-secondary" onclick="document.getElementById('jm_attachment_input').click()">+ Add</button>
+              <input type="file" id="jm_attachment_input" multiple style="display:none" onchange="handleJobAttachmentUpload(event)">
+            </div>
+            <div id="jmAttachmentItems"></div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-secondary" onclick="confirmDelete()" id="deleteBtn" style="margin-right:auto; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
+            <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
+            <button class="btn btn-secondary" onclick="cancelEdit()">Close</button>
           </div>
         </div>
-        <div class="manager-form-area" id="formArea">
-          <div class="empty-state" id="emptyState" onclick="addNewJob()" title="Add a new job">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
-            <h4>No Job Selected</h4>
-            <p>Select a job from the list or click here to create a new one.</p>
-          </div>
-          <div class="job-edit-row" id="jobEditRow">
-            <div class="form-container" id="jobForm" style="display:none;">
-              <div class="form-title-row">
-                <h3 id="formTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job</h3>
-                <button class="duplicate-job-btn" id="duplicateJobBtn" onclick="duplicateJob(editingJobId, event)" title="Duplicate job" style="display:none;"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>
-              </div>
-              <div class="job-current-board-indicator" id="jobCurrentBoardIndicator" style="display:none;"></div>
-              <div class="form-group">
-                <label>Job Name *</label>
-                <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
-                <span class="field-error-hint" id="f_job_hint" style="display:none;">Name required to save</span>
-              </div>
-              <div class="form-group">
-                <label>Tasks</label>
-                <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Duration</span><span>Finish</span><span>Notes</span></div>
-                <div id="taskRows"></div>
-                <div class="field-error-hint" id="taskRowsWarning" style="display:none;"></div>
-              </div>
-              <div class="form-group">
-                <div class="color-toggle-row" onclick="toggleJobColorPanel()">
-                  <label>Bar Color</label>
-                  <div class="color-toggle-swatch-wrap">
-                    <span class="color-toggle-swatch" id="jobColorToggleSwatch" style="background:#3949ab;"></span>
-                    <span class="color-toggle-arrow" id="jobColorToggleArrow">▾</span>
-                  </div>
-                </div>
-                <div class="color-picker-panel" id="jobColorPickerPanel">
-                  <div class="color-picker-wrapper">
-                    <input type="color" id="f_color" value="#3949ab" oninput="updateJobColorSwatch()">
-                    <div class="color-presets" id="colorPresets"></div>
-                  </div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label>Description</label>
-                <textarea id="f_description" placeholder="Add details, notes, or next steps..."></textarea>
-              </div>
-              <div class="form-group">
-                <label>Due Date</label>
-                <input type="date" id="f_due">
-              </div>
-
-              <!-- CUSTOM FIELDS -->
-              <div class="card-section">
-                <div class="card-section-header">
-                  <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> Custom Fields</h5>
-                  <button class="btn btn-secondary" onclick="openManageFields()">Edit</button>
-                </div>
-                <div class="custom-fields-grid" id="jmCustomFieldsGrid"></div>
-              </div>
-
-              <!-- CHECKLIST -->
-              <div class="card-section">
-                <div class="card-section-header">
-                  <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Checklist</h5>
-                </div>
-                <div class="checklist-progress-row">
-                  <div class="checklist-progress-bar"><div class="checklist-progress-fill" id="jmChecklistProgressFill" style="width:0%;"></div></div>
-                  <span class="checklist-progress-pct" id="jmChecklistProgressPct">0%</span>
-                </div>
-                <div id="jmChecklistItems"></div>
-                <div class="checklist-add-row">
-                  <input type="text" id="jmChecklistNewItem" placeholder="Add an item..." onkeydown="if(event.key==='Enter'){event.preventDefault();addJobChecklistItem();}">
-                  <button class="btn btn-secondary" onclick="addJobChecklistItem()">Add</button>
-                </div>
-              </div>
-
-              <!-- ATTACHMENTS -->
-              <div class="card-section">
-                <div class="card-section-header">
-                  <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Attachments</h5>
-                  <button class="btn btn-secondary" onclick="document.getElementById('jm_attachment_input').click()">+ Add</button>
-                  <input type="file" id="jm_attachment_input" multiple style="display:none" onchange="handleJobAttachmentUpload(event)">
-                </div>
-                <div id="jmAttachmentItems"></div>
-              </div>
-
-              <div class="form-actions">
-                <button class="btn btn-secondary" onclick="confirmDelete()" id="deleteBtn" style="margin-right:auto; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
-                <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
-                <button class="btn btn-secondary" onclick="cancelEdit()">Close</button>
-              </div>
-            </div>
-            <div class="job-comments-panel" id="jobCommentsPanel" style="display:none;">
-              <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> Comments</h4>
-              <div class="job-comments-list" id="jobCommentsList"></div>
-              <div class="job-comments-input-row">
-                <textarea id="newJobCommentText" placeholder="Add a note or comment..." onkeydown="handleJobCommentKey(event)"></textarea>
-                <button class="btn btn-primary" onclick="addJobComment()" style="align-self:flex-end;">Post</button>
-              </div>
-            </div>
+        <div class="job-comments-panel" id="jobCommentsPanel" style="display:none;">
+          <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> Comments</h4>
+          <div class="job-comments-list" id="jobCommentsList"></div>
+          <div class="job-comments-input-row">
+            <textarea id="newJobCommentText" placeholder="Add a note or comment..." onkeydown="handleJobCommentKey(event)"></textarea>
+            <button class="btn btn-primary" onclick="addJobComment()" style="align-self:flex-end;">Post</button>
           </div>
         </div>
       </div>
@@ -3133,9 +3135,12 @@ function applyBoardBgVisual() {
 }
 
 function switchTab(tab) {
-  // Navigating away from Job Manager (or anywhere) shouldn't leave a
-  // debounced edit stranded — commit it now. Harmless no-op if the job
-  // form isn't open or nothing changed since the last save.
+  // The job drawer (#formArea) is an overlay independent of which of
+  // Gantt/Board/Calendar is active underneath — switching tabs while it's
+  // open leaves it open, same as it would on the Board (see cancelEdit()
+  // for the only thing that actually closes it). Still worth flushing any
+  // debounced edit here as a safety net rather than relying solely on the
+  // drawer's own blur/close handlers.
   flushAutoSaveJobForm();
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -3143,7 +3148,6 @@ function switchTab(tab) {
   document.getElementById('panel-' + tab).classList.add('active');
   document.getElementById('ganttToolbar').style.display = (tab === 'gantt') ? 'flex' : 'none';
   if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
-  else if (tab === 'manager') { renderJobList(); }
   else if (tab === 'board') { renderBoard(); }
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
 }
@@ -3153,7 +3157,6 @@ function switchTab(tab) {
 // Gantt/Calendar and never auto-moved with dates) opens the real job form
 // instead, so every card on the board is always backed by a job.
 function addJobFromBoard() {
-  switchTab('manager');
   addNewJob();
 }
 
@@ -3964,7 +3967,6 @@ function handleCalBarMouseUp(e) {
 }
 
 function calendarOpenJob(jobId, taskId) {
-  switchTab('manager');
   editJob(jobId);
 }
 
@@ -4252,7 +4254,7 @@ function renderGantt() {
       row.dataset.jobId = job.id;
       row.dataset.taskId = task.id;
       row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + ' <span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>' + noteDot + '</div>';
-      row.addEventListener('click', () => { switchTab('manager'); editJob(job.id, task.id); });
+      row.addEventListener('click', () => { editJob(job.id, task.id); });
       leftBody.appendChild(row);
       visibleRowIdx++;
     }
@@ -4339,7 +4341,7 @@ function renderGantt() {
       bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar));
       bar.addEventListener('click', () => {
         if (bar.dataset.dragged === 'true') { bar.dataset.dragged = 'false'; return; }
-        switchTab('manager'); editJob(job.id, task.id);
+        editJob(job.id, task.id);
       });
 
       // A due date is a single point in time, not a range — only "move"
@@ -4985,7 +4987,7 @@ function refreshJobFormIfOpen(jobId) {
     editingTaskId = null;
     setJobNameHint(false);
     showTaskRowWarnings([]);
-    document.getElementById('emptyState').style.display = 'block';
+    closeJobDrawer();
     document.getElementById('jobForm').style.display = 'none';
     document.getElementById('jobCommentsPanel').style.display = 'none';
     renderJobList();
@@ -5127,6 +5129,14 @@ function updateJobCurrentBoardIndicator(job) {
   el.innerHTML = '<span class="job-card-board-dot" style="background:' + (col.color || '#3949ab') + ';"></span> Currently on <strong>' + escapeHtml(col.label) + '</strong>' + (manual ? ' (manually placed)' : '');
 }
 
+// The job drawer (#formArea) slides in over whichever of Gantt/Board/
+// Calendar is currently active — see the .manager-form-area/.open CSS.
+// Opening/closing it is separate from jobForm's own display toggle (which
+// autoSaveJobForm() etc. use as an "is a job actually loaded" guard) so
+// the two can be called independently where it matters.
+function openJobDrawer() { document.getElementById('formArea').classList.add('open'); }
+function closeJobDrawer() { document.getElementById('formArea').classList.remove('open'); }
+
 function addNewJob() {
   // Whatever job was open before (if any) gets its pending autosave
   // committed before we swap the form over to a blank draft.
@@ -5135,7 +5145,7 @@ function addNewJob() {
   showTaskRowWarnings([]);
   editingJobId = null;
   editingTaskId = null;
-  document.getElementById('emptyState').style.display = 'none';
+  openJobDrawer();
   document.getElementById('jobForm').style.display = 'block';
   document.getElementById('formTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><rect x="11" y="6.5" width="2" height="11" rx="1" fill="#fff"/><rect x="6.5" y="11" width="11" height="2" rx="1" fill="#fff"/></svg>Add New Job';
   document.getElementById('deleteBtn').style.display = 'none';
@@ -5178,7 +5188,7 @@ function editJob(jobId) {
   setJobNameHint(false);
   showTaskRowWarnings([]);
 
-  document.getElementById('emptyState').style.display = 'none';
+  openJobDrawer();
   document.getElementById('jobForm').style.display = 'block';
   document.getElementById('formTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job';
   document.getElementById('deleteBtn').style.display = 'inline-flex';
@@ -5581,7 +5591,7 @@ function cancelEdit() {
   editingTaskId = null;
   setJobNameHint(false);
   showTaskRowWarnings([]);
-  document.getElementById('emptyState').style.display = 'block';
+  closeJobDrawer();
   document.getElementById('jobForm').style.display = 'none';
   document.getElementById('jobCommentsPanel').style.display = 'none';
   renderJobList();
@@ -5751,7 +5761,7 @@ function executeDelete() {
       editingTaskId = null;
       setJobNameHint(false);
       showTaskRowWarnings([]);
-      document.getElementById('emptyState').style.display = 'block';
+      closeJobDrawer();
       document.getElementById('jobForm').style.display = 'none';
       document.getElementById('jobCommentsPanel').style.display = 'none';
     }
