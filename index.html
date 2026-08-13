@@ -2737,6 +2737,15 @@ function init() {
   setInterval(() => {
     if (document.getElementById('panel-gantt').classList.contains('active') && !barMoveState) renderGantt();
     syncCardColumns();
+    // Safety net: a remote update deferred while isBusyEditing() was true
+    // is normally caught up on the next focusout, but that relies on focus
+    // actually shifting somewhere afterward — e.g. closing a modal by
+    // clicking a button with nothing else focused might not fire one. This
+    // guarantees it's never stuck for more than a minute regardless.
+    if (pendingRemoteRefresh && !isBusyEditing()) {
+      pendingRemoteRefresh = false;
+      refreshActiveProjectFromShared();
+    }
   }, 60000);
 }
 
@@ -7441,7 +7450,16 @@ async function setupLiveblocksSync() {
     // changes anywhere in the tree bubble up here too (not just top-level root changes).
     room.subscribe(root, () => {
       if (liveblocksUpdateDepth > 0) return;
-      applyLiveblocksState(root);
+      // A bug anywhere in the merge/render chain must never take down this
+      // subscription — if it did, this client would stop receiving every
+      // future teammate update too (their pushes would keep succeeding,
+      // making it look one-directional: "they get my changes, I don't get
+      // theirs" — exactly the failure mode this guards against).
+      try {
+        applyLiveblocksState(root);
+      } catch (err) {
+        console.error('applyLiveblocksState failed — a remote update may not have fully applied', err);
+      }
     }, { isDeep: true });
 
     // On first connect, if remote has any projects use them; otherwise seed
@@ -7928,13 +7946,15 @@ function applyLiveblocksState(root) {
 // board-column change is reflected here without any extra wiring.
 function refreshActiveProjectFromShared() {
   loadActiveProjectData();
-  renderGantt();
-  renderJobList();
-  updateJobCount();
-  renderBoard();
-  renderCalendar();
-  updateGhostBtnState();
-  refreshArchivedJobsListIfOpen();
+  // Each render runs independently — a bug in one view (e.g. malformed
+  // data breaking Calendar rendering) must never prevent the others from
+  // updating, or silently make it look like sync is broken for a teammate
+  // even though the underlying data merged in fine (loadActiveProjectData
+  // already succeeded above; a page refresh would show it's actually there).
+  [renderGantt, renderJobList, updateJobCount, renderBoard, renderCalendar,
+   updateGhostBtnState, refreshArchivedJobsListIfOpen].forEach(function(fn) {
+    try { fn(); } catch (err) { console.error('refreshActiveProjectFromShared: ' + fn.name + ' failed', err); }
+  });
   showToast('Synced latest changes', 'info');
 }
 
