@@ -15,7 +15,7 @@
     --radius: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
 
   /* Stale-cache guard — see checkForNewerVersion(). Fixed overlay rather
      than pushing layout down, since the rest of the app sizes itself off
@@ -923,7 +923,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      Full-height row: the job rail (#jobRail) on the left spans the entire
      viewport height, level with the header — everything else (header,
      tabs, content) stacks in a column to its right, in .app-shell-main. */
-  .app-shell { display: flex; height: 100vh; overflow: hidden; }
+  .app-shell { display: flex; flex: 1; min-height: 0; overflow: hidden; }
   .app-shell-main { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 
   /* ===== MAIN AREA & ACTIVITY SIDEBAR ===== */
@@ -1147,22 +1147,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   <button onclick="location.reload()">Reload Now</button>
 </div>
 
-<div class="app-shell">
-  <!-- JOB RAIL: permanent left-side job list, spanning the full viewport
-       height (level with the header) rather than just the content area
-       below the tabs. Present regardless of which of Gantt/Board/Calendar
-       is active on the right. Clicking a job opens the slide-out drawer
-       (#formArea, inside panelsContainer) over whichever panel is showing. -->
-  <div class="manager-sidebar" id="jobRail">
-    <div class="manager-sidebar-header">
-      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span></h2>
-      <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
-    </div>
-    <div class="job-list" id="jobList"></div>
-  </div>
-  <div class="app-shell-main">
-
-<!-- EDITABLE HEADER -->
+<!-- EDITABLE HEADER — full width, above the rail (not beside it), so the
+     rail starts right under it rather than extending up alongside it. -->
 <div class="app-header">
   <div class="header-text">
     <h1 id="headerTitle">APS Production</h1>
@@ -1195,6 +1181,22 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
   </div>
 </div>
+
+<div class="app-shell">
+  <!-- JOB RAIL: permanent left-side job list, starting right under the
+       header and spanning the rest of the viewport height, rather than
+       just the content area below the tabs. Present regardless of which
+       of Gantt/Board/Calendar is active on the right. Clicking a job opens
+       the slide-out drawer (#formArea, inside panelsContainer) over
+       whichever panel is showing. -->
+  <div class="manager-sidebar" id="jobRail">
+    <div class="manager-sidebar-header">
+      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span></h2>
+      <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
+    </div>
+    <div class="job-list" id="jobList"></div>
+  </div>
+  <div class="app-shell-main">
 
 <!-- TABS -->
 <div class="tab-bar">
