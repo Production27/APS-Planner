@@ -1252,7 +1252,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
               <div class="form-actions">
                 <button class="btn btn-secondary" onclick="cancelEdit()">Close</button>
                 <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
-                <button class="btn btn-danger" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>
+                <button class="btn btn-secondary" onclick="confirmDelete()" id="deleteBtn" style="margin-left:auto; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
               </div>
             </div>
             <div class="job-comments-panel" id="jobCommentsPanel" style="display:none;">
@@ -1420,7 +1420,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="card-section">
         <div class="card-section-header">
           <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> Custom Fields</h5>
-          <button class="btn btn-secondary" onclick="openManageFields()">Edit</button>
         </div>
         <div class="custom-fields-grid" id="customFieldsGrid"></div>
       </div>
@@ -1452,7 +1451,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       </div>
 
       <div class="modal-actions" style="justify-content:space-between; margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
-        <button class="btn btn-danger" id="cardDeleteBtn" onclick="deleteCardFromModal()" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>
+        <button class="btn btn-secondary" id="cardDeleteBtn" onclick="deleteCardFromModal()" style="display:none; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
         <div style="display:flex; gap:10px;">
           <button class="btn btn-secondary" onclick="closeCardModal()">Close</button>
         </div>
