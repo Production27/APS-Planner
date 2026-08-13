@@ -17,6 +17,24 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
 
+  /* Stale-cache guard — see checkForNewerVersion(). Fixed overlay rather
+     than pushing layout down, since the rest of the app sizes itself off
+     the viewport (100vh) and this only needs to show rarely/briefly. */
+  .new-version-banner {
+    display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
+    background: linear-gradient(90deg, #1a237e, #3949ab); color: #fff;
+    padding: 10px 20px; font-size: 13px; font-weight: 600;
+    align-items: center; justify-content: center; gap: 16px; text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  }
+  .new-version-banner.show { display: flex; }
+  .new-version-banner button {
+    background: #fff; color: var(--primary); border: none; border-radius: 6px;
+    padding: 6px 16px; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+  .new-version-banner button:hover { transform: translateY(-1px); }
+
   /* ===== EDITABLE HEADER ===== */
   .app-header {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
@@ -1103,6 +1121,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
 
+<!-- NEW VERSION BANNER — see checkForNewerVersion(); stale-cache guard -->
+<div class="new-version-banner" id="newVersionBanner">
+  <span>A newer version of this app is available — reload to get the latest fixes and avoid working on outdated data.</span>
+  <button onclick="location.reload()">Reload Now</button>
+</div>
+
 <!-- EDITABLE HEADER -->
 <div class="app-header">
   <div class="header-text">
@@ -1600,6 +1624,39 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 </div>
 
 <script>
+// Bump this string on every meaningful push (any change worth everyone
+// picking up). checkForNewerVersion() compares it against a freshly-
+// fetched copy of this same file to catch tabs stuck on stale cached JS —
+// the exact scenario that caused sync to look broken earlier: an old tab
+// running outdated merge/autosave logic against teammates on the current
+// version. Format is free-form; date+sequence keeps it human-scannable.
+const APP_VERSION = '2026-08-13.1';
+
+// Fetches this page fresh (bypassing HTTP cache) and compares its embedded
+// APP_VERSION to this tab's own. On a mismatch, shows a persistent banner
+// rather than force-reloading — an unprompted reload could drop in-progress
+// typing, which would be a worse failure mode than a stale tab for a few
+// extra minutes. Called on visibilitychange (the tab-left-open-in-the-
+// background scenario) and on a periodic timer as a backstop.
+async function checkForNewerVersion() {
+  try {
+    const res = await fetch(location.pathname + '?_v=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const text = await res.text();
+    const match = text.match(/const APP_VERSION = '([^']+)'/);
+    if (match && match[1] && match[1] !== APP_VERSION) {
+      document.getElementById('newVersionBanner').classList.add('show');
+    }
+  } catch (err) {
+    // Offline or a network hiccup — not worth surfacing; the next
+    // periodic check (or the next tab-focus) will just try again.
+  }
+}
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible') checkForNewerVersion();
+});
+setInterval(checkForNewerVersion, 5 * 60 * 1000);
+
 const DEFAULT_JOBS = [
   {
     id: 'job-1',
@@ -2329,6 +2386,16 @@ function getActiveProject() {
 
 function switchProject(projectId) {
   if (!projects[projectId] || projectId === activeProjectId) return;
+  // The job/card/event forms hold IDs scoped to the OLD project's data —
+  // left open across a project switch, autoSaveJobForm() would find no
+  // matching job in the new project's array and (since a form with a name
+  // typed in it materializes as a new job once autosave can't find the one
+  // it thinks it's editing) could create a stray duplicate job in the WRONG
+  // project. cancelEdit() flushes any pending edit to the OLD project
+  // first (still correct while it's still the active one) before closing.
+  cancelEdit();
+  closeCardModal();
+  closeCalendarEventModal();
   activeProjectId = projectId;
   saveProjects();
   loadActiveProjectData();
@@ -4873,7 +4940,23 @@ let currentGridTasks = [];
 function refreshJobFormIfOpen(jobId) {
   if (editingJobId !== jobId) return;
   const found = findJob(jobId);
-  if (!found) return;
+  if (!found) {
+    // Deleted (or this browser switched to a project that no longer has
+    // it) while it was open here — close cleanly instead of leaving a
+    // ghost form whose next autosave would treat it as a blank new draft
+    // and resurrect it with whatever stale data was still in the fields.
+    cancelPendingJobAutosave();
+    editingJobId = null;
+    editingTaskId = null;
+    setJobNameHint(false);
+    showTaskRowWarnings([]);
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('jobForm').style.display = 'none';
+    document.getElementById('jobCommentsPanel').style.display = 'none';
+    renderJobList();
+    showToast('This job is no longer available — it may have been deleted', 'info');
+    return;
+  }
   renderFixedTaskGrid(found.job.tasks);
   const card = boardCards.find(function(c) { return c.jobId === jobId; });
   if (!card) return;
@@ -5678,6 +5761,11 @@ function exportData() {
 function importData(input) {
   const file = input.files[0];
   if (!file) return;
+  // Same reasoning as switchProject(): an open form holds IDs scoped to
+  // whatever's about to be replaced wholesale.
+  cancelEdit();
+  closeCardModal();
+  closeCalendarEventModal();
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
