@@ -8157,7 +8157,28 @@ function applyLiveblocksState(root) {
   Object.keys(projects).forEach(function (localId) {
     if (remoteIds.has(localId)) return;
     if (Object.keys(projects).length <= 1) return;
-    if (localId === activeProjectId) return;
+    if (localId === activeProjectId) {
+      // The project this browser is currently viewing was deleted by
+      // someone else — leaving activeProjectId pointed at a dead id would
+      // strand this tab on a disconnected, no-longer-synced local copy
+      // (getActiveProject() doesn't care whether the id still exists
+      // remotely, so nothing would visibly break, it would just quietly
+      // stop syncing). Switch to a surviving project instead, same as
+      // enforceFixedProjectSet() already does when it deletes a duplicate
+      // out from under the active one.
+      const survivor = Object.keys(projects).find(function(id) { return id !== localId; });
+      if (survivor) {
+        activeProjectId = survivor;
+        delete projects[localId];
+        listChanged = true;
+        // The forEach above already finished for this new activeProjectId
+        // without knowing it would become active — flag it directly so the
+        // caller actually reloads/re-renders instead of leaving the globals
+        // (jobs/boardCards/etc.) pointed at the just-deleted project.
+        activeDataChanged = true;
+      }
+      return;
+    }
     delete projects[localId];
     listChanged = true;
   });
