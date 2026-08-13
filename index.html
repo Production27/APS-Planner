@@ -2081,6 +2081,10 @@ function ensureJobHasCard(job) {
     for (let i = 1; i < linked.length; i++) {
       const idx = boardCards.indexOf(linked[i]);
       if (idx !== -1) boardCards.splice(idx, 1);
+      // Routine saves are upsert-only now (see pushProjectToShared) and no
+      // longer delete-by-absence, so a duplicate removed locally needs an
+      // explicit remote delete too or it'll just keep re-appearing.
+      deleteCardFromShared(activeProjectId, linked[i].id);
     }
   }
 
@@ -4073,8 +4077,10 @@ function deleteCalendarEventFromModal() {
   if (!editingCalendarEventId) return;
   const evt = calendarEvents.find(function(e) { return e.id === editingCalendarEventId; });
   if (evt) logActivity('deleted calendar event "' + evt.title + '"');
+  const eventId = editingCalendarEventId;
   calendarEvents = calendarEvents.filter(function(e) { return e.id !== editingCalendarEventId; });
   saveCalendarEvents();
+  deleteCalendarEventFromShared(activeProjectId, eventId);
   renderCalendar();
   showToast('Event deleted', 'info');
   closeCalendarEventModal();
@@ -5695,8 +5701,23 @@ function executeDelete() {
     if (!found) return;
     const jobName = found.job.name;
     const idx = found.idx;
+    const jobId = found.job.id;
     jobs.splice(idx, 1);
+
+    // The schema-lock pass (ensureJobHasCard) only ever creates a missing
+    // card — it never removes an extra one — so without this, a deleted
+    // job's card was left behind as a phantom on the Board forever (it
+    // used to get cleaned up only as a side effect of the old delete-by-
+    // absence push logic, which was removed for being unsafe under
+    // concurrent edits; see the comment on pushProjectToShared's jobsMap).
+    const orphanedCardIds = boardCards.filter(function(c) { return c.jobId === jobId; }).map(function(c) { return c.id; });
+    boardCards = boardCards.filter(function(c) { return c.jobId !== jobId; });
+
     saveJobs();
+    const activeId = activeProjectId;
+    deleteJobFromShared(activeId, jobId);
+    orphanedCardIds.forEach(function(cardId) { deleteCardFromShared(activeId, cardId); });
+
     logActivity('deleted job "' + jobName + '"');
     if (editingJobId === deleteTargetJobId) {
       editingJobId = null;
@@ -5710,6 +5731,7 @@ function executeDelete() {
     renderJobList();
     renderGantt();
     renderCalendar();
+    renderBoard();
     showToast('Job deleted', 'info');
     refreshArchivedJobsListIfOpen();
   }
@@ -5724,8 +5746,14 @@ function closeModal() {
 function clearAllJobs() {
   if (confirm('Are you sure you want to clear ALL jobs? This cannot be undone.')) {
     cancelPendingJobAutosave();
+    const clearedJobIds = jobs.map(function(j) { return j.id; });
+    const clearedCardIds = boardCards.map(function(c) { return c.id; });
     jobs = [];
+    boardCards = [];
     saveJobs();
+    const activeId = activeProjectId;
+    clearedJobIds.forEach(function(jobId) { deleteJobFromShared(activeId, jobId); });
+    clearedCardIds.forEach(function(cardId) { deleteCardFromShared(activeId, cardId); });
     logActivity('cleared all jobs');
     editingJobId = null;
     editingTaskId = null;
@@ -5735,6 +5763,7 @@ function clearAllJobs() {
     document.getElementById('jobForm').style.display = 'none';
     document.getElementById('jobCommentsPanel').style.display = 'none';
     renderJobList();
+    renderBoard();
     renderGantt();
     renderCalendar();
     showToast('All jobs cleared', 'info');
@@ -7154,8 +7183,10 @@ function deleteCardFromModal() {
   cancelPendingCardAutosave();
   const card = boardCards.find(c => c.id === editingCardId);
   if (card) logActivity('deleted card "' + card.title + '"');
+  const cardId = editingCardId;
   boardCards = boardCards.filter(c => c.id !== editingCardId);
   saveBoardCards();
+  deleteCardFromShared(activeProjectId, cardId);
   renderBoard();
   closeCardModal();
   showToast('Card deleted', 'info');
@@ -7761,45 +7792,43 @@ function pushProjectToShared(projectId, headerOverride) {
       // shape tasks array (name/start/finish/notes/color/order, locked to
       // BOARD_COLUMNS as of Section 3) travels automatically; no per-field
       // enumeration needed here.
+      //
+      // Upsert only — deliberately never delete-by-absence here. This local
+      // snapshot (proj.jobs) can be stale relative to what's already in the
+      // live jobsMap: if this tab was busy-editing (isBusyEditing()) when a
+      // teammate's concurrent addition arrived, applyLiveblocksState() defers
+      // merging it into the globals (pendingRemoteRefresh), but a save fired
+      // from this tab in the meantime still overwrites proj.jobs from those
+      // stale globals. Diffing against "what's not in my stale snapshot" and
+      // deleting it would silently destroy the teammate's new job/card — this
+      // is exactly the bug that caused a newly-added job to vanish for
+      // everyone but its card to survive (cards and jobs are separate
+      // LiveMaps, so the race didn't necessarily hit both the same way).
+      // Real deletions instead go through deleteJobFromShared() /
+      // deleteCardFromShared() / deleteCalendarEventFromShared() as explicit,
+      // targeted ops fired at the exact moment the user deletes something —
+      // immune to how stale the rest of local state is.
       const jobsMap = entry.get('jobsMap');
       if (jobsMap && typeof jobsMap.set === 'function') {
-        const liveJobIds = new Set(proj.jobs.map(function (j) { return String(j.id); }));
         proj.jobs.forEach(function (j) { jobsMap.set(String(j.id), j); });
-        if (typeof jobsMap.keys === 'function') {
-          Array.from(jobsMap.keys()).forEach(function (key) {
-            if (!liveJobIds.has(key)) jobsMap.delete(key);
-          });
-        }
       }
 
-      // cards — likewise pushed whole, so jobId, manualColumn, and
-      // manualColumnUntil (Section 5's manual override) travel with every
-      // job-linked card automatically.
+      // cards — likewise pushed whole (upsert only, see above), so jobId,
+      // manualColumn, and manualColumnUntil (Section 5's manual override)
+      // travel with every job-linked card automatically.
       const cardsMap = entry.get('boardCardsMap');
       if (cardsMap && typeof cardsMap.set === 'function') {
-        const liveCardIds = new Set(proj.boardCards.map(function (c) { return String(c.id); }));
         proj.boardCards.forEach(function (c) { cardsMap.set(String(c.id), c); });
-        if (typeof cardsMap.keys === 'function') {
-          Array.from(cardsMap.keys()).forEach(function (key) {
-            if (!liveCardIds.has(key)) cardsMap.delete(key);
-          });
-        }
       }
 
-      // calendar-only events — same whole-object push pattern. Lazily
+      // calendar-only events — same whole-object upsert pattern. Lazily
       // created here for any project entry that predates this feature.
       let calEventsMap = entry.get('calendarEventsMap');
       if (!calEventsMap || typeof calEventsMap.set !== 'function') {
         calEventsMap = new LiveMapCtor();
         entry.set('calendarEventsMap', calEventsMap);
       }
-      const liveCalEventIds = new Set((proj.calendarEvents || []).map(function (e) { return String(e.id); }));
       (proj.calendarEvents || []).forEach(function (e) { calEventsMap.set(String(e.id), e); });
-      if (typeof calEventsMap.keys === 'function') {
-        Array.from(calEventsMap.keys()).forEach(function (key) {
-          if (!liveCalEventIds.has(key)) calEventsMap.delete(key);
-        });
-      }
 
       entry.set('boardColumns', proj.boardColumns);
       entry.set('fieldOptions', proj.fieldOptions);
@@ -7829,6 +7858,29 @@ function removeProjectFromShared(projectId) {
     Promise.resolve().then(() => { liveblocksUpdateDepth--; });
   }
 }
+
+// Explicit, targeted deletes for one job/card/calendar event — see the
+// comment above pushProjectToShared's jobsMap upsert for why routine saves
+// never infer a deletion from "this id is missing from my local snapshot"
+// anymore. These are the only things that actually remove a key from the
+// shared maps, called at the exact moment the user deletes something.
+function deleteFromSharedMap(projectId, mapKey, id) {
+  if (!liveblocksRoot || !liveblocksRoom) return;
+  liveblocksUpdateDepth++;
+  try {
+    const projectsMap = liveblocksRoot.get('projects');
+    if (!projectsMap || typeof projectsMap.get !== 'function') return;
+    const entry = projectsMap.get(projectId);
+    if (!entry || typeof entry.get !== 'function') return;
+    const map = entry.get(mapKey);
+    if (map && typeof map.delete === 'function') map.delete(String(id));
+  } finally {
+    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
+  }
+}
+function deleteJobFromShared(projectId, jobId) { deleteFromSharedMap(projectId, 'jobsMap', jobId); }
+function deleteCardFromShared(projectId, cardId) { deleteFromSharedMap(projectId, 'boardCardsMap', cardId); }
+function deleteCalendarEventFromShared(projectId, eventId) { deleteFromSharedMap(projectId, 'calendarEventsMap', eventId); }
 
 function logActivity(actionText) {
   const p = getActiveProject();
