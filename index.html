@@ -919,8 +919,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .activity-log-empty { color:#777; }
 
 
+  /* ===== APP SHELL =====
+     Full-height row: the job rail (#jobRail) on the left spans the entire
+     viewport height, level with the header — everything else (header,
+     tabs, content) stacks in a column to its right, in .app-shell-main. */
+  .app-shell { display: flex; height: 100vh; overflow: hidden; }
+  .app-shell-main { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+
   /* ===== MAIN AREA & ACTIVITY SIDEBAR ===== */
-  .main-area { display: flex; height: calc(100vh - 108px); overflow: hidden; }
+  .main-area { display: flex; flex: 1; min-height: 0; overflow: hidden; }
   .panels-container { flex: 1; min-width: 0; overflow: hidden; position: relative; }
 
   .activity-sidebar {
@@ -1140,6 +1147,21 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   <button onclick="location.reload()">Reload Now</button>
 </div>
 
+<div class="app-shell">
+  <!-- JOB RAIL: permanent left-side job list, spanning the full viewport
+       height (level with the header) rather than just the content area
+       below the tabs. Present regardless of which of Gantt/Board/Calendar
+       is active on the right. Clicking a job opens the slide-out drawer
+       (#formArea, inside panelsContainer) over whichever panel is showing. -->
+  <div class="manager-sidebar" id="jobRail">
+    <div class="manager-sidebar-header">
+      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span></h2>
+      <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
+    </div>
+    <div class="job-list" id="jobList"></div>
+  </div>
+  <div class="app-shell-main">
+
 <!-- EDITABLE HEADER -->
 <div class="app-header">
   <div class="header-text">
@@ -1194,17 +1216,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 </div>
 
 <div class="main-area" id="mainArea">
-  <!-- JOB RAIL: permanent left-side job list, present regardless of which
-       of Gantt/Board/Calendar is active on the right. Clicking a job opens
-       the slide-out drawer (#formArea, inside panelsContainer) over
-       whichever panel is currently showing. -->
-  <div class="manager-sidebar" id="jobRail">
-    <div class="manager-sidebar-header">
-      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span></h2>
-      <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
-    </div>
-    <div class="job-list" id="jobList"></div>
-  </div>
   <div class="panels-container" id="panelsContainer">
     <!-- CALENDAR TAB -->
     <div class="tab-panel" id="panel-calendar">
@@ -1367,6 +1378,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="activity-sidebar-body" id="activitySidebarBody">
       <div class="activity-log-empty">Open to see recent changes</div>
     </div>
+  </div>
+</div>
+
   </div>
 </div>
 
