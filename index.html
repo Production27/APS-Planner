@@ -191,7 +191,7 @@
   /* ===== GANTT ===== */
   .gantt-wrapper { display: flex; height: 100%; overflow: hidden; }
   .left-panel {
-    width: 500px; min-width: 500px; background: var(--card); border-right: 1px solid var(--border);
+    width: 380px; min-width: 380px; background: var(--card); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 6px rgba(0,0,0,0.04);
   }
   .left-header {
@@ -200,7 +200,7 @@
     color: #495057; height: 68px; flex-shrink: 0;
   }
   .left-header .col { padding: 8px 10px; display: flex; align-items: center; border-right: 1px solid #e9ecef; }
-  .left-header .col-start { width: 88px; } .left-header .col-finish { width: 88px; } .left-header .col-percent { width: 90px; } .left-header .col-jobs { flex: 1; border-right: none; }
+  .left-header .col-start { width: 88px; } .left-header .col-finish { width: 88px; } .left-header .col-jobs { flex: 1; border-right: none; }
   .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
@@ -211,11 +211,6 @@
   .task-row .col { padding: 0 10px; border-right: 1px solid #f0f0f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
   .task-row .col-start { width: 88px; color: #555; font-size: 11px; }
   .task-row .col-finish { width: 88px; color: #555; font-size: 11px; }
-  .task-row .col-percent { width: 90px; gap: 6px; }
-  .progress-track { flex: 1; height: 6px; border-radius: 3px; background: #e9ecef; overflow: hidden; }
-  .progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--primary-light), var(--primary)); }
-  .progress-fill.complete { background: linear-gradient(90deg, #43a047, #2e7d32); }
-  .progress-pct { font-size: 10px; font-weight: 700; color: #666; width: 30px; text-align: right; flex-shrink: 0; }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
   .task-row .col-jobs .company-tag { display: inline-block; font-size: 9px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: 600; color: white; vertical-align: middle; }
   .task-row .col-jobs .task-row-jobname { display: inline-block; font-size: 10px; font-weight: 600; color: #fff; margin-left: 6px; padding: 1px 8px; border-radius: 10px; vertical-align: middle; line-height: 1.5; }
@@ -995,7 +990,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .activity-sidebar-close { color: #777; }
   body.dark-mode .activity-sidebar-close:hover { background: rgba(220,53,69,0.18); color: var(--danger); }
 
-  @media (max-width: 1100px) { .left-panel { width: 400px; min-width: 400px; } .manager-sidebar { width: 210px; min-width: 210px; } }
+  @media (max-width: 1100px) { .left-panel { width: 320px; min-width: 320px; } .manager-sidebar { width: 210px; min-width: 210px; } }
 
   /* ===== DARK MODE ===== */
   body.dark-mode {
@@ -1053,8 +1048,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .task-row:nth-child(even) { background: rgba(255,255,255,0.025); }
   body.dark-mode .task-row .col { border-right-color: var(--border); }
   body.dark-mode .task-row .col-start, body.dark-mode .task-row .col-finish { color: var(--text-light); }
-  body.dark-mode .progress-track { background: #2a2e39; }
-  body.dark-mode .progress-pct { color: var(--text-light); }
 
   body.dark-mode .grid-line { background: rgba(255,255,255,0.05); }
   body.dark-mode .grid-line.weekend-line { background: rgba(255,255,255,0.09); }
@@ -1287,7 +1280,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="left-header">
             <div class="col col-start">Start</div>
             <div class="col col-finish">Finish</div>
-            <div class="col col-percent">% Complete</div>
             <div class="col col-jobs">Task</div>
           </div>
           <div class="left-body" id="leftBody"></div>
@@ -3271,24 +3263,6 @@ function buildCalBarHtml(seg, left, top, width) {
     dragHandles + content + '</div>';
 }
 
-function calcPercentComplete(task) {
-  if (!task.start || !task.finish) return 0;
-  const s = new Date(task.start + 'T00:00:00');
-  const f = new Date(task.finish + 'T00:00:00');
-  if (isNaN(s.getTime()) || isNaN(f.getTime())) return 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const totalDays = getDaysDiff(s, f) + 1;
-  if (totalDays <= 0) {
-    return 0;
-  }
-
-  const elapsed = getDaysDiff(s, today);
-  const pct = Math.round((elapsed / totalDays) * 100);
-  return Math.max(0, Math.min(100, pct));
-}
-
 function computeDateRange() {
   // Ghost jobs come from a different project with its own BOARD_COLUMNS, so
   // hideFromSchedule indices (computed against the active project's columns)
@@ -4288,14 +4262,12 @@ function renderGantt() {
       const startStr = hasDates ? new Date(task.start + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
       const finishStr = hasDates ? new Date(task.finish + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
       const noteDot = task.notes ? '<span class="note-dot" title="Has notes"></span>' : '';
-      const pct = calcPercentComplete(task);
-      const pctHtml = '<div class="progress-track"><div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + pct + '%;"></div></div><span class="progress-pct">' + pct + '%</span>';
 
       const row = document.createElement('div');
       row.className = 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '');
       row.dataset.jobId = job.id;
       row.dataset.taskId = task.id;
-      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-percent">' + pctHtml + '</div><div class="col col-jobs">' + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + ' <span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>' + noteDot + '</div>';
+      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + ' <span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>' + noteDot + '</div>';
       row.addEventListener('click', () => { editJob(job.id, task.id); });
       leftBody.appendChild(row);
       visibleRowIdx++;
