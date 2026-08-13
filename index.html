@@ -530,6 +530,7 @@
      pseudo-elements) — Firefox has no equivalent hook, so it'll keep
      showing the year there, degrading harmlessly rather than breaking. */
   .task-fixed-row input[type="date"]::-webkit-datetime-edit-year-field { display: none; }
+  .task-fixed-row input[type="date"]::-webkit-datetime-edit-text:last-of-type { display: none; }
   .task-fixed-row input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   .task-fixed-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
   .task-fixed-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
