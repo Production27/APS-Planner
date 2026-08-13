@@ -2457,93 +2457,28 @@ function deleteProject(projectId) {
 // overwrite this local rename) it renames whatever the original single
 // project was into "ADVANCED PRECUT SYSTEMS" and creates "BLUDORN BUILDERS"
 // if it doesn't exist yet, so every browser and the shared room converge on
-// the same two. Returns the ids of any project it created/renamed, so the
-// caller can push just those to the shared room.
+// the same two. Returns the ids of any project it created, so the caller
+// can push just those to the shared room.
+//
+// IMPORTANT: this only ever CREATES a project, when there are fewer than
+// two — it never renames an existing one. It used to also forcibly rename
+// "whichever project came first" back to FIXED_PROJECT_NAMES[0]/[1] every
+// single time it ran (this runs on every page load), which meant a rename
+// via the header text or renameProject() would silently revert on the next
+// reload. Project names are meant to be freely editable now — see
+// saveActiveProject() syncing p.name from the header text — so
+// FIXED_PROJECT_NAMES is only ever used as a starter name for a newly
+// created project, never re-asserted onto an existing one.
 const FIXED_PROJECT_NAMES = ['ADVANCED PRECUT SYSTEMS', 'BLUDORN BUILDERS'];
 
 function enforceFixedProjectSet() {
   const changedIds = [];
-  const ids = Object.keys(projects);
+  if (Object.keys(projects).length >= 2) return changedIds;
 
-  // Deduplicate: keep one project per fixed name. Safety net for the
-  // scenario setupLiveblocksSync's onlyHasFreshPlaceholder check exists to
-  // prevent in the first place (see the comment there) — a locally-
-  // fabricated placeholder and the real synced project ending up with the
-  // same name. A known-fake placeholder id (freshLocalSeedProjectIds) is
-  // never kept over a real one, regardless of which was inserted first;
-  // among two real (or two fake) candidates, first-seen still wins.
-  const seenNames = {};
-  const toDelete = [];
-  ids.forEach(function(id) {
-    const name = projects[id].name;
-    if (FIXED_PROJECT_NAMES.indexOf(name) !== -1) {
-      const existing = seenNames[name];
-      if (existing === undefined) {
-        seenNames[name] = id;
-      } else if (freshLocalSeedProjectIds.indexOf(existing) !== -1 && freshLocalSeedProjectIds.indexOf(id) === -1) {
-        // The one kept so far is a known fake and this one isn't — swap.
-        toDelete.push(existing);
-        seenNames[name] = id;
-      } else {
-        toDelete.push(id);
-      }
-    }
-  });
-
-  toDelete.forEach(function(id) {
-    if (activeProjectId === id) {
-      // Switch active to the surviving duplicate before deleting
-      activeProjectId = seenNames[projects[id].name] || Object.keys(projects)[0];
-    }
-    delete projects[id];
-  });
-
-  // Ensure both fixed names exist
-  const names = Object.values(projects).map(function(p) { return p.name; });
-
-  if (names.indexOf(FIXED_PROJECT_NAMES[0]) === -1) {
-    const remainingIds = Object.keys(projects);
-    if (remainingIds.length >= 1) {
-      const firstId = remainingIds[0];
-      const p = projects[firstId];
-      p.name = FIXED_PROJECT_NAMES[0];
-      p.header.title = FIXED_PROJECT_NAMES[0];
-      changedIds.push(firstId);
-    } else {
-      // No projects at all — create the first fixed one
-      const id = 'project-' + Date.now();
-      projects[id] = {
-        id: id,
-        name: FIXED_PROJECT_NAMES[0],
-        jobs: JSON.parse(JSON.stringify(DEFAULT_JOBS)),
-        boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
-        boardCards: [],
-        fieldOptions: {
-          pm: [], foreman: [],
-          jobType: ['New Home', 'Remodel', 'Commercial', 'Addition', 'Service Call'],
-          timeframe: ['This Week', 'Next Week', 'This Month', 'This Quarter'],
-          incentivePeriod: ['Q1', 'Q2', 'Q3', 'Q4']
-        },
-        header: { title: FIXED_PROJECT_NAMES[0], subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
-      };
-      projects[id].jobs.forEach(function(j) { if (!j.notes) j.notes = ''; });
-      if (!activeProjectId) activeProjectId = id;
-      // This id is just as much a locally-fabricated placeholder as the one
-      // migrateFromLegacy() creates — same reasoning applies (see the
-      // freshLocalSeedProjectIds comment above), or setupLiveblocksSync's
-      // "is this browser's whole local project set just fake starter
-      // content" check silently never fires for whichever placeholder was
-      // created here instead of there.
-      if (freshLocalSeed) freshLocalSeedProjectIds.push(id);
-      changedIds.push(id);
-    }
-  }
-
-  if (names.indexOf(FIXED_PROJECT_NAMES[1]) === -1) {
-    const id = 'project-' + Date.now();
-    projects[id] = {
+  function makeProject(id, name) {
+    const p = {
       id: id,
-      name: FIXED_PROJECT_NAMES[1],
+      name: name,
       jobs: JSON.parse(JSON.stringify(DEFAULT_JOBS)),
       boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
       boardCards: [],
@@ -2553,15 +2488,32 @@ function enforceFixedProjectSet() {
         timeframe: ['This Week', 'Next Week', 'This Month', 'This Quarter'],
         incentivePeriod: ['Q1', 'Q2', 'Q3', 'Q4']
       },
-      header: { title: FIXED_PROJECT_NAMES[1], subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
+      header: { title: name, subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
     };
-    projects[id].jobs.forEach(function(j) { if (!j.notes) j.notes = ''; });
+    p.jobs.forEach(function(j) { if (!j.notes) j.notes = ''; });
+    return p;
+  }
+
+  while (Object.keys(projects).length < 2) {
+    // Whichever default name isn't already taken, so backfilling a second
+    // project never creates a same-named duplicate of the first (e.g. a
+    // solo project that already happens to be named FIXED_PROJECT_NAMES[0]).
+    const usedNames = Object.values(projects).map(function(p) { return p.name; });
+    const name = usedNames.indexOf(FIXED_PROJECT_NAMES[0]) === -1 ? FIXED_PROJECT_NAMES[0] : FIXED_PROJECT_NAMES[1];
+    const id = 'project-' + Date.now() + '-' + changedIds.length;
+    projects[id] = makeProject(id, name);
     if (!activeProjectId) activeProjectId = id;
+    // This id is just as much a locally-fabricated placeholder as the one
+    // migrateFromLegacy() creates — same reasoning applies (see the
+    // freshLocalSeedProjectIds comment above), or setupLiveblocksSync's
+    // "is this browser's whole local project set just fake starter
+    // content" check silently never fires for whichever placeholder was
+    // created here instead of there.
     if (freshLocalSeed) freshLocalSeedProjectIds.push(id);
     changedIds.push(id);
   }
 
-  if (changedIds.length || toDelete.length) saveProjects();
+  if (changedIds.length) saveProjects();
   return changedIds;
 }
 
@@ -2633,6 +2585,14 @@ function saveActiveProject() {
   p.calendarEvents = calendarEvents;
   p.fieldOptions = fieldOptions;
   p.header.title = document.getElementById('headerTitle').textContent.trim();
+  // The header text IS the project/board name as far as anyone using the
+  // app can tell — keep the two in sync so editing it (already possible,
+  // it's contenteditable) actually renames the project everywhere its name
+  // shows up (the project switcher's tooltip, etc.) instead of just
+  // changing the display text while the underlying name silently stays the
+  // old one. Guarded against blanking it out if the title is momentarily
+  // empty mid-edit.
+  if (p.header.title) p.name = p.header.title;
   p.header.subtitle = document.getElementById('headerSubtitle').textContent.trim();
   p.header.theme = getSavedTheme();
   p.header.bgPhoto = localStorage.getItem('gantt_header_bg_photo_v1') || null;
@@ -3135,13 +3095,10 @@ function applyBoardBgVisual() {
 }
 
 function switchTab(tab) {
-  // The job drawer (#formArea) is an overlay independent of which of
-  // Gantt/Board/Calendar is active underneath — switching tabs while it's
-  // open leaves it open, same as it would on the Board (see cancelEdit()
-  // for the only thing that actually closes it). Still worth flushing any
-  // debounced edit here as a safety net rather than relying solely on the
-  // drawer's own blur/close handlers.
-  flushAutoSaveJobForm();
+  // Switching to a different view closes the job drawer if it's open —
+  // cancelEdit() also flushes any debounced edit first, same safety net
+  // switchTab() always had. Harmless no-op if nothing was open.
+  cancelEdit();
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
