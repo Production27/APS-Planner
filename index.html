@@ -1239,7 +1239,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="job-list" id="jobList"></div>
           <div class="manager-toolbar">
             <button class="btn btn-success" onclick="addNewJob()">+ Add Job</button>
-            <button class="btn btn-secondary" onclick="clearAllJobs()">Clear All</button>
           </div>
         </div>
         <div class="manager-form-area" id="formArea">
@@ -5767,33 +5766,6 @@ function executeDelete() {
 function closeModal() {
   document.getElementById('deleteModal').classList.remove('show');
   deleteTargetJobId = null;
-}
-
-function clearAllJobs() {
-  if (confirm('Are you sure you want to clear ALL jobs? This cannot be undone.')) {
-    cancelPendingJobAutosave();
-    const clearedJobIds = jobs.map(function(j) { return j.id; });
-    const clearedCardIds = boardCards.map(function(c) { return c.id; });
-    jobs = [];
-    boardCards = [];
-    saveJobs();
-    const activeId = activeProjectId;
-    clearedJobIds.forEach(function(jobId) { deleteJobFromShared(activeId, jobId); });
-    clearedCardIds.forEach(function(cardId) { deleteCardFromShared(activeId, cardId); });
-    logActivity('cleared all jobs');
-    editingJobId = null;
-    editingTaskId = null;
-    setJobNameHint(false);
-    showTaskRowWarnings([]);
-    document.getElementById('emptyState').style.display = 'block';
-    document.getElementById('jobForm').style.display = 'none';
-    document.getElementById('jobCommentsPanel').style.display = 'none';
-    renderJobList();
-    renderBoard();
-    renderGantt();
-    renderCalendar();
-    showToast('All jobs cleared', 'info');
-  }
 }
 
 function exportData() {
