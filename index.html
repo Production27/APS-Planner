@@ -2295,13 +2295,21 @@ let projects = {};
 let activeProjectId = null;
 
 // Set when this browser has never had any real data (no saved projects,
-// no legacy keys) — meaning the "default project" it creates on init() is
-// just generic starter content, not anything a person actually made. Used
-// by setupLiveblocksSync to know it's safe to discard that placeholder and
-// adopt whatever the team is already sharing, instead of the two living
-// side-by-side as duplicate projects forever. See migrateFromLegacy().
+// no legacy keys) — meaning the "default project(s)" it creates on init()
+// are just generic starter content, not anything a person actually made.
+// Used by setupLiveblocksSync to know it's safe to discard those
+// placeholders and adopt whatever the team is already sharing, instead of
+// living side-by-side as duplicate projects forever. See migrateFromLegacy().
+//
+// This is an ARRAY, not a single id: migrateFromLegacy() creates one fresh
+// project, but enforceFixedProjectSet() — called right after it, inside
+// init(), before Liveblocks ever gets a chance to run — always tops that up
+// to the full two-project fixed set (see FIXED_PROJECT_NAMES), fabricating
+// a SECOND local-only placeholder project with its own fresh id. Both need
+// to be tracked, or the discard check below only ever recognizes one of the
+// two placeholders as fake.
 let freshLocalSeed = false;
-let freshLocalSeedProjectId = null;
+let freshLocalSeedProjectIds = [];
 
 function migrateFromLegacy() {
   const oldTasks = localStorage.getItem('gantt_jobs_v4');
@@ -2366,7 +2374,7 @@ function migrateFromLegacy() {
 
   if (!oldTasks && !oldColumns && !oldCards && !oldFields && !oldTitle && !oldSub && !oldTheme && !oldBg && !oldBoardBg) {
     freshLocalSeed = true;
-    freshLocalSeedProjectId = defaultId;
+    freshLocalSeedProjectIds.push(defaultId);
   }
 }
 
@@ -2454,17 +2462,27 @@ function enforceFixedProjectSet() {
   const changedIds = [];
   const ids = Object.keys(projects);
 
-  // Deduplicate: keep only the first project for each fixed name.
-  // Any extra project with a fixed name gets removed.
+  // Deduplicate: keep one project per fixed name. Safety net for the
+  // scenario setupLiveblocksSync's onlyHasFreshPlaceholder check exists to
+  // prevent in the first place (see the comment there) — a locally-
+  // fabricated placeholder and the real synced project ending up with the
+  // same name. A known-fake placeholder id (freshLocalSeedProjectIds) is
+  // never kept over a real one, regardless of which was inserted first;
+  // among two real (or two fake) candidates, first-seen still wins.
   const seenNames = {};
   const toDelete = [];
   ids.forEach(function(id) {
     const name = projects[id].name;
     if (FIXED_PROJECT_NAMES.indexOf(name) !== -1) {
-      if (seenNames[name]) {
-        toDelete.push(id);
-      } else {
+      const existing = seenNames[name];
+      if (existing === undefined) {
         seenNames[name] = id;
+      } else if (freshLocalSeedProjectIds.indexOf(existing) !== -1 && freshLocalSeedProjectIds.indexOf(id) === -1) {
+        // The one kept so far is a known fake and this one isn't — swap.
+        toDelete.push(existing);
+        seenNames[name] = id;
+      } else {
+        toDelete.push(id);
       }
     }
   });
@@ -2507,6 +2525,13 @@ function enforceFixedProjectSet() {
       };
       projects[id].jobs.forEach(function(j) { if (!j.notes) j.notes = ''; });
       if (!activeProjectId) activeProjectId = id;
+      // This id is just as much a locally-fabricated placeholder as the one
+      // migrateFromLegacy() creates — same reasoning applies (see the
+      // freshLocalSeedProjectIds comment above), or setupLiveblocksSync's
+      // "is this browser's whole local project set just fake starter
+      // content" check silently never fires for whichever placeholder was
+      // created here instead of there.
+      if (freshLocalSeed) freshLocalSeedProjectIds.push(id);
       changedIds.push(id);
     }
   }
@@ -2529,6 +2554,7 @@ function enforceFixedProjectSet() {
     };
     projects[id].jobs.forEach(function(j) { if (!j.notes) j.notes = ''; });
     if (!activeProjectId) activeProjectId = id;
+    if (freshLocalSeed) freshLocalSeedProjectIds.push(id);
     changedIds.push(id);
   }
 
@@ -7615,18 +7641,39 @@ async function setupLiveblocksSync() {
     const projectsMap = root.get('projects');
     const hasData = projectsMap && projectsMap.size > 0;
     if (hasData) {
-      // If this browser only has the untouched placeholder project (fresh
-      // install, nothing real typed into it yet) and the team is already
-      // sharing real project(s), drop the placeholder instead of merging it
-      // in as a duplicate — otherwise every new teammate who opens the site
-      // ends up "live" but stuck editing their own island that nobody else
-      // ever sees, which looks exactly like sync being broken.
+      // If this browser only has untouched placeholder project(s) — fresh
+      // install/cache-cleared browser, nothing real typed into it yet — and
+      // the team is already sharing real project(s), drop the placeholder(s)
+      // instead of merging them in as duplicates — otherwise every new
+      // teammate (or anyone who clears their cache) who opens the site ends
+      // up "live" but stuck editing their own island that nobody else ever
+      // sees, which looks exactly like sync being broken.
+      //
+      // This used to check `Object.keys(projects).length === 1` against a
+      // single freshLocalSeedProjectId, which could never actually be true:
+      // init() runs enforceFixedProjectSet() (which tops a single fresh
+      // project up to the full two-project FIXED_PROJECT_NAMES set,
+      // fabricating a second local-only placeholder) BEFORE this code ever
+      // runs, so the local project count was already 2 by the time this
+      // ran — meaning this whole discard-and-adopt branch was silently dead
+      // code, every single time. Real project data would then get merged in
+      // ALONGSIDE the two fake placeholders (different ids, same names), and
+      // the next enforceFixedProjectSet() call's name-based dedup — which
+      // keeps whichever id it saw FIRST — would keep the placeholders (they
+      // were always inserted first) and delete the just-merged real project
+      // entries, orphaning them locally. That's the confirmed mechanism
+      // behind jobs/cards silently reverting to old demo content after a
+      // cache clear. Checking against the full freshLocalSeedProjectIds
+      // array (both placeholders, however many init() actually fabricated)
+      // fixes it by discarding every fake placeholder before the dedup ever
+      // gets a chance to run.
       const onlyHasFreshPlaceholder = freshLocalSeed &&
-        Object.keys(projects).length === 1 &&
-        activeProjectId === freshLocalSeedProjectId &&
-        !projectsMap.get(freshLocalSeedProjectId);
+        freshLocalSeedProjectIds.length > 0 &&
+        Object.keys(projects).every(function(id) { return freshLocalSeedProjectIds.indexOf(id) !== -1; }) &&
+        freshLocalSeedProjectIds.indexOf(activeProjectId) !== -1 &&
+        !freshLocalSeedProjectIds.some(function(id) { return !!projectsMap.get(id); });
       if (onlyHasFreshPlaceholder) {
-        delete projects[freshLocalSeedProjectId];
+        freshLocalSeedProjectIds.forEach(function(id) { delete projects[id]; });
         activeProjectId = Array.from(projectsMap.keys())[0];
       }
       applyLiveblocksState(root);
