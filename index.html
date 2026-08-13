@@ -295,6 +295,7 @@
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
   .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
   .cal-event-bar.due-marker .cal-jobname-tag { display: none; }
+  .cal-event-bar.calendar-event-bar { border: 1px dashed rgba(255,255,255,0.6); }
   .task-bar-job-tag {
     position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
     border-top-left-radius: 4px; border-bottom-left-radius: 4px;
@@ -1386,6 +1387,69 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   </div>
 </div>
 
+<!-- CALENDAR EVENT MODAL -->
+<div class="modal-overlay" id="calendarEventModal">
+  <div class="modal-box" style="max-width:440px;">
+    <h4 id="calendarEventModalTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#7e57c2" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#7e57c2"/><rect x="6" y="13" width="3" height="3" fill="#7e57c2"/><rect x="10.5" y="13" width="3" height="3" fill="#7e57c2"/><rect x="15" y="13" width="3" height="3" fill="#7e57c2"/></svg> New Event</h4>
+    <p style="font-size:12px;color:var(--text-light);margin-top:-8px;margin-bottom:16px;">Calendar-only — doesn't create a job or task, and never shows up on the Gantt or Board.</p>
+    <div class="form-group">
+      <label>Title *</label>
+      <input type="text" id="ce_title" placeholder="e.g. Team meeting">
+      <span class="field-error-hint" id="ce_title_hint" style="display:none;">Title is required</span>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="ce_date">
+      </div>
+      <div class="form-group">
+        <label>Time (optional)</label>
+        <input type="time" id="ce_time">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Duration (days)</label>
+      <input type="number" id="ce_duration" min="1" value="1">
+    </div>
+    <div class="form-group">
+      <label>Repeat</label>
+      <select id="ce_repeat" onchange="toggleRepeatUntilField()">
+        <option value="none">Does not repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+    <div class="form-group" id="ce_repeat_until_group" style="display:none;">
+      <label>Repeat Until</label>
+      <input type="date" id="ce_repeat_until">
+      <span class="field-error-hint" style="display:block;color:var(--text-light);font-weight:500;">Leave blank to repeat for about 6 months</span>
+    </div>
+    <div class="form-group">
+      <div class="color-toggle-row" onclick="toggleCalendarEventColorPanel()">
+        <label>Color</label>
+        <div class="color-toggle-swatch-wrap">
+          <span class="color-toggle-swatch" id="ceColorToggleSwatch" style="background:#7e57c2;"></span>
+          <span class="color-toggle-arrow" id="ceColorToggleArrow">▾</span>
+        </div>
+      </div>
+      <div class="color-picker-panel" id="ceColorPickerPanel">
+        <div class="color-picker-wrapper">
+          <input type="color" id="ce_color" value="#7e57c2" oninput="updateCalendarEventColorSwatch()">
+          <div class="color-presets" id="ceColorPresets"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-secondary" id="ceDeleteBtn" onclick="deleteCalendarEventFromModal()" style="display:none; color:var(--danger);" title="Deletes the whole series, not just one occurrence"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeCalendarEventModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCalendarEventFromModal()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- CARD MODAL -->
 <div class="modal-overlay" id="cardModal">
   <div class="modal-box card-modal-box">
@@ -1711,6 +1775,96 @@ function flattenJobs(jobsArr, includeArchived) {
   return rows;
 }
 
+const CALENDAR_EVENT_TASK_PREFIX = 'calevt|';
+function isCalendarEventTaskId(taskId) {
+  return typeof taskId === 'string' && taskId.indexOf(CALENDAR_EVENT_TASK_PREFIX) === 0;
+}
+function parseCalendarEventTaskId(taskId) {
+  // 'calevt|<eventId>|<sourceDate>' — eventId is a genId() and never
+  // contains '|', so a plain split is safe.
+  const parts = taskId.split('|');
+  return { eventId: parts[1], sourceDate: parts[2] };
+}
+
+// Default recurrence horizon when repeatUntil is left blank: 6 months out
+// from the anchor date, so a repeating event is usable without typing an
+// end date, but doesn't generate occurrences forever.
+function defaultRepeatUntil(anchorDate) {
+  const d = new Date(anchorDate);
+  d.setMonth(d.getMonth() + 6);
+  return d;
+}
+
+// Expands one calendar event into its concrete occurrences within
+// [rangeStart, rangeEnd] (inclusive), applying any per-occurrence
+// exceptions. Each occurrence carries `sourceDate` — the theoretical,
+// un-overridden date it was generated from — which exceptions are keyed
+// by and which identifies it for dragging (see CALENDAR_EVENT_TASK_PREFIX).
+function getCalendarEventOccurrences(evt, rangeStart, rangeEnd) {
+  const anchor = new Date(evt.start + 'T00:00:00');
+  if (isNaN(anchor.getTime())) return [];
+
+  const theoretical = [];
+  if (!evt.repeat || evt.repeat === 'none') {
+    theoretical.push({ sourceDate: evt.start, start: evt.start, time: evt.time || '', duration: evt.duration || 1 });
+  } else {
+    const until = evt.repeatUntil ? new Date(evt.repeatUntil + 'T00:00:00') : defaultRepeatUntil(anchor);
+    let cursor = new Date(anchor);
+    let guard = 0;
+    while (cursor <= until && guard < 500) {
+      const dateStr = cursor.toISOString().split('T')[0];
+      theoretical.push({ sourceDate: dateStr, start: dateStr, time: evt.time || '', duration: evt.duration || 1 });
+      if (evt.repeat === 'daily') cursor.setDate(cursor.getDate() + 1);
+      else if (evt.repeat === 'weekly') cursor.setDate(cursor.getDate() + 7);
+      else if (evt.repeat === 'monthly') cursor.setMonth(cursor.getMonth() + 1);
+      else break; // unrecognized repeat value — treat as non-repeating
+      guard++;
+    }
+  }
+
+  const exceptions = evt.exceptions || {};
+  const result = [];
+  theoretical.forEach(function(occ) {
+    const ex = exceptions[occ.sourceDate];
+    if (ex && ex.skip) return;
+    const effectiveStart = (ex && ex.start) || occ.start;
+    const effectiveTime = (ex && ex.time !== undefined) ? ex.time : occ.time;
+    const effectiveDuration = (ex && ex.duration) ? ex.duration : occ.duration;
+    const s = new Date(effectiveStart + 'T00:00:00');
+    if (isNaN(s.getTime())) return;
+    const f = new Date(s);
+    f.setDate(f.getDate() + effectiveDuration - 1);
+    if (rangeEnd && s > rangeEnd) return;
+    if (rangeStart && f < rangeStart) return;
+    result.push({ sourceDate: occ.sourceDate, start: s, finish: f, time: effectiveTime, duration: effectiveDuration });
+  });
+  return result;
+}
+
+// Shapes calendar-event occurrences to match flattenJobs()'s {job, task,
+// start, finish} rows, so the Calendar's existing lane-packing/rendering
+// code can treat them identically to job task rows without a rewrite.
+function flattenCalendarEventsForRange(rangeStart, rangeEnd) {
+  const rows = [];
+  (calendarEvents || []).forEach(function(evt) {
+    getCalendarEventOccurrences(evt, rangeStart, rangeEnd).forEach(function(occ) {
+      const fakeJob = { id: 'calevt-job-' + evt.id, name: evt.title, color: evt.color, archived: false };
+      const fakeTask = {
+        id: CALENDAR_EVENT_TASK_PREFIX + evt.id + '|' + occ.sourceDate,
+        name: evt.title,
+        notes: '',
+        color: evt.color,
+        start: occ.start.toISOString().split('T')[0],
+        finish: occ.finish.toISOString().split('T')[0],
+        isCalendarEvent: true,
+        time: occ.time
+      };
+      rows.push({ job: fakeJob, task: fakeTask, start: occ.start, finish: occ.finish });
+    });
+  });
+  return rows;
+}
+
 function findJob(jobId) {
   for (let i = 0; i < jobs.length; i++) { if (jobs[i].id === jobId) return {job: jobs[i], idx: i}; }
   return null;
@@ -1965,6 +2119,23 @@ function ensureCardIds(arr) {
   return arr;
 }
 
+// ===== CALENDAR-ONLY EVENTS =====
+// Deliberately NOT jobs/tasks — no job.tasks entry, no linked board card,
+// never touches the Gantt or Board. `exceptions` holds per-occurrence
+// overrides (keyed by the theoretical, un-overridden occurrence date) so
+// dragging one instance of a repeating event moves just that instance
+// instead of the whole series — see getCalendarEventOccurrences().
+function ensureCalendarEventIds(arr) {
+  (arr || []).forEach(function(e) {
+    if (!e.id) e.id = genId();
+    if (!e.repeat) e.repeat = 'none';
+    if (typeof e.duration !== 'number' || e.duration < 1) e.duration = 1;
+    if (!e.exceptions || typeof e.exceptions !== 'object') e.exceptions = {};
+    if (!e.color) e.color = '#7e57c2';
+  });
+  return arr;
+}
+
 let jobs = [];
 let editingJobId = null;
 let editingTaskId = null;
@@ -1988,6 +2159,9 @@ const DEFAULT_BOARD_COLUMNS = [
 ];
 let BOARD_COLUMNS = [];
 let boardCards = [];
+let calendarEvents = [];
+let editingCalendarEventId = null;
+let calendarEventTargetDate = null; // set by openAddCalendarEvent(), read by saveCalendarEventFromModal()
 let editingCardId = null;
 let draggedCardId = null;
 let draftChecklist = [];
@@ -2276,6 +2450,7 @@ function loadActiveProjectData() {
   jobs = ensureJobAndTaskIds(p.jobs || []);
   BOARD_COLUMNS = p.boardColumns || JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS));
   boardCards = ensureCardIds(p.boardCards || []);
+  calendarEvents = ensureCalendarEventIds(p.calendarEvents || []);
   fieldOptions = p.fieldOptions || {};
   document.getElementById('headerTitle').textContent = p.header.title || 'APS Production';
   document.getElementById('headerSubtitle').textContent = p.header.subtitle || '';
@@ -2312,6 +2487,7 @@ function saveActiveProject() {
   p.jobs = jobs;
   p.boardColumns = BOARD_COLUMNS;
   p.boardCards = boardCards;
+  p.calendarEvents = calendarEvents;
   p.fieldOptions = fieldOptions;
   p.header.title = document.getElementById('headerTitle').textContent.trim();
   p.header.subtitle = document.getElementById('headerSubtitle').textContent.trim();
@@ -2432,6 +2608,7 @@ function isJobFinished(job) {
 
 function saveBoardColumns() { saveActiveProject(); queueSharedSync(); }
 function saveBoardCards() { ensureCardIds(boardCards); saveActiveProject(); queueSharedSync(); }
+function saveCalendarEvents() { ensureCalendarEventIds(calendarEvents); saveActiveProject(); queueSharedSync(); }
 function saveFieldOptions() { saveActiveProject(); queueSharedSync(); }
 function saveHeader() { saveActiveProject(); logActivity('updated header'); queueSharedSync(); }
 
@@ -2513,6 +2690,7 @@ function init() {
   renderAll();
   setupScrollSync();
   buildCardColorPresets();
+  buildCalendarEventColorPresets();
   initJobFormAutosaveListeners();
   initCardFormAutosaveListeners();
   setInterval(() => {
@@ -2833,6 +3011,18 @@ function getDaysDiff(d1, d2) {
   return Math.round((d2 - d1) / 86400000);
 }
 
+// '14:30' -> '2:30 PM'. Calendar events store time as a plain 24h string
+// from <input type="time">; empty/invalid input just renders nothing.
+function formatTimeLabel(hhmm) {
+  if (!hhmm) return '';
+  const parts = hhmm.split(':');
+  const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return '';
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = ((h + 11) % 12) + 1;
+  return h12 + ':' + String(m).padStart(2, '0') + ' ' + period;
+}
+
 function calcPercentComplete(task) {
   if (!task.start || !task.finish) return 0;
   const s = new Date(task.start + 'T00:00:00');
@@ -3025,12 +3215,17 @@ function renderMonthCalendar() {
     cellDates.push(cellDate);
   }
 
-  // Build flat list from jobs→tasks
+  // Build flat list from jobs→tasks, plus standalone calendar-only events
+  // (never part of a job — see flattenCalendarEventsForRange) laid out in
+  // the exact same lane-packing pass below.
   const flatRows = flattenJobs(jobs, showArchived);
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
     return { flatIdx, job: row.job, task: row.task, start: s, finish: f };
+  });
+  flattenCalendarEventsForRange(cellDates[0], cellDates[cellDates.length - 1]).forEach(function(row, i) {
+    allJobs.push({ flatIdx: 'ce-' + i, job: row.job, task: row.task, start: row.start, finish: row.finish });
   });
 
   const numRows = 6;
@@ -3075,7 +3270,7 @@ function renderMonthCalendar() {
       const isOutside = cellDate.getMonth() !== month;
       const isToday = cellDate.getTime() === today.getTime();
       html += '<div class="cal-day' + (isOutside ? ' cal-outside' : '') + (isToday ? ' cal-today' : '') +
-        '" style="min-height:' + minH + 'px;" data-row="' + row + '" data-col="' + col + '">' +
+        '" style="min-height:' + minH + 'px;" data-row="' + row + '" data-col="' + col + '" data-date="' + cellDate.toISOString().split('T')[0] + '">' +
         '<div class="cal-day-num">' + cellDate.getDate() + '</div>' +
       '</div>';
     }
@@ -3085,6 +3280,9 @@ function renderMonthCalendar() {
 
   const cellEls = daysEl.querySelectorAll('.cal-day');
   const getCell = (row, col) => cellEls[row * 7 + col];
+  cellEls.forEach(function(cell) {
+    cell.addEventListener('click', function(e) { if (e.target.closest('.cal-day') === cell) openAddCalendarEvent(cell.dataset.date); });
+  });
 
   let barsHtml = '';
   for (let row = 0; row < numRows; row++) {
@@ -3097,18 +3295,21 @@ function renderMonthCalendar() {
       const job = seg.job;
       const task = seg.task;
       const isDue = !!task.isDueMarker;
+      const isCalEvt = !!task.isCalendarEvent;
       const classes = ['cal-event-bar'];
       if (isDue) classes.push('due-marker');
+      if (isCalEvt) classes.push('calendar-event-bar');
       classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
       classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
       if (isTaskFinished(job, task)) classes.push('finished');
+      const tagLabel = isCalEvt ? formatTimeLabel(task.time) : job.name;
       barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (task.color || job.color || '#3949ab') + ';" title="' +
-        escapeHtml(task.name) + ' — ' + escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+        escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name)) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
         (isDue ? '' :
           '<div class="cal-bar-drag-left" data-drag="left"></div>' +
           '<div class="cal-bar-drag-body" data-drag="move"></div>' +
           '<div class="cal-bar-drag-right" data-drag="right"></div>') +
-        (isDue ? '🚩' : escapeHtml(task.name)) + ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(job.name) + '</span></div>';
+        (isDue ? '🚩' : escapeHtml(task.name)) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '') + '</div>';
     });
   }
 
@@ -3151,12 +3352,15 @@ function renderWeekCalendar() {
     cellDates.push(d);
   }
 
-  // Build flat list from jobs→tasks
+  // Build flat list from jobs→tasks, plus standalone calendar-only events
   const flatRows = flattenJobs(jobs, showArchived);
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
     return { flatIdx, job: row.job, task: row.task, start: s, finish: f };
+  });
+  flattenCalendarEventsForRange(weekStart, weekEnd).forEach(function(row, i) {
+    allJobs.push({ flatIdx: 'ce-' + i, job: row.job, task: row.task, start: row.start, finish: row.finish });
   });
 
   // Build day cells (single row, 7 columns)
@@ -3164,7 +3368,7 @@ function renderWeekCalendar() {
   for (let col = 0; col < 7; col++) {
     const cellDate = cellDates[col];
     const isToday = cellDate.getTime() === today.getTime();
-    html += '<div class="cal-day week-day' + (isToday ? ' cal-today' : '') + '" data-week-col="' + col + '">' +
+    html += '<div class="cal-day week-day' + (isToday ? ' cal-today' : '') + '" data-week-col="' + col + '" data-date="' + cellDate.toISOString().split('T')[0] + '">' +
       '<div class="cal-day-num">' + cellDate.getDate() + '</div>' +
     '</div>';
   }
@@ -3173,6 +3377,9 @@ function renderWeekCalendar() {
 
   const cellEls = daysEl.querySelectorAll('.cal-day');
   const getCell = (col) => cellEls[col];
+  cellEls.forEach(function(cell) {
+    cell.addEventListener('click', function(e) { if (e.target.closest('.cal-day') === cell) openAddCalendarEvent(cell.dataset.date); });
+  });
 
   // Build continuous segments across the week (like month view but 1 row)
   const segs = allJobs.filter(j => j.finish >= weekStart && j.start <= weekEnd)
@@ -3214,18 +3421,21 @@ function renderWeekCalendar() {
     const job = seg.job;
     const task = seg.task;
     const isDue = !!task.isDueMarker;
+    const isCalEvt = !!task.isCalendarEvent;
     const classes = ['cal-event-bar'];
     if (isDue) classes.push('due-marker');
+    if (isCalEvt) classes.push('calendar-event-bar');
     classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
     classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
     if (isTaskFinished(job, task)) classes.push('finished');
+    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : job.name;
     barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (task.color || job.color || '#3949ab') + ';" title="' +
-      escapeHtml(task.name) + ' — ' + escapeHtml(job.name) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+      escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name)) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
       (isDue ? '' :
         '<div class="cal-bar-drag-left" data-drag="left"></div>' +
         '<div class="cal-bar-drag-body" data-drag="move"></div>' +
         '<div class="cal-bar-drag-right" data-drag="right"></div>') +
-      (isDue ? '🚩' : escapeHtml(task.name)) + ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(job.name) + '</span></div>';
+      (isDue ? '🚩' : escapeHtml(task.name)) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '') + '</div>';
   });
 
   let barsLayer = daysEl.querySelector('.cal-bars-layer');
@@ -3256,13 +3466,23 @@ function handleCalBarMouseDown(e) {
   e.preventDefault();
   const jobId = bar.dataset.calJobId;
   const taskId = bar.dataset.calTaskId;
-  let task, job;
+  let task, job, calEventId = null, calEventSourceDate = null;
   if (taskId === DUE_MARKER_TASK_ID) {
     const jf = findJob(jobId);
     if (!jf) return;
     job = jf.job;
     task = getJobDueMarkerTask(job);
     if (!task) return;
+  } else if (isCalendarEventTaskId(taskId)) {
+    const parsed = parseCalendarEventTaskId(taskId);
+    const evt = calendarEvents.find(function(e) { return e.id === parsed.eventId; });
+    if (!evt) return;
+    const occ = getCalendarEventOccurrences(evt, null, null).find(function(o) { return o.sourceDate === parsed.sourceDate; });
+    if (!occ) return;
+    calEventId = parsed.eventId;
+    calEventSourceDate = parsed.sourceDate;
+    job = { id: 'calevt-job-' + evt.id, name: evt.title };
+    task = { id: taskId, name: evt.title, start: occ.start.toISOString().split('T')[0], finish: occ.finish.toISOString().split('T')[0] };
   } else {
     const found = findTask(jobId, taskId);
     if (!found) return;
@@ -3270,10 +3490,11 @@ function handleCalBarMouseDown(e) {
     job = found.job;
   }
 
-  // Due-marker bars render no drag-zone sub-elements (see renderMonthCalendar/
-  // renderWeekCalendar), so e.target IS the bar and has no data-drag —
-  // always resolves to 'move', which is the only drag type that makes
-  // sense for a single-day marker.
+  // Due-marker and calendar-event bars render no drag-zone sub-elements
+  // (see renderMonthCalendar/renderWeekCalendar) when they're a single-day
+  // marker, so e.target IS the bar and has no data-drag — resolves to
+  // 'move'. Multi-day calendar events DO get resize handles like a normal
+  // task bar, so this still picks up 'left'/'right' for those.
   const dragType = e.target.dataset.drag || 'move';
   const startX = e.clientX;
   const origLeft = parseFloat(bar.style.left);
@@ -3286,6 +3507,7 @@ function handleCalBarMouseDown(e) {
   calDragState = {
     jobId, taskId, job, task, bar, dragType, startX, origLeft, origWidth,
     startDateObj: s, finishDateObj: f, duration,
+    isCalendarEvent: !!calEventId, calEventId, calEventSourceDate,
     moved: false
   };
 
@@ -3345,14 +3567,15 @@ function handleCalBarMouseMove(e) {
 
 function handleCalBarMouseUp(e) {
   if (!calDragState) return;
-  const { jobId, taskId, job, bar, dragType, moved, duration, startDateObj, finishDateObj, task } = calDragState;
+  const { jobId, taskId, job, bar, dragType, moved, duration, startDateObj, finishDateObj, task, isCalendarEvent, calEventId, calEventSourceDate } = calDragState;
   document.removeEventListener('mousemove', handleCalBarMouseMove);
   document.removeEventListener('mouseup', handleCalBarMouseUp);
   bar.classList.remove('cal-dragging', 'cal-resizing');
   hideTooltip();
 
   if (!moved) {
-    calendarOpenJob(jobId, taskId);
+    if (isCalendarEvent) openEditCalendarEvent(calEventId, calEventSourceDate);
+    else calendarOpenJob(jobId, taskId);
     calDragState = null;
     return;
   }
@@ -3360,6 +3583,43 @@ function handleCalBarMouseUp(e) {
   const cellWidth = document.querySelector('.cal-day')?.offsetWidth || 1;
   const deltaX = e.clientX - calDragState.startX;
   const deltaDays = Math.round(deltaX / cellWidth);
+
+  if (isCalendarEvent) {
+    if (deltaDays !== 0) {
+      let newStart = new Date(startDateObj);
+      let newDuration = duration;
+      if (dragType === 'move') {
+        newStart.setDate(newStart.getDate() + deltaDays);
+      } else if (dragType === 'right') {
+        newDuration = Math.max(1, duration + deltaDays);
+      } else if (dragType === 'left') {
+        newDuration = Math.max(1, duration - deltaDays);
+        newStart = new Date(finishDateObj);
+        newStart.setDate(newStart.getDate() - (newDuration - 1));
+      }
+      const newStartStr = newStart.toISOString().split('T')[0];
+      const evt = calendarEvents.find(function(ev) { return ev.id === calEventId; });
+      if (evt) {
+        // A one-off (non-repeating) event just updates directly. A
+        // repeating series instead records this as a per-occurrence
+        // exception, keyed by the theoretical date it was dragged FROM —
+        // the rest of the series is untouched (see getCalendarEventOccurrences).
+        if (evt.repeat === 'none') {
+          evt.start = newStartStr;
+          evt.duration = newDuration;
+        } else {
+          if (!evt.exceptions) evt.exceptions = {};
+          evt.exceptions[calEventSourceDate] = { start: newStartStr, time: evt.time, duration: newDuration };
+        }
+        saveCalendarEvents();
+        logActivity((dragType === 'move' ? 'rescheduled' : 'resized') + ' calendar event "' + evt.title + '"');
+        showToast('Event updated', 'success');
+      }
+    }
+    calDragState = null;
+    renderCalendar();
+    return;
+  }
 
   if (dragType === 'move' && deltaDays !== 0 && taskId === DUE_MARKER_TASK_ID) {
     const newStart = new Date(startDateObj);
@@ -3422,6 +3682,149 @@ function handleCalBarMouseUp(e) {
 function calendarOpenJob(jobId, taskId) {
   switchTab('manager');
   editJob(jobId);
+}
+
+// ===== CALENDAR-ONLY EVENTS: Add/Edit modal =====
+// Deliberately simple (explicit Save, not autosave like the job form) —
+// this is a small, self-contained modal, not worth the bulletproofing
+// machinery built for Job Manager/the card popup.
+function openAddCalendarEvent(dateStr) {
+  editingCalendarEventId = null;
+  calendarEventTargetDate = dateStr;
+  document.getElementById('calendarEventModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#7e57c2" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#7e57c2"/><rect x="6" y="13" width="3" height="3" fill="#7e57c2"/><rect x="10.5" y="13" width="3" height="3" fill="#7e57c2"/><rect x="15" y="13" width="3" height="3" fill="#7e57c2"/></svg> New Event';
+  document.getElementById('ceDeleteBtn').style.display = 'none';
+  document.getElementById('ce_title').value = '';
+  document.getElementById('ce_title_hint').style.display = 'none';
+  document.getElementById('ce_date').value = dateStr || '';
+  document.getElementById('ce_time').value = '';
+  document.getElementById('ce_duration').value = 1;
+  document.getElementById('ce_repeat').value = 'none';
+  document.getElementById('ce_repeat_until').value = '';
+  document.getElementById('ce_color').value = '#7e57c2';
+  updateCalendarEventColorSwatch();
+  document.querySelectorAll('#ceColorPresets .color-preset').forEach(function(p) { p.classList.remove('selected'); });
+  toggleCalendarEventColorPanel(false);
+  toggleRepeatUntilField();
+  document.getElementById('calendarEventModal').classList.add('show');
+  setTimeout(function() { document.getElementById('ce_title').focus(); }, 50);
+}
+
+// sourceDate is accepted but unused for now — editing via the modal always
+// edits the series definition (evt.start/duration/etc.), not one occurrence.
+// Dragging an occurrence on the calendar (not this modal) is how you create
+// a per-occurrence exception — see handleCalBarMouseUp.
+function openEditCalendarEvent(eventId, sourceDate) {
+  const evt = calendarEvents.find(function(e) { return e.id === eventId; });
+  if (!evt) return;
+  editingCalendarEventId = eventId;
+  calendarEventTargetDate = null;
+  document.getElementById('calendarEventModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Event';
+  document.getElementById('ceDeleteBtn').style.display = 'inline-flex';
+  document.getElementById('ce_title').value = evt.title;
+  document.getElementById('ce_title_hint').style.display = 'none';
+  document.getElementById('ce_date').value = evt.start;
+  document.getElementById('ce_time').value = evt.time || '';
+  document.getElementById('ce_duration').value = evt.duration || 1;
+  document.getElementById('ce_repeat').value = evt.repeat || 'none';
+  document.getElementById('ce_repeat_until').value = evt.repeatUntil || '';
+  document.getElementById('ce_color').value = evt.color || '#7e57c2';
+  updateCalendarEventColorSwatch();
+  document.querySelectorAll('#ceColorPresets .color-preset').forEach(function(p) {
+    p.classList.toggle('selected', p.dataset.color === evt.color);
+  });
+  toggleCalendarEventColorPanel(false);
+  toggleRepeatUntilField();
+  document.getElementById('calendarEventModal').classList.add('show');
+}
+
+function closeCalendarEventModal() {
+  document.getElementById('calendarEventModal').classList.remove('show');
+  editingCalendarEventId = null;
+  calendarEventTargetDate = null;
+}
+
+function toggleRepeatUntilField() {
+  const repeat = document.getElementById('ce_repeat').value;
+  document.getElementById('ce_repeat_until_group').style.display = (repeat === 'none') ? 'none' : 'block';
+}
+
+function toggleCalendarEventColorPanel(forceOpen) {
+  const panel = document.getElementById('ceColorPickerPanel');
+  const arrow = document.getElementById('ceColorToggleArrow');
+  const open = forceOpen != null ? forceOpen : !panel.classList.contains('open');
+  panel.classList.toggle('open', open);
+  arrow.classList.toggle('open', open);
+}
+
+function updateCalendarEventColorSwatch() {
+  document.getElementById('ceColorToggleSwatch').style.background = document.getElementById('ce_color').value;
+}
+
+function buildCalendarEventColorPresets() {
+  const container = document.getElementById('ceColorPresets');
+  container.innerHTML = '';
+  COLOR_PRESETS.forEach(function(c) {
+    const div = document.createElement('div');
+    div.className = 'color-preset';
+    div.style.background = c;
+    div.dataset.color = c;
+    div.onclick = function() {
+      document.getElementById('ce_color').value = c;
+      container.querySelectorAll('.color-preset').forEach(function(p) { p.classList.remove('selected'); });
+      div.classList.add('selected');
+      updateCalendarEventColorSwatch();
+    };
+    container.appendChild(div);
+  });
+}
+
+function saveCalendarEventFromModal() {
+  const title = document.getElementById('ce_title').value.trim();
+  if (!title) {
+    document.getElementById('ce_title_hint').style.display = 'block';
+    return;
+  }
+  const date = document.getElementById('ce_date').value;
+  if (!date) { showToast('Date is required', 'error'); return; }
+  const time = document.getElementById('ce_time').value;
+  const duration = Math.max(1, parseInt(document.getElementById('ce_duration').value, 10) || 1);
+  const repeat = document.getElementById('ce_repeat').value;
+  const repeatUntil = document.getElementById('ce_repeat_until').value;
+  const color = document.getElementById('ce_color').value;
+
+  if (editingCalendarEventId) {
+    const evt = calendarEvents.find(function(e) { return e.id === editingCalendarEventId; });
+    if (!evt) return;
+    evt.title = title;
+    evt.start = date;
+    evt.time = time;
+    evt.duration = duration;
+    evt.repeat = repeat;
+    evt.repeatUntil = repeatUntil || null;
+    evt.color = color;
+    logActivity('updated calendar event "' + title + '"');
+  } else {
+    calendarEvents.push({
+      id: genId(), title: title, start: date, time: time, duration: duration,
+      repeat: repeat, repeatUntil: repeatUntil || null, color: color, exceptions: {}
+    });
+    logActivity('added calendar event "' + title + '"');
+  }
+  saveCalendarEvents();
+  renderCalendar();
+  showToast('Event saved', 'success');
+  closeCalendarEventModal();
+}
+
+function deleteCalendarEventFromModal() {
+  if (!editingCalendarEventId) return;
+  const evt = calendarEvents.find(function(e) { return e.id === editingCalendarEventId; });
+  if (evt) logActivity('deleted calendar event "' + evt.title + '"');
+  calendarEvents = calendarEvents.filter(function(e) { return e.id !== editingCalendarEventId; });
+  saveCalendarEvents();
+  renderCalendar();
+  showToast('Event deleted', 'info');
+  closeCalendarEventModal();
 }
 
 function renderGantt() {
@@ -5166,6 +5569,7 @@ function importData(input) {
         }
         if (Array.isArray(data.boardColumns) && data.boardColumns.length) p.boardColumns = data.boardColumns;
         if (Array.isArray(data.boardCards)) p.boardCards = data.boardCards;
+        if (Array.isArray(data.calendarEvents)) p.calendarEvents = data.calendarEvents;
         saveProjects();
         loadActiveProjectData();
         renderAll();
@@ -6509,6 +6913,10 @@ document.getElementById('cardModal').addEventListener('click', function(e) {
   if (e.target === this) closeCardModal();
 });
 
+document.getElementById('calendarEventModal').addEventListener('click', function(e) {
+  if (e.target === this) closeCalendarEventModal();
+});
+
 document.getElementById('manageFieldsModal').addEventListener('click', function(e) {
   if (e.target === this) closeManageFields();
 });
@@ -6529,6 +6937,7 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeModal();
     closeCardModal();
+    if (document.getElementById('calendarEventModal').classList.contains('show')) closeCalendarEventModal();
     closeSettingsMenu();
     if (document.getElementById('manageFieldsModal').classList.contains('show')) closeManageFields();
     if (document.getElementById('themeModal').classList.contains('show')) closeThemeModal();
@@ -6717,7 +7126,7 @@ function setSyncStatus(text, busy) {
 }
 
 function isBusyEditing() {
-  const openModal = ['cardModal', 'themeModal', 'headerBgModal', 'boardBgModal', 'manageFieldsModal', 'deleteModal'].some(function(id) {
+  const openModal = ['cardModal', 'themeModal', 'headerBgModal', 'boardBgModal', 'manageFieldsModal', 'deleteModal', 'calendarEventModal'].some(function(id) {
     const el = document.getElementById(id);
     return el && el.classList.contains('show');
   });
@@ -7051,6 +7460,7 @@ function pushProjectToShared(projectId, headerOverride) {
           name: proj.name,
           jobsMap: new LiveMapCtor(),
           boardCardsMap: new LiveMapCtor(),
+          calendarEventsMap: new LiveMapCtor(),
           boardColumns: [],
           fieldOptions: {},
           header: new LiveObjectCtor({
@@ -7091,6 +7501,21 @@ function pushProjectToShared(projectId, headerOverride) {
             if (!liveCardIds.has(key)) cardsMap.delete(key);
           });
         }
+      }
+
+      // calendar-only events — same whole-object push pattern. Lazily
+      // created here for any project entry that predates this feature.
+      let calEventsMap = entry.get('calendarEventsMap');
+      if (!calEventsMap || typeof calEventsMap.set !== 'function') {
+        calEventsMap = new LiveMapCtor();
+        entry.set('calendarEventsMap', calEventsMap);
+      }
+      const liveCalEventIds = new Set((proj.calendarEvents || []).map(function (e) { return String(e.id); }));
+      (proj.calendarEvents || []).forEach(function (e) { calEventsMap.set(String(e.id), e); });
+      if (typeof calEventsMap.keys === 'function') {
+        Array.from(calEventsMap.keys()).forEach(function (key) {
+          if (!liveCalEventIds.has(key)) calEventsMap.delete(key);
+        });
       }
 
       entry.set('boardColumns', proj.boardColumns);
@@ -7214,6 +7639,7 @@ function applyLiveblocksState(root) {
     const remoteName      = entry.get('name');
     const remoteJobsMap   = entry.get('jobsMap');
     const remoteCardsMap  = entry.get('boardCardsMap');
+    const remoteCalEventsMap = entry.get('calendarEventsMap');
     const remoteColumns   = entry.get('boardColumns');
     const remoteFieldOpts = entry.get('fieldOptions');
     const remoteHeader    = entry.get('header');
@@ -7226,6 +7652,7 @@ function applyLiveblocksState(root) {
         jobs: [],
         boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
         boardCards: [],
+        calendarEvents: [],
         fieldOptions: {},
         header: { title: remoteName || 'Untitled Project', subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
       };
@@ -7261,6 +7688,16 @@ function applyLiveblocksState(root) {
     } else if (Array.isArray(remoteCardsMap)) {
       ensureCardIds(remoteCardsMap);
       local.boardCards = remoteCardsMap.slice();
+    }
+
+    // ── calendar-only events ──
+    if (remoteCalEventsMap && typeof remoteCalEventsMap.values === 'function') {
+      const ce = Array.from(remoteCalEventsMap.values());
+      ensureCalendarEventIds(ce);
+      local.calendarEvents = ce;
+    } else if (Array.isArray(remoteCalEventsMap)) {
+      ensureCalendarEventIds(remoteCalEventsMap);
+      local.calendarEvents = remoteCalEventsMap.slice();
     }
 
     // ── fields ──
