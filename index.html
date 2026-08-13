@@ -122,6 +122,10 @@
   #calendarWeekdays { flex-shrink: 0; margin-bottom: 6px; }
   #calendarWeekdays .cal-weekday { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; padding: 4px 0; }
   .calendar-days { flex: 1; grid-auto-rows: 1fr; overflow: auto; }
+  /* Week view splits into this (all-day-ish items only, once timed events
+     move into the hourly grid below) sized to content instead of filling
+     all available height, and the hourly grid taking the rest. */
+  .calendar-days.week-all-day-mode { flex: 0 0 auto; max-height: 30vh; grid-auto-rows: auto; }
   .cal-day { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px; min-height: 90px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
   .cal-day.cal-outside { background: var(--bg); opacity: 0.55; }
   .cal-day.cal-today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
@@ -296,6 +300,39 @@
   .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
   .cal-event-bar.due-marker .cal-jobname-tag { display: none; }
   .cal-event-bar.calendar-event-bar { border: 1px dashed rgba(255,255,255,0.6); }
+  /* Google-Calendar-style rendering for a calendar event once it has a
+     time: no more solid color fill — just a colored dot + time + title. */
+  .cal-event-bar.timed-style {
+    background: transparent !important; box-shadow: none; border: none !important;
+    color: var(--text); display: flex; align-items: center; gap: 4px; padding: 1px 4px 1px 2px;
+  }
+  .cal-event-bar.timed-style::before {
+    content: ''; width: 7px; height: 7px; min-width: 7px; border-radius: 50%; background: var(--dot-color, #7e57c2);
+  }
+  .cal-event-bar.timed-style .cal-event-time { font-weight: 700; font-size: 9.5px; color: var(--text-light); flex-shrink: 0; }
+  .cal-event-bar.timed-style:hover { filter: none; background: rgba(0,0,0,0.06) !important; }
+  body.dark-mode .cal-event-bar.timed-style:hover { background: rgba(255,255,255,0.08) !important; }
+  /* Week view hourly grid */
+  .week-hour-section { display: none; flex: 1; overflow-y: auto; position: relative; border-top: 1px solid var(--border); margin-top: 8px; min-height: 0; }
+  .week-hour-section.show { display: flex; }
+  .week-hour-labels { width: 48px; flex-shrink: 0; }
+  .week-hour-label { height: 48px; box-sizing: border-box; text-align: right; padding-right: 8px; font-size: 10px; color: var(--text-light); position: relative; }
+  .week-hour-label span { position: relative; top: -6px; }
+  .week-hour-cols { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); position: relative; }
+  .week-hour-col { border-left: 1px solid var(--border); position: relative; cursor: pointer; }
+  .week-hour-row-line { height: 48px; border-bottom: 1px solid var(--border); box-sizing: border-box; }
+  .week-timed-event {
+    position: absolute; left: 2px; right: 2px; border-radius: 4px; padding: 2px 5px;
+    font-size: 10.5px; color: #fff; overflow: hidden; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    z-index: 2; line-height: 13px;
+  }
+  .week-timed-event:hover { filter: brightness(1.1); z-index: 6; }
+  .week-timed-event .wte-time { display: block; font-size: 9px; opacity: 0.85; }
+  .week-current-time-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--danger); z-index: 3; pointer-events: none; }
+  .week-current-time-line::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+  body.dark-mode .week-hour-section { border-color: #333c55; }
+  body.dark-mode .week-hour-col { border-color: #333c55; }
+  body.dark-mode .week-hour-row-line { border-color: #333c55; }
   .task-bar-job-tag {
     position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
     border-top-left-radius: 4px; border-bottom-left-radius: 4px;
@@ -1135,6 +1172,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         </div>
         <div class="calendar-grid" id="calendarWeekdays"></div>
         <div class="calendar-grid calendar-days" id="calendarDays"></div>
+        <div class="week-hour-section" id="weekHourSection">
+          <div class="week-hour-labels" id="weekHourLabels"></div>
+          <div class="week-hour-cols" id="weekHourCols"></div>
+        </div>
       </div>
     </div>
 
@@ -3023,6 +3064,59 @@ function formatTimeLabel(hhmm) {
   return h12 + ':' + String(m).padStart(2, '0') + ' ' + period;
 }
 
+// 'HH:MM' -> minutes since midnight, or null if blank/invalid. Used to
+// position timed calendar events in the week view's hourly grid.
+function timeToMinutes(hhmm) {
+  if (!hhmm) return null;
+  const parts = hhmm.split(':');
+  const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+// Shared by renderMonthCalendar/renderWeekCalendar's all-day bar rows —
+// factored out once bar rendering grew due-marker, calendar-event, and
+// (once a time is set) Google-Calendar-style dot+time variants, so the two
+// copies wouldn't have to be kept in sync by hand. Caller supplies the
+// pixel position (left/top/width) since that math is view-specific.
+function buildCalBarHtml(seg, left, top, width) {
+  const job = seg.job;
+  const task = seg.task;
+  const isDue = !!task.isDueMarker;
+  const isCalEvt = !!task.isCalendarEvent;
+  const isTimedCalEvt = isCalEvt && !!task.time;
+  const classes = ['cal-event-bar'];
+  if (isDue) classes.push('due-marker');
+  if (isCalEvt) classes.push('calendar-event-bar');
+  if (isTimedCalEvt) classes.push('timed-style');
+  classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
+  classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
+  if (isTaskFinished(job, task)) classes.push('finished');
+
+  const barColor = task.color || job.color || '#3949ab';
+  const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') : ('background:' + barColor + ';');
+
+  const dragHandles = isDue ? '' :
+    '<div class="cal-bar-drag-left" data-drag="left"></div>' +
+    '<div class="cal-bar-drag-body" data-drag="move"></div>' +
+    '<div class="cal-bar-drag-right" data-drag="right"></div>';
+
+  let content;
+  if (isDue) {
+    content = '🚩';
+  } else if (isTimedCalEvt) {
+    const timeLabel = formatTimeLabel(task.time);
+    content = (timeLabel ? '<span class="cal-event-time">' + escapeHtml(timeLabel) + '</span>' : '') + escapeHtml(task.name);
+  } else {
+    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : job.name;
+    content = escapeHtml(task.name) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '');
+  }
+
+  return '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; ' + styleExtra + '" title="' +
+    escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name)) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+    dragHandles + content + '</div>';
+}
+
 function calcPercentComplete(task) {
   if (!task.start || !task.finish) return 0;
   const s = new Date(task.start + 'T00:00:00');
@@ -3292,26 +3386,12 @@ function renderMonthCalendar() {
       const left = startCell.offsetLeft;
       const width = (endCell.offsetLeft + endCell.offsetWidth) - left;
       const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
-      const job = seg.job;
-      const task = seg.task;
-      const isDue = !!task.isDueMarker;
-      const isCalEvt = !!task.isCalendarEvent;
-      const classes = ['cal-event-bar'];
-      if (isDue) classes.push('due-marker');
-      if (isCalEvt) classes.push('calendar-event-bar');
-      classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
-      classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
-      if (isTaskFinished(job, task)) classes.push('finished');
-      const tagLabel = isCalEvt ? formatTimeLabel(task.time) : job.name;
-      barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (task.color || job.color || '#3949ab') + ';" title="' +
-        escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name)) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
-        (isDue ? '' :
-          '<div class="cal-bar-drag-left" data-drag="left"></div>' +
-          '<div class="cal-bar-drag-body" data-drag="move"></div>' +
-          '<div class="cal-bar-drag-right" data-drag="right"></div>') +
-        (isDue ? '🚩' : escapeHtml(task.name)) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '') + '</div>';
+      barsHtml += buildCalBarHtml(seg, left, top, width);
     });
   }
+
+  document.getElementById('weekHourSection').classList.remove('show');
+  daysEl.classList.remove('week-all-day-mode');
 
   let barsLayer = daysEl.querySelector('.cal-bars-layer');
   if (!barsLayer) {
@@ -3352,14 +3432,19 @@ function renderWeekCalendar() {
     cellDates.push(d);
   }
 
-  // Build flat list from jobs→tasks, plus standalone calendar-only events
+  // Build flat list from jobs→tasks, plus standalone calendar-only events —
+  // except calendar events that have a time set, which render in the
+  // separate hourly grid below (built further down) instead of up here in
+  // the all-day-style row.
   const flatRows = flattenJobs(jobs, showArchived);
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
     return { flatIdx, job: row.job, task: row.task, start: s, finish: f };
   });
+  const timedCalRows = [];
   flattenCalendarEventsForRange(weekStart, weekEnd).forEach(function(row, i) {
+    if (row.task.time) { timedCalRows.push(row); return; }
     allJobs.push({ flatIdx: 'ce-' + i, job: row.job, task: row.task, start: row.start, finish: row.finish });
   });
 
@@ -3418,25 +3503,10 @@ function renderWeekCalendar() {
     const left = startCell.offsetLeft;
     const width = (endCell.offsetLeft + endCell.offsetWidth) - left;
     const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
-    const job = seg.job;
-    const task = seg.task;
-    const isDue = !!task.isDueMarker;
-    const isCalEvt = !!task.isCalendarEvent;
-    const classes = ['cal-event-bar'];
-    if (isDue) classes.push('due-marker');
-    if (isCalEvt) classes.push('calendar-event-bar');
-    classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
-    classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
-    if (isTaskFinished(job, task)) classes.push('finished');
-    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : job.name;
-    barsHtml += '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; background:' + (task.color || job.color || '#3949ab') + ';" title="' +
-      escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name)) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
-      (isDue ? '' :
-        '<div class="cal-bar-drag-left" data-drag="left"></div>' +
-        '<div class="cal-bar-drag-body" data-drag="move"></div>' +
-        '<div class="cal-bar-drag-right" data-drag="right"></div>') +
-      (isDue ? '🚩' : escapeHtml(task.name)) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '') + '</div>';
+    barsHtml += buildCalBarHtml(seg, left, top, width);
   });
+
+  daysEl.classList.add('week-all-day-mode');
 
   let barsLayer = daysEl.querySelector('.cal-bars-layer');
   if (!barsLayer) {
@@ -3445,6 +3515,111 @@ function renderWeekCalendar() {
     daysEl.appendChild(barsLayer);
   }
   barsLayer.innerHTML = barsHtml;
+
+  renderWeekHourGrid(cellDates, timedCalRows, today);
+}
+
+// ===== WEEK VIEW HOURLY GRID (Google-Calendar style) =====
+const WEEK_HOUR_ROW_H = 48;
+// Calendar events only store a start time, not an end time/duration-in-
+// minutes — this is the fixed visual block height (and the window used for
+// same-day overlap/lane-packing) used to represent one on the hourly grid.
+const WEEK_TIMED_EVENT_MIN_HEIGHT_MINUTES = 45;
+
+function renderWeekHourGrid(cellDates, timedCalRows, today) {
+  const section = document.getElementById('weekHourSection');
+  const labelsEl = document.getElementById('weekHourLabels');
+  const colsEl = document.getElementById('weekHourCols');
+  if (!section || !labelsEl || !colsEl) return;
+  section.classList.add('show');
+
+  // Hour labels down the left side.
+  let labelsHtml = '';
+  for (let h = 0; h < 24; h++) {
+    const label = h === 0 ? '12 AM' : h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM';
+    labelsHtml += '<div class="week-hour-label"><span>' + (h === 0 ? '' : label) + '</span></div>';
+  }
+  labelsEl.innerHTML = labelsHtml;
+
+  // Bucket each day's timed occurrences by which calendar day they fall on,
+  // then lane-pack same-day overlaps by time range (same greedy algorithm
+  // used for date-range lane packing elsewhere, just keyed by minutes).
+  const dayBuckets = cellDates.map(function() { return []; });
+  timedCalRows.forEach(function(row) {
+    const dayIdx = Math.round((row.start - cellDates[0]) / 86400000);
+    if (dayIdx < 0 || dayIdx >= cellDates.length) return;
+    const startMin = timeToMinutes(row.task.time);
+    if (startMin === null) return;
+    dayBuckets[dayIdx].push({ task: row.task, job: row.job, startMin: startMin });
+  });
+
+  let colsHtml = '';
+  for (let col = 0; col < 7; col++) {
+    const isToday = cellDates[col].getTime() === today.getTime();
+    let rowLines = '';
+    for (let h = 0; h < 24; h++) rowLines += '<div class="week-hour-row-line"></div>';
+
+    const items = dayBuckets[col].sort(function(a, b) { return a.startMin - b.startMin; });
+    const laneEnds = [];
+    items.forEach(function(it) {
+      const endMin = it.startMin + WEEK_TIMED_EVENT_MIN_HEIGHT_MINUTES;
+      let lane = laneEnds.findIndex(function(end) { return end <= it.startMin; });
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(endMin); }
+      else { laneEnds[lane] = endMin; }
+      it.lane = lane;
+    });
+    const laneCount = laneEnds.length || 1;
+
+    let eventsHtml = '';
+    items.forEach(function(it) {
+      const top = (it.startMin / 60) * WEEK_HOUR_ROW_H;
+      const height = Math.max(20, (WEEK_TIMED_EVENT_MIN_HEIGHT_MINUTES / 60) * WEEK_HOUR_ROW_H - 2);
+      const laneWidthPct = 100 / laneCount;
+      const leftPct = it.lane * laneWidthPct;
+      const timeLabel = formatTimeLabel(it.task.time);
+      eventsHtml += '<div class="week-timed-event" style="top:' + top + 'px; height:' + height + 'px; left:calc(' + leftPct + '% + 2px); width:calc(' + laneWidthPct + '% - 4px); background:' + (it.task.color || it.job.color || '#7e57c2') + ';" title="' + escapeHtml(it.task.name) + (timeLabel ? ' — ' + timeLabel : '') + '" data-cal-job-id="' + it.job.id + '" data-cal-task-id="' + it.task.id + '">' +
+        (timeLabel ? '<span class="wte-time">' + escapeHtml(timeLabel) + '</span>' : '') +
+        escapeHtml(it.task.name) + '</div>';
+    });
+
+    let nowLineHtml = '';
+    if (isToday) {
+      const now = new Date();
+      const nowTop = ((now.getHours() * 60 + now.getMinutes()) / 60) * WEEK_HOUR_ROW_H;
+      nowLineHtml = '<div class="week-current-time-line" style="top:' + nowTop + 'px;"></div>';
+    }
+
+    colsHtml += '<div class="week-hour-col" data-col="' + col + '" data-date="' + cellDates[col].toISOString().split('T')[0] + '">' +
+      rowLines + eventsHtml + nowLineHtml + '</div>';
+  }
+  colsEl.innerHTML = colsHtml;
+
+  colsEl.querySelectorAll('.week-hour-col').forEach(function(colEl) {
+    colEl.addEventListener('click', function(e) {
+      if (e.target.closest('.week-timed-event')) return; // handled by its own listener below
+      const rect = colEl.getBoundingClientRect();
+      const offsetY = e.clientY - rect.top;
+      const totalMinutes = Math.max(0, Math.round((offsetY / WEEK_HOUR_ROW_H) * 60 / 30) * 30);
+      const h = Math.min(23, Math.floor(totalMinutes / 60));
+      const m = totalMinutes % 60;
+      const timeStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      openAddCalendarEvent(colEl.dataset.date, timeStr);
+    });
+  });
+  colsEl.querySelectorAll('.week-timed-event').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const parsed = parseCalendarEventTaskId(el.dataset.calTaskId);
+      openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
+    });
+  });
+
+  // Scroll to a sensible starting point: near the current time if today is
+  // in view, otherwise default to business hours (~7 AM) instead of
+  // dumping the user at midnight.
+  const todayIdx = cellDates.findIndex(function(d) { return d.getTime() === today.getTime(); });
+  const scrollHour = todayIdx !== -1 ? Math.max(0, new Date().getHours() - 1) : 7;
+  section.scrollTop = scrollHour * WEEK_HOUR_ROW_H;
 }
 
 window.addEventListener('resize', () => {
@@ -3688,7 +3863,7 @@ function calendarOpenJob(jobId, taskId) {
 // Deliberately simple (explicit Save, not autosave like the job form) —
 // this is a small, self-contained modal, not worth the bulletproofing
 // machinery built for Job Manager/the card popup.
-function openAddCalendarEvent(dateStr) {
+function openAddCalendarEvent(dateStr, timeStr) {
   editingCalendarEventId = null;
   calendarEventTargetDate = dateStr;
   document.getElementById('calendarEventModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#7e57c2" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#7e57c2"/><rect x="6" y="13" width="3" height="3" fill="#7e57c2"/><rect x="10.5" y="13" width="3" height="3" fill="#7e57c2"/><rect x="15" y="13" width="3" height="3" fill="#7e57c2"/></svg> New Event';
@@ -3696,7 +3871,7 @@ function openAddCalendarEvent(dateStr) {
   document.getElementById('ce_title').value = '';
   document.getElementById('ce_title_hint').style.display = 'none';
   document.getElementById('ce_date').value = dateStr || '';
-  document.getElementById('ce_time').value = '';
+  document.getElementById('ce_time').value = timeStr || '';
   document.getElementById('ce_duration').value = 1;
   document.getElementById('ce_repeat').value = 'none';
   document.getElementById('ce_repeat_until').value = '';
