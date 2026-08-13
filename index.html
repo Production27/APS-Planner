@@ -530,6 +530,7 @@
      actually seen is the plain-text display span underneath, showing just
      "M/D" — no native segmented boxes, no year, nothing to fight with CSS. */
   .task-fixed-date-wrap { position: relative; width: 100%; }
+  .task-fixed-date-wrap-finish { margin-left: 10px; }
   .task-fixed-date-display {
     display: flex; align-items: center; justify-content: center; gap: 4px;
     width: 100%; box-sizing: border-box; padding: 8px 6px;
@@ -5156,6 +5157,10 @@ function renderFixedTaskGrid(taskList) {
 
     const finishCell = buildDateCell('task-fixed-finish', t.finish);
     const finishInput = finishCell.input;
+    // A little breathing room from Duration — sitting flush against it
+    // (just the row's usual 6px grid gap) made Finish feel like it was
+    // crowding/overlapping Duration.
+    finishCell.wrap.classList.add('task-fixed-date-wrap-finish');
 
     // Duration is never stored on the task itself — start/finish stay the
     // single source of truth (unchanged schema). It's just derived here for
