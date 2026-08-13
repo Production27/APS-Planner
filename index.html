@@ -530,7 +530,6 @@
      actually seen is the plain-text display span underneath, showing just
      "M/D" — no native segmented boxes, no year, nothing to fight with CSS. */
   .task-fixed-date-wrap { position: relative; width: 100%; }
-  .task-fixed-date-wrap-finish { margin-left: 10px; }
   .task-fixed-date-display {
     display: flex; align-items: center; justify-content: center; gap: 4px;
     width: 100%; box-sizing: border-box; padding: 8px 6px;
@@ -561,6 +560,7 @@
   .task-fixed-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
   .task-fixed-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .task-fixed-header { display: grid; grid-template-columns: auto 1fr 92px 50px 92px; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; padding: 0 2px; }
+  .task-fixed-header span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .task-fixed-header span:first-child { width: 14px; }
 
   .color-picker-wrapper { display: flex; align-items: center; gap: 12px; }
@@ -1325,7 +1325,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           </div>
           <div class="form-group">
             <label>Tasks</label>
-            <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Duration</span><span>Finish</span></div>
+            <div class="task-fixed-header"><span></span><span>Column</span><span>Start</span><span>Days</span><span>Finish</span></div>
             <div id="taskRows"></div>
             <div class="field-error-hint" id="taskRowsWarning" style="display:none;"></div>
           </div>
@@ -5157,10 +5157,6 @@ function renderFixedTaskGrid(taskList) {
 
     const finishCell = buildDateCell('task-fixed-finish', t.finish);
     const finishInput = finishCell.input;
-    // A little breathing room from Duration — sitting flush against it
-    // (just the row's usual 6px grid gap) made Finish feel like it was
-    // crowding/overlapping Duration.
-    finishCell.wrap.classList.add('task-fixed-date-wrap-finish');
 
     // Duration is never stored on the task itself — start/finish stay the
     // single source of truth (unchanged schema). It's just derived here for
