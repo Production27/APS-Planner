@@ -7951,9 +7951,20 @@ function refreshActiveProjectFromShared() {
   // updating, or silently make it look like sync is broken for a teammate
   // even though the underlying data merged in fine (loadActiveProjectData
   // already succeeded above; a page refresh would show it's actually there).
-  [renderGantt, renderJobList, updateJobCount, renderBoard, renderCalendar,
-   updateGhostBtnState, refreshArchivedJobsListIfOpen].forEach(function(fn) {
-    try { fn(); } catch (err) { console.error('refreshActiveProjectFromShared: ' + fn.name + ' failed', err); }
+  const renders = [renderGantt, renderJobList, updateJobCount, renderBoard, renderCalendar,
+    updateGhostBtnState, refreshArchivedJobsListIfOpen];
+  // CRITICAL: if a job is open in Job Manager, its form fields (task dates
+  // in particular) are plain DOM state — they don't track the `jobs` array
+  // automatically. autoSaveJobForm() reads those fields directly on every
+  // save, from ANY field changing (not just task edits). Without refreshing
+  // them here, the next keystroke in, say, Description would silently
+  // overwrite a teammate's concurrent task-date change with this browser's
+  // stale, pre-sync values — exactly the "our jobs don't quite match"
+  // failure mode. Must run before the renders below in case one of them
+  // (e.g. a render bug) throws and skips the rest.
+  if (editingJobId) renders.unshift(function() { refreshJobFormIfOpen(editingJobId); });
+  renders.forEach(function(fn) {
+    try { fn(); } catch (err) { console.error('refreshActiveProjectFromShared: ' + (fn.name || 'refreshJobFormIfOpen') + ' failed', err); }
   });
   showToast('Synced latest changes', 'info');
 }
