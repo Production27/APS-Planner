@@ -440,7 +440,6 @@
   .job-card .job-card-meta { font-size: 11px; color: var(--text-light); display: flex; gap: 12px; align-items: center; }
   .job-card .color-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); }
   .job-card .note-icon { font-size: 10px; color: var(--warning); }
-  .job-card .task-count-tag { font-size: 10px; font-weight: 600; color: var(--primary-light); background: #eef1fa; padding: 1px 7px; border-radius: 10px; }
   .job-card .delete-btn { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
   .job-card .delete-btn:hover { background: #ffebee; color: var(--danger); }
   .job-card .copy-btn { position: absolute; top: 8px; right: 34px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
@@ -4963,7 +4962,6 @@ function renderJobList() {
       if (!f || tf > f) f = tf;
     });
     const dur = (s && f) ? getDaysDiff(s, f) + 1 : 0;
-    const taskCountLabel = taskList.length + (taskList.length === 1 ? ' task' : ' tasks');
     const linkedCard = boardCards.find(function(c) { return c.jobId === job.id; });
     const boardCol = linkedCard ? BOARD_COLUMNS.find(function(c) { return c.id === linkedCard.column; }) : null;
     const boardTag = boardCol
@@ -4977,7 +4975,6 @@ function renderJobList() {
       '<div class="job-card-meta">' +
       (s && f ? '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + f.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>' +
       '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + dur + 'd</span>' : '') +
-      '<span class="task-count-tag">' + taskCountLabel + '</span>' +
       boardTag +
       ((job.comments && job.comments.length) ? '<span class="note-icon" title="' + job.comments.length + ' comment' + (job.comments.length === 1 ? '' : 's') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> ' + job.comments.length + '</span>' : '') + '</div>' +
       '<button class="copy-btn" onclick="event.stopPropagation(); duplicateJob(\'' + job.id + '\', event)" title="Duplicate"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>' +
