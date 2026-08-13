@@ -531,17 +531,22 @@
      "M/D" — no native segmented boxes, no year, nothing to fight with CSS. */
   .task-fixed-date-wrap { position: relative; width: 100%; }
   .task-fixed-date-display {
-    display: block; width: 100%; box-sizing: border-box; padding: 8px 6px;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    width: 100%; box-sizing: border-box; padding: 8px 6px;
     border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
-    font-family: inherit; text-align: center; color: var(--text);
-    background: white; cursor: pointer; user-select: none; min-height: 33px;
+    font-family: inherit; color: var(--text);
+    background: #eef0f5; cursor: pointer; user-select: none; min-height: 33px;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
-  .task-fixed-date-display:hover { border-color: var(--primary-light); }
+  .task-fixed-date-display:hover { border-color: var(--primary-light); background: #e1e5f5; color: var(--primary); }
+  .task-fixed-date-display.empty { color: var(--text-light); }
+  .task-fixed-date-display.empty:hover { color: var(--primary); }
+  body.dark-mode .task-fixed-date-display:hover { background: rgba(57,73,171,0.22); }
   .task-fixed-date-wrap input[type="date"] {
     position: absolute; inset: 0; width: 100%; height: 100%;
     opacity: 0; border: none; padding: 0; margin: 0; cursor: pointer;
   }
-  body.dark-mode .task-fixed-date-display { background: var(--card); }
+  body.dark-mode .task-fixed-date-display { background: rgba(255,255,255,0.06); }
   .task-fixed-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
   .task-fixed-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .task-fixed-header { display: grid; grid-template-columns: auto 1fr 92px 50px 92px; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; padding: 0 2px; }
@@ -5057,13 +5062,24 @@ function formatMonthDayShort(iso) {
   return (d.getMonth() + 1) + '/' + d.getDate();
 }
 
+// A small calendar glyph (currentColor, so it follows .empty's muted
+// tint) plus the "M/D" text, or "Set date" when there's nothing yet —
+// shared between buildDateCell() and every place that refreshes a date
+// cell after a picker/duration change, so the icon+empty-state logic
+// never has to be kept in sync by hand in more than one spot.
+function renderDateDisplayContent(display, iso) {
+  const text = formatMonthDayShort(iso);
+  display.classList.toggle('empty', !text);
+  display.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="5" width="18" height="4" fill="currentColor"/></svg><span>' + (text || 'Set date') + '</span>';
+}
+
 // A native <input type="date"> always renders as the browser's own
 // segmented month/day/year widget — no reliable cross-browser CSS trick
 // reskins it into plain text (hiding the year sub-field and the leftover
 // separator next to it only ever half-worked). Instead of fighting that,
 // the real date input here is visually hidden and stretched to fill an
-// invisible layer over a plain-text span showing "M/D" (no year, no
-// boxes) — clicking the span calls showPicker() on the hidden input, so
+// invisible layer over a button-styled span showing "M/D" (no year, no
+// native boxes) — clicking it calls showPicker() on the hidden input, so
 // picking a date still goes through the browser's own calendar UI rather
 // than requiring anyone to type a date in by hand.
 function buildDateCell(className, initialIso) {
@@ -5072,7 +5088,8 @@ function buildDateCell(className, initialIso) {
 
   const display = document.createElement('span');
   display.className = 'task-fixed-date-display';
-  display.textContent = formatMonthDayShort(initialIso);
+  display.title = 'Click to change date';
+  renderDateDisplayContent(display, initialIso);
 
   const input = document.createElement('input');
   input.type = 'date';
@@ -5150,7 +5167,7 @@ function renderFixedTaskGrid(taskList) {
       const f = new Date(s);
       f.setDate(f.getDate() + durVal - 1);
       finishInput.value = f.toISOString().split('T')[0];
-      finishCell.display.textContent = formatMonthDayShort(finishInput.value);
+      renderDateDisplayContent(finishCell.display, finishInput.value);
     }
 
     function applyFinishToDuration() {
@@ -5163,7 +5180,7 @@ function renderFixedTaskGrid(taskList) {
     }
 
     startInput.addEventListener('change', function() {
-      startCell.display.textContent = formatMonthDayShort(startInput.value);
+      renderDateDisplayContent(startCell.display, startInput.value);
       if (!startInput.value) return;
       // A start date with nothing else set yet defaults to this board's
       // configured duration (see the board's ⋮ settings) — otherwise keep
@@ -5177,7 +5194,7 @@ function renderFixedTaskGrid(taskList) {
     });
     durationInput.addEventListener('change', function() { applyDurationToFinish(); scheduleAutoSaveJobForm(); });
     finishInput.addEventListener('change', function() {
-      finishCell.display.textContent = formatMonthDayShort(finishInput.value);
+      renderDateDisplayContent(finishCell.display, finishInput.value);
       applyFinishToDuration();
       scheduleAutoSaveJobForm();
     });
