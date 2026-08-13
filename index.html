@@ -523,15 +523,25 @@
      name, without needing to touch the row's overall width to get there. */
   .task-fixed-row { display: grid; grid-template-columns: auto 1fr 92px 50px 92px; gap: 6px; align-items: center; margin-bottom: 8px; }
   .task-fixed-row input { width: 100%; padding: 8px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
-  /* Hide just the year sub-field in the Start/Finish date inputs — the
-     stored value (and everywhere else dates are shown, e.g. the job card's
-     date range) still has the full year; this only affects what's visible
-     inline in this compact grid. Chrome/Edge only (WebKit shadow-DOM
-     pseudo-elements) — Firefox has no equivalent hook, so it'll keep
-     showing the year there, degrading harmlessly rather than breaking. */
-  .task-fixed-row input[type="date"]::-webkit-datetime-edit-year-field { display: none; }
-  .task-fixed-row input[type="date"]::-webkit-datetime-edit-text:last-of-type { display: none; }
   .task-fixed-row input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
+  /* Start/Finish: the real <input type="date"> is invisible and stretched
+     over the whole cell (see buildDateCell()) — clicking anywhere in the
+     cell hits it and opens the native picker via showPicker(). What's
+     actually seen is the plain-text display span underneath, showing just
+     "M/D" — no native segmented boxes, no year, nothing to fight with CSS. */
+  .task-fixed-date-wrap { position: relative; width: 100%; }
+  .task-fixed-date-display {
+    display: block; width: 100%; box-sizing: border-box; padding: 8px 6px;
+    border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+    font-family: inherit; text-align: center; color: var(--text);
+    background: white; cursor: pointer; user-select: none; min-height: 33px;
+  }
+  .task-fixed-date-display:hover { border-color: var(--primary-light); }
+  .task-fixed-date-wrap input[type="date"] {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; border: none; padding: 0; margin: 0; cursor: pointer;
+  }
+  body.dark-mode .task-fixed-date-display { background: var(--card); }
   .task-fixed-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
   .task-fixed-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .task-fixed-header { display: grid; grid-template-columns: auto 1fr 92px 50px 92px; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; padding: 0 2px; }
@@ -5038,6 +5048,48 @@ function refreshJobFormIfOpen(jobId) {
   renderJobAttachments();
 }
 
+// Just formats for the compact display span below — the real value lives
+// on the (hidden) native date input untouched, full year and all.
+function formatMonthDayShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return '';
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
+
+// A native <input type="date"> always renders as the browser's own
+// segmented month/day/year widget — no reliable cross-browser CSS trick
+// reskins it into plain text (hiding the year sub-field and the leftover
+// separator next to it only ever half-worked). Instead of fighting that,
+// the real date input here is visually hidden and stretched to fill an
+// invisible layer over a plain-text span showing "M/D" (no year, no
+// boxes) — clicking the span calls showPicker() on the hidden input, so
+// picking a date still goes through the browser's own calendar UI rather
+// than requiring anyone to type a date in by hand.
+function buildDateCell(className, initialIso) {
+  const wrap = document.createElement('span');
+  wrap.className = 'task-fixed-date-wrap';
+
+  const display = document.createElement('span');
+  display.className = 'task-fixed-date-display';
+  display.textContent = formatMonthDayShort(initialIso);
+
+  const input = document.createElement('input');
+  input.type = 'date';
+  input.className = className;
+  input.value = initialIso || '';
+
+  wrap.appendChild(display);
+  wrap.appendChild(input);
+
+  display.addEventListener('click', function() {
+    if (typeof input.showPicker === 'function') input.showPicker();
+    else input.focus();
+  });
+
+  return { wrap: wrap, input: input, display: display };
+}
+
 function renderFixedTaskGrid(taskList) {
   currentGridTasks = taskList || [];
   const container = document.getElementById('taskRows');
@@ -5066,10 +5118,8 @@ function renderFixedTaskGrid(taskList) {
     nameLabel.textContent = t.name || '';
     nameLabel.title = t.name || '';
 
-    const startInput = document.createElement('input');
-    startInput.type = 'date';
-    startInput.className = 'task-fixed-start';
-    startInput.value = t.start || '';
+    const startCell = buildDateCell('task-fixed-start', t.start);
+    const startInput = startCell.input;
 
     const durationInput = document.createElement('input');
     durationInput.type = 'number';
@@ -5077,10 +5127,8 @@ function renderFixedTaskGrid(taskList) {
     durationInput.min = '1';
     durationInput.placeholder = 'Days';
 
-    const finishInput = document.createElement('input');
-    finishInput.type = 'date';
-    finishInput.className = 'task-fixed-finish';
-    finishInput.value = t.finish || '';
+    const finishCell = buildDateCell('task-fixed-finish', t.finish);
+    const finishInput = finishCell.input;
 
     // Duration is never stored on the task itself — start/finish stay the
     // single source of truth (unchanged schema). It's just derived here for
@@ -5102,6 +5150,7 @@ function renderFixedTaskGrid(taskList) {
       const f = new Date(s);
       f.setDate(f.getDate() + durVal - 1);
       finishInput.value = f.toISOString().split('T')[0];
+      finishCell.display.textContent = formatMonthDayShort(finishInput.value);
     }
 
     function applyFinishToDuration() {
@@ -5114,6 +5163,7 @@ function renderFixedTaskGrid(taskList) {
     }
 
     startInput.addEventListener('change', function() {
+      startCell.display.textContent = formatMonthDayShort(startInput.value);
       if (!startInput.value) return;
       // A start date with nothing else set yet defaults to this board's
       // configured duration (see the board's ⋮ settings) — otherwise keep
@@ -5126,13 +5176,17 @@ function renderFixedTaskGrid(taskList) {
       scheduleAutoSaveJobForm();
     });
     durationInput.addEventListener('change', function() { applyDurationToFinish(); scheduleAutoSaveJobForm(); });
-    finishInput.addEventListener('change', function() { applyFinishToDuration(); scheduleAutoSaveJobForm(); });
+    finishInput.addEventListener('change', function() {
+      finishCell.display.textContent = formatMonthDayShort(finishInput.value);
+      applyFinishToDuration();
+      scheduleAutoSaveJobForm();
+    });
 
     row.appendChild(swatch);
     row.appendChild(nameLabel);
-    row.appendChild(startInput);
+    row.appendChild(startCell.wrap);
     row.appendChild(durationInput);
-    row.appendChild(finishInput);
+    row.appendChild(finishCell.wrap);
     container.appendChild(row);
   });
 }
