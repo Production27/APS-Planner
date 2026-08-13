@@ -523,6 +523,13 @@
      name, without needing to touch the row's overall width to get there. */
   .task-fixed-row { display: grid; grid-template-columns: auto 1fr 92px 50px 92px; gap: 6px; align-items: center; margin-bottom: 8px; }
   .task-fixed-row input { width: 100%; padding: 8px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
+  /* Hide just the year sub-field in the Start/Finish date inputs — the
+     stored value (and everywhere else dates are shown, e.g. the job card's
+     date range) still has the full year; this only affects what's visible
+     inline in this compact grid. Chrome/Edge only (WebKit shadow-DOM
+     pseudo-elements) — Firefox has no equivalent hook, so it'll keep
+     showing the year there, degrading harmlessly rather than breaking. */
+  .task-fixed-row input[type="date"]::-webkit-datetime-edit-year-field { display: none; }
   .task-fixed-row input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   .task-fixed-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
   .task-fixed-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
