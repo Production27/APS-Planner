@@ -222,12 +222,20 @@
   /* ===== TIMELINE HEADER (scrolls with body) ===== */
   .timeline-header-wrap {
     height: 68px; background: #f8f9fa; border-bottom: 2px solid #dee2e6;
-    overflow-x: auto; overflow-y: hidden;
+    overflow: hidden;
     flex-shrink: 0; position: relative;
-    scrollbar-width: none; /* Firefox */
   }
-  .timeline-header-wrap::-webkit-scrollbar { display: none; } /* Chrome/Safari */
   .timeline-header {
+    /* Positioned via transform: translateX(), driven directly from
+       #timelineBody's scrollLeft (see setHeaderScroll()/setupScrollSync())
+       — not scrolled itself anymore. scrollLeft syncing between two
+       independently-scrollable elements could drift out of step whenever
+       their scrollWidth/clientWidth weren't exactly identical (e.g.
+       timelineBody reserves width for its own vertical scrollbar that
+       this element never had), which silently clamped this header's
+       scrollLeft short of matching the body once the gap grew large
+       enough — worse the farther right you scrolled. transform has no
+       ceiling of its own to clamp against, so it can't happen anymore. */
     height: 68px; position: relative; overflow: visible;
   }
   .timeline-header .week-header {
@@ -3322,17 +3330,25 @@ function computeDateRange() {
 
 let isSyncingScroll = false;
 
+// The single place that positions the date header horizontally — always
+// via transform, never timelineHeaderWrap.scrollLeft (see the comment on
+// .timeline-header). #timelineBody's own scrollLeft is the one source of
+// truth for "how far scrolled right now."
+function setHeaderScroll(px) {
+  const header = document.getElementById('timelineHeader');
+  if (header) header.style.transform = 'translateX(-' + px + 'px)';
+}
+
 function setupScrollSync() {
   const timelineBody = document.getElementById('timelineBody');
-  const timelineHeaderWrap = document.getElementById('timelineHeaderWrap');
   const leftBody = document.getElementById('leftBody');
 
-  if (!timelineBody || !timelineHeaderWrap || !leftBody) return;
+  if (!timelineBody || !leftBody) return;
 
   timelineBody.onscroll = function() {
     if (isSyncingScroll) return;
     isSyncingScroll = true;
-    timelineHeaderWrap.scrollLeft = timelineBody.scrollLeft;
+    setHeaderScroll(timelineBody.scrollLeft);
     leftBody.scrollTop = timelineBody.scrollTop;
     isSyncingScroll = false;
   };
@@ -3341,13 +3357,6 @@ function setupScrollSync() {
     if (isSyncingScroll) return;
     isSyncingScroll = true;
     timelineBody.scrollTop = leftBody.scrollTop;
-    isSyncingScroll = false;
-  };
-
-  timelineHeaderWrap.onscroll = function() {
-    if (isSyncingScroll) return;
-    isSyncingScroll = true;
-    timelineBody.scrollLeft = timelineHeaderWrap.scrollLeft;
     isSyncingScroll = false;
   };
 }
@@ -4177,11 +4186,14 @@ function renderGantt() {
   const gridWidth = Math.max(totalDays * dayWidth, containerW);
   const grid = document.getElementById('timelineGrid');
   const header = document.getElementById('timelineHeader');
-  const headerWrap = document.getElementById('timelineHeaderWrap');
   const leftBody = document.getElementById('leftBody');
 
-  const savedScrollLeft = headerWrap ? headerWrap.scrollLeft : 0;
-  const savedScrollTop = document.getElementById('timelineBody') ? document.getElementById('timelineBody').scrollTop : 0;
+  // timelineBody's own scrollLeft is the source of truth for horizontal
+  // position now — the header is positioned via transform, driven from
+  // it (see setHeaderScroll()), not independently scrolled itself.
+  const savedScrollTb = document.getElementById('timelineBody');
+  const savedScrollLeft = savedScrollTb ? savedScrollTb.scrollLeft : 0;
+  const savedScrollTop = savedScrollTb ? savedScrollTb.scrollTop : 0;
 
   grid.style.width = gridWidth + 'px';
   header.style.width = gridWidth + 'px';
@@ -4433,9 +4445,10 @@ function renderGantt() {
       ganttFirstRender = false;
       if (tb) tb.scrollTop = savedScrollTop;
       scrollToToday();
-      if (headerWrap) headerWrap.scrollLeft = tb ? tb.scrollLeft : savedScrollLeft;
+      setHeaderScroll(tb ? tb.scrollLeft : savedScrollLeft);
     } else {
-      if (headerWrap) headerWrap.scrollLeft = savedScrollLeft;
+      if (tb) tb.scrollLeft = savedScrollLeft;
+      setHeaderScroll(savedScrollLeft);
       if (tb) tb.scrollTop = savedScrollTop;
     }
     setupScrollSync();
