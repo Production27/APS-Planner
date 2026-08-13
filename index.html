@@ -532,8 +532,10 @@
   .btn-danger { background: linear-gradient(135deg, #e53935 0%, #c62828 100%); color: white; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(198,40,40,0.25), 0 4px 10px rgba(198,40,40,0.25); }
   .btn-danger:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 3px 6px rgba(198,40,40,0.3), 0 8px 18px rgba(198,40,40,0.35); }
   .btn-danger:active { box-shadow: 0 -1px 0 rgba(255,255,255,0.12) inset, 0 2px 4px rgba(0,0,0,0.2) inset, 0 1px 3px rgba(198,40,40,0.35); }
-  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-light); }
-  .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-light); cursor: pointer; border-radius: 8px; transition: background 0.15s; }
+  .empty-state:hover { background: rgba(57,73,171,0.06); }
+  .empty-state:hover svg { opacity: 0.5; }
+  .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; transition: opacity 0.15s; }
   .empty-state h4 { font-size: 16px; margin-bottom: 6px; color: var(--text); }
   .empty-state p { font-size: 13px; }
   .manager-toolbar { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); background: #fafafa; }
@@ -1242,10 +1244,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           </div>
         </div>
         <div class="manager-form-area" id="formArea">
-          <div class="empty-state" id="emptyState">
+          <div class="empty-state" id="emptyState" onclick="addNewJob()" title="Add a new job">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
             <h4>No Job Selected</h4>
-            <p>Select a job from the list or click "Add Job" to create a new one.</p>
+            <p>Select a job from the list or click here to create a new one.</p>
           </div>
           <div class="job-edit-row" id="jobEditRow">
             <div class="form-container" id="jobForm" style="display:none;">
