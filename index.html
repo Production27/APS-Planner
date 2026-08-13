@@ -7808,9 +7808,26 @@ function pushProjectToShared(projectId, headerOverride) {
       // deleteCardFromShared() / deleteCalendarEventFromShared() as explicit,
       // targeted ops fired at the exact moment the user deletes something —
       // immune to how stale the rest of local state is.
+      // Each .set() is wrapped individually — a single item Liveblocks
+      // rejects (e.g. an undefined value buried in a custom field, which
+      // Storage doesn't allow) must never abort the rest of the batch. Before
+      // this, one bad job could silently block every other job AND every
+      // card behind it in the same push, which looked exactly like "this one
+      // job never synced" with zero indication why. Surfacing it (console +
+      // toast) instead of swallowing it turns a silent, unreproducible-
+      // looking gap into a concrete, fixable error.
+      function safeSet(map, id, value, label) {
+        try {
+          map.set(String(id), value);
+        } catch (err) {
+          console.error('pushProjectToShared: failed to sync ' + label + ' ' + id, err, value);
+          showToast('Sync error: "' + label + '" failed to save — see console (F12)', 'error');
+        }
+      }
+
       const jobsMap = entry.get('jobsMap');
       if (jobsMap && typeof jobsMap.set === 'function') {
-        proj.jobs.forEach(function (j) { jobsMap.set(String(j.id), j); });
+        proj.jobs.forEach(function (j) { safeSet(jobsMap, j.id, j, 'job "' + (j.name || j.id) + '"'); });
       }
 
       // cards — likewise pushed whole (upsert only, see above), so jobId,
@@ -7818,7 +7835,7 @@ function pushProjectToShared(projectId, headerOverride) {
       // travel with every job-linked card automatically.
       const cardsMap = entry.get('boardCardsMap');
       if (cardsMap && typeof cardsMap.set === 'function') {
-        proj.boardCards.forEach(function (c) { cardsMap.set(String(c.id), c); });
+        proj.boardCards.forEach(function (c) { safeSet(cardsMap, c.id, c, 'card "' + (c.title || c.id) + '"'); });
       }
 
       // calendar-only events — same whole-object upsert pattern. Lazily
@@ -7828,7 +7845,7 @@ function pushProjectToShared(projectId, headerOverride) {
         calEventsMap = new LiveMapCtor();
         entry.set('calendarEventsMap', calEventsMap);
       }
-      (proj.calendarEvents || []).forEach(function (e) { calEventsMap.set(String(e.id), e); });
+      (proj.calendarEvents || []).forEach(function (e) { safeSet(calEventsMap, e.id, e, 'calendar event "' + (e.title || e.id) + '"'); });
 
       entry.set('boardColumns', proj.boardColumns);
       entry.set('fieldOptions', proj.fieldOptions);
@@ -8046,6 +8063,17 @@ function applyLiveblocksState(root) {
       if (typeof title === 'string') local.header.title = title;
       if (typeof subtitle === 'string') local.header.subtitle = subtitle;
       if (theme) local.header.theme = theme;
+    }
+
+    // Diagnostic: makes a "card shows but job doesn't" report instantly
+    // checkable in devtools — confirms whether the job is actually missing
+    // from this client's remote replica (a real sync gap) vs. present here
+    // but not making it into the rendered views (a render/local-state bug).
+    if (isActive) {
+      const orphanCards = local.boardCards.filter(function(c) { return c.jobId && !local.jobs.some(function(j) { return j.id === c.jobId; }); });
+      if (orphanCards.length) {
+        console.warn('applyLiveblocksState: ' + orphanCards.length + ' card(s) reference a jobId not present in the merged jobsMap for project ' + projectId, orphanCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
+      }
     }
 
     if (isActive) activeDataChanged = true;
