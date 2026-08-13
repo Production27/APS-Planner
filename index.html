@@ -7557,6 +7557,33 @@ async function setupLiveblocksSync() {
       }
     });
 
+    // Chasing a specific failure mode: a job push that the SDK accepts
+    // without throwing (pushProjectToShared's per-item safeSet already
+    // covers a synchronous rejection) but that never actually gets
+    // acknowledged by the server — the room 'status' event above only
+    // reflects the WebSocket connection, not whether queued local writes
+    // have actually been persisted. storage-status is the SDK's own signal
+    // for that: it sits on 'synchronizing' while local changes are queued
+    // but unconfirmed, and should settle back to 'synchronized' within a
+    // second or two. If it doesn't, that's a write silently not reaching
+    // the server with nothing else in the public API surfacing it.
+    try {
+      let storageStuckTimer = null;
+      room.subscribe('storage-status', function(status) {
+        clearTimeout(storageStuckTimer);
+        if (status === 'synchronizing') {
+          storageStuckTimer = setTimeout(function() {
+            if (room.getStorageStatus() === 'synchronizing') {
+              console.error('Liveblocks storage-status stuck on "synchronizing" for 8+ seconds — local changes are queued but not confirmed saved by the server.');
+              showToast('Your last change may not have saved — sync has been stuck. Try reloading.', 'error');
+            }
+          }, 8000);
+        }
+      });
+    } catch (err) {
+      console.warn('storage-status subscription not supported by this Liveblocks client version', err);
+    }
+
     // Backstop for the case where the OS/browser reports the network dropping
     // outright (e.g. wifi toggled off) — belt and suspenders alongside the
     // Liveblocks status events above.
