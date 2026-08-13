@@ -1390,15 +1390,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <label>Description</label>
         <textarea id="c_description" placeholder="Add details, notes, or next steps..."></textarea>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Due Date</label>
-          <input type="date" id="c_due">
-        </div>
-        <div class="form-group">
-          <label>Column</label>
-          <select id="c_column"></select>
-        </div>
+      <div class="form-group">
+        <label>Due Date</label>
+        <input type="date" id="c_due">
       </div>
       <div class="form-group">
         <div class="color-toggle-row" onclick="toggleColorPanel()">
@@ -5932,12 +5926,6 @@ function toggleColorPanel(forceOpen) {
   arrow.classList.toggle('open', open);
 }
 
-function populateColumnSelect(selected) {
-  const sel = document.getElementById('c_column');
-  sel.innerHTML = BOARD_COLUMNS.map(col => '<option value="' + col.id + '">' + col.label + '</option>').join('');
-  sel.value = selected;
-}
-
 // ----- Custom fields -----
 function renderCustomFieldsGrid(values) {
   values = values || {};
@@ -6334,7 +6322,6 @@ function openEditCard(id) {
   });
   updateColorSwatch();
   toggleColorPanel(false);
-  populateColumnSelect(card.column);
   renderCustomFieldsGrid(card.customFields || {});
   renderChecklist();
   renderAttachments();
@@ -6387,7 +6374,6 @@ function autoSaveCardForm() {
     description: document.getElementById('c_description').value.trim(),
     due: document.getElementById('c_due').value,
     color: document.getElementById('c_color').value,
-    column: document.getElementById('c_column').value,
     customFields: collectCustomFieldValues(),
     checklist: draftChecklist,
     attachments: draftAttachments
@@ -6418,7 +6404,6 @@ function initCardFormAutosaveListeners() {
   document.getElementById('c_description').addEventListener('input', scheduleCardAutosave);
   document.getElementById('c_due').addEventListener('change', scheduleCardAutosave);
   document.getElementById('c_color').addEventListener('input', scheduleCardAutosave);
-  document.getElementById('c_column').addEventListener('change', scheduleCardAutosave);
 
   const grid = document.getElementById('customFieldsGrid');
   grid.addEventListener('input', function(e) { if (e.target.dataset.field) scheduleCardAutosave(); });
