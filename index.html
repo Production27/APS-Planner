@@ -4847,7 +4847,8 @@ function renderGantt() {
         left: startIdx * dayWidth,
         width: duration * dayWidth,
         top: barVisibleIdx * 34 + 6,
-        bar: bar
+        bar: bar,
+        jobColor: job.color
       });
     }
 
@@ -4883,7 +4884,7 @@ function renderGantt() {
         d = 'M ' + x1 + ' ' + y1 + ' L ' + rightX + ' ' + y1 + ' L ' + rightX + ' ' + laneY + ' L ' + leftX + ' ' + laneY + ' L ' + leftX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
       }
       path.setAttribute('d', d);
-      path.setAttribute('stroke', 'rgba(100,100,100,0.35)');
+      path.setAttribute('stroke', a.jobColor || '#3949ab');
       path.setAttribute('stroke-width', '2');
       path.setAttribute('fill', 'none');
       svg.appendChild(path);
