@@ -4474,7 +4474,16 @@ function renderGantt() {
       row.className = 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '');
       row.dataset.jobId = job.id;
       row.dataset.taskId = task.id;
-      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + ' <span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>' + noteDot + '</div>';
+      // Jobs view: the job-name pill already says everything there is to
+      // say for a condensed row, so it's the only label — no redundant
+      // plain-text repeat of the same name next to it. Leads view swaps
+      // that plain-text slot for the lead's name instead, with the job
+      // pill still alongside it so which job it belongs to stays visible.
+      const mainLabel = task.isJobSpan
+        ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : '')
+        : (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name);
+      const jobPill = '<span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>';
+      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobPill + noteDot + '</div>';
       row.addEventListener('click', () => { editJob(job.id, task.id); });
       leftBody.appendChild(row);
       visibleRowIdx++;
