@@ -4633,13 +4633,14 @@ function renderGantt() {
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
       bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
-      bar.style.background = task.color || job.color;
       if (task.isJobSpan) {
-        // Condensed 'jobs'/'leads' bar: the day-by-day color segments
-        // built below cover the bar's own text completely, so the job
-        // name lives in a separate pill overlay instead (same look as the
-        // job-name tag on a regular task bar), elevated above everything
-        // else on the row so it's never covered.
+        // Condensed 'jobs'/'leads' bar: left transparent — a solid fill
+        // here would otherwise show through in gap stretches, which are
+        // meant to look empty. `bar` itself stays in the DOM purely so a
+        // grab anywhere that isn't one of the individually-colored task
+        // segments (i.e. a gap, or an overlap hatch) still moves the whole
+        // job — all the color now comes from the outline and the
+        // individual day-segments built below.
         bar.classList.add('job-span-bar');
         const labelWrap = document.createElement('div');
         labelWrap.className = 'job-span-name-wrap';
@@ -4670,6 +4671,7 @@ function renderGantt() {
         borderOverlay.style.borderColor = job.color || '#3949ab';
         grid.appendChild(borderOverlay);
       } else {
+        bar.style.background = task.color || job.color;
         bar.textContent = task.isDueMarker ? '🚩' : '';
         if (duration !== 1) {
           const jobTag = document.createElement('span');
