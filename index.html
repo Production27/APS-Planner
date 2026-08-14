@@ -431,6 +431,16 @@
   .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
   .manager-sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafafa; }
   .manager-sidebar-header h2 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  /* Second "+ Add Job" entry point, alongside the one at the end of the
+     list (see renderJobList()) — reachable without scrolling all the way
+     down past a long job list to find it. */
+  .job-rail-add-btn {
+    margin-left: auto; width: 22px; height: 22px; border-radius: 50%; border: none;
+    background: var(--primary-light); color: white; font-size: 16px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    line-height: 1; padding: 0; flex-shrink: 0; transition: transform 0.15s, background 0.15s;
+  }
+  .job-rail-add-btn:hover { background: var(--primary); transform: scale(1.1); }
   .search-box { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; transition: border-color 0.2s; }
   .search-box:focus { border-color: var(--primary-light); }
   .job-list { flex: 1; overflow-y: auto; padding: 8px; }
@@ -1231,7 +1241,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        whichever panel is showing. -->
   <div class="manager-sidebar" id="jobRail">
     <div class="manager-sidebar-header">
-      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span></h2>
+      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span><button class="job-rail-add-btn" onclick="addNewJob()" title="Add a new job">+</button></h2>
       <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
     </div>
     <div class="job-list" id="jobList"></div>
