@@ -316,6 +316,7 @@
   body.dark-mode .task-bar.reordering { opacity: 0.25; }
   body.dark-mode .task-row.reorder-target { background: rgba(92,107,192,0.45) !important; }
   .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; justify-content: center; font-size: 9px; }
+  .task-bar.job-span-bar { cursor: pointer; }
   .task-bar.due-marker-bar { border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935, 0 1px 3px rgba(0,0,0,0.25); }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
@@ -1256,6 +1257,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   <button class="tab-btn active" onclick="switchTab('gantt')" id="tab-gantt"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Gantt Chart</button>
   <button class="tab-btn" onclick="switchTab('board')" id="tab-board"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board <span class="badge" id="boardCount">0</span></button>
   <div class="gantt-toolbar" id="ganttToolbar">
+    <div style="display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
+      <button class="btn btn-secondary gantt-view-mode-btn" id="ganttViewTasks" data-mode="tasks" onclick="setGanttViewMode('tasks')" style="padding:6px 12px;font-size:12px;" title="One row per task (current behavior)">Tasks</button>
+      <button class="btn btn-secondary gantt-view-mode-btn" id="ganttViewJobs" data-mode="jobs" onclick="setGanttViewMode('jobs')" style="padding:6px 12px;font-size:12px;" title="One row per job, tasks condensed into a single bar">Jobs</button>
+      <button class="btn btn-secondary gantt-view-mode-btn" id="ganttViewLeads" data-mode="leads" onclick="setGanttViewMode('leads')" style="padding:6px 12px;font-size:12px;" title="Same as Jobs, colored by assigned lead/foreman">Leads</button>
+    </div>
     <div style="position:relative;">
       <button class="ghost-toggle-btn" id="ghostToggleBtn" onclick="toggleGhostDropdown(event)" title="Ghost overlay"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a7 7 0 00-7 7v9.5l2-2 2 2 2-2 1 1 2-2 2 2 1-1 2 2V10a7 7 0 00-7-7z" fill="#b39ddb"/><circle cx="9.5" cy="10.5" r="1" fill="#fff"/><circle cx="14.5" cy="10.5" r="1" fill="#fff"/></svg></button>
       <div class="ghost-dropdown" id="ghostDropdown"></div>
@@ -2339,6 +2345,51 @@ let dayWidth = 28;
 let startDate, endDate;
 let deleteTargetJobId = null;
 let showArchived = false;
+
+// ===== GANTT VIEW MODE =====
+// 'tasks' (default, one row per task — unchanged behavior), 'jobs' (one
+// row per job, tasks condensed into a single bar spanning the job's
+// earliest start to latest finish), 'leads' (same condensed bars as
+// 'jobs', colored by the job's assigned lead/foreman instead of the
+// job's own color). See buildCondensedJobRows() in renderGantt().
+let ganttViewMode = localStorage.getItem('gantt_view_mode_v1') || 'tasks';
+
+// Foreman/lead lives on the job's linked card's custom fields (see
+// CUSTOM_FIELD_DEFS), not on the job itself — cards carry the same
+// pm/foreman/etc. values shown in the Board's quick-edit popup.
+function getJobLeadName(job) {
+  const card = boardCards.find(function(c) { return c.jobId === job.id; });
+  const name = card && card.customFields && card.customFields.foreman;
+  return (name && name.trim()) || 'Unassigned';
+}
+
+// Hash-based so the same lead name always lands on the same color across
+// renders/sessions without needing to store a persistent mapping anywhere.
+const LEAD_COLOR_PALETTE = ['#3949ab', '#e53935', '#43a047', '#f0ad4e', '#8e24aa', '#00897b', '#d81b60', '#546e7a', '#fb8c00', '#5d4037', '#00acc1', '#7cb342'];
+function colorForLead(name) {
+  if (!name) return '#999';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return LEAD_COLOR_PALETTE[hash % LEAD_COLOR_PALETTE.length];
+}
+
+function syncGanttViewModeButtons() {
+  // Matches the same inline-style toggling setCalendarView() already uses
+  // for its Month/Week buttons, rather than introducing a separate
+  // "active" CSS class convention just for this one control.
+  const activeStyle = 'padding:6px 12px;font-size:12px;background:var(--primary-light);color:white;border-color:var(--primary-light);';
+  const inactiveStyle = 'padding:6px 12px;font-size:12px;background:transparent;color:var(--text-light);border-color:transparent;';
+  document.querySelectorAll('.gantt-view-mode-btn').forEach(function(b) {
+    b.style.cssText = b.dataset.mode === ganttViewMode ? activeStyle : inactiveStyle;
+  });
+}
+
+function setGanttViewMode(mode) {
+  ganttViewMode = mode;
+  localStorage.setItem('gantt_view_mode_v1', mode);
+  syncGanttViewModeButtons();
+  renderGantt();
+}
 const ARCHIVE_CUTOFF_DAYS = 30;
 let ganttFirstRender = true;
 // Fallback only — per-board default lives on col.defaultDuration, set from
@@ -4180,6 +4231,7 @@ function deleteCalendarEventFromModal() {
 }
 
 function renderGantt() {
+  syncGanttViewModeButtons();
   // Row order across the WHOLE board: earliest start date first, regardless
   // of which job a task belongs to. Ties broken by job order then task's
   // stored order so identical start dates stay stable/predictable.
@@ -4213,6 +4265,46 @@ function renderGantt() {
       });
       const dueTask = getJobDueMarkerTask(job);
       if (dueTask) rows.push({ job: job, task: dueTask });
+    });
+    rows.sort(function(a, b) {
+      return byStartDate(a.task, b.task) || ((a.job.order || 0) - (b.job.order || 0));
+    });
+    return rows;
+  }
+
+  // 'jobs'/'leads' view: one row per job instead of one per task — each
+  // job's tasks collapse into a single synthetic pseudo-task (isJobSpan)
+  // spanning its earliest start to latest finish, colored by the job
+  // itself ('jobs') or by its assigned lead/foreman ('leads'). Jobs with
+  // no dated tasks at all have nothing to span, so they're left out here
+  // the same way an individual undated task has no bar in 'tasks' view.
+  function buildCondensedJobRows() {
+    const rows = [];
+    jobs.forEach(function(job) {
+      if (!showArchived && job.archived) return;
+      let minStart = null, maxFinish = null;
+      (job.tasks || []).forEach(function(task) {
+        if (!task.start || !task.finish) return;
+        const s = new Date(task.start + 'T00:00:00');
+        const f = new Date(task.finish + 'T00:00:00');
+        if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+        if (!minStart || s < minStart) minStart = s;
+        if (!maxFinish || f > maxFinish) maxFinish = f;
+      });
+      if (!minStart || !maxFinish) return;
+      const leadName = ganttViewMode === 'leads' ? getJobLeadName(job) : null;
+      const pseudoTask = {
+        id: 'jobspan|' + job.id,
+        name: job.name,
+        start: minStart.toISOString().split('T')[0],
+        finish: maxFinish.toISOString().split('T')[0],
+        notes: '',
+        color: leadName ? colorForLead(leadName) : job.color,
+        order: 0,
+        isJobSpan: true,
+        leadName: leadName
+      };
+      rows.push({ job: job, task: pseudoTask });
     });
     rows.sort(function(a, b) {
       return byStartDate(a.task, b.task) || ((a.job.order || 0) - (b.job.order || 0));
@@ -4298,7 +4390,7 @@ function renderGantt() {
 
   let visibleRowIdx = 0;
   const jobBarMap = {};
-  const visibleRows = buildVisibleTaskRows();
+  const visibleRows = ganttViewMode === 'tasks' ? buildVisibleTaskRows() : buildCondensedJobRows();
 
   visibleRows.forEach(function(entry) {
     const job = entry.job, task = entry.task;
@@ -4390,40 +4482,56 @@ function renderGantt() {
       bar.style.width = (duration * dayWidth) + 'px';
       bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
       bar.style.background = task.color || job.color;
-      bar.textContent = task.isDueMarker ? '🚩' : '';
-      if (duration !== 1) {
-        const jobTag = document.createElement('span');
-        jobTag.className = 'task-bar-job-tag';
-        jobTag.style.background = job.color;
-        jobTag.textContent = job.name;
-        jobTag.title = job.name;
-        bar.appendChild(jobTag);
+      if (task.isJobSpan) {
+        // Condensed 'jobs'/'leads' bar: it already IS the job, so its own
+        // label is the job name directly rather than a separate tag — a
+        // tag repeating the same name the bar text already shows would
+        // just be redundant.
+        bar.textContent = task.name;
+        bar.classList.add('job-span-bar');
+      } else {
+        bar.textContent = task.isDueMarker ? '🚩' : '';
+        if (duration !== 1) {
+          const jobTag = document.createElement('span');
+          jobTag.className = 'task-bar-job-tag';
+          jobTag.style.background = job.color;
+          jobTag.textContent = job.name;
+          jobTag.title = job.name;
+          bar.appendChild(jobTag);
+        }
       }
       bar.addEventListener('mouseenter', e => showTooltip(e, job, task));
       bar.addEventListener('mouseleave', hideTooltip);
       bar.addEventListener('mousemove', moveTooltip);
-      bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar));
       bar.addEventListener('click', () => {
         if (bar.dataset.dragged === 'true') { bar.dataset.dragged = 'false'; return; }
         editJob(job.id, task.id);
       });
 
-      // A due date is a single point in time, not a range — only "move"
-      // makes sense, so it gets no resize handles.
-      if (!task.isDueMarker) {
-        const handleLeft = document.createElement('div');
-        handleLeft.className = 'task-bar-resize-handle task-bar-resize-handle-left';
-        handleLeft.title = 'Drag to change start date';
-        handleLeft.addEventListener('mousedown', e => startBarResizeLeft(e, job.id, task.id, bar));
-        handleLeft.addEventListener('click', e => e.stopPropagation());
-        bar.appendChild(handleLeft);
+      // A condensed job-span bar doesn't correspond to any single real
+      // task — there's nothing meaningful for dragging/resizing it to
+      // write back to, so (unlike a due marker, which still supports
+      // moving) it gets neither a move handler nor resize handles at all.
+      if (!task.isJobSpan) {
+        bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar));
 
-        const handleRight = document.createElement('div');
-        handleRight.className = 'task-bar-resize-handle task-bar-resize-handle-right';
-        handleRight.title = 'Drag to change finish date';
-        handleRight.addEventListener('mousedown', e => startBarResizeRight(e, job.id, task.id, bar));
-        handleRight.addEventListener('click', e => e.stopPropagation());
-        bar.appendChild(handleRight);
+        // A due date is a single point in time, not a range — only "move"
+        // makes sense, so it gets no resize handles.
+        if (!task.isDueMarker) {
+          const handleLeft = document.createElement('div');
+          handleLeft.className = 'task-bar-resize-handle task-bar-resize-handle-left';
+          handleLeft.title = 'Drag to change start date';
+          handleLeft.addEventListener('mousedown', e => startBarResizeLeft(e, job.id, task.id, bar));
+          handleLeft.addEventListener('click', e => e.stopPropagation());
+          bar.appendChild(handleLeft);
+
+          const handleRight = document.createElement('div');
+          handleRight.className = 'task-bar-resize-handle task-bar-resize-handle-right';
+          handleRight.title = 'Drag to change finish date';
+          handleRight.addEventListener('mousedown', e => startBarResizeRight(e, job.id, task.id, bar));
+          handleRight.addEventListener('click', e => e.stopPropagation());
+          bar.appendChild(handleRight);
+        }
       }
 
       grid.appendChild(bar);
@@ -4855,15 +4963,33 @@ function fitToView() {
 
 function buildLegend() {
   const legend = document.getElementById('legend');
-  const jobColors = {};
-  jobs.forEach(job => {
-    if (!showArchived && job.archived) return;
-    jobColors[job.name] = job.color;
-  });
-  let html = '<div class="legend-float-title">Jobs</div>';
-  Object.entries(jobColors).sort().forEach(([name, color]) => {
-    html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + escapeHtml(name) + '</div></div>';
-  });
+  let html;
+  if (ganttViewMode === 'leads') {
+    // Bar color means something different in this view (who's leading the
+    // job, not which job it is) — the legend needs to explain that
+    // mapping instead of the usual per-job one, or the colors are just
+    // arbitrary.
+    const leadColors = {};
+    jobs.forEach(job => {
+      if (!showArchived && job.archived) return;
+      const name = getJobLeadName(job);
+      leadColors[name] = colorForLead(name);
+    });
+    html = '<div class="legend-float-title">Leads</div>';
+    Object.entries(leadColors).sort().forEach(([name, color]) => {
+      html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + escapeHtml(name) + '</div></div>';
+    });
+  } else {
+    const jobColors = {};
+    jobs.forEach(job => {
+      if (!showArchived && job.archived) return;
+      jobColors[job.name] = job.color;
+    });
+    html = '<div class="legend-float-title">Jobs</div>';
+    Object.entries(jobColors).sort().forEach(([name, color]) => {
+      html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + escapeHtml(name) + '</div></div>';
+    });
+  }
   legend.innerHTML = html;
 }
 
@@ -4913,7 +5039,15 @@ function showTooltip(e, job, task) {
   const f = new Date(task.finish + 'T00:00:00');
   const dur = getDaysDiff(s, f) + 1;
   let html = '<div class="tt-title">' + escapeHtml(job.name) + '</div>';
-  html += '<div class="tt-row"><span class="tt-label">Task:</span><span class="tt-value">' + escapeHtml(task.name) + '</span></div>';
+  // A job-span bar (see buildCondensedJobRows()) IS the job, condensed —
+  // task.name is just job.name again there, so a "Task:" row repeating
+  // the title right above it would be redundant. Show the lead instead,
+  // if this is the 'leads' view.
+  if (task.isJobSpan) {
+    if (task.leadName) html += '<div class="tt-row"><span class="tt-label">Lead:</span><span class="tt-value">' + escapeHtml(task.leadName) + '</span></div>';
+  } else {
+    html += '<div class="tt-row"><span class="tt-label">Task:</span><span class="tt-value">' + escapeHtml(task.name) + '</span></div>';
+  }
   html += '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' + s.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
   html += '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' + f.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
   html += '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' + dur + ' day' + (dur>1?'s':'') + '</span></div>';
