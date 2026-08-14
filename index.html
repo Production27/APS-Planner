@@ -372,6 +372,16 @@
     position: absolute; width: 2px; height: 28px; background: rgba(255,255,255,0.9);
     box-shadow: 0 0 0 1px rgba(0,0,0,0.25); border-radius: 1px; z-index: 65; pointer-events: none;
   }
+  /* Unscheduled stretch between two tasks in a condensed Jobs/Leads bar —
+     see the interval-merge step in renderGantt(). Sits below the ticks
+     (z-index 65) but above the bar's own hover/moving/resizing states
+     (up to z-index 60) so the hashing doesn't disappear while dragging. */
+  .job-span-gap-hash {
+    position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
+    background: repeating-linear-gradient(45deg,
+      rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px,
+      rgba(0,0,0,0.18) 4px, rgba(0,0,0,0.18) 8px);
+  }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
   .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
@@ -4624,17 +4634,22 @@ function renderGantt() {
       // block — drop a small tick at each task's finish date (except the
       // last, which already coincides with the bar's own right edge) so
       // the phase boundaries are still visible without splitting the row.
+      // Any stretch of days not covered by any task (a real scheduling
+      // gap, not just a boundary) gets a diagonal hash overlay instead.
       if (task.isJobSpan) {
         const jobEndIdx = startIdx + duration - 1;
         const seenIdx = {};
+        const intervals = [];
         (job.tasks || []).forEach(function(t) {
           if (!t.start || !t.finish) return;
-          const tf = new Date(t.finish + 'T00:00:00');
-          if (isNaN(tf.getTime())) return;
-          const endIdx = getDaysDiff(startDate, tf);
-          if (endIdx >= jobEndIdx || seenIdx[endIdx]) return;
-          seenIdx[endIdx] = true;
-          const tickLeft = (endIdx + 1) * dayWidth;
+          const ts = new Date(t.start + 'T00:00:00'), tf = new Date(t.finish + 'T00:00:00');
+          if (isNaN(ts.getTime()) || isNaN(tf.getTime())) return;
+          const sIdx = getDaysDiff(startDate, ts), eIdx = getDaysDiff(startDate, tf);
+          intervals.push({ start: sIdx, end: eIdx });
+
+          if (eIdx >= jobEndIdx || seenIdx[eIdx]) return;
+          seenIdx[eIdx] = true;
+          const tickLeft = (eIdx + 1) * dayWidth;
           const tick = document.createElement('div');
           tick.className = 'job-span-task-tick';
           tick.dataset.jobId = job.id;
@@ -4644,6 +4659,35 @@ function renderGantt() {
           tick.title = t.name;
           grid.appendChild(tick);
         });
+
+        // Merge overlapping/back-to-back task intervals, then hash-stripe
+        // whatever day ranges fall between what's left — those are the
+        // actual unscheduled gaps.
+        intervals.sort(function(a, b) { return a.start - b.start; });
+        const merged = [];
+        intervals.forEach(function(iv) {
+          const last = merged[merged.length - 1];
+          if (last && iv.start <= last.end + 1) {
+            last.end = Math.max(last.end, iv.end);
+          } else {
+            merged.push({ start: iv.start, end: iv.end });
+          }
+        });
+        for (let gi = 0; gi < merged.length - 1; gi++) {
+          const gapStartIdx = merged[gi].end + 1;
+          const gapEndIdx = merged[gi + 1].start - 1;
+          if (gapEndIdx < gapStartIdx) continue;
+          const gapLeft = gapStartIdx * dayWidth;
+          const hash = document.createElement('div');
+          hash.className = 'job-span-gap-hash';
+          hash.dataset.jobId = job.id;
+          hash.dataset.origLeft = gapLeft;
+          hash.style.left = gapLeft + 'px';
+          hash.style.width = ((gapEndIdx - gapStartIdx + 1) * dayWidth) + 'px';
+          hash.style.top = (barVisibleIdx * 34 + 6) + 'px';
+          hash.title = 'No task scheduled here';
+          grid.appendChild(hash);
+        }
       }
 
       if (!jobBarMap[job.id]) jobBarMap[job.id] = [];
@@ -4931,11 +4975,11 @@ function onBarMoveMove(e) {
   barMoveState.deltaDays = deltaDays;
   barMoveState.bar.style.left = (barMoveState.origLeftPx + deltaDays * dayWidth) + 'px';
 
-  // Drag the job-span bar's phase-boundary ticks along with it so they
-  // don't visually detach from the bar mid-drag (they otherwise only
-  // catch up once renderGantt() redraws everything on drop).
+  // Drag the job-span bar's phase-boundary ticks and gap hashing along
+  // with it so they don't visually detach from the bar mid-drag (they
+  // otherwise only catch up once renderGantt() redraws everything on drop).
   if (barMoveState.isJobSpan) {
-    document.querySelectorAll('.job-span-task-tick').forEach(function(tk) {
+    document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash').forEach(function(tk) {
       if (tk.dataset.jobId !== barMoveState.jobId) return;
       tk.style.left = (parseFloat(tk.dataset.origLeft) + deltaDays * dayWidth) + 'px';
     });
