@@ -388,13 +388,10 @@
     position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
   }
   .job-span-gap-hash {
-    /* No task covers this stretch at all — a real scheduling gap. Light
-       grey with a subtle speckle rather than a hard black/white hash, so
-       it reads as "empty" instead of competing with the task colors. */
+    /* No task covers this stretch at all — a real scheduling gap. Left
+       fully transparent (no fill) so the gantt grid/background shows
+       through instead of the bar having anything drawn over it here. */
     position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
-    background-color: #e4e4e4;
-    background-image: radial-gradient(circle, rgba(0,0,0,0.16) 1px, transparent 1.2px);
-    background-size: 6px 6px;
   }
   /* Hosts the job-name pill (.task-bar-job-tag, same look as on a regular
      task bar) above everything else on a condensed Jobs/Leads row — the
