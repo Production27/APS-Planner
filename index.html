@@ -394,6 +394,15 @@
       rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px,
       rgba(0,0,0,0.18) 4px, rgba(0,0,0,0.18) 8px);
   }
+  /* Hosts the job-name pill (.task-bar-job-tag, same look as on a regular
+     task bar) above everything else on a condensed Jobs/Leads row — the
+     day-segments above it (up to z-index 65) would otherwise fully cover
+     plain text drawn inside the bar itself. pointer-events:none so drag/
+     click/hover still land on the real bar underneath. */
+  .job-span-name-wrap {
+    position: absolute; height: 22px; display: flex; align-items: center;
+    padding: 0 8px; overflow: hidden; z-index: 70; pointer-events: none;
+  }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
   .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
@@ -4615,12 +4624,26 @@ function renderGantt() {
       bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
       bar.style.background = task.color || job.color;
       if (task.isJobSpan) {
-        // Condensed 'jobs'/'leads' bar: it already IS the job, so its own
-        // label is the job name directly rather than a separate tag — a
-        // tag repeating the same name the bar text already shows would
-        // just be redundant.
-        bar.textContent = task.name;
+        // Condensed 'jobs'/'leads' bar: the day-by-day color segments
+        // built below cover the bar's own text completely, so the job
+        // name lives in a separate pill overlay instead (same look as the
+        // job-name tag on a regular task bar), elevated above everything
+        // else on the row so it's never covered.
         bar.classList.add('job-span-bar');
+        const labelWrap = document.createElement('div');
+        labelWrap.className = 'job-span-name-wrap';
+        labelWrap.dataset.jobId = job.id;
+        labelWrap.dataset.origLeft = startIdx * dayWidth;
+        labelWrap.style.left = (startIdx * dayWidth) + 'px';
+        labelWrap.style.width = (duration * dayWidth) + 'px';
+        labelWrap.style.top = (barVisibleIdx * 34 + 6) + 'px';
+        const jobTag = document.createElement('span');
+        jobTag.className = 'task-bar-job-tag';
+        jobTag.style.background = job.color || '#999';
+        jobTag.textContent = job.name;
+        jobTag.title = job.name;
+        labelWrap.appendChild(jobTag);
+        grid.appendChild(labelWrap);
       } else {
         bar.textContent = task.isDueMarker ? '🚩' : '';
         if (duration !== 1) {
@@ -5053,11 +5076,11 @@ function onBarMoveMove(e) {
   barMoveState.bar.style.left = (barMoveState.origLeftPx + deltaDays * dayWidth) + 'px';
 
   // Drag the job-span bar's phase-boundary ticks, gap hashing, solid task
-  // segments, and overlap hatching along with it so they don't visually
-  // detach from the bar mid-drag (they otherwise only catch up once
-  // renderGantt() redraws everything on drop).
+  // segments, overlap hatching, and name label along with it so they don't
+  // visually detach from the bar mid-drag (they otherwise only catch up
+  // once renderGantt() redraws everything on drop).
   if (barMoveState.isJobSpan) {
-    document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid').forEach(function(tk) {
+    document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap').forEach(function(tk) {
       if (tk.dataset.jobId !== barMoveState.jobId) return;
       tk.style.left = (parseFloat(tk.dataset.origLeft) + deltaDays * dayWidth) + 'px';
     });
