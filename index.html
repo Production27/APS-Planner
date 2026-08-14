@@ -403,6 +403,13 @@
     position: absolute; height: 22px; display: flex; align-items: center;
     padding: 0 8px; overflow: hidden; z-index: 70; pointer-events: none;
   }
+  /* Outline around the whole condensed span in the job's own color — the
+     topmost overlay on the row (above the name pill's z-index 70) so it
+     frames everything else instead of being painted over by it. */
+  .job-span-border {
+    position: absolute; height: 22px; border-radius: 5px; border-width: 2px;
+    border-style: solid; box-sizing: border-box; z-index: 80; pointer-events: none;
+  }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
   .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
@@ -4644,6 +4651,20 @@ function renderGantt() {
         jobTag.title = job.name;
         labelWrap.appendChild(jobTag);
         grid.appendChild(labelWrap);
+
+        // Outline the whole span in the job's own color — drawn as a
+        // separate overlay (rather than a border on `bar` itself) so it
+        // stays visible on top of the day-segments instead of being
+        // painted over by them.
+        const borderOverlay = document.createElement('div');
+        borderOverlay.className = 'job-span-border';
+        borderOverlay.dataset.jobId = job.id;
+        borderOverlay.dataset.origLeft = startIdx * dayWidth;
+        borderOverlay.style.left = (startIdx * dayWidth) + 'px';
+        borderOverlay.style.width = (duration * dayWidth) + 'px';
+        borderOverlay.style.top = (barVisibleIdx * 34 + 6) + 'px';
+        borderOverlay.style.borderColor = job.color || '#3949ab';
+        grid.appendChild(borderOverlay);
       } else {
         bar.textContent = task.isDueMarker ? '🚩' : '';
         if (duration !== 1) {
@@ -5076,11 +5097,11 @@ function onBarMoveMove(e) {
   barMoveState.bar.style.left = (barMoveState.origLeftPx + deltaDays * dayWidth) + 'px';
 
   // Drag the job-span bar's phase-boundary ticks, gap hashing, solid task
-  // segments, overlap hatching, and name label along with it so they don't
-  // visually detach from the bar mid-drag (they otherwise only catch up
-  // once renderGantt() redraws everything on drop).
+  // segments, overlap hatching, name label, and outline along with it so
+  // they don't visually detach from the bar mid-drag (they otherwise only
+  // catch up once renderGantt() redraws everything on drop).
   if (barMoveState.isJobSpan) {
-    document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap').forEach(function(tk) {
+    document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap, .job-span-border').forEach(function(tk) {
       if (tk.dataset.jobId !== barMoveState.jobId) return;
       tk.style.left = (parseFloat(tk.dataset.origLeft) + deltaDays * dayWidth) + 'px';
     });
