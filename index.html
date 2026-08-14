@@ -117,17 +117,40 @@
     display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px; border: 1px solid var(--border);
   }
 
-  /* ===== TABS ===== */
-  .tab-bar { display: flex; background: white; border-bottom: 1px solid var(--border); padding: 0 24px; gap: 4px; flex-shrink: 0; }
-  .tab-btn {
-    padding: 12px 24px; border: none; background: transparent; color: var(--text-light);
-    font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent;
-    transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+  /* ===== VIEW SWITCHER (rail-tab-row, top of the job rail) =====
+     Active tab shows full-size (icon + label); the other two collapse to
+     icon-only (flex-basis 34px) and expand back to full-size on hover —
+     same idea as a dock/activity-bar rather than a conventional tab strip,
+     chosen to fit inside the rail's narrow width. Hovering a non-active
+     tab shares flex-grow with whichever tab is .active, so both end up
+     visible at once rather than the active one snapping back to icon-only
+     while you're pointed at a different one. */
+  .rail-tab-row { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border); background: #fafafa; }
+  .rail-tab {
+    display: flex; align-items: center; gap: 6px; overflow: hidden;
+    flex: 0 0 34px; height: 34px; padding: 0; border: none; border-radius: 8px;
+    background: transparent; color: var(--text-light); cursor: pointer;
+    white-space: nowrap; transition: flex-basis 0.2s ease, background 0.2s ease, color 0.2s ease;
   }
-  .tab-btn:hover { color: var(--primary); background: #f8f9ff; }
-  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: #f8f9ff; box-shadow: 0 2px 6px rgba(26,35,126,0.12); }
-  .tab-btn:active { transform: translateY(1px); }
-  .tab-btn .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; }
+  .rail-tab svg { flex-shrink: 0; margin-left: 9px; }
+  .rail-tab:active { transform: translateY(1px); }
+  /* Both collapse the same way as the label — a badge visible at 34px
+     collapsed width would overflow it (icon alone already takes ~25px). */
+  .rail-tab .badge {
+    background: rgba(255,255,255,0.9); color: var(--primary); font-size: 10px;
+    padding: 2px 7px; border-radius: 10px; font-weight: 700; flex-shrink: 0;
+    opacity: 0; max-width: 0; overflow: hidden;
+    transition: opacity 0.15s ease, max-width 0.2s ease, padding 0.2s ease;
+  }
+  .rail-tab-label {
+    font-size: 12px; font-weight: 700; opacity: 0; max-width: 0;
+    overflow: hidden; transition: opacity 0.15s ease, max-width 0.2s ease;
+  }
+  .rail-tab.active, .rail-tab:hover {
+    flex: 1 1 auto; background: var(--primary-light); color: white;
+  }
+  .rail-tab.active .rail-tab-label, .rail-tab:hover .rail-tab-label { opacity: 1; max-width: 140px; }
+  .rail-tab.active .badge, .rail-tab:hover .badge { opacity: 1; max-width: 40px; }
   .manager-sidebar-header .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; margin-left: 2px; }
 
   .tab-panel { display: none; height: 100%; overflow: hidden; }
@@ -1039,8 +1062,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .board-card,
   body.dark-mode .legend-float,
   body.dark-mode .toast,
-  body.dark-mode .modal-box,
-  body.dark-mode .tab-bar {
+  body.dark-mode .modal-box {
     background: var(--card);
   }
   body.dark-mode .btn-secondary { background: linear-gradient(180deg, var(--card) 0%, #1c1f28 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 5px rgba(0,0,0,0.3); }
@@ -1114,7 +1136,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     background: #20232c; color: var(--text);
   }
 
-  body.dark-mode .tab-btn:hover, body.dark-mode .tab-btn.active { background: rgba(57,73,171,0.2); }
+  body.dark-mode .rail-tab-row { background: #1a1d25; border-bottom-color: var(--border); }
 
   body.dark-mode .board-column { background: #232732; transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; box-shadow: 0 8px 20px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.06); }
   body.dark-mode .board-column.drag-over-col { border-color: var(--primary-light); box-shadow: 0 12px 28px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3); }
@@ -1255,6 +1277,17 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        the slide-out drawer (#formArea, inside panelsContainer) over
        whichever panel is showing. -->
   <div class="manager-sidebar" id="jobRail">
+    <!-- View switcher, moved here from its own row up top — the active
+         view shows full-size (icon + label), the other two collapse to
+         icon-only and expand back to full-size on hover (see
+         .rail-tab/.rail-tab-label). switchTab() drives which one has
+         .active via the same #tab-<name> ids/.rail-tab query it always
+         used (renamed from .tab-btn), just relocated. -->
+    <div class="rail-tab-row">
+      <button class="rail-tab" onclick="switchTab('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
+      <button class="rail-tab active" onclick="switchTab('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
+      <button class="rail-tab" onclick="switchTab('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
+    </div>
     <div class="manager-sidebar-header">
       <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span><button class="job-rail-add-btn" onclick="addNewJob()" title="Add a new job">+</button></h2>
       <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
@@ -1262,13 +1295,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="job-list" id="jobList"></div>
   </div>
   <div class="app-shell-main">
-
-<!-- TABS -->
-<div class="tab-bar">
-  <button class="tab-btn" onclick="switchTab('calendar')" id="tab-calendar"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> Calendar</button>
-  <button class="tab-btn active" onclick="switchTab('gantt')" id="tab-gantt"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Gantt Chart</button>
-  <button class="tab-btn" onclick="switchTab('board')" id="tab-board"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board <span class="badge" id="boardCount">0</span></button>
-</div>
 
 <div class="main-area" id="mainArea">
   <div class="panels-container" id="panelsContainer">
@@ -3290,7 +3316,7 @@ function switchTab(tab) {
   // cancelEdit() also flushes any debounced edit first, same safety net
   // switchTab() always had. Harmless no-op if nothing was open.
   cancelEdit();
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.rail-tab').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('panel-' + tab).classList.add('active');
