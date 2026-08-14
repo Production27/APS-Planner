@@ -3125,8 +3125,18 @@ document.addEventListener('click', function(e) {
   // drawer was already open). editingJobIdAtMouseDown lets us tell the two
   // apart: if the job actually being edited changed during this click,
   // something else already handled it deliberately.
+  //
+  // e.target.isConnected guards a second case: the "+ Add Job" button at
+  // the bottom of the list opens the drawer and then calls renderJobList(),
+  // which rebuilds the list and destroys that very button — all inside
+  // this same click, before it finishes bubbling here. A detached node
+  // isn't "contained" by anything, so without this check the click looked
+  // like it came from outside both the rail and the drawer and closed it
+  // right back. If the target's been removed from the document by its own
+  // click handler, we can't trust the containment check either way, so
+  // just leave the drawer alone.
   const formArea = document.getElementById('formArea');
-  if (formArea && formArea.classList.contains('open') &&
+  if (formArea && formArea.classList.contains('open') && e.target.isConnected &&
       !formArea.contains(e.target) && !document.getElementById('jobRail').contains(e.target) &&
       !e.target.closest('.modal-overlay') && editingJobId === editingJobIdAtMouseDown) {
     cancelEdit();
