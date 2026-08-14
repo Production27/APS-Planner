@@ -372,23 +372,27 @@
     position: absolute; width: 2px; height: 28px; background: rgba(255,255,255,0.9);
     box-shadow: 0 0 0 1px rgba(0,0,0,0.25); border-radius: 1px; z-index: 65; pointer-events: none;
   }
-  /* Unscheduled stretch between two tasks in a condensed Jobs/Leads bar —
-     see the interval-merge step in renderGantt(). Sits below the ticks
-     (z-index 65) but above the bar's own hover/moving/resizing states
-     (up to z-index 60) so the hashing doesn't disappear while dragging. */
+  /* Day-by-day segments drawn over a condensed Jobs/Leads bar — see the
+     day-sweep in renderGantt(). All three sit below the ticks (z-index 65)
+     but above the bar's own hover/moving/resizing states (up to z-index
+     60) so they don't disappear while dragging, and they never overlap
+     each other since each day belongs to exactly one segment. */
+  .job-span-task-solid {
+    /* One task covers this stretch of days — solid in that task's own
+       color, set inline per element since it varies per task. */
+    position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
+  }
+  .job-span-task-hatch {
+    /* Two or more tasks overlap on this stretch — hard-edged stripes
+       alternating between their colors, set inline per element. */
+    position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
+  }
   .job-span-gap-hash {
+    /* No task covers this stretch at all — a real scheduling gap. */
     position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
     background: repeating-linear-gradient(45deg,
       rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px,
       rgba(0,0,0,0.18) 4px, rgba(0,0,0,0.18) 8px);
-  }
-  /* One of these per real task inside a condensed Jobs/Leads bar, covering
-     just that task's own date range — the diagonal stripe color is set
-     inline per element (see renderGantt()) since it follows that specific
-     task's own color, not a fixed value like the gap hash above. Same
-     z-index as the gap hash since the two never occupy the same pixels. */
-  .job-span-task-hatch {
-    position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
   }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
@@ -2461,17 +2465,6 @@ function colorForLead(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   return LEAD_COLOR_PALETTE[hash % LEAD_COLOR_PALETTE.length];
-}
-
-// '#3949ab' + 0.6 -> 'rgba(57,73,171,0.6)' — used for the per-task hatch
-// overlay on condensed Jobs/Leads bars, where the stripe color is whatever
-// that specific task's board column is, not a fixed value.
-function hexToRgba(hex, alpha) {
-  if (!hex || hex[0] !== '#' || hex.length < 7) return 'rgba(57,73,171,' + alpha + ')';
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
 function syncGanttViewModeButtons() {
@@ -4679,78 +4672,98 @@ function renderGantt() {
 
       // Jobs/Leads view: the condensed bar is one solid span, but the real
       // tasks inside it usually run back-to-back rather than as a single
-      // block. Each task's own date range gets a diagonal hatch overlay in
-      // that task's own color (so the phases are visible without splitting
-      // the row into one bar per task), plus a tick at its finish date
-      // (except the last, which already coincides with the bar's own right
-      // edge). Any stretch of days not covered by any task (a real
-      // scheduling gap, not just a boundary) gets a plain hash overlay.
+      // block. Walk it day by day and group consecutive days that have the
+      // exact same set of covering tasks into one segment: a day covered
+      // by one task is drawn solid in that task's own color, a day covered
+      // by two or more overlapping tasks gets a hard hatch alternating
+      // between their colors, and a day covered by none (a real scheduling
+      // gap) gets the plain black/white hash. Ticks still mark each task's
+      // finish date (except the last, which already coincides with the
+      // bar's own right edge) so phase boundaries stay visible even
+      // between two same-colored/adjacent tasks.
       if (task.isJobSpan) {
         const jobEndIdx = startIdx + duration - 1;
-        const seenIdx = {};
-        const intervals = [];
-        (job.tasks || []).forEach(function(t) {
-          if (!t.start || !t.finish) return;
+        const datedTasks = (job.tasks || []).map(function(t) {
+          if (!t.start || !t.finish) return null;
           const ts = new Date(t.start + 'T00:00:00'), tf = new Date(t.finish + 'T00:00:00');
-          if (isNaN(ts.getTime()) || isNaN(tf.getTime())) return;
-          const sIdx = getDaysDiff(startDate, ts), eIdx = getDaysDiff(startDate, tf);
-          intervals.push({ start: sIdx, end: eIdx });
+          if (isNaN(ts.getTime()) || isNaN(tf.getTime())) return null;
+          return { t: t, sIdx: getDaysDiff(startDate, ts), eIdx: getDaysDiff(startDate, tf) };
+        }).filter(Boolean);
 
-          const stripeColor = t.color || job.color || '#3949ab';
-          const hatch = document.createElement('div');
-          hatch.className = 'job-span-task-hatch';
-          hatch.dataset.jobId = job.id;
-          const hatchLeft = sIdx * dayWidth;
-          hatch.dataset.origLeft = hatchLeft;
-          hatch.style.left = hatchLeft + 'px';
-          hatch.style.width = ((eIdx - sIdx + 1) * dayWidth) + 'px';
-          hatch.style.top = (barVisibleIdx * 34 + 6) + 'px';
-          hatch.style.background = 'repeating-linear-gradient(45deg, ' +
-            hexToRgba(stripeColor, 0.6) + ' 0px, ' + hexToRgba(stripeColor, 0.6) + ' 4px, ' +
-            'transparent 4px, transparent 8px)';
-          hatch.title = t.name;
-          grid.appendChild(hatch);
-
-          if (eIdx >= jobEndIdx || seenIdx[eIdx]) return;
-          seenIdx[eIdx] = true;
-          const tickLeft = (eIdx + 1) * dayWidth;
+        const seenIdx = {};
+        datedTasks.forEach(function(dt) {
+          if (dt.eIdx >= jobEndIdx || seenIdx[dt.eIdx]) return;
+          seenIdx[dt.eIdx] = true;
+          const tickLeft = (dt.eIdx + 1) * dayWidth;
           const tick = document.createElement('div');
           tick.className = 'job-span-task-tick';
           tick.dataset.jobId = job.id;
           tick.dataset.origLeft = tickLeft;
           tick.style.left = tickLeft + 'px';
           tick.style.top = (barVisibleIdx * 34 + 6) + 'px';
-          tick.title = t.name;
+          tick.title = dt.t.name;
           grid.appendChild(tick);
         });
 
-        // Merge overlapping/back-to-back task intervals, then hash-stripe
-        // whatever day ranges fall between what's left — those are the
-        // actual unscheduled gaps.
-        intervals.sort(function(a, b) { return a.start - b.start; });
-        const merged = [];
-        intervals.forEach(function(iv) {
-          const last = merged[merged.length - 1];
-          if (last && iv.start <= last.end + 1) {
-            last.end = Math.max(last.end, iv.end);
-          } else {
-            merged.push({ start: iv.start, end: iv.end });
+        const dayColors = [];
+        for (let i = 0; i < duration; i++) dayColors.push([]);
+        datedTasks.forEach(function(dt) {
+          const color = dt.t.color || job.color || '#3949ab';
+          for (let d = Math.max(dt.sIdx, startIdx); d <= Math.min(dt.eIdx, jobEndIdx); d++) {
+            dayColors[d - startIdx].push(color);
           }
         });
-        for (let gi = 0; gi < merged.length - 1; gi++) {
-          const gapStartIdx = merged[gi].end + 1;
-          const gapEndIdx = merged[gi + 1].start - 1;
-          if (gapEndIdx < gapStartIdx) continue;
-          const gapLeft = gapStartIdx * dayWidth;
-          const hash = document.createElement('div');
-          hash.className = 'job-span-gap-hash';
-          hash.dataset.jobId = job.id;
-          hash.dataset.origLeft = gapLeft;
-          hash.style.left = gapLeft + 'px';
-          hash.style.width = ((gapEndIdx - gapStartIdx + 1) * dayWidth) + 'px';
-          hash.style.top = (barVisibleIdx * 34 + 6) + 'px';
-          hash.title = 'No task scheduled here';
-          grid.appendChild(hash);
+
+        let di = 0;
+        while (di < duration) {
+          const colors = dayColors[di];
+          const key = colors.slice().sort().join('|');
+          let dj = di;
+          while (dj + 1 < duration && dayColors[dj + 1].slice().sort().join('|') === key) dj++;
+          const segLeft = (startIdx + di) * dayWidth;
+          const segWidth = (dj - di + 1) * dayWidth;
+          const segTop = (barVisibleIdx * 34 + 6) + 'px';
+
+          if (colors.length === 0) {
+            const hash = document.createElement('div');
+            hash.className = 'job-span-gap-hash';
+            hash.dataset.jobId = job.id;
+            hash.dataset.origLeft = segLeft;
+            hash.style.left = segLeft + 'px';
+            hash.style.width = segWidth + 'px';
+            hash.style.top = segTop;
+            hash.title = 'No task scheduled here';
+            grid.appendChild(hash);
+          } else if (colors.length === 1) {
+            const solid = document.createElement('div');
+            solid.className = 'job-span-task-solid';
+            solid.dataset.jobId = job.id;
+            solid.dataset.origLeft = segLeft;
+            solid.style.left = segLeft + 'px';
+            solid.style.width = segWidth + 'px';
+            solid.style.top = segTop;
+            solid.style.background = colors[0];
+            grid.appendChild(solid);
+          } else {
+            const uniqColors = Array.from(new Set(colors));
+            const stripe = 6;
+            const stops = [];
+            uniqColors.forEach(function(c, idx) {
+              stops.push(c + ' ' + (idx * stripe) + 'px');
+              stops.push(c + ' ' + ((idx + 1) * stripe) + 'px');
+            });
+            const hatch = document.createElement('div');
+            hatch.className = 'job-span-task-hatch';
+            hatch.dataset.jobId = job.id;
+            hatch.dataset.origLeft = segLeft;
+            hatch.style.left = segLeft + 'px';
+            hatch.style.width = segWidth + 'px';
+            hatch.style.top = segTop;
+            hatch.style.background = 'repeating-linear-gradient(45deg, ' + stops.join(', ') + ')';
+            hatch.title = 'Overlapping tasks';
+            grid.appendChild(hatch);
+          }
+          di = dj + 1;
         }
       }
 
@@ -5039,12 +5052,12 @@ function onBarMoveMove(e) {
   barMoveState.deltaDays = deltaDays;
   barMoveState.bar.style.left = (barMoveState.origLeftPx + deltaDays * dayWidth) + 'px';
 
-  // Drag the job-span bar's phase-boundary ticks, gap hashing, and
-  // per-task hatching along with it so they don't visually detach from the
-  // bar mid-drag (they otherwise only catch up once renderGantt() redraws
-  // everything on drop).
+  // Drag the job-span bar's phase-boundary ticks, gap hashing, solid task
+  // segments, and overlap hatching along with it so they don't visually
+  // detach from the bar mid-drag (they otherwise only catch up once
+  // renderGantt() redraws everything on drop).
   if (barMoveState.isJobSpan) {
-    document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch').forEach(function(tk) {
+    document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid').forEach(function(tk) {
       if (tk.dataset.jobId !== barMoveState.jobId) return;
       tk.style.left = (parseFloat(tk.dataset.origLeft) + deltaDays * dayWidth) + 'px';
     });
