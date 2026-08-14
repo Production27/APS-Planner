@@ -212,12 +212,23 @@
 .cal-event-bar.cal-resizing { opacity: 0.8; z-index: 10; }
 
   /* ===== GANTT ===== */
-  .gantt-wrapper { display: flex; height: 100%; overflow: hidden; }
+  .gantt-wrapper { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  /* One solid strip spanning the full gantt width — the view-mode tabs and
+     the toolbar buttons are both flex children of this single row, so
+     there's one shared background/border instead of two boxes that happen
+     to sit side by side (which is what .left-panel's own border-right/
+     box-shadow would otherwise cut through). The panels row below it is
+     where .left-panel's border/shadow actually starts. */
+  .gantt-top-row { display: flex; height: 45px; box-sizing: border-box; background: #eef1fa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .gantt-panels-row { display: flex; flex: 1; overflow: hidden; }
   .left-panel {
     width: 300px; min-width: 300px; background: var(--card); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 6px rgba(0,0,0,0.04);
   }
-  .gantt-view-toggle-row { display: flex; align-items: flex-end; gap: 4px; height: 45px; box-sizing: border-box; padding: 8px 8px 0; background: #eef1fa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .gantt-view-toggle-row {
+    display: flex; align-items: flex-end; gap: 4px; width: 300px; min-width: 300px;
+    box-sizing: border-box; padding: 8px 8px 0; border-right: 1px solid var(--border);
+  }
   /* Tab look: active mode sits larger/bolder on top, the other two shrink
      down until clicked (unlike a row of equal-width pills). */
   .gantt-view-toggle-row .gantt-view-mode-btn {
@@ -437,15 +448,11 @@
 
   .row-bg { position: absolute; left: 0; right: 0; height: 34px; border-bottom: 1px solid #f5f5f5; }
   .row-bg:nth-child(even) { background: #fafafa; }
-  /* Height/background match .gantt-view-toggle-row's exactly — this row
-     lives at the top of the right panel (see the HTML comment there),
-     lining up with that toggle row over on the left panel so
-     .left-body's rows and the actual gantt bars in .timeline-body start
-     at the same vertical offset below both. justify-content pushes the
-     buttons to the right edge, the same place margin-left:auto used to
-     put this whole toolbar when it was a flex item up in the tab bar
-     instead of the full-width row it is now. */
-  .gantt-toolbar { display: flex; gap: 4px; align-items: center; justify-content: flex-end; height: 45px; box-sizing: border-box; padding: 0 8px; background: #eef1fa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  /* Sits in .gantt-top-row next to .gantt-view-toggle-row, sharing that
+     row's background/border rather than carrying its own — see the
+     comment on .gantt-top-row. justify-content pushes the buttons to the
+     right edge of the remaining space. */
+  .gantt-toolbar { display: flex; gap: 4px; align-items: center; justify-content: flex-end; flex: 1; box-sizing: border-box; padding: 0 8px; }
   .gantt-toolbar button {
     background: transparent; border: 1px solid var(--border); color: var(--text-light);
     width: 26px; height: 26px; padding: 0; border-radius: 6px; cursor: pointer;
@@ -1055,7 +1062,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .activity-sidebar-close { color: #777; }
   body.dark-mode .activity-sidebar-close:hover { background: rgba(220,53,69,0.18); color: var(--danger); }
 
-  @media (max-width: 1100px) { .left-panel { width: 260px; min-width: 260px; } .manager-sidebar { width: 210px; min-width: 210px; } }
+  @media (max-width: 1100px) { .left-panel, .gantt-view-toggle-row { width: 260px; min-width: 260px; } .manager-sidebar { width: 210px; min-width: 210px; } }
 
   /* ===== DARK MODE ===== */
   body.dark-mode {
@@ -1099,8 +1106,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   }
   body.dark-mode .left-header { color: var(--text-light); }
   body.dark-mode .left-header .col { border-right-color: var(--border); }
-  body.dark-mode .gantt-view-toggle-row,
-  body.dark-mode .gantt-toolbar { background: #1a1d25; border-bottom-color: var(--border); }
+  body.dark-mode .gantt-top-row { background: #1a1d25; border-bottom-color: var(--border); }
+  body.dark-mode .gantt-view-toggle-row { border-right-color: var(--border); }
   body.dark-mode .gantt-view-toggle-row .gantt-view-mode-btn.active { background: var(--card); color: var(--primary-light); }
   body.dark-mode .gantt-view-toggle-row .gantt-view-mode-btn:hover:not(.active) { background: rgba(57,73,171,0.22); color: #cfd4e0; }
   body.dark-mode .timeline-header .week-header:hover { background: rgba(57,73,171,0.28); }
@@ -1336,27 +1343,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <!-- GANTT TAB -->
     <div class="tab-panel active" id="panel-gantt">
       <div class="gantt-wrapper">
-        <div class="left-panel">
+        <!-- One solid strip: view-mode tabs + toolbar buttons as flex
+             siblings sharing a single background/border, rather than each
+             living at the top of its own panel (which left a seam where
+             .left-panel's border-right/box-shadow cut through). -->
+        <div class="gantt-top-row">
           <div class="gantt-view-toggle-row">
             <button class="gantt-view-mode-btn active" id="ganttViewTasks" data-mode="tasks" onclick="setGanttViewMode('tasks')" title="One row per task (current behavior)">Tasks</button>
             <button class="gantt-view-mode-btn" id="ganttViewJobs" data-mode="jobs" onclick="setGanttViewMode('jobs')" title="One row per job, tasks condensed into a single bar">Jobs</button>
             <button class="gantt-view-mode-btn" id="ganttViewLeads" data-mode="leads" onclick="setGanttViewMode('leads')" title="Same as Jobs, colored by assigned lead/foreman">Leads</button>
           </div>
-          <div class="left-header">
-            <div class="col col-start">Start</div>
-            <div class="col col-finish">Finish</div>
-            <div class="col col-jobs">Task</div>
-          </div>
-          <div class="left-body" id="leftBody"></div>
-        </div>
-        <div class="right-panel">
-          <!-- Matches .gantt-view-toggle-row's height so the timeline
-               header/bars line up with the left panel's rows — see the
-               comment on .gantt-toolbar below. Reuses that existing class
-               (kept its button styling) even though it's no longer up in
-               the tab bar — these controls are only relevant while this
-               tab is active anyway, so living inside the panel works
-               just as well and is what let them move down here at all. -->
           <div class="gantt-toolbar" id="ganttToolbar">
             <div style="position:relative;">
               <button class="ghost-toggle-btn" id="ghostToggleBtn" onclick="toggleGhostDropdown(event)" title="Ghost overlay"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a7 7 0 00-7 7v9.5l2-2 2 2 2-2 1 1 2-2 2 2 1-1 2 2V10a7 7 0 00-7-7z" fill="#b39ddb"/><circle cx="9.5" cy="10.5" r="1" fill="#fff"/><circle cx="14.5" cy="10.5" r="1" fill="#fff"/></svg></button>
@@ -1369,13 +1365,25 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <button onclick="fitToView()" title="Fit to view">⤢</button>
             <button onclick="scrollToToday()" title="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
           </div>
-          <!-- Header wrap scrolls horizontally with body -->
-          <div class="timeline-header-wrap" id="timelineHeaderWrap">
-            <div class="timeline-header" id="timelineHeader"></div>
+        </div>
+        <div class="gantt-panels-row">
+          <div class="left-panel">
+            <div class="left-header">
+              <div class="col col-start">Start</div>
+              <div class="col col-finish">Finish</div>
+              <div class="col col-jobs">Task</div>
+            </div>
+            <div class="left-body" id="leftBody"></div>
           </div>
-          <div class="timeline-body" id="timelineBody">
-            <div class="timeline-grid" id="timelineGrid"></div>
-            <div class="date-popover" id="datePopover"></div>
+          <div class="right-panel">
+            <!-- Header wrap scrolls horizontally with body -->
+            <div class="timeline-header-wrap" id="timelineHeaderWrap">
+              <div class="timeline-header" id="timelineHeader"></div>
+            </div>
+            <div class="timeline-body" id="timelineBody">
+              <div class="timeline-grid" id="timelineGrid"></div>
+              <div class="date-popover" id="datePopover"></div>
+            </div>
           </div>
         </div>
       </div>
