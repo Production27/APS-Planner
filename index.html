@@ -5351,8 +5351,16 @@ function renderJobList() {
     const taskList = job.tasks || [];
     let s = null, f = null;
     taskList.forEach(function(t) {
+      // Skip undated tasks entirely — building a Date from an empty string
+      // produces an invalid Date, and once `s`/`f` land on one, every later
+      // comparison against it is false (NaN never compares less/greater
+      // than anything), so a bad first task would otherwise permanently
+      // stick the whole card at "Invalid Date" even if other tasks have
+      // real dates.
+      if (!t.start || !t.finish) return;
       const ts = new Date(t.start + 'T00:00:00');
       const tf = new Date(t.finish + 'T00:00:00');
+      if (isNaN(ts.getTime()) || isNaN(tf.getTime())) return;
       if (!s || ts < s) s = ts;
       if (!f || tf > f) f = tf;
     });
