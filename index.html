@@ -3313,10 +3313,14 @@ function computeDateRange() {
   minPastDate.setDate(minPastDate.getDate() - ARCHIVE_CUTOFF_DAYS);
 
   if (datedTasks.length === 0) {
-    // No dated tasks anywhere (e.g. brand new jobs with blank grids) —
-    // give the chart a small window around today so rows still appear.
+    // No dated tasks anywhere (e.g. brand new jobs with blank grids, or a
+    // project — like Bludorn was — that just doesn't have anything
+    // scheduled yet) — give the chart a window around today. Matches the
+    // +30 days buffer the dated-tasks branch below gets, so every project
+    // behaves the same regardless of whether it happens to have any dates
+    // set yet.
     startDate = new Date(minPastDate);
-    endDate = new Date(today); endDate.setDate(today.getDate() + 7);
+    endDate = new Date(today); endDate.setDate(today.getDate() + 30);
     return;
   }
   const starts = datedTasks.map(t => new Date(t.start + 'T00:00:00'));
