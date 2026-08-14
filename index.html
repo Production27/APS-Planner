@@ -379,9 +379,14 @@
      each other since each day belongs to exactly one segment. */
   .job-span-task-solid {
     /* One task covers this stretch of days — solid in that task's own
-       color, set inline per element since it varies per task. */
-    position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
+       color, set inline per element since it varies per task. Unlike the
+       other overlays it's interactive: pointer-events are left on so it
+       can be grabbed to move just that one task (see renderGantt()). */
+    position: absolute; height: 22px; border-radius: 2px; z-index: 64; cursor: grab;
+    transition: filter 0.15s;
   }
+  .job-span-task-solid:hover { filter: brightness(1.12); }
+  .job-span-task-solid.moving { cursor: grabbing; filter: brightness(1.15); transition: none; }
   .job-span-task-hatch {
     /* Two or more tasks overlap on this stretch — hard-edged stripes
        alternating between their colors, set inline per element. */
@@ -4717,10 +4722,12 @@ function renderGantt() {
       // tasks inside it usually run back-to-back rather than as a single
       // block. Walk it day by day and group consecutive days that have the
       // exact same set of covering tasks into one segment: a day covered
-      // by one task is drawn solid in that task's own color, a day covered
-      // by two or more overlapping tasks gets a hard hatch alternating
-      // between their colors, and a day covered by none (a real scheduling
-      // gap) gets the plain black/white hash. Ticks still mark each task's
+      // by one task is drawn solid in that task's own color and is
+      // individually grabbable to move just that task (leaving the rest of
+      // the job alone), a day covered by two or more overlapping tasks
+      // gets a hard hatch alternating between their colors (click-through
+      // to the whole-job drag, since there's no single task to target), and
+      // a day covered by none is left blank. Ticks still mark each task's
       // finish date (except the last, which already coincides with the
       // bar's own right edge) so phase boundaries stay visible even
       // between two same-colored/adjacent tasks.
@@ -4748,26 +4755,28 @@ function renderGantt() {
           grid.appendChild(tick);
         });
 
-        const dayColors = [];
-        for (let i = 0; i < duration; i++) dayColors.push([]);
+        // Keyed by task id (not color) so two different same-colored tasks
+        // never get merged into one segment — each solid segment needs to
+        // map to exactly one real task to be individually draggable.
+        const dayTasks = [];
+        for (let i = 0; i < duration; i++) dayTasks.push([]);
         datedTasks.forEach(function(dt) {
-          const color = dt.t.color || job.color || '#3949ab';
           for (let d = Math.max(dt.sIdx, startIdx); d <= Math.min(dt.eIdx, jobEndIdx); d++) {
-            dayColors[d - startIdx].push(color);
+            dayTasks[d - startIdx].push(dt);
           }
         });
 
         let di = 0;
         while (di < duration) {
-          const colors = dayColors[di];
-          const key = colors.slice().sort().join('|');
+          const covering = dayTasks[di];
+          const key = covering.map(function(dt) { return dt.t.id; }).sort().join('|');
           let dj = di;
-          while (dj + 1 < duration && dayColors[dj + 1].slice().sort().join('|') === key) dj++;
+          while (dj + 1 < duration && dayTasks[dj + 1].map(function(dt) { return dt.t.id; }).sort().join('|') === key) dj++;
           const segLeft = (startIdx + di) * dayWidth;
           const segWidth = (dj - di + 1) * dayWidth;
           const segTop = (barVisibleIdx * 34 + 6) + 'px';
 
-          if (colors.length === 0) {
+          if (covering.length === 0) {
             const hash = document.createElement('div');
             hash.className = 'job-span-gap-hash';
             hash.dataset.jobId = job.id;
@@ -4777,18 +4786,33 @@ function renderGantt() {
             hash.style.top = segTop;
             hash.title = 'No task scheduled here';
             grid.appendChild(hash);
-          } else if (colors.length === 1) {
+          } else if (covering.length === 1) {
+            // Unambiguously one task's own stretch — grabbable to move just
+            // that task, same as an individual bar in Tasks view. Overlap
+            // (below) stays click-through since there's no single task to
+            // target there; it falls through to the whole-job drag on `bar`.
+            const dt = covering[0];
             const solid = document.createElement('div');
             solid.className = 'job-span-task-solid';
             solid.dataset.jobId = job.id;
+            solid.dataset.dragged = 'false';
             solid.dataset.origLeft = segLeft;
             solid.style.left = segLeft + 'px';
             solid.style.width = segWidth + 'px';
             solid.style.top = segTop;
-            solid.style.background = colors[0];
+            solid.style.background = dt.t.color || job.color || '#3949ab';
+            solid.title = dt.t.name;
+            solid.addEventListener('mouseenter', function(e) { showTooltip(e, job, dt.t); });
+            solid.addEventListener('mouseleave', hideTooltip);
+            solid.addEventListener('mousemove', moveTooltip);
+            solid.addEventListener('mousedown', function(e) { startBarMove(e, job.id, dt.t.id, solid); });
+            solid.addEventListener('click', function() {
+              if (solid.dataset.dragged === 'true') { solid.dataset.dragged = 'false'; return; }
+              editJob(job.id, dt.t.id);
+            });
             grid.appendChild(solid);
           } else {
-            const uniqColors = Array.from(new Set(colors));
+            const uniqColors = Array.from(new Set(covering.map(function(dt) { return dt.t.color || job.color || '#3949ab'; })));
             const stripe = 6;
             const stops = [];
             uniqColors.forEach(function(c, idx) {
