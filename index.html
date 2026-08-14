@@ -3374,6 +3374,35 @@ function getDaysDiff(d1, d2) {
   return Math.round((d2 - d1) / 86400000);
 }
 
+// Business-day (Mon-Fri) versions of the above, used only for the Job
+// Manager's Days field — the Gantt itself still positions/sizes bars by
+// calendar days, since a bar's width needs to represent real elapsed time
+// on the timeline regardless of weekends.
+function getBusinessDaysDiff(d1, d2) {
+  const d = new Date(d1); d.setHours(0, 0, 0, 0);
+  const end = new Date(d2); end.setHours(0, 0, 0, 0);
+  if (d > end) return 0;
+  let count = 0;
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+function addBusinessDays(startDate, days) {
+  const d = new Date(startDate);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  let count = 1;
+  while (count < days) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return d;
+}
+
 // '14:30' -> '2:30 PM'. Calendar events store time as a plain 24h string
 // from <input type="time">; empty/invalid input just renders nothing.
 function formatTimeLabel(hhmm) {
@@ -5522,11 +5551,13 @@ function renderFixedTaskGrid(taskList) {
     // Duration is never stored on the task itself — start/finish stay the
     // single source of truth (unchanged schema). It's just derived here for
     // display and re-applied to finish (or vice versa) as the user edits.
+    // Business days only (Sat/Sun don't count), per the Job Manager's own
+    // convention — the Gantt chart itself still uses calendar days.
     if (t.start && t.finish) {
       const s0 = new Date(t.start + 'T00:00:00');
       const f0 = new Date(t.finish + 'T00:00:00');
       if (!isNaN(s0.getTime()) && !isNaN(f0.getTime())) {
-        const dur0 = getDaysDiff(s0, f0) + 1;
+        const dur0 = getBusinessDaysDiff(s0, f0);
         if (dur0 > 0) durationInput.value = dur0;
       }
     }
@@ -5536,8 +5567,7 @@ function renderFixedTaskGrid(taskList) {
       if (!startInput.value || !durVal || durVal < 1) return;
       const s = new Date(startInput.value + 'T00:00:00');
       if (isNaN(s.getTime())) return;
-      const f = new Date(s);
-      f.setDate(f.getDate() + durVal - 1);
+      const f = addBusinessDays(s, durVal);
       finishInput.value = f.toISOString().split('T')[0];
       renderDateDisplayContent(finishCell.display, finishInput.value);
     }
@@ -5547,7 +5577,7 @@ function renderFixedTaskGrid(taskList) {
       const s = new Date(startInput.value + 'T00:00:00');
       const f = new Date(finishInput.value + 'T00:00:00');
       if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
-      const dur = getDaysDiff(s, f) + 1;
+      const dur = getBusinessDaysDiff(s, f);
       if (dur > 0) durationInput.value = dur;
     }
 
