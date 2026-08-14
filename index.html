@@ -1369,7 +1369,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="left-header">
               <div class="col col-start">Start</div>
               <div class="col col-finish">Finish</div>
-              <div class="col col-jobs">Task</div>
+              <div class="col col-jobs" id="ganttTaskColHeader">Task</div>
             </div>
             <div class="left-body" id="leftBody"></div>
           </div>
@@ -2443,6 +2443,10 @@ function syncGanttViewModeButtons() {
   document.querySelectorAll('.gantt-view-mode-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.mode === ganttViewMode);
   });
+  const colHeader = document.getElementById('ganttTaskColHeader');
+  if (colHeader) {
+    colHeader.textContent = ganttViewMode === 'jobs' ? 'Jobs' : ganttViewMode === 'leads' ? 'Leads' : 'Task';
+  }
 }
 
 function setGanttViewMode(mode) {
