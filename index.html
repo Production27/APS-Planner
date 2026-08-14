@@ -2928,6 +2928,15 @@ function closeSettingsMenu() {
   document.getElementById('settingsDropdown').classList.remove('show');
 }
 
+// Snapshot before the click's own handlers run (mousedown fires first),
+// so the outside-click-closes-the-drawer check below can tell "this click
+// opened/switched to a different job" apart from "this click was genuinely
+// outside and nothing else touched editingJobId."
+let editingJobIdAtMouseDown = null;
+document.addEventListener('mousedown', function() {
+  editingJobIdAtMouseDown = editingJobId;
+});
+
 document.addEventListener('click', function(e) {
   const wrap = document.querySelector('.settings-menu-wrap');
   if (wrap && !wrap.contains(e.target)) closeSettingsMenu();
@@ -2940,6 +2949,20 @@ document.addEventListener('click', function(e) {
   if (!e.target.closest('.board-col-settings-wrap')) closeAllColSettings();
   // Close card color pickers
   if (!e.target.closest('.card-color-swatch') && !e.target.closest('.card-color-picker')) closeAllCardColorPickers();
+
+  // Close the job drawer on a click outside it — but not for a click that
+  // opened/switched it in the first place (a Gantt bar or Calendar entry
+  // for a different job also opens the drawer; without this check, this
+  // same click closing it right back would make those unusable while the
+  // drawer was already open). editingJobIdAtMouseDown lets us tell the two
+  // apart: if the job actually being edited changed during this click,
+  // something else already handled it deliberately.
+  const formArea = document.getElementById('formArea');
+  if (formArea && formArea.classList.contains('open') &&
+      !formArea.contains(e.target) && !document.getElementById('jobRail').contains(e.target) &&
+      !e.target.closest('.modal-overlay') && editingJobId === editingJobIdAtMouseDown) {
+    cancelEdit();
+  }
 });
 
 // ===== DARK MODE =====
