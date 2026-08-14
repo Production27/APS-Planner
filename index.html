@@ -217,8 +217,19 @@
     width: 300px; min-width: 300px; background: var(--card); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 6px rgba(0,0,0,0.04);
   }
-  .gantt-view-toggle-row { display: flex; align-items: center; gap: 4px; height: 45px; box-sizing: border-box; padding: 0 8px; background: #eef1fa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .gantt-view-toggle-row .gantt-view-mode-btn { flex: 1; padding: 6px 4px; font-size: 11px; text-align: center; }
+  .gantt-view-toggle-row { display: flex; align-items: flex-end; gap: 4px; height: 45px; box-sizing: border-box; padding: 8px 8px 0; background: #eef1fa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  /* Tab look: active mode sits larger/bolder on top, the other two shrink
+     down until clicked (unlike a row of equal-width pills). */
+  .gantt-view-toggle-row .gantt-view-mode-btn {
+    flex: 0 0 auto; border: none; border-radius: 6px 6px 0 0; background: transparent;
+    color: var(--text-light); font-weight: 600; cursor: pointer; white-space: nowrap;
+    text-align: center; font-size: 11px; padding: 6px 12px; transition: all 0.2s ease;
+  }
+  .gantt-view-toggle-row .gantt-view-mode-btn:hover:not(.active) { color: var(--primary); background: rgba(255,255,255,0.6); }
+  .gantt-view-toggle-row .gantt-view-mode-btn.active {
+    font-size: 14px; font-weight: 800; padding: 10px 18px; color: var(--primary);
+    background: var(--card); box-shadow: 0 -2px 5px rgba(0,0,0,0.06);
+  }
   .left-header {
     display: flex; background: #f8f9fa; border-bottom: 2px solid #dee2e6;
     font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
@@ -1090,6 +1101,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .left-header .col { border-right-color: var(--border); }
   body.dark-mode .gantt-view-toggle-row,
   body.dark-mode .gantt-toolbar { background: #1a1d25; border-bottom-color: var(--border); }
+  body.dark-mode .gantt-view-toggle-row .gantt-view-mode-btn.active { background: var(--card); color: var(--primary-light); }
+  body.dark-mode .gantt-view-toggle-row .gantt-view-mode-btn:hover:not(.active) { background: rgba(57,73,171,0.22); color: #cfd4e0; }
   body.dark-mode .timeline-header .week-header:hover { background: rgba(57,73,171,0.28); }
   body.dark-mode .timeline-header .day-header { color: var(--text-light); border-right-color: var(--border); }
   body.dark-mode .timeline-header .day-header:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
@@ -1325,9 +1338,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="gantt-wrapper">
         <div class="left-panel">
           <div class="gantt-view-toggle-row">
-            <button class="btn btn-secondary gantt-view-mode-btn" id="ganttViewTasks" data-mode="tasks" onclick="setGanttViewMode('tasks')" title="One row per task (current behavior)">Tasks</button>
-            <button class="btn btn-secondary gantt-view-mode-btn" id="ganttViewJobs" data-mode="jobs" onclick="setGanttViewMode('jobs')" title="One row per job, tasks condensed into a single bar">Jobs</button>
-            <button class="btn btn-secondary gantt-view-mode-btn" id="ganttViewLeads" data-mode="leads" onclick="setGanttViewMode('leads')" title="Same as Jobs, colored by assigned lead/foreman">Leads</button>
+            <button class="gantt-view-mode-btn active" id="ganttViewTasks" data-mode="tasks" onclick="setGanttViewMode('tasks')" title="One row per task (current behavior)">Tasks</button>
+            <button class="gantt-view-mode-btn" id="ganttViewJobs" data-mode="jobs" onclick="setGanttViewMode('jobs')" title="One row per job, tasks condensed into a single bar">Jobs</button>
+            <button class="gantt-view-mode-btn" id="ganttViewLeads" data-mode="leads" onclick="setGanttViewMode('leads')" title="Same as Jobs, colored by assigned lead/foreman">Leads</button>
           </div>
           <div class="left-header">
             <div class="col col-start">Start</div>
@@ -2419,14 +2432,10 @@ function colorForLead(name) {
 }
 
 function syncGanttViewModeButtons() {
-  // Sizing/layout come from the .gantt-view-toggle-row .gantt-view-mode-btn
-  // stylesheet rule — this only ever touches color state (same inline-style
-  // toggling setCalendarView() already uses for its Month/Week buttons),
-  // so it can't clobber that on every render.
-  const activeStyle = 'background:var(--primary-light);color:white;border-color:var(--primary-light);';
-  const inactiveStyle = 'background:transparent;color:var(--text-light);border-color:transparent;';
+  // Look (size/weight/background) is entirely driven by the .active class
+  // in the stylesheet — this just decides which button has it.
   document.querySelectorAll('.gantt-view-mode-btn').forEach(function(b) {
-    b.style.cssText = b.dataset.mode === ganttViewMode ? activeStyle : inactiveStyle;
+    b.classList.toggle('active', b.dataset.mode === ganttViewMode);
   });
 }
 
