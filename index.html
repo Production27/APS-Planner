@@ -363,7 +363,6 @@
   body.dark-mode .task-bar.reordering { opacity: 0.25; }
   body.dark-mode .task-row.reorder-target { background: rgba(92,107,192,0.45) !important; }
   .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; justify-content: center; font-size: 9px; }
-  .task-bar.job-span-bar { cursor: pointer; }
   .task-bar.due-marker-bar { border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935, 0 1px 3px rgba(0,0,0,0.25); }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
@@ -4569,11 +4568,13 @@ function renderGantt() {
         editJob(job.id, task.id);
       });
 
-      // A condensed job-span bar doesn't correspond to any single real
-      // task — there's nothing meaningful for dragging/resizing it to
-      // write back to, so (unlike a due marker, which still supports
-      // moving) it gets neither a move handler nor resize handles at all.
-      if (!task.isJobSpan) {
+      if (task.isJobSpan) {
+        // Condensed 'jobs'/'leads' bar: dragging it moves every one of the
+        // job's real tasks by the same number of days (see the isJobSpan
+        // branch in onBarMoveEnd), keeping the whole schedule connected.
+        // No resize handles — there's no single task to stretch.
+        bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar, true));
+      } else {
         bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar));
 
         // A due date is a single point in time, not a range — only "move"
@@ -4812,9 +4813,26 @@ function onBarResizeEnd(e) {
 }
 
 // --- Bar body: drag to move the whole task (both dates shift together) ---
-function startBarMove(e, jobId, taskId, bar) {
+// isJobSpan: dragging a condensed 'jobs'/'leads' bar moves every dated task
+// in the job together (see onBarMoveEnd) rather than one real task, so
+// `task` here is a synthetic start/finish spanning all of them, recomputed
+// fresh from the job's current tasks (same rule as buildCondensedJobRows()).
+function startBarMove(e, jobId, taskId, bar, isJobSpan) {
   let task;
-  if (taskId === DUE_MARKER_TASK_ID) {
+  if (isJobSpan) {
+    const jf = findJob(jobId);
+    if (!jf) return;
+    let minStart = null, maxFinish = null;
+    (jf.job.tasks || []).forEach(function(t) {
+      if (!t.start || !t.finish) return;
+      const s = new Date(t.start + 'T00:00:00'), f = new Date(t.finish + 'T00:00:00');
+      if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+      if (!minStart || s < minStart) minStart = s;
+      if (!maxFinish || f > maxFinish) maxFinish = f;
+    });
+    if (!minStart || !maxFinish) return;
+    task = { name: jf.job.name, start: minStart.toISOString().split('T')[0], finish: maxFinish.toISOString().split('T')[0] };
+  } else if (taskId === DUE_MARKER_TASK_ID) {
     const jf = findJob(jobId);
     if (!jf) return;
     task = getJobDueMarkerTask(jf.job);
@@ -4833,7 +4851,7 @@ function startBarMove(e, jobId, taskId, bar) {
     startDateObj: s, duration, deltaDays: 0, moved: false,
     origLeftPx: parseFloat(bar.style.left),
     origTopPx: parseFloat(bar.style.top),
-    reorderMode: false, newIndex: null
+    reorderMode: false, newIndex: null, isJobSpan: !!isJobSpan
   };
 
   document.addEventListener('mousemove', onBarMoveMove);
@@ -4882,11 +4900,39 @@ function onBarMoveMove(e) {
 
 function onBarMoveEnd(e) {
   if (!barMoveState) return;
-  const { task, taskId, deltaDays, moved, duration, startDateObj, bar, reorderMode, jobId, newJobIndex } = barMoveState;
+  const { task, taskId, deltaDays, moved, duration, startDateObj, bar, reorderMode, jobId, newJobIndex, isJobSpan } = barMoveState;
   document.removeEventListener('mousemove', onBarMoveMove);
   document.removeEventListener('mouseup', onBarMoveEnd);
   bar.classList.remove('moving', 'reordering');
   hideTooltip();
+
+  if (isJobSpan) {
+    if (moved && deltaDays !== 0) {
+      const jf = findJob(jobId);
+      if (jf) {
+        (jf.job.tasks || []).forEach(function(t) {
+          if (!t.start || !t.finish) return;
+          const ns = new Date(t.start + 'T00:00:00');
+          ns.setDate(ns.getDate() + deltaDays);
+          const nf = new Date(t.finish + 'T00:00:00');
+          nf.setDate(nf.getDate() + deltaDays);
+          t.start = ns.toISOString().split('T')[0];
+          t.finish = nf.toISOString().split('T')[0];
+        });
+        saveJobs();
+        logActivity('moved job "' + jf.job.name + '"');
+        renderJobList();
+        refreshJobFormIfOpen(jobId);
+        showToast('Job dates updated', 'success');
+      }
+      bar.dataset.dragged = 'true';
+    } else {
+      bar.dataset.dragged = 'false';
+    }
+    barMoveState = null;
+    renderGantt();
+    return;
+  }
 
   if (reorderMode) {
     removeReorderGhost();
