@@ -4672,6 +4672,12 @@ function renderGantt() {
         grid.appendChild(borderOverlay);
       } else {
         bar.style.background = task.color || job.color;
+        // Same job-color outline as a condensed Jobs/Leads bar, so which
+        // job a task belongs to is visible at a glance without needing the
+        // job-name tag below. Due markers keep their own white/red ring
+        // instead — that's a distinct "this is a due date" signal, not a
+        // job identity one.
+        if (!task.isDueMarker) bar.style.border = '2px solid ' + (job.color || '#3949ab');
         bar.textContent = task.isDueMarker ? '🚩' : '';
         if (duration !== 1) {
           const jobTag = document.createElement('span');
