@@ -364,6 +364,14 @@
   body.dark-mode .task-row.reorder-target { background: rgba(92,107,192,0.45) !important; }
   .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; justify-content: center; font-size: 9px; }
   .task-bar.due-marker-bar { border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935, 0 1px 3px rgba(0,0,0,0.25); }
+  /* Phase-boundary tick on a condensed Jobs/Leads bar — see the
+     task.isJobSpan block in renderGantt(). Taller than the bar itself so
+     the bottom few pixels "stick down" below it as a small flag marking
+     where one task ends and the next begins. */
+  .job-span-task-tick {
+    position: absolute; width: 2px; height: 28px; background: rgba(255,255,255,0.9);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.25); border-radius: 1px; z-index: 65; pointer-events: none;
+  }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
   .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
@@ -4611,6 +4619,33 @@ function renderGantt() {
 
       grid.appendChild(bar);
 
+      // Jobs/Leads view: the condensed bar is one solid span, but the real
+      // tasks inside it usually run back-to-back rather than as a single
+      // block — drop a small tick at each task's finish date (except the
+      // last, which already coincides with the bar's own right edge) so
+      // the phase boundaries are still visible without splitting the row.
+      if (task.isJobSpan) {
+        const jobEndIdx = startIdx + duration - 1;
+        const seenIdx = {};
+        (job.tasks || []).forEach(function(t) {
+          if (!t.start || !t.finish) return;
+          const tf = new Date(t.finish + 'T00:00:00');
+          if (isNaN(tf.getTime())) return;
+          const endIdx = getDaysDiff(startDate, tf);
+          if (endIdx >= jobEndIdx || seenIdx[endIdx]) return;
+          seenIdx[endIdx] = true;
+          const tickLeft = (endIdx + 1) * dayWidth;
+          const tick = document.createElement('div');
+          tick.className = 'job-span-task-tick';
+          tick.dataset.jobId = job.id;
+          tick.dataset.origLeft = tickLeft;
+          tick.style.left = tickLeft + 'px';
+          tick.style.top = (barVisibleIdx * 34 + 6) + 'px';
+          tick.title = t.name;
+          grid.appendChild(tick);
+        });
+      }
+
       if (!jobBarMap[job.id]) jobBarMap[job.id] = [];
       jobBarMap[job.id].push({
         left: startIdx * dayWidth,
@@ -4895,6 +4930,16 @@ function onBarMoveMove(e) {
   const deltaDays = Math.round(deltaX / dayWidth);
   barMoveState.deltaDays = deltaDays;
   barMoveState.bar.style.left = (barMoveState.origLeftPx + deltaDays * dayWidth) + 'px';
+
+  // Drag the job-span bar's phase-boundary ticks along with it so they
+  // don't visually detach from the bar mid-drag (they otherwise only
+  // catch up once renderGantt() redraws everything on drop).
+  if (barMoveState.isJobSpan) {
+    document.querySelectorAll('.job-span-task-tick').forEach(function(tk) {
+      if (tk.dataset.jobId !== barMoveState.jobId) return;
+      tk.style.left = (parseFloat(tk.dataset.origLeft) + deltaDays * dayWidth) + 'px';
+    });
+  }
 
   const newStart = new Date(barMoveState.startDateObj);
   newStart.setDate(newStart.getDate() + deltaDays);
