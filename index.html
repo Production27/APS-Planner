@@ -536,9 +536,14 @@
   .task-bar.resizing .task-bar-resize-handle::after { opacity: 1; }
 
   /* ===== LIVE TODAY LINE ===== */
+  /* z-index 85/86 — above every job-span overlay in the condensed Jobs/
+     Leads view (.job-span-border is the highest, at 80), which otherwise
+     drew over/"underlapped" the line on any day a job's bar covered. A
+     reference line like this should read as always-on-top regardless of
+     what's under it. */
   .today-line {
     position: absolute; top: 0; bottom: 0; width: 2px;
-    background: var(--accent); z-index: 40; pointer-events: none;
+    background: var(--accent); z-index: 85; pointer-events: none;
   }
   .today-line::before {
     content: ''; position: absolute; top: -4px; left: -4px;
@@ -549,7 +554,7 @@
     position: absolute; top: 2px;
     background: var(--accent); color: white;
     font-size: 9px; padding: 2px 8px; border-radius: 3px;
-    font-weight: 700; z-index: 41; white-space: nowrap;
+    font-weight: 700; z-index: 86; white-space: nowrap;
     pointer-events: none;
   }
 
