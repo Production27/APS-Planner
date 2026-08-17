@@ -463,7 +463,12 @@
   .cal-event-bar.timed-style:hover { filter: none; background: rgba(0,0,0,0.06) !important; }
   body.dark-mode .cal-event-bar.timed-style:hover { background: rgba(255,255,255,0.08) !important; }
   /* Week view hourly grid */
-  .week-hour-section { display: none; flex: 1; overflow-y: auto; position: relative; border-top: 1px solid var(--border); margin-top: 8px; min-height: 0; }
+  /* touch-action:pan-y — see the same rule on .calendar-days; lets a
+     horizontal swipe (day mode's swipe-to-navigate — see calSwipeTargets())
+     go straight to JS instead of the browser's scroll-gesture recognizer
+     contesting it first, while vertical scroll through the 24 hours here
+     stays untouched either way. */
+  .week-hour-section { display: none; flex: 1; overflow-y: auto; touch-action: pan-y; position: relative; border-top: 1px solid var(--border); margin-top: 8px; min-height: 0; }
   .week-hour-section.show { display: flex; }
   .week-hour-labels { width: 48px; flex-shrink: 0; }
   .week-hour-label { height: 48px; box-sizing: border-box; text-align: right; padding-right: 8px; font-size: 10px; color: var(--text-light); position: relative; }
@@ -4311,19 +4316,39 @@ function initCalendarDragHandlers() {
   daysEl.removeEventListener('mousedown', handleCalBarMouseDown);
   daysEl.addEventListener('mousedown', handleCalBarMouseDown);
 
-  // Swipe left/right to go to next/prev month, following the finger live
-  // — mobile month view only (see @media(max-width:480px); week view
-  // isn't reachable there, and desktop never gets touch events in the
-  // first place). passive:true throughout since none of these call
-  // preventDefault — see the touch-action:pan-y rule on .calendar-days,
-  // which is what tells the browser to leave native vertical scroll alone
-  // while letting JS own horizontal drags, rather than the two fighting.
-  daysEl.removeEventListener('touchstart', handleCalSwipeStart);
-  daysEl.removeEventListener('touchmove', handleCalSwipeMove);
-  daysEl.removeEventListener('touchend', handleCalSwipeEnd);
-  daysEl.addEventListener('touchstart', handleCalSwipeStart, { passive: true });
-  daysEl.addEventListener('touchmove', handleCalSwipeMove, { passive: true });
-  daysEl.addEventListener('touchend', handleCalSwipeEnd, { passive: true });
+  // Swipe left/right to go to next/prev month/day, following the finger
+  // live — mobile month & day mode only (see @media(max-width:480px);
+  // week view isn't reachable there, and desktop never gets touch events
+  // in the first place). Attached to both #calendarDays (the grid/agenda
+  // list) and #weekHourSection (day mode's hourly grid below it — see
+  // calSwipeTargets()) so a swipe starting on either one navigates and
+  // slides both together, not just whichever one the finger happened to
+  // land on. passive:true throughout since none of these call
+  // preventDefault — see the touch-action:pan-y rule on .calendar-days
+  // and .week-hour-section, which is what tells the browser to leave
+  // native vertical scroll alone while letting JS own horizontal drags,
+  // rather than the two fighting.
+  const hourEl = document.getElementById('weekHourSection');
+  [daysEl, hourEl].forEach(function(el) {
+    if (!el) return;
+    el.removeEventListener('touchstart', handleCalSwipeStart);
+    el.removeEventListener('touchmove', handleCalSwipeMove);
+    el.removeEventListener('touchend', handleCalSwipeEnd);
+    el.addEventListener('touchstart', handleCalSwipeStart, { passive: true });
+    el.addEventListener('touchmove', handleCalSwipeMove, { passive: true });
+    el.addEventListener('touchend', handleCalSwipeEnd, { passive: true });
+  });
+}
+
+// The elements a swipe drags/slides together — just #calendarDays in month
+// mode, plus #weekHourSection in day mode so the hourly grid moves in
+// lockstep with the all-day list above it (same day, one gesture).
+function calSwipeTargets() {
+  const daysEl = document.getElementById('calendarDays');
+  if (!daysEl) return [];
+  if (calendarViewMode !== 'day') return [daysEl];
+  const hourEl = document.getElementById('weekHourSection');
+  return hourEl ? [daysEl, hourEl] : [daysEl];
 }
 
 const CAL_SWIPE_THRESHOLD = 60;
@@ -4349,8 +4374,8 @@ function handleCalSwipeMove(e) {
   const touch = e.touches[0];
   const deltaX = touch.clientX - calSwipeStartX;
   const deltaY = touch.clientY - calSwipeStartY;
-  const daysEl = document.getElementById('calendarDays');
-  if (!daysEl) return;
+  const targets = calSwipeTargets();
+  if (!targets.length) return;
 
   if (!calSwipeTracking) {
     // Wait for enough movement to tell a horizontal swipe apart from a
@@ -4360,9 +4385,9 @@ function handleCalSwipeMove(e) {
     if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
     if (Math.abs(deltaY) > Math.abs(deltaX)) { calSwipeStartX = null; return; }
     calSwipeTracking = true;
-    daysEl.style.transition = 'none';
+    targets.forEach(function(el) { el.style.transition = 'none'; });
   }
-  daysEl.style.transform = 'translateX(' + deltaX + 'px)';
+  targets.forEach(function(el) { el.style.transform = 'translateX(' + deltaX + 'px)'; });
 }
 
 function handleCalSwipeEnd(e) {
@@ -4379,14 +4404,17 @@ function handleCalSwipeEnd(e) {
   // open once the synthesized mouseup for this same touch fires.
   calSwipeConsumedTap = true;
 
-  const daysEl = document.getElementById('calendarDays');
-  if (!daysEl) return;
+  const targets = calSwipeTargets();
+  if (!targets.length) return;
+  const daysEl = targets[0]; // drives the completion timing for all targets below
 
   if (Math.abs(deltaX) < CAL_SWIPE_THRESHOLD) {
     // Didn't clear the threshold — spring back to where it started, no
-    // month change.
-    daysEl.style.transition = 'transform 0.2s ease';
-    daysEl.style.transform = 'translateX(0)';
+    // month/day change.
+    targets.forEach(function(el) {
+      el.style.transition = 'transform 0.2s ease';
+      el.style.transform = 'translateX(0)';
+    });
     return;
   }
 
@@ -4397,29 +4425,38 @@ function handleCalSwipeEnd(e) {
   // following a leftward drag — snapped back positive right as you let
   // go, instead of continuing left), then swap to the next/prev month or
   // day (calendarNext()/calendarPrev() — see their calendarViewMode
-  // branches) and slide that in from the opposite edge.
+  // branches) and slide that in from the opposite edge. In day mode this
+  // moves in lockstep with the hourly grid below it (see
+  // calSwipeTargets()), not just the all-day list.
   const width = daysEl.getBoundingClientRect().width || window.innerWidth;
   const outX = deltaX < 0 ? -width : width;
   const goNext = deltaX < 0; // swiping left continues left — next month/day
-  daysEl.style.transition = 'transform 0.2s ease';
-  daysEl.style.transform = 'translateX(' + outX + 'px)';
+  targets.forEach(function(el) {
+    el.style.transition = 'transform 0.2s ease';
+    el.style.transform = 'translateX(' + outX + 'px)';
+  });
 
   const finishSwipe = function() {
     daysEl.removeEventListener('transitionend', finishSwipe);
     if (goNext) calendarNext(); else calendarPrev();
-    // calendarNext()/calendarPrev() re-render this same #calendarDays
-    // element's contents in place, but the outgoing transform from above
-    // is still sitting on it — jump it out to the opposite edge with no
+    // calendarNext()/calendarPrev() re-render these same elements'
+    // contents in place, but the outgoing transform from above is still
+    // sitting on them — jump them out to the opposite edge with no
     // transition (so this is invisible), then animate back to 0 so the
     // new month/day visibly slides in from the side the old one exited
     // toward.
-    const freshDaysEl = document.getElementById('calendarDays');
+    const freshTargets = calSwipeTargets();
+    const freshDaysEl = freshTargets[0];
     if (!freshDaysEl) return;
-    freshDaysEl.style.transition = 'none';
-    freshDaysEl.style.transform = 'translateX(' + (-outX) + 'px)';
+    freshTargets.forEach(function(el) {
+      el.style.transition = 'none';
+      el.style.transform = 'translateX(' + (-outX) + 'px)';
+    });
     void freshDaysEl.offsetHeight; // force layout so the jump above lands before the transition re-enables
-    freshDaysEl.style.transition = 'transform 0.2s ease';
-    freshDaysEl.style.transform = 'translateX(0)';
+    freshTargets.forEach(function(el) {
+      el.style.transition = 'transform 0.2s ease';
+      el.style.transform = 'translateX(0)';
+    });
   };
   daysEl.addEventListener('transitionend', finishSwipe);
 }
