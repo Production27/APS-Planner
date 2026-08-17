@@ -1283,11 +1283,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .calendar-view-toggle-wrap { display: none !important; }
     .week-hour-section { display: none; }
     .calendar-wrapper { padding: 8px; }
-    /* Prev/Next/Today wrap onto their own row below the month/year label
-       instead of everything fighting for one cramped row. */
+    /* Today wraps onto its own row below the month/year label instead of
+       fighting for one cramped row. Prev/Next are hidden entirely —
+       swiping the grid (see handleCalSwipeEnd()) is the mobile way to
+       change months, so they'd just be redundant. */
     .calendar-toolbar { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
     .calendar-toolbar h3 { flex: 1 1 100%; order: -1; font-size: 15px; margin-bottom: 2px; }
     .calendar-toolbar button { padding: 6px 10px; font-size: 12px; }
+    .cal-prev-next-btn { display: none; }
     .calendar-grid { gap: 3px; }
     .cal-day { min-height: 62px; padding: 3px; }
     .cal-day-num { font-size: 10px; margin-bottom: 2px; }
@@ -1585,9 +1588,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="tab-panel" id="panel-calendar">
       <div class="calendar-wrapper">
         <div class="calendar-toolbar">
-          <button class="btn btn-secondary" onclick="calendarPrev()">‹ Prev</button>
+          <button class="btn btn-secondary cal-prev-next-btn" onclick="calendarPrev()">‹ Prev</button>
           <h3 id="calendarLabel"></h3>
-          <button class="btn btn-secondary" onclick="calendarNext()">Next ›</button>
+          <button class="btn btn-secondary cal-prev-next-btn" onclick="calendarNext()">Next ›</button>
           <button class="btn btn-secondary" onclick="calendarToday()" style="margin-left:8px;">Today</button>
           <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
             <button class="btn btn-secondary" id="calViewMonth" onclick="setCalendarView('month')" style="padding:6px 14px;font-size:12px;">Month</button>
@@ -4365,16 +4368,21 @@ function handleCalSwipeEnd(e) {
   }
 
   // Finish sliding the current month the rest of the way off-screen in
-  // the direction it was already moving, then swap to the next/prev
-  // month and slide that in from the opposite edge.
-  const dir = deltaX < 0 ? 1 : -1; // 1 = next (exits left), -1 = prev (exits right)
-  const outX = dir * (daysEl.getBoundingClientRect().width || window.innerWidth);
+  // the SAME direction it was already moving (a past bug derived this
+  // from a separate "dir" flag that ended up with the opposite sign of
+  // deltaX, so the grid — already sitting at a negative transform after
+  // following a leftward drag — snapped back positive right as you let
+  // go, instead of continuing left), then swap to the next/prev month and
+  // slide that in from the opposite edge.
+  const width = daysEl.getBoundingClientRect().width || window.innerWidth;
+  const outX = deltaX < 0 ? -width : width;
+  const goNext = deltaX < 0; // swiping left continues left — next month
   daysEl.style.transition = 'transform 0.2s ease';
   daysEl.style.transform = 'translateX(' + outX + 'px)';
 
   const finishSwipe = function() {
     daysEl.removeEventListener('transitionend', finishSwipe);
-    if (dir === 1) calendarNext(); else calendarPrev();
+    if (goNext) calendarNext(); else calendarPrev();
     // calendarNext()/calendarPrev() re-render this same #calendarDays
     // element's contents in place, but the outgoing transform from above
     // is still sitting on it — jump it out to the opposite edge with no
