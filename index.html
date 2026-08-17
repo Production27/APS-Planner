@@ -5621,9 +5621,12 @@ let reorderIndicatorEl = null;
 // task.order) by the same number of days — keeps each later task's own
 // duration and any gaps between tasks intact. Used for right-edge resize
 // (extending/shortening a task's finish pushes the rest of the schedule
-// with it). Deliberately NOT used for whole-bar moves or left-edge resize,
-// since those change a task's start date and should be free to cross over
-// neighboring tasks so the Gantt can reorder rows by start date.
+// with it) and for dragging a task's whole bar to move it (see the
+// !isJobSpan branch of onBarMoveEnd()) — same idea, since a move shifts
+// start and finish by the same delta a resize's cascade already uses.
+// Deliberately NOT used for left-edge resize, since that only changes
+// this task's own start date (finish stays put) — there's no single
+// "shift the rest of the schedule" delta that would make sense there.
 function cascadeShiftLaterTasks(jobId, taskId, deltaDays) {
   if (!deltaDays) return;
   const found = findJob(jobId);
@@ -6016,6 +6019,9 @@ function onBarMoveEnd(e) {
     newFinish.setDate(newFinish.getDate() + duration - 1);
     task.start = newStart.toISOString().split('T')[0];
     task.finish = newFinish.toISOString().split('T')[0];
+    // Keep the rest of the job's schedule connected — later tasks slide
+    // along by the same delta instead of only the dragged one moving.
+    cascadeShiftLaterTasks(jobId, taskId, deltaDays);
     saveJobs();
     logActivity('moved task "' + task.name + '"');
     renderJobList();
