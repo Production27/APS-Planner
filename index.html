@@ -174,7 +174,11 @@
   .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
   #calendarWeekdays { flex-shrink: 0; margin-bottom: 6px; }
   #calendarWeekdays .cal-weekday { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; padding: 4px 0; }
-  .calendar-days { flex: 1; grid-auto-rows: 1fr; overflow: auto; }
+  /* touch-action:pan-y — tells the browser this element only handles
+     native touch panning vertically, so a horizontal drag is immediately
+     handed to JS (see handleCalSwipeMove()) instead of the two fighting
+     over the gesture; vertical scroll is untouched either way. */
+  .calendar-days { flex: 1; grid-auto-rows: 1fr; overflow: auto; touch-action: pan-y; }
   /* Week view splits into this (all-day-ish items only, once timed events
      move into the hourly grid below) sized to content instead of filling
      all available height, and the hourly grid taking the rest. */
@@ -4231,38 +4235,107 @@ function initCalendarDragHandlers() {
   daysEl.removeEventListener('mousedown', handleCalBarMouseDown);
   daysEl.addEventListener('mousedown', handleCalBarMouseDown);
 
-  // Swipe left/right to go to next/prev month — mobile month view only
-  // (see @media(max-width:480px); week view isn't reachable there, and
-  // desktop never gets touch events in the first place). passive:true
-  // since neither handler calls preventDefault — vertical scroll (see the
-  // 100dvh fix for .calendar-days actually having room to need it) stays
-  // completely native and unaffected.
+  // Swipe left/right to go to next/prev month, following the finger live
+  // — mobile month view only (see @media(max-width:480px); week view
+  // isn't reachable there, and desktop never gets touch events in the
+  // first place). passive:true throughout since none of these call
+  // preventDefault — see the touch-action:pan-y rule on .calendar-days,
+  // which is what tells the browser to leave native vertical scroll alone
+  // while letting JS own horizontal drags, rather than the two fighting.
   daysEl.removeEventListener('touchstart', handleCalSwipeStart);
+  daysEl.removeEventListener('touchmove', handleCalSwipeMove);
   daysEl.removeEventListener('touchend', handleCalSwipeEnd);
   daysEl.addEventListener('touchstart', handleCalSwipeStart, { passive: true });
+  daysEl.addEventListener('touchmove', handleCalSwipeMove, { passive: true });
   daysEl.addEventListener('touchend', handleCalSwipeEnd, { passive: true });
 }
 
-let calSwipeStartX = null, calSwipeStartY = null, calSwipeStartedOnBar = false;
+const CAL_SWIPE_THRESHOLD = 60;
+let calSwipeStartX = null, calSwipeStartY = null, calSwipeTracking = false;
+// Set when a real drag (swipe or an aborted one) was recognized, so the
+// mousedown/mouseup pair synthesized from the same touch — which fires
+// right after touchend — knows not to also open whatever bar the finger
+// happened to land on. See the isMobile branch in handleCalBarMouseUp.
+let calSwipeConsumedTap = false;
+
 function handleCalSwipeStart(e) {
   if (calendarViewMode !== 'month' || e.touches.length !== 1) { calSwipeStartX = null; return; }
-  // A swipe that starts on an event bar is already spoken for — tapping/
-  // dragging a bar always opens it on mobile (see handleCalBarMouseUp),
-  // so treating the same gesture as a month-swipe too would fire both.
-  calSwipeStartedOnBar = !!e.target.closest('.cal-event-bar');
   calSwipeStartX = e.touches[0].clientX;
   calSwipeStartY = e.touches[0].clientY;
+  calSwipeTracking = false;
 }
-function handleCalSwipeEnd(e) {
-  if (calSwipeStartX == null || calSwipeStartedOnBar) { calSwipeStartX = null; return; }
-  const touch = e.changedTouches[0];
+
+function handleCalSwipeMove(e) {
+  if (calSwipeStartX == null || e.touches.length !== 1) return;
+  const touch = e.touches[0];
   const deltaX = touch.clientX - calSwipeStartX;
   const deltaY = touch.clientY - calSwipeStartY;
+  const daysEl = document.getElementById('calendarDays');
+  if (!daysEl) return;
+
+  if (!calSwipeTracking) {
+    // Wait for enough movement to tell a horizontal swipe apart from a
+    // vertical scroll before committing to either — once decided, a
+    // vertical gesture is left alone for native scroll to handle, exactly
+    // as if this listener wasn't here at all.
+    if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
+    if (Math.abs(deltaY) > Math.abs(deltaX)) { calSwipeStartX = null; return; }
+    calSwipeTracking = true;
+    daysEl.style.transition = 'none';
+  }
+  daysEl.style.transform = 'translateX(' + deltaX + 'px)';
+}
+
+function handleCalSwipeEnd(e) {
+  const wasTracking = calSwipeTracking;
+  calSwipeTracking = false;
+  if (calSwipeStartX == null) return;
+  const touch = e.changedTouches[0];
+  const deltaX = touch.clientX - calSwipeStartX;
   calSwipeStartX = null;
-  // Require a deliberate, mostly-horizontal swipe so an ordinary vertical
-  // scroll through the grid never gets misread as a month change.
-  if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY)) return;
-  if (deltaX < 0) calendarNext(); else calendarPrev();
+  if (!wasTracking) return;
+
+  // Real dragging happened either way (whether or not it clears the
+  // threshold below) — not a clean tap, so the bar underneath shouldn't
+  // open once the synthesized mouseup for this same touch fires.
+  calSwipeConsumedTap = true;
+
+  const daysEl = document.getElementById('calendarDays');
+  if (!daysEl) return;
+
+  if (Math.abs(deltaX) < CAL_SWIPE_THRESHOLD) {
+    // Didn't clear the threshold — spring back to where it started, no
+    // month change.
+    daysEl.style.transition = 'transform 0.2s ease';
+    daysEl.style.transform = 'translateX(0)';
+    return;
+  }
+
+  // Finish sliding the current month the rest of the way off-screen in
+  // the direction it was already moving, then swap to the next/prev
+  // month and slide that in from the opposite edge.
+  const dir = deltaX < 0 ? 1 : -1; // 1 = next (exits left), -1 = prev (exits right)
+  const outX = dir * (daysEl.getBoundingClientRect().width || window.innerWidth);
+  daysEl.style.transition = 'transform 0.2s ease';
+  daysEl.style.transform = 'translateX(' + outX + 'px)';
+
+  const finishSwipe = function() {
+    daysEl.removeEventListener('transitionend', finishSwipe);
+    if (dir === 1) calendarNext(); else calendarPrev();
+    // calendarNext()/calendarPrev() re-render this same #calendarDays
+    // element's contents in place, but the outgoing transform from above
+    // is still sitting on it — jump it out to the opposite edge with no
+    // transition (so this is invisible), then animate back to 0 so the
+    // new month visibly slides in from the side the old one exited toward.
+    const freshDaysEl = document.getElementById('calendarDays');
+    if (!freshDaysEl) return;
+    freshDaysEl.style.transition = 'none';
+    freshDaysEl.style.transform = 'translateX(' + (-outX) + 'px)';
+    void freshDaysEl.offsetHeight; // force layout so the jump above lands before the transition re-enables
+    freshDaysEl.style.transition = 'transform 0.2s ease';
+    freshDaysEl.style.transform = 'translateX(0)';
+  };
+  daysEl.addEventListener('transitionend', finishSwipe);
 }
 
 function handleCalBarMouseDown(e) {
@@ -4378,15 +4451,27 @@ function handleCalBarMouseUp(e) {
   bar.classList.remove('cal-dragging', 'cal-resizing');
   hideTooltip();
 
-  // On phones (see the @media(max-width:480px) mobile layout), always
-  // treat this as "open", never "reschedule" — regardless of `moved`. A
-  // touchscreen tap wobbles more than a mouse click does, and 3px (the
-  // threshold that sets `moved`) is well within normal finger imprecision,
-  // so without this a slightly-off tap could silently drag a task/event by
-  // a day or two instead of opening it. Rescheduling on mobile goes
-  // through that same edit modal's date field instead, which is reliable
-  // either way.
   const isMobile = window.matchMedia('(max-width: 480px)').matches;
+
+  // A real swipe (see handleCalSwipeEnd) already ran on this same gesture's
+  // touchend, which always fires before the mousedown/mouseup pair that
+  // gets synthesized from a touch — so by the time we're here, it's
+  // already decided this was "swipe the month", not "tap this bar", even
+  // when the finger started right on top of a bar. Without this, a
+  // calendar full of bars would leave nowhere to swipe from.
+  if (isMobile && calSwipeConsumedTap) {
+    calSwipeConsumedTap = false;
+    calDragState = null;
+    return;
+  }
+
+  // Otherwise, on phones, always treat this as "open", never "reschedule"
+  // — regardless of `moved`. A touchscreen tap wobbles more than a mouse
+  // click does, and 3px (the threshold that sets `moved`) is well within
+  // normal finger imprecision, so without this a slightly-off tap could
+  // silently drag a task/event by a day or two instead of opening it.
+  // Rescheduling on mobile goes through that same edit modal's date field
+  // instead, which is reliable either way.
   if (!moved || isMobile) {
     if (isCalendarEvent) openEditCalendarEvent(calEventId, calEventSourceDate);
     else calendarOpenJob(jobId, taskId);
