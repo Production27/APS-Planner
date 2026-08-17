@@ -1159,8 +1159,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     /* #formArea escapes that zero-width collapse via position:fixed —
        its width:min(888px,100%) then resolves against the viewport
        instead of its now-collapsed containing block, and fixed
-       positioning isn't clipped by an ancestor's overflow:hidden. */
-    .manager-form-area { position: fixed; padding: 16px; }
+       positioning isn't clipped by an ancestor's overflow:hidden.
+       top:60px (not the base rule's top:0) keeps it below .app-header:
+       both would otherwise start at the very top of the viewport, and
+       the header's higher z-index (100 vs this drawer's 95) would paint
+       over whatever's at the top of the drawer's own content — which,
+       since the Comments panel reorders to the top (order:-1, see the
+       1440px query above), silently clipped Comments specifically while
+       leaving the rest of the form (further down) untouched. */
+    .manager-form-area { position: fixed; top: 60px; padding: 16px; }
     .form-container { padding: 16px; }
     /* Start/Days/Finish were sized for a ~460px-wide desktop drawer column
        (92/50/92px) — at phone width that leaves almost nothing for the
