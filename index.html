@@ -1120,6 +1120,42 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   @media (max-width: 1100px) { .left-panel, .gantt-view-toggle-row { width: 260px; min-width: 260px; } .manager-sidebar { width: 210px; min-width: 210px; } }
 
+  /* ===== MOBILE (phone-width) =====
+     First mobile-friendly pass, scoped to the Job list + editor only —
+     that's the "quick check/edit from the field" use case, and the most
+     tractable to get right in one pass. Gantt/Board/Calendar are each a
+     wide, dense, desktop-oriented layout that need their own dedicated
+     mobile treatment rather than just shrinking, so for now they (and the
+     tab switcher that reaches them) are hidden instead of shown broken —
+     the job rail takes over the full screen instead of sharing it with a
+     panel that doesn't fit. Revisit this per-view in a later pass. */
+  @media (max-width: 480px) {
+    .app-header { padding: 10px 14px; }
+    /* The title/subtitle's desktop min-width (200px/300px) is what was
+       pushing header-actions (project switch/activity log/settings) off
+       the right edge — nothing to switch to but there's no space to shrink
+       into it, and the two just overflow instead of yielding. */
+    .app-header h1 { min-width: 0; max-width: 100%; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .app-header .subtitle { min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .header-actions { gap: 4px; }
+
+    /* .legend-float lives outside .app-shell-main (it's a top-level fixed
+       element, not nested in the Gantt panel), so hiding that panel alone
+       doesn't hide it — it needs its own rule or it's left floating over
+       the job list with nothing on-screen for it to be a legend of. */
+    .app-shell-main, .rail-tab-row, .activity-sidebar, #activityToggleBtn, .legend-float { display: none; }
+    .manager-sidebar { width: 100%; min-width: 0; }
+    .manager-sidebar-header { padding: 12px; }
+
+    .manager-form-area { padding: 16px; }
+    .form-container { padding: 16px; }
+    /* Start/Days/Finish were sized for a ~460px-wide desktop drawer column
+       (92/50/92px) — at phone width that leaves almost nothing for the
+       task name itself. Narrower date cells still fit their "M/D" text
+       fine; the name column gets the room back. */
+    .task-fixed-header, .task-fixed-row { grid-template-columns: auto 1fr 58px 34px 58px; }
+  }
+
   /* ===== DARK MODE ===== */
   body.dark-mode {
     --bg: #14161c; --card: #1c1f27; --border: #323744;
