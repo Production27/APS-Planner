@@ -214,17 +214,13 @@
   body.dark-mode .cal-day { background: #1e2130; border-color: #333c55; }
   body.dark-mode .cal-day.cal-outside { background: #16182380; }
 
-  /* ===== DAY VIEW MODAL ===== */
-  /* .modal-box is normally sized purely by content, but a full 24-row
-     hourly grid (see renderDayHourGrid()) is ~1150px tall on its own —
-     mirror how the desktop week view handles the same problem: a bounded
-     flex column where the all-day list stays pinned (like the week view's
-     own all-day segments row) and only the hourly grid scrolls beneath it
-     (.week-hour-section already has flex:1/overflow-y:auto/min-height:0
-     for exactly this, reused as-is). Header and Close stay outside both,
-     always reachable. */
-  #dayViewModal .modal-box { display: flex; flex-direction: column; max-height: 85vh; }
-  #dayViewList { flex-shrink: 0; max-height: 35vh; overflow-y: auto; margin-bottom: 8px; }
+  /* ===== DAY VIEW (calendarViewMode = 'day') ===== */
+  /* Renders into the same #calendarDays/#weekHourSection elements as
+     month/week (see renderDayCalendarView()) — sized to content instead
+     of stretching to fill available height like month/week's
+     .calendar-days (flex:1 there), so the hourly grid below it gets the
+     rest of the space. */
+  .day-agenda-list { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 8px; }
   .day-view-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
   .day-view-item:hover { background: #eef1fa; }
   .day-view-item-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
@@ -1289,11 +1285,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        flex" in the markup, which otherwise beats any stylesheet rule
        regardless of specificity. */
     .calendar-view-toggle-wrap { display: none !important; }
-    /* Scoped to the ID, not the .week-hour-section class — the day view
-       modal's hourly grid (#dayViewHourSection) shares that class for its
-       styling but must stay visible on mobile, since tapping a day is how
-       the day view is reached there in the first place. */
-    #weekHourSection { display: none; }
+    /* Scoped to week mode specifically (via the data-calendar-mode
+       attribute renderCalendar() keeps on <body>) — day mode reuses this
+       same #weekHourSection element for its own hourly grid and must stay
+       visible on mobile, since tapping a day is how it's reached there. */
+    body[data-calendar-mode="week"] #weekHourSection { display: none; }
     .calendar-wrapper { padding: 8px; }
     /* Today wraps onto its own row below the month/year label instead of
        fighting for one cramped row. Prev/Next are hidden entirely —
@@ -1600,10 +1596,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="tab-panel" id="panel-calendar">
       <div class="calendar-wrapper">
         <div class="calendar-toolbar">
+          <!-- Only shown in day mode (see renderCalendar()) — not a
+               .cal-prev-next-btn since it must stay reachable on mobile,
+               where Prev/Next themselves are hidden in favor of swipe. -->
+          <button class="btn btn-secondary" id="calBackBtn" onclick="calendarExitDayView()" style="display:none;">‹ Month</button>
           <button class="btn btn-secondary cal-prev-next-btn" onclick="calendarPrev()">‹ Prev</button>
           <h3 id="calendarLabel"></h3>
           <button class="btn btn-secondary cal-prev-next-btn" onclick="calendarNext()">Next ›</button>
           <button class="btn btn-secondary" onclick="calendarToday()" style="margin-left:8px;">Today</button>
+          <!-- Day mode only (see renderCalendar()) — the day agenda has no
+               empty-cell-to-click affordance for adding an event the way
+               month/week's grid cells do. -->
+          <button class="btn btn-secondary" id="calAddEventBtn" onclick="openAddCalendarEvent(calendarViewDate.toISOString().split('T')[0])" style="display:none;">+ Add</button>
           <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
             <button class="btn btn-secondary" id="calViewMonth" onclick="setCalendarView('month')" style="padding:6px 14px;font-size:12px;">Month</button>
             <button class="btn btn-secondary" id="calViewWeek" onclick="setCalendarView('week')" style="padding:6px 14px;font-size:12px;">Week</button>
@@ -1952,33 +1956,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <button class="btn btn-secondary" onclick="closeCalendarEventModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveCalendarEventFromModal()">Save</button>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- DAY VIEW MODAL: opened by tapping/clicking a day in the calendar grid
-     (see openDayView()) — an hourly single-day agenda, Google-Calendar
-     style: all-day items (job tasks, due markers, untimed events) listed
-     up top, timed calendar events positioned on an hourly grid below,
-     reusing the desktop week view's own grid renderer (renderWeekHourGrid,
-     see renderDayHourGrid()) pointed at this modal's elements instead of
-     the week view's. When the day is empty, the Add Event modal above
-     opens on top of this one right away (that modal's default z-index of
-     3000 beats this one's 2999, so it visibly layers over rather than the
-     two competing). -->
-<div class="modal-overlay" id="dayViewModal" style="z-index:2999;">
-  <div class="modal-box day-view-box" style="max-width:420px;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-      <h4 id="dayViewTitle" style="margin-bottom:0;"></h4>
-      <button class="btn btn-secondary" onclick="openAddCalendarEvent(dayViewDate)" style="padding:6px 12px; font-size:12px;">+ Add</button>
-    </div>
-    <div id="dayViewList"></div>
-    <div class="week-hour-section" id="dayViewHourSection">
-      <div class="week-hour-labels" id="dayViewHourLabels"></div>
-      <div class="week-hour-cols" id="dayViewHourCols"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeDayView()">Close</button>
     </div>
   </div>
 </div>
@@ -3693,11 +3670,13 @@ function setMobileView(view) {
   } else if (view === 'calendar') {
     // Week view's 7-day hourly grid is a wide multi-column timeline, the
     // same category of problem the Gantt chart has — not mobile-ready, so
-    // month is the only view offered here (the toggle to reach week is
-    // hidden too, see .calendar-view-toggle-wrap). Forced here rather than
-    // just hidden in case a prior desktop session in this same page load
-    // left calendarViewMode on 'week'.
-    calendarViewMode = 'month';
+    // month/day are the only views offered here (the toggle to reach week
+    // is hidden too, see .calendar-view-toggle-wrap). Guarded here (not
+    // just hidden) in case a prior desktop session in this same page load
+    // left calendarViewMode on 'week'. Day mode is fine on mobile, so it's
+    // left alone if that's already where the user was — switching to
+    // another mobile tab and back shouldn't lose their place.
+    if (calendarViewMode === 'week') calendarViewMode = 'month';
     switchTab('calendar');
   }
 }
@@ -3904,7 +3883,7 @@ function setupScrollSync() {
 
 // ===== CALENDAR TAB =====
 let calendarViewDate = new Date();
-let calendarViewMode = 'month'; // 'month' or 'week'
+let calendarViewMode = 'month'; // 'month', 'week', or 'day'
 
 function setCalendarView(mode) {
   calendarViewMode = mode;
@@ -3914,6 +3893,8 @@ function setCalendarView(mode) {
 function calendarPrev() {
   if (calendarViewMode === 'month') {
     calendarViewDate.setMonth(calendarViewDate.getMonth() - 1);
+  } else if (calendarViewMode === 'day') {
+    calendarViewDate.setDate(calendarViewDate.getDate() - 1);
   } else {
     calendarViewDate.setDate(calendarViewDate.getDate() - 7);
   }
@@ -3923,6 +3904,8 @@ function calendarPrev() {
 function calendarNext() {
   if (calendarViewMode === 'month') {
     calendarViewDate.setMonth(calendarViewDate.getMonth() + 1);
+  } else if (calendarViewMode === 'day') {
+    calendarViewDate.setDate(calendarViewDate.getDate() + 1);
   } else {
     calendarViewDate.setDate(calendarViewDate.getDate() + 7);
   }
@@ -3942,9 +3925,15 @@ const CAL_DAYNUM_H = 20;
 function renderCalendar() {
   if (calendarViewMode === 'week') {
     renderWeekCalendar();
+  } else if (calendarViewMode === 'day') {
+    renderDayCalendarView();
   } else {
     renderMonthCalendar();
   }
+  // Exposed on <body> so mobile CSS can key off it — see the
+  // body[data-calendar-mode="week"] #weekHourSection rule, which day mode
+  // must NOT be caught by since it reuses that same element.
+  document.body.dataset.calendarMode = calendarViewMode;
   // Update view toggle buttons
   const monthBtn = document.getElementById('calViewMonth');
   const weekBtn = document.getElementById('calViewWeek');
@@ -3954,6 +3943,10 @@ function renderCalendar() {
     monthBtn.style.cssText = calendarViewMode === 'month' ? activeStyle : inactiveStyle;
     weekBtn.style.cssText = calendarViewMode === 'week' ? activeStyle : inactiveStyle;
   }
+  const backBtn = document.getElementById('calBackBtn');
+  if (backBtn) backBtn.style.display = calendarViewMode === 'day' ? 'inline-flex' : 'none';
+  const addBtn = document.getElementById('calAddEventBtn');
+  if (addBtn) addBtn.style.display = calendarViewMode === 'day' ? 'inline-flex' : 'none';
 }
 
 function renderMonthCalendar() {
@@ -3961,6 +3954,7 @@ function renderMonthCalendar() {
   const daysEl = document.getElementById('calendarDays');
   const labelEl = document.getElementById('calendarLabel');
   if (!weekdaysEl || !daysEl || !labelEl) return;
+  daysEl.style.flex = ''; // clears the day mode override — see renderDayCalendarView()
 
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const WEEKDAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -4085,6 +4079,7 @@ function renderWeekCalendar() {
   const daysEl = document.getElementById('calendarDays');
   const labelEl = document.getElementById('calendarLabel');
   if (!weekdaysEl || !daysEl || !labelEl) return;
+  daysEl.style.flex = ''; // clears the day mode override — see renderDayCalendarView()
 
   const WEEKDAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const today = new Date();
@@ -4340,7 +4335,10 @@ let calSwipeStartX = null, calSwipeStartY = null, calSwipeTracking = false;
 let calSwipeConsumedTap = false;
 
 function handleCalSwipeStart(e) {
-  if (calendarViewMode !== 'month' || e.touches.length !== 1) { calSwipeStartX = null; return; }
+  // Month and day mode only — week's own hourly grid isn't reachable on
+  // mobile in the first place (see the mobile-only #weekHourSection hide
+  // rule), so there's nothing here to swipe through in that mode.
+  if ((calendarViewMode !== 'month' && calendarViewMode !== 'day') || e.touches.length !== 1) { calSwipeStartX = null; return; }
   calSwipeStartX = e.touches[0].clientX;
   calSwipeStartY = e.touches[0].clientY;
   calSwipeTracking = false;
@@ -4392,16 +4390,17 @@ function handleCalSwipeEnd(e) {
     return;
   }
 
-  // Finish sliding the current month the rest of the way off-screen in
+  // Finish sliding the current month/day the rest of the way off-screen in
   // the SAME direction it was already moving (a past bug derived this
   // from a separate "dir" flag that ended up with the opposite sign of
   // deltaX, so the grid — already sitting at a negative transform after
   // following a leftward drag — snapped back positive right as you let
-  // go, instead of continuing left), then swap to the next/prev month and
-  // slide that in from the opposite edge.
+  // go, instead of continuing left), then swap to the next/prev month or
+  // day (calendarNext()/calendarPrev() — see their calendarViewMode
+  // branches) and slide that in from the opposite edge.
   const width = daysEl.getBoundingClientRect().width || window.innerWidth;
   const outX = deltaX < 0 ? -width : width;
-  const goNext = deltaX < 0; // swiping left continues left — next month
+  const goNext = deltaX < 0; // swiping left continues left — next month/day
   daysEl.style.transition = 'transform 0.2s ease';
   daysEl.style.transform = 'translateX(' + outX + 'px)';
 
@@ -4412,7 +4411,8 @@ function handleCalSwipeEnd(e) {
     // element's contents in place, but the outgoing transform from above
     // is still sitting on it — jump it out to the opposite edge with no
     // transition (so this is invisible), then animate back to 0 so the
-    // new month visibly slides in from the side the old one exited toward.
+    // new month/day visibly slides in from the side the old one exited
+    // toward.
     const freshDaysEl = document.getElementById('calendarDays');
     if (!freshDaysEl) return;
     freshDaysEl.style.transition = 'none';
@@ -4668,14 +4668,15 @@ function calendarOpenJob(jobId, taskId) {
   editJob(jobId);
 }
 
-// ===== DAY VIEW MODAL =====
+// ===== DAY VIEW (calendarViewMode = 'day') =====
 // Tapping a day in the calendar grid (month or week's all-day row — see
 // the .cal-day click handlers in renderMonthCalendar()/renderWeekCalendar())
-// opens this instead of jumping straight to "add an event", matching how
-// Google Calendar's day view works: browse what's already there, or add
-// something new from inside it.
-let dayViewDate = null;
-let dayViewItems = [];
+// switches the whole calendar over to a single-day agenda instead of
+// opening a separate view on top of it — same toolbar/label/grid area as
+// month & week (see renderCalendar()), just showing one day. Prev/Next/
+// swipe move a day at a time in this mode (see calendarPrev()/Next() and
+// the calendarViewMode checks in handleCalSwipeStart()); "‹ Month" (only
+// shown in this mode — see calBackBtn) exits back to the grid.
 
 // Reuses the exact same data flattenJobs()/flattenCalendarEventsForRange()
 // already produce for the month grid's own bars (job tasks + due markers +
@@ -4703,24 +4704,55 @@ function getScheduledItemsForDate(dateStr) {
   return items;
 }
 
+// Entry point — called by the .cal-day click handlers in
+// renderMonthCalendar()/renderWeekCalendar().
 function openDayView(dateStr) {
-  dayViewDate = dateStr;
+  calendarViewDate = new Date(dateStr + 'T00:00:00');
+  calendarViewMode = 'day';
+  renderCalendar();
+  // Nothing scheduled — go straight into adding something, layered on top
+  // of this (now essentially empty-state) day. Only on entry, not on every
+  // subsequent Prev/Next/swipe — renderDayCalendarView() itself has no
+  // such side effect, so browsing through several empty days in a row
+  // doesn't keep popping the Add Event modal back open.
+  if (!getScheduledItemsForDate(dateStr).length) openAddCalendarEvent(dateStr);
+}
+
+function calendarExitDayView() {
+  calendarViewMode = 'month';
+  renderCalendar();
+}
+
+function renderDayCalendarView() {
+  const weekdaysEl = document.getElementById('calendarWeekdays');
+  const daysEl = document.getElementById('calendarDays');
+  const labelEl = document.getElementById('calendarLabel');
+  if (!weekdaysEl || !daysEl || !labelEl) return;
+
+  const d = new Date(calendarViewDate);
+  d.setHours(0, 0, 0, 0);
+  const dateStr = d.toISOString().split('T')[0];
+
+  labelEl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  weekdaysEl.style.display = 'none';
+  weekdaysEl.innerHTML = '';
+
   const items = getScheduledItemsForDate(dateStr);
-  dayViewItems = items;
-
-  const d = new Date(dateStr + 'T00:00:00');
-  document.getElementById('dayViewTitle').textContent =
-    d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
   // Timed calendar events render as positioned blocks on the hourly grid
-  // below (see renderDayHourGrid()) instead of in this list — job tasks
-  // and due markers never carry a .time, so they always stay up here.
-  const listEl = document.getElementById('dayViewList');
-  if (!items.length) {
-    listEl.innerHTML = '<div class="day-view-empty">Nothing scheduled.</div>';
+  // below instead of in this list — job tasks/due markers never carry a
+  // .time, so they always stay up here.
+  const allDayItems = items.filter(function(item) { return !item.task.time; });
+
+  // Sized to content (unlike month/week's flex:1 .calendar-days) so the
+  // hourly grid below gets the rest of the space — cleared back to the
+  // stylesheet default by renderMonthCalendar()/renderWeekCalendar().
+  daysEl.className = 'calendar-days day-agenda-list';
+  daysEl.style.flex = '0 1 auto';
+  if (!allDayItems.length) {
+    daysEl.innerHTML = '<div class="day-view-empty">Nothing all-day.</div>';
   } else {
-    listEl.innerHTML = items.filter(function(item) { return !item.task.time; }).map(function(item) {
-      const idx = dayViewItems.indexOf(item);
+    daysEl.innerHTML = allDayItems.map(function(item) {
+      const idx = items.indexOf(item);
       const color = item.task.color || item.job.color || '#999';
       // A job task's own name is its board column ("Bid", "Scheduled", …),
       // not the job's — worth showing alongside the job name. A calendar
@@ -4728,56 +4760,32 @@ function openDayView(dateStr) {
       // flattenCalendarEventsForRange()), so skip the redundant repeat.
       const sub = (item.task.name && item.task.name !== item.job.name)
         ? '<div class="day-view-item-sub">' + escapeHtml(item.task.name) + '</div>' : '';
-      return '<div class="day-view-item" onclick="openDayViewItem(' + idx + ')">' +
+      return '<div class="day-view-item" data-day-idx="' + idx + '">' +
         '<span class="day-view-item-swatch" style="background:' + color + ';"></span>' +
         '<div class="day-view-item-text"><div class="day-view-item-title">' + escapeHtml(item.job.name) + '</div>' + sub + '</div>' +
       '</div>';
     }).join('');
+    daysEl.querySelectorAll('.day-view-item').forEach(function(el) {
+      el.addEventListener('click', function() {
+        const item = items[parseInt(el.dataset.dayIdx, 10)];
+        if (!item) return;
+        if (item.task.isCalendarEvent) {
+          const parsed = parseCalendarEventTaskId(item.task.id);
+          openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
+        } else {
+          calendarOpenJob(item.job.id, item.task.id);
+        }
+      });
+    });
   }
 
-  // Shown before rendering the hour grid (not after) so its auto-scroll-
-  // to-now math — see the scrollEl branch in renderWeekHourGrid() — has
-  // real, non-zero layout to measure instead of a still-hidden modal.
-  document.getElementById('dayViewModal').classList.add('show');
-  renderDayHourGrid(dateStr, items);
-
-  // Nothing here to browse — go straight into adding something, layered
-  // on top of this (now essentially empty-state) view rather than
-  // replacing it, so Close still gets back to a day view showing whatever
-  // just got added.
-  if (!items.length) openAddCalendarEvent(dateStr);
-}
-
-// Reuses the desktop week view's hourly-grid renderer (renderWeekHourGrid),
-// just pointed at this modal's elements and given a single-date cellDates
-// array instead of a 7-day week — see the sectionId/labelsId/colsId params
-// it grew for exactly this. Only items with a .time (calendar events —
-// job tasks/due markers never have one) show up here; the rest are the
-// all-day list built in openDayView() above.
-function renderDayHourGrid(dateStr, items) {
-  const d = new Date(dateStr + 'T00:00:00');
+  // Reuses the desktop week view's own hourly-grid renderer, just given a
+  // single-date cellDates array instead of a 7-day week.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const timedRows = items.filter(function(item) { return item.task.time; })
     .map(function(item) { return { task: item.task, job: item.job, start: d }; });
-  renderWeekHourGrid([d], timedRows, today, 'dayViewHourSection', 'dayViewHourLabels', 'dayViewHourCols');
-}
-
-function openDayViewItem(idx) {
-  const item = dayViewItems[idx];
-  if (!item) return;
-  closeDayView();
-  if (item.task.isCalendarEvent) {
-    const parsed = parseCalendarEventTaskId(item.task.id);
-    openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
-  } else {
-    calendarOpenJob(item.job.id, item.task.id);
-  }
-}
-
-function closeDayView() {
-  document.getElementById('dayViewModal').classList.remove('show');
-  dayViewDate = null;
+  renderWeekHourGrid([d], timedRows, today);
 }
 
 // ===== CALENDAR-ONLY EVENTS: Add/Edit modal =====
@@ -4907,12 +4915,11 @@ function saveCalendarEventFromModal() {
     logActivity('added calendar event "' + title + '"');
   }
   saveCalendarEvents();
+  // Re-renders whichever mode is currently active (month/week/day) — if
+  // this modal was opened from inside the day view (see openDayView()),
+  // that's calendarViewMode 'day', so the just-added/edited event shows
+  // up there immediately once this modal closes.
   renderCalendar();
-  // The day view (see openDayView()) stays open underneath this modal
-  // rather than closing when it launches it for an empty day — refresh
-  // its list so the just-added/edited event actually shows up there once
-  // this modal closes back down to it.
-  if (dayViewDate) openDayView(dayViewDate);
   showToast('Event saved', 'success');
   closeCalendarEventModal();
 }
@@ -4926,7 +4933,6 @@ function deleteCalendarEventFromModal() {
   saveCalendarEvents();
   deleteCalendarEventFromShared(activeProjectId, eventId);
   renderCalendar();
-  if (dayViewDate) openDayView(dayViewDate);
   showToast('Event deleted', 'info');
   closeCalendarEventModal();
 }
