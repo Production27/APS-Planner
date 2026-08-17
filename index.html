@@ -214,6 +214,18 @@
   body.dark-mode .cal-day { background: #1e2130; border-color: #333c55; }
   body.dark-mode .cal-day.cal-outside { background: #16182380; }
 
+  /* ===== DAY VIEW MODAL ===== */
+  #dayViewList { max-height: 50vh; overflow-y: auto; margin-bottom: 16px; }
+  .day-view-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
+  .day-view-item:hover { background: #eef1fa; }
+  .day-view-item-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .day-view-item-text { flex: 1; min-width: 0; }
+  .day-view-item-title { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .day-view-item-sub { font-size: 11px; color: var(--text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .day-view-item-time { font-size: 11px; color: var(--text-light); flex-shrink: 0; white-space: nowrap; }
+  .day-view-empty { font-size: 13px; color: var(--text-light); text-align: center; padding: 24px 0; }
+  body.dark-mode .day-view-item:hover { background: rgba(57,73,171,0.18); }
+
 /* ===== CALENDAR BAR DRAG ===== */
 .cal-bar-drag-body { position: absolute; inset: 0; cursor: grab; z-index: 2; }
 .cal-bar-drag-left, .cal-bar-drag-right { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 3; }
@@ -1904,6 +1916,24 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <button class="btn btn-secondary" onclick="closeCalendarEventModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveCalendarEventFromModal()">Save</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- DAY VIEW MODAL: opened by tapping/clicking a day in the calendar grid
+     (see openDayView()) — lists everything scheduled that day. When the
+     day is empty, the Add Event modal above opens on top of this one
+     right away (that modal's default z-index of 3000 beats this one's
+     2999, so it visibly layers over rather than the two competing). -->
+<div class="modal-overlay" id="dayViewModal" style="z-index:2999;">
+  <div class="modal-box" style="max-width:420px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+      <h4 id="dayViewTitle" style="margin-bottom:0;"></h4>
+      <button class="btn btn-secondary" onclick="openAddCalendarEvent(dayViewDate)" style="padding:6px 12px; font-size:12px;">+ Add</button>
+    </div>
+    <div id="dayViewList"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDayView()">Close</button>
     </div>
   </div>
 </div>
@@ -3976,7 +4006,7 @@ function renderMonthCalendar() {
   const cellEls = daysEl.querySelectorAll('.cal-day');
   const getCell = (row, col) => cellEls[row * 7 + col];
   cellEls.forEach(function(cell) {
-    cell.addEventListener('click', function(e) { if (e.target.closest('.cal-day') === cell) openAddCalendarEvent(cell.dataset.date); });
+    cell.addEventListener('click', function(e) { if (e.target.closest('.cal-day') === cell) openDayView(cell.dataset.date); });
   });
 
   let barsHtml = '';
@@ -4064,7 +4094,7 @@ function renderWeekCalendar() {
   const cellEls = daysEl.querySelectorAll('.cal-day');
   const getCell = (col) => cellEls[col];
   cellEls.forEach(function(cell) {
-    cell.addEventListener('click', function(e) { if (e.target.closest('.cal-day') === cell) openAddCalendarEvent(cell.dataset.date); });
+    cell.addEventListener('click', function(e) { if (e.target.closest('.cal-day') === cell) openDayView(cell.dataset.date); });
   });
 
   // Build continuous segments across the week (like month view but 1 row)
@@ -4582,6 +4612,97 @@ function calendarOpenJob(jobId, taskId) {
   editJob(jobId);
 }
 
+// ===== DAY VIEW MODAL =====
+// Tapping a day in the calendar grid (month or week's all-day row — see
+// the .cal-day click handlers in renderMonthCalendar()/renderWeekCalendar())
+// opens this instead of jumping straight to "add an event", matching how
+// Google Calendar's day view works: browse what's already there, or add
+// something new from inside it.
+let dayViewDate = null;
+let dayViewItems = [];
+
+// Reuses the exact same data flattenJobs()/flattenCalendarEventsForRange()
+// already produce for the month grid's own bars (job tasks + due markers +
+// calendar-only events), just filtered down to one specific date instead
+// of laid out across a whole visible range.
+function getScheduledItemsForDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const items = [];
+  flattenJobs(jobs, showArchived).forEach(function(row) {
+    if (!row.task.start || !row.task.finish) return;
+    const s = new Date(row.task.start + 'T00:00:00');
+    const f = new Date(row.task.finish + 'T00:00:00');
+    if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+    if (d >= s && d <= f) items.push({ job: row.job, task: row.task });
+  });
+  flattenCalendarEventsForRange(d, d).forEach(function(row) {
+    items.push({ job: row.job, task: row.task });
+  });
+  // All-day items first, then timed items chronologically — matches how
+  // Google Calendar's own day view orders things.
+  items.sort(function(a, b) {
+    const ta = a.task.time || '', tb = b.task.time || '';
+    return ta < tb ? -1 : ta > tb ? 1 : 0;
+  });
+  return items;
+}
+
+function openDayView(dateStr) {
+  dayViewDate = dateStr;
+  const items = getScheduledItemsForDate(dateStr);
+  dayViewItems = items;
+
+  const d = new Date(dateStr + 'T00:00:00');
+  document.getElementById('dayViewTitle').textContent =
+    d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  const listEl = document.getElementById('dayViewList');
+  if (!items.length) {
+    listEl.innerHTML = '<div class="day-view-empty">Nothing scheduled.</div>';
+  } else {
+    listEl.innerHTML = items.map(function(item, idx) {
+      const color = item.task.color || item.job.color || '#999';
+      // A job task's own name is its board column ("Bid", "Scheduled", …),
+      // not the job's — worth showing alongside the job name. A calendar
+      // event's task.name is just its title again (see
+      // flattenCalendarEventsForRange()), so skip the redundant repeat.
+      const sub = (item.task.name && item.task.name !== item.job.name)
+        ? '<div class="day-view-item-sub">' + escapeHtml(item.task.name) + '</div>' : '';
+      const time = item.task.time ? '<span class="day-view-item-time">' + formatTimeLabel(item.task.time) + '</span>' : '';
+      return '<div class="day-view-item" onclick="openDayViewItem(' + idx + ')">' +
+        '<span class="day-view-item-swatch" style="background:' + color + ';"></span>' +
+        '<div class="day-view-item-text"><div class="day-view-item-title">' + escapeHtml(item.job.name) + '</div>' + sub + '</div>' +
+        time +
+      '</div>';
+    }).join('');
+  }
+
+  document.getElementById('dayViewModal').classList.add('show');
+
+  // Nothing here to browse — go straight into adding something, layered
+  // on top of this (now essentially empty-state) view rather than
+  // replacing it, so Close still gets back to a day view showing whatever
+  // just got added.
+  if (!items.length) openAddCalendarEvent(dateStr);
+}
+
+function openDayViewItem(idx) {
+  const item = dayViewItems[idx];
+  if (!item) return;
+  closeDayView();
+  if (item.task.isCalendarEvent) {
+    const parsed = parseCalendarEventTaskId(item.task.id);
+    openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
+  } else {
+    calendarOpenJob(item.job.id, item.task.id);
+  }
+}
+
+function closeDayView() {
+  document.getElementById('dayViewModal').classList.remove('show');
+  dayViewDate = null;
+}
+
 // ===== CALENDAR-ONLY EVENTS: Add/Edit modal =====
 // Deliberately simple (explicit Save, not autosave like the job form) —
 // this is a small, self-contained modal, not worth the bulletproofing
@@ -4710,6 +4831,11 @@ function saveCalendarEventFromModal() {
   }
   saveCalendarEvents();
   renderCalendar();
+  // The day view (see openDayView()) stays open underneath this modal
+  // rather than closing when it launches it for an empty day — refresh
+  // its list so the just-added/edited event actually shows up there once
+  // this modal closes back down to it.
+  if (dayViewDate) openDayView(dayViewDate);
   showToast('Event saved', 'success');
   closeCalendarEventModal();
 }
@@ -4723,6 +4849,7 @@ function deleteCalendarEventFromModal() {
   saveCalendarEvents();
   deleteCalendarEventFromShared(activeProjectId, eventId);
   renderCalendar();
+  if (dayViewDate) openDayView(dayViewDate);
   showToast('Event deleted', 'info');
   closeCalendarEventModal();
 }
