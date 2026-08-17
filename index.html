@@ -215,14 +215,22 @@
   body.dark-mode .cal-day.cal-outside { background: #16182380; }
 
   /* ===== DAY VIEW MODAL ===== */
-  #dayViewList { max-height: 50vh; overflow-y: auto; margin-bottom: 16px; }
+  /* .modal-box is normally sized purely by content, but a full 24-row
+     hourly grid (see renderDayHourGrid()) is ~1150px tall on its own —
+     mirror how the desktop week view handles the same problem: a bounded
+     flex column where the all-day list stays pinned (like the week view's
+     own all-day segments row) and only the hourly grid scrolls beneath it
+     (.week-hour-section already has flex:1/overflow-y:auto/min-height:0
+     for exactly this, reused as-is). Header and Close stay outside both,
+     always reachable. */
+  #dayViewModal .modal-box { display: flex; flex-direction: column; max-height: 85vh; }
+  #dayViewList { flex-shrink: 0; max-height: 35vh; overflow-y: auto; margin-bottom: 8px; }
   .day-view-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
   .day-view-item:hover { background: #eef1fa; }
   .day-view-item-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .day-view-item-text { flex: 1; min-width: 0; }
   .day-view-item-title { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .day-view-item-sub { font-size: 11px; color: var(--text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .day-view-item-time { font-size: 11px; color: var(--text-light); flex-shrink: 0; white-space: nowrap; }
   .day-view-empty { font-size: 13px; color: var(--text-light); text-align: center; padding: 24px 0; }
   body.dark-mode .day-view-item:hover { background: rgba(57,73,171,0.18); }
 
@@ -1281,7 +1289,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        flex" in the markup, which otherwise beats any stylesheet rule
        regardless of specificity. */
     .calendar-view-toggle-wrap { display: none !important; }
-    .week-hour-section { display: none; }
+    /* Scoped to the ID, not the .week-hour-section class — the day view
+       modal's hourly grid (#dayViewHourSection) shares that class for its
+       styling but must stay visible on mobile, since tapping a day is how
+       the day view is reached there in the first place. */
+    #weekHourSection { display: none; }
     .calendar-wrapper { padding: 8px; }
     /* Today wraps onto its own row below the month/year label instead of
        fighting for one cramped row. Prev/Next are hidden entirely —
@@ -1945,17 +1957,26 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 </div>
 
 <!-- DAY VIEW MODAL: opened by tapping/clicking a day in the calendar grid
-     (see openDayView()) — lists everything scheduled that day. When the
-     day is empty, the Add Event modal above opens on top of this one
-     right away (that modal's default z-index of 3000 beats this one's
-     2999, so it visibly layers over rather than the two competing). -->
+     (see openDayView()) — an hourly single-day agenda, Google-Calendar
+     style: all-day items (job tasks, due markers, untimed events) listed
+     up top, timed calendar events positioned on an hourly grid below,
+     reusing the desktop week view's own grid renderer (renderWeekHourGrid,
+     see renderDayHourGrid()) pointed at this modal's elements instead of
+     the week view's. When the day is empty, the Add Event modal above
+     opens on top of this one right away (that modal's default z-index of
+     3000 beats this one's 2999, so it visibly layers over rather than the
+     two competing). -->
 <div class="modal-overlay" id="dayViewModal" style="z-index:2999;">
-  <div class="modal-box" style="max-width:420px;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+  <div class="modal-box day-view-box" style="max-width:420px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
       <h4 id="dayViewTitle" style="margin-bottom:0;"></h4>
       <button class="btn btn-secondary" onclick="openAddCalendarEvent(dayViewDate)" style="padding:6px 12px; font-size:12px;">+ Add</button>
     </div>
     <div id="dayViewList"></div>
+    <div class="week-hour-section" id="dayViewHourSection">
+      <div class="week-hour-labels" id="dayViewHourLabels"></div>
+      <div class="week-hour-cols" id="dayViewHourCols"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeDayView()">Close</button>
     </div>
@@ -4183,12 +4204,16 @@ const WEEK_HOUR_ROW_H = 48;
 // same-day overlap/lane-packing) used to represent one on the hourly grid.
 const WEEK_TIMED_EVENT_MIN_HEIGHT_MINUTES = 45;
 
-function renderWeekHourGrid(cellDates, timedCalRows, today) {
-  const section = document.getElementById('weekHourSection');
-  const labelsEl = document.getElementById('weekHourLabels');
-  const colsEl = document.getElementById('weekHourCols');
+// sectionId/labelsId/colsId default to the desktop week view's own elements
+// — the day view (see renderDayHourGrid()) passes its own IDs to reuse this
+// same renderer for a single-day column instead of seven.
+function renderWeekHourGrid(cellDates, timedCalRows, today, sectionId, labelsId, colsId) {
+  const section = document.getElementById(sectionId || 'weekHourSection');
+  const labelsEl = document.getElementById(labelsId || 'weekHourLabels');
+  const colsEl = document.getElementById(colsId || 'weekHourCols');
   if (!section || !labelsEl || !colsEl) return;
   section.classList.add('show');
+  colsEl.style.gridTemplateColumns = 'repeat(' + cellDates.length + ', 1fr)';
 
   // Hour labels down the left side.
   let labelsHtml = '';
@@ -4211,7 +4236,7 @@ function renderWeekHourGrid(cellDates, timedCalRows, today) {
   });
 
   let colsHtml = '';
-  for (let col = 0; col < 7; col++) {
+  for (let col = 0; col < cellDates.length; col++) {
     const isToday = cellDates[col].getTime() === today.getTime();
     let rowLines = '';
     for (let h = 0; h < 24; h++) rowLines += '<div class="week-hour-row-line"></div>';
@@ -4687,11 +4712,15 @@ function openDayView(dateStr) {
   document.getElementById('dayViewTitle').textContent =
     d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
+  // Timed calendar events render as positioned blocks on the hourly grid
+  // below (see renderDayHourGrid()) instead of in this list — job tasks
+  // and due markers never carry a .time, so they always stay up here.
   const listEl = document.getElementById('dayViewList');
   if (!items.length) {
     listEl.innerHTML = '<div class="day-view-empty">Nothing scheduled.</div>';
   } else {
-    listEl.innerHTML = items.map(function(item, idx) {
+    listEl.innerHTML = items.filter(function(item) { return !item.task.time; }).map(function(item) {
+      const idx = dayViewItems.indexOf(item);
       const color = item.task.color || item.job.color || '#999';
       // A job task's own name is its board column ("Bid", "Scheduled", …),
       // not the job's — worth showing alongside the job name. A calendar
@@ -4699,22 +4728,39 @@ function openDayView(dateStr) {
       // flattenCalendarEventsForRange()), so skip the redundant repeat.
       const sub = (item.task.name && item.task.name !== item.job.name)
         ? '<div class="day-view-item-sub">' + escapeHtml(item.task.name) + '</div>' : '';
-      const time = item.task.time ? '<span class="day-view-item-time">' + formatTimeLabel(item.task.time) + '</span>' : '';
       return '<div class="day-view-item" onclick="openDayViewItem(' + idx + ')">' +
         '<span class="day-view-item-swatch" style="background:' + color + ';"></span>' +
         '<div class="day-view-item-text"><div class="day-view-item-title">' + escapeHtml(item.job.name) + '</div>' + sub + '</div>' +
-        time +
       '</div>';
     }).join('');
   }
 
+  // Shown before rendering the hour grid (not after) so its auto-scroll-
+  // to-now math — see the scrollEl branch in renderWeekHourGrid() — has
+  // real, non-zero layout to measure instead of a still-hidden modal.
   document.getElementById('dayViewModal').classList.add('show');
+  renderDayHourGrid(dateStr, items);
 
   // Nothing here to browse — go straight into adding something, layered
   // on top of this (now essentially empty-state) view rather than
   // replacing it, so Close still gets back to a day view showing whatever
   // just got added.
   if (!items.length) openAddCalendarEvent(dateStr);
+}
+
+// Reuses the desktop week view's hourly-grid renderer (renderWeekHourGrid),
+// just pointed at this modal's elements and given a single-date cellDates
+// array instead of a 7-day week — see the sectionId/labelsId/colsId params
+// it grew for exactly this. Only items with a .time (calendar events —
+// job tasks/due markers never have one) show up here; the rest are the
+// all-day list built in openDayView() above.
+function renderDayHourGrid(dateStr, items) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const timedRows = items.filter(function(item) { return item.task.time; })
+    .map(function(item) { return { task: item.task, job: item.job, start: d }; });
+  renderWeekHourGrid([d], timedRows, today, 'dayViewHourSection', 'dayViewHourLabels', 'dayViewHourCols');
 }
 
 function openDayViewItem(idx) {
