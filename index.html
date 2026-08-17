@@ -1170,12 +1170,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        gets the row to itself either way. Reversed below when Board mode
        is active: the rail collapses instead and this expands back out. */
     .app-shell-main { flex: 0 0 0; width: 0; min-width: 0; overflow: hidden; }
-    /* Board mode: setMobileBoardView(true) adds this to <body> and calls
-       switchTab('board') so #panel-board is the one .tab-panel with
-       .active (Gantt/Calendar stay display:none via the existing
-       .tab-panel rule, so there's no way to land on them from here). */
-    body.mobile-board-active .manager-sidebar { display: none; }
-    body.mobile-board-active .app-shell-main { flex: 1 1 auto; width: auto; min-width: 0; }
+    /* Board/Calendar mode: setMobileView() sets data-mobile-view on
+       <body> and calls switchTab() so #panel-board/#panel-calendar is the
+       one .tab-panel with .active (Gantt stays display:none via the
+       existing .tab-panel rule — there's no way to land on it from here). */
+    body[data-mobile-view="board"] .manager-sidebar,
+    body[data-mobile-view="calendar"] .manager-sidebar { display: none; }
+    body[data-mobile-view="board"] .app-shell-main,
+    body[data-mobile-view="calendar"] .app-shell-main { flex: 1 1 auto; width: auto; min-width: 0; }
     /* #formArea escapes that zero-width collapse via position:fixed —
        its width:min(888px,100%) then resolves against the viewport
        instead of its now-collapsed containing block, and fixed
@@ -1243,6 +1245,31 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     /* Card edit modal: two columns of custom fields is too tight at
        phone width. */
     .custom-fields-grid { grid-template-columns: 1fr; }
+
+    /* ===== CALENDAR ===== */
+    /* Month view only — the toggle to reach Week is hidden (Week's 7-day
+       hourly grid needs its own mobile-only layout, same category of
+       problem as the Gantt chart, deferred for now; see setMobileView()
+       which also force-sets calendarViewMode='month' as a belt-and-
+       suspenders measure). */
+    /* !important on the toggle wrap: it carries an inline style="display:
+       flex" in the markup, which otherwise beats any stylesheet rule
+       regardless of specificity. */
+    .calendar-view-toggle-wrap { display: none !important; }
+    .week-hour-section { display: none; }
+    .calendar-wrapper { padding: 8px; }
+    /* Prev/Next/Today wrap onto their own row below the month/year label
+       instead of everything fighting for one cramped row. */
+    .calendar-toolbar { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .calendar-toolbar h3 { flex: 1 1 100%; order: -1; font-size: 15px; margin-bottom: 2px; }
+    .calendar-toolbar button { padding: 6px 10px; font-size: 12px; }
+    .calendar-grid { gap: 3px; }
+    .cal-day { min-height: 62px; padding: 3px; }
+    .cal-day-num { font-size: 10px; margin-bottom: 2px; }
+    .cal-event-bar { font-size: 8.5px; padding: 1px 3px; line-height: 11px; }
+    /* No room for a second label at this size — the bar's own color/
+       position already says which job it's for. */
+    .cal-event-bar .cal-jobname-tag { display: none; }
   }
 
   /* ===== DARK MODE ===== */
@@ -1470,12 +1497,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 </div>
 
 <!-- MOBILE VIEW SWITCHER: only shown ≤480px (see @media rules) — the job
-     rail and the Board panel can't both fit on a phone screen, so this
-     toggles which one takes over. Gantt/Calendar aren't mobile-ready yet,
-     so they're deliberately not options here; see setMobileBoardView(). -->
+     rail, Board, and Calendar can't all fit on a phone screen at once, so
+     this toggles which one takes over the full screen. Gantt isn't
+     mobile-ready yet (needs a from-scratch list view, not just narrower
+     CSS — deliberately not offered here); see setMobileView(). -->
 <div class="mobile-view-switcher" id="mobileViewSwitcher">
-  <button class="mobile-view-btn active" data-view="jobs" onclick="setMobileBoardView(false)">Jobs</button>
-  <button class="mobile-view-btn" data-view="board" onclick="setMobileBoardView(true)">Board</button>
+  <button class="mobile-view-btn active" data-view="jobs" onclick="setMobileView('jobs')">Jobs</button>
+  <button class="mobile-view-btn" data-view="board" onclick="setMobileView('board')">Board</button>
+  <button class="mobile-view-btn" data-view="calendar" onclick="setMobileView('calendar')">Calendar</button>
 </div>
 
 <div class="app-shell">
@@ -1515,7 +1544,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <h3 id="calendarLabel"></h3>
           <button class="btn btn-secondary" onclick="calendarNext()">Next ›</button>
           <button class="btn btn-secondary" onclick="calendarToday()" style="margin-left:8px;">Today</button>
-          <div style="margin-left:auto;display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
+          <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
             <button class="btn btn-secondary" id="calViewMonth" onclick="setCalendarView('month')" style="padding:6px 14px;font-size:12px;">Month</button>
             <button class="btn btn-secondary" id="calViewWeek" onclick="setCalendarView('week')" style="padding:6px 14px;font-size:12px;">Week</button>
           </div>
@@ -3561,17 +3590,27 @@ function switchTab(tab) {
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
 }
 
-// Mobile-only Jobs/Board toggle — see .mobile-view-switcher and the
-// body.mobile-board-active rules under @media (max-width:480px). The job
-// rail and the Board panel each take the full screen on a phone, so
-// there's no "both visible" state to preserve here the way switchTab()
-// does on desktop.
-function setMobileBoardView(showBoard) {
-  document.body.classList.toggle('mobile-board-active', showBoard);
+// Mobile-only Jobs/Board/Calendar toggle — see .mobile-view-switcher and
+// the body[data-mobile-view] rules under @media (max-width:480px). Each of
+// these takes the full screen on a phone, so there's no "both visible"
+// state to preserve here the way switchTab() does on desktop.
+function setMobileView(view) {
+  document.body.dataset.mobileView = view;
   document.querySelectorAll('.mobile-view-btn').forEach(function(b) {
-    b.classList.toggle('active', (b.dataset.view === 'board') === showBoard);
+    b.classList.toggle('active', b.dataset.view === view);
   });
-  if (showBoard) switchTab('board');
+  if (view === 'board') {
+    switchTab('board');
+  } else if (view === 'calendar') {
+    // Week view's 7-day hourly grid has the same "wide multi-column
+    // timeline" problem as the Gantt chart — not mobile-ready, so month
+    // is the only view offered here (the toggle to reach week is hidden
+    // too, see .calendar-view-toggle-wrap). Forced here rather than just
+    // hidden in case a prior desktop session in this same page load left
+    // calendarViewMode on 'week'.
+    calendarViewMode = 'month';
+    switchTab('calendar');
+  }
 }
 
 // Every board column's "+ New Job" button (formerly "+ Add a card", which
@@ -4298,7 +4337,16 @@ function handleCalBarMouseUp(e) {
   bar.classList.remove('cal-dragging', 'cal-resizing');
   hideTooltip();
 
-  if (!moved) {
+  // On phones (see the @media(max-width:480px) mobile layout), always
+  // treat this as "open", never "reschedule" — regardless of `moved`. A
+  // touchscreen tap wobbles more than a mouse click does, and 3px (the
+  // threshold that sets `moved`) is well within normal finger imprecision,
+  // so without this a slightly-off tap could silently drag a task/event by
+  // a day or two instead of opening it. Rescheduling on mobile goes
+  // through that same edit modal's date field instead, which is reliable
+  // either way.
+  const isMobile = window.matchMedia('(max-width: 480px)').matches;
+  if (!moved || isMobile) {
     if (isCalendarEvent) openEditCalendarEvent(calEventId, calEventSourceDate);
     else calendarOpenJob(jobId, taskId);
     calDragState = null;
