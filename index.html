@@ -1194,14 +1194,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        gets the row to itself either way. Reversed below when Board mode
        is active: the rail collapses instead and this expands back out. */
     .app-shell-main { flex: 0 0 0; width: 0; min-width: 0; overflow: hidden; }
-    /* Board/Calendar mode: setMobileView() sets data-mobile-view on
-       <body> and calls switchTab() so #panel-board/#panel-calendar is the
-       one .tab-panel with .active (Gantt stays display:none via the
-       existing .tab-panel rule — there's no way to land on it from here). */
+    /* Board/Calendar/Gantt mode: setMobileView() sets data-mobile-view on
+       <body> and calls switchTab() so the matching .tab-panel is the one
+       with .active. */
     body[data-mobile-view="board"] .manager-sidebar,
-    body[data-mobile-view="calendar"] .manager-sidebar { display: none; }
+    body[data-mobile-view="calendar"] .manager-sidebar,
+    body[data-mobile-view="gantt"] .manager-sidebar { display: none; }
     body[data-mobile-view="board"] .app-shell-main,
-    body[data-mobile-view="calendar"] .app-shell-main { flex: 1 1 auto; width: auto; min-width: 0; }
+    body[data-mobile-view="calendar"] .app-shell-main,
+    body[data-mobile-view="gantt"] .app-shell-main { flex: 1 1 auto; width: auto; min-width: 0; }
     /* #formArea escapes that zero-width collapse via position:fixed —
        its width:min(888px,100%) then resolves against the viewport
        instead of its now-collapsed containing block, and fixed
@@ -1294,6 +1295,23 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     /* No room for a second label at this size — the bar's own color/
        position already says which job it's for. */
     .cal-event-bar .cal-jobname-tag { display: none; }
+
+    /* ===== GANTT ===== */
+    /* Kept as the same real Gantt chart (not a rebuilt list view like
+       Board/Calendar got) per explicit request — just compacted as far as
+       it reasonably can be. Won't be as good an experience as the other
+       mobile views; the timeline is inherently wide and there's no way
+       around some horizontal scrolling here regardless. */
+    .gantt-top-row { flex-wrap: wrap; height: auto; }
+    .gantt-view-toggle-row { width: 100%; min-width: 0; }
+    .gantt-toolbar { width: 100%; flex: 1 1 100%; }
+    .left-panel { width: 110px; min-width: 110px; }
+    /* Start/Finish would be truncated into uselessness at this width —
+       the task/job name (what actually identifies a row) gets the space
+       instead. Exact dates are still one tap away, via that row/bar's own
+       edit screen. */
+    .left-header .col-start, .left-header .col-finish,
+    .task-row .col-start, .task-row .col-finish { display: none; }
   }
 
   /* ===== DARK MODE ===== */
@@ -1521,14 +1539,17 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 </div>
 
 <!-- MOBILE VIEW SWITCHER: only shown ≤480px (see @media rules) — the job
-     rail, Board, and Calendar can't all fit on a phone screen at once, so
-     this toggles which one takes over the full screen. Gantt isn't
-     mobile-ready yet (needs a from-scratch list view, not just narrower
-     CSS — deliberately not offered here); see setMobileView(). -->
+     rail, Board, Calendar, and Gantt can't all fit on a phone screen at
+     once, so this toggles which one takes over the full screen. Gantt
+     keeps its desktop layout, just narrowed/compacted as far as it
+     reasonably can be (see the .gantt-* mobile rules) — it's not going to
+     be as good an experience as the other views, but it's real and
+     reachable rather than hidden entirely. See setMobileView(). -->
 <div class="mobile-view-switcher" id="mobileViewSwitcher">
   <button class="mobile-view-btn active" data-view="jobs" onclick="setMobileView('jobs')">Jobs</button>
   <button class="mobile-view-btn" data-view="board" onclick="setMobileView('board')">Board</button>
   <button class="mobile-view-btn" data-view="calendar" onclick="setMobileView('calendar')">Calendar</button>
+  <button class="mobile-view-btn" data-view="gantt" onclick="setMobileView('gantt')">Gantt</button>
 </div>
 
 <div class="app-shell">
@@ -3632,10 +3653,10 @@ function switchTab(tab) {
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
 }
 
-// Mobile-only Jobs/Board/Calendar toggle — see .mobile-view-switcher and
-// the body[data-mobile-view] rules under @media (max-width:480px). Each of
-// these takes the full screen on a phone, so there's no "both visible"
-// state to preserve here the way switchTab() does on desktop.
+// Mobile-only Jobs/Board/Calendar/Gantt toggle — see .mobile-view-switcher
+// and the body[data-mobile-view] rules under @media (max-width:480px).
+// Each of these takes the full screen on a phone, so there's no "both
+// visible" state to preserve here the way switchTab() does on desktop.
 function setMobileView(view) {
   document.body.dataset.mobileView = view;
   document.querySelectorAll('.mobile-view-btn').forEach(function(b) {
@@ -3643,13 +3664,15 @@ function setMobileView(view) {
   });
   if (view === 'board') {
     switchTab('board');
+  } else if (view === 'gantt') {
+    switchTab('gantt');
   } else if (view === 'calendar') {
-    // Week view's 7-day hourly grid has the same "wide multi-column
-    // timeline" problem as the Gantt chart — not mobile-ready, so month
-    // is the only view offered here (the toggle to reach week is hidden
-    // too, see .calendar-view-toggle-wrap). Forced here rather than just
-    // hidden in case a prior desktop session in this same page load left
-    // calendarViewMode on 'week'.
+    // Week view's 7-day hourly grid is a wide multi-column timeline, the
+    // same category of problem the Gantt chart has — not mobile-ready, so
+    // month is the only view offered here (the toggle to reach week is
+    // hidden too, see .calendar-view-toggle-wrap). Forced here rather than
+    // just hidden in case a prior desktop session in this same page load
+    // left calendarViewMode on 'week'.
     calendarViewMode = 'month';
     switchTab('calendar');
   }
