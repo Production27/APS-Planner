@@ -960,6 +960,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .cf-field select:focus, .cf-field input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.1); }
 
   /* Checklist */
+  /* Which board-column stage's checklist is showing — see
+     getChecklistForStage()/setActiveChecklistStage(). Sits in the section
+     header next to the title, same slot as Custom Fields' "Edit" button. */
+  .checklist-stage-select { font-size: 11px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); font-family: inherit; }
   .checklist-progress-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .checklist-progress-pct { font-size: 11px; font-weight: 700; color: var(--text-light); min-width: 32px; }
   .checklist-progress-bar { flex: 1; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; }
@@ -968,6 +972,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .checklist-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
   .checklist-item .ci-text { flex: 1; font-size: 13px; color: var(--text); }
   .checklist-item.done .ci-text { text-decoration: line-through; color: #aaa; }
+  .checklist-item .ci-assignee { font-size: 11px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); color: var(--text-light); font-family: inherit; flex-shrink: 0; max-width: 110px; }
   .checklist-item .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 15px; padding: 2px 6px; flex-shrink: 0; }
   .checklist-item .ci-delete:hover { color: var(--danger); }
   .checklist-add-row { display: flex; gap: 8px; margin-top: 8px; }
@@ -1835,10 +1840,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             </div>
           </div>
 
-          <!-- CHECKLIST -->
+          <!-- CHECKLIST: one per board-column stage — see
+               jmChecklistStageSelect/setActiveJobChecklistStage() and
+               getChecklistForStage() -->
           <div class="card-section mobile-collapsible">
             <div class="card-section-header">
               <h5 onclick="toggleMobileField(this)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Checklist</h5>
+              <select class="checklist-stage-select" id="jmChecklistStageSelect" onchange="setActiveJobChecklistStage(this.value)"></select>
             </div>
             <div class="mobile-field-body">
               <div class="checklist-progress-row">
@@ -2112,10 +2120,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="custom-fields-grid" id="customFieldsGrid"></div>
       </div>
 
-      <!-- CHECKLIST -->
+      <!-- CHECKLIST: one per board-column stage — see checklistStageSelect/
+           setActiveChecklistStage() and getChecklistForStage() -->
       <div class="card-section">
         <div class="card-section-header">
           <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>️ Checklist</h5>
+          <select class="checklist-stage-select" id="checklistStageSelect" onchange="setActiveChecklistStage(this.value)"></select>
         </div>
         <div class="checklist-progress-row">
           <div class="checklist-progress-bar"><div class="checklist-progress-fill" id="checklistProgressFill" style="width:0%;"></div></div>
@@ -2156,6 +2166,22 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div id="manageFieldsBody"></div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="closeManageFields()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE COLUMN DEFAULT CHECKLIST MODAL: scoped to one board column at a
+     time (managingChecklistColumnId) — opened via that column's settings
+     dropdown ("Default Checklist"). Items added here become the template
+     getChecklistForStage() seeds a job's checklist with the first time it's
+     viewed for this stage — see openManageColumnChecklist(). -->
+<div class="modal-overlay" id="manageColumnChecklistModal">
+  <div class="modal-box manage-fields-box">
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Checklist — <span id="manageColumnChecklistTitle"></span></h4>
+    <p>Items added here are what a job's checklist starts with the first time it's opened on this board.</p>
+    <div id="manageColumnChecklistBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeManageColumnChecklist()">Done</button>
     </div>
   </div>
 </div>
@@ -2646,7 +2672,7 @@ function ensureJobHasCard(job) {
       manualColumn: null,
       manualColumnUntil: null,
       customFields: {},
-      checklist: [],
+      checklists: {},
       attachments: []
     });
   } else if (linked.length > 1) {
@@ -2895,14 +2921,54 @@ let editingCalendarEventId = null;
 let calendarEventTargetDate = null; // set by openAddCalendarEvent(), read by saveCalendarEventFromModal()
 let editingCardId = null;
 let draggedCardId = null;
-let draftChecklist = [];
+// Checklists are per board-column stage now — see ensureCardChecklists()
+// and getChecklistForStage() — so the draft is a map keyed by column id
+// (card.checklists shape) rather than one flat array, plus which stage's
+// list is currently shown/edited in this modal.
+let draftChecklists = {};
+let activeChecklistColumnId = null;
 let localActivityLog = [];
 let draftAttachments = [];
 // Job Manager's own copies of the card modal's draft state — kept separate
 // so editing a job's checklist/attachments there can't collide with the
 // Board's quick-edit popup if both happen to hold stale drafts.
-let jmDraftChecklist = [];
+let jmDraftChecklists = {};
+let jmActiveChecklistColumnId = null;
 let jmDraftAttachments = [];
+
+// One-time migration: the old card.checklist (one flat array per job) is
+// now card.checklists (one array per board-column stage, keyed by column
+// id) — see BOARD_COLUMNS' defaultChecklist and getChecklistForStage()
+// below. Whatever legacy items existed land in the card's CURRENT column,
+// since that's the best guess for which stage they belonged to. Mirrors
+// the job.comments/job.notes migration pattern elsewhere in this file.
+// Idempotent and cheap (one property check) — call defensively anywhere
+// card.checklists gets read or written.
+function ensureCardChecklists(card) {
+  if (!card || card.checklists) return;
+  card.checklists = {};
+  if (Array.isArray(card.checklist) && card.checklist.length) {
+    card.checklists[card.column] = card.checklist;
+  }
+  delete card.checklist;
+}
+
+// Returns the checklist array for one stage of a checklists map (either a
+// live card's card.checklists or one of the draft copies below), seeding
+// it from that board column's defaultChecklist template the first time
+// it's asked for — not before, so a job that never visits a stage (or
+// hasn't had its checklist opened there yet) doesn't get items materialized
+// it'll never see. Mutates `checklists` in place and returns the array.
+function getChecklistForStage(checklists, columnId) {
+  if (!checklists[columnId]) {
+    const col = BOARD_COLUMNS.find(function(c) { return c.id === columnId; });
+    const defaults = (col && col.defaultChecklist) || [];
+    checklists[columnId] = defaults.map(function(d) {
+      return { id: genId(), text: d.text, done: false, assignee: '' };
+    });
+  }
+  return checklists[columnId];
+}
 
 const CUSTOM_FIELD_DEFS = [
   { key: 'pm', label: 'Project Manager', type: 'select' },
@@ -6482,7 +6548,13 @@ function refreshJobFormIfOpen(jobId) {
   const descEl = document.getElementById('f_description');
   if (descEl) descEl.value = card.description || '';
   renderJobCustomFieldsGrid(card.customFields || {});
-  jmDraftChecklist = JSON.parse(JSON.stringify(card.checklist || []));
+  ensureCardChecklists(card);
+  jmDraftChecklists = JSON.parse(JSON.stringify(card.checklists || {}));
+  // Keeps whichever stage was already being viewed, just refreshes its
+  // data — this fires for external changes (Gantt/Calendar drags, the
+  // Board's own save), not a fresh open, so switching the user's view
+  // out from under them here would be jarring.
+  if (!jmActiveChecklistColumnId) jmActiveChecklistColumnId = card.column;
   jmDraftAttachments = JSON.parse(JSON.stringify(card.attachments || []));
   renderJobChecklist();
   renderJobAttachments();
@@ -6685,9 +6757,11 @@ function addNewJob() {
   document.getElementById('f_color').value = '#3949ab';
   document.getElementById('f_description').value = '';
   document.getElementById('f_due').value = '';
-  jmDraftChecklist = [];
+  jmDraftChecklists = {};
+  jmActiveChecklistColumnId = BOARD_COLUMNS[0] ? BOARD_COLUMNS[0].id : null;
   jmDraftAttachments = [];
   renderJobCustomFieldsGrid({});
+  renderJobChecklistStageSelect();
   renderJobChecklist();
   renderJobAttachments();
   // No job exists yet to attach comments to — the panel reappears once
@@ -6736,8 +6810,12 @@ function editJob(jobId) {
   document.getElementById('f_description').value = (linkedCard && linkedCard.description) || '';
   document.getElementById('f_due').value = (linkedCard && linkedCard.due) || '';
   renderJobCustomFieldsGrid((linkedCard && linkedCard.customFields) || {});
-  jmDraftChecklist = JSON.parse(JSON.stringify((linkedCard && linkedCard.checklist) || []));
+  if (linkedCard) ensureCardChecklists(linkedCard);
+  jmDraftChecklists = JSON.parse(JSON.stringify((linkedCard && linkedCard.checklists) || {}));
+  jmActiveChecklistColumnId = (linkedCard && linkedCard.column) || (BOARD_COLUMNS[0] && BOARD_COLUMNS[0].id) || null;
+  getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId); // seed the default-view stage if it's never been opened
   jmDraftAttachments = JSON.parse(JSON.stringify((linkedCard && linkedCard.attachments) || []));
+  renderJobChecklistStageSelect();
   renderJobChecklist();
   renderJobAttachments();
 
@@ -7072,7 +7150,7 @@ function autoSaveJobForm() {
     cardToUpdate.description = document.getElementById('f_description').value.trim();
     cardToUpdate.due = document.getElementById('f_due').value;
     cardToUpdate.customFields = collectJobCustomFieldValues();
-    cardToUpdate.checklist = jmDraftChecklist;
+    cardToUpdate.checklists = jmDraftChecklists;
     cardToUpdate.attachments = jmDraftAttachments;
   }
 
@@ -7250,7 +7328,11 @@ function duplicateJob(jobId, event) {
     newCard.description = originalCard.description || '';
     newCard.due = originalCard.due || '';
     newCard.customFields = Object.assign({}, originalCard.customFields || {});
-    newCard.checklist = (originalCard.checklist || []).map(function(i) { return Object.assign({}, i, { id: genId() }); });
+    ensureCardChecklists(originalCard);
+    newCard.checklists = {};
+    Object.keys(originalCard.checklists || {}).forEach(function(colId) {
+      newCard.checklists[colId] = originalCard.checklists[colId].map(function(i) { return Object.assign({}, i, { id: genId() }); });
+    });
     newCard.attachments = (originalCard.attachments || []).map(function(a) { return Object.assign({}, a, { id: genId() }); });
   }
 
@@ -7721,6 +7803,7 @@ function renderBoard() {
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Duration</span>' +
               '<input type="number" min="1" class="board-col-duration-input" value="' + (col.defaultDuration || DEFAULT_TASK_DURATION_DAYS) + '" onclick="event.stopPropagation()" onchange="setColumnDefaultDuration(\'' + col.id + '\', this.value, event)">' +
             '</div>' +
+            '<div class="board-col-settings-item" onclick="openManageColumnChecklist(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Checklist</div>' +
             '<div class="board-col-settings-item" onclick="renameBoardColumn(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Rename</div>' +
             '<div class="board-col-settings-divider"></div>' +
             '<div class="board-col-settings-item danger" onclick="deleteBoardColumn(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</div>' +
@@ -7826,7 +7909,11 @@ function buildCardEl(card) {
   if (cf.poNumber) metaLines.push('<div class="board-card-meta-line"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> ' + escapeHtml(cf.poNumber) + '</div>');
   if (cf.location) metaLines.push('<div class="board-card-meta-line"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg> ' + escapeHtml(cf.location) + '</div>');
 
-  const checklist = card.checklist || [];
+  // Current stage's checklist only — a pure read (no lazy-seed here, this
+  // renders on every board paint; a stage nobody's opened yet just shows
+  // no badge instead of materializing its defaults from a render pass).
+  ensureCardChecklists(card);
+  const checklist = (card.checklists && card.checklists[card.column]) || [];
   if (checklist.length) {
     const doneCount = checklist.filter(i => i.done).length;
     const allDone = doneCount === checklist.length;
@@ -8358,19 +8445,44 @@ function collectJobCustomFieldValues() {
   return values;
 }
 
+// Builds the <option>s for the stage <select> above the list, and for the
+// per-item assignee <select> — BOARD_COLUMNS for the former,
+// fieldOptions.checklistAssignee (the roster managed from inside Manage
+// Custom Fields — see renderManageFieldsBody()) for the latter.
+function renderJobChecklistStageSelect() {
+  const sel = document.getElementById('jmChecklistStageSelect');
+  if (!sel) return;
+  sel.innerHTML = BOARD_COLUMNS.map(function(c) {
+    return '<option value="' + c.id + '"' + (c.id === jmActiveChecklistColumnId ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
+  }).join('');
+}
+
+function setActiveJobChecklistStage(colId) {
+  jmActiveChecklistColumnId = colId;
+  getChecklistForStage(jmDraftChecklists, colId);
+  renderJobChecklist();
+  flushAutoSaveJobForm(); // persists a freshly-seeded default list right away, same as any other checklist edit
+}
+
 function renderJobChecklist() {
   const container = document.getElementById('jmChecklistItems');
   if (!container) return;
-  container.innerHTML = jmDraftChecklist.map(item =>
-    '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
-    '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(' + item.id + ')">' +
-    '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-    '<button class="ci-delete" onclick="deleteJobChecklistItem(' + item.id + ')">×</button>' +
-    '</div>'
-  ).join('');
+  const items = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId);
+  const assignees = fieldOptions.checklistAssignee || [];
+  container.innerHTML = items.map(function(item) {
+    const options = '<option value="">Unassigned</option>' + assignees.map(function(a) {
+      return '<option value="' + escapeHtml(a) + '"' + (item.assignee === a ? ' selected' : '') + '>' + escapeHtml(a) + '</option>';
+    }).join('');
+    return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
+      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(' + item.id + ')">' +
+      '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
+      '<select class="ci-assignee" onchange="setJobChecklistItemAssignee(' + item.id + ', this.value)">' + options + '</select>' +
+      '<button class="ci-delete" onclick="deleteJobChecklistItem(' + item.id + ')">×</button>' +
+      '</div>';
+  }).join('');
 
-  const total = jmDraftChecklist.length;
-  const done = jmDraftChecklist.filter(i => i.done).length;
+  const total = items.length;
+  const done = items.filter(function(i) { return i.done; }).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
   document.getElementById('jmChecklistProgressFill').style.width = pct + '%';
   document.getElementById('jmChecklistProgressPct').textContent = pct + '%';
@@ -8380,21 +8492,28 @@ function addJobChecklistItem() {
   const input = document.getElementById('jmChecklistNewItem');
   const text = input.value.trim();
   if (!text) return;
-  jmDraftChecklist.push({ id: Date.now(), text, done: false });
+  getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).push({ id: Date.now(), text, done: false, assignee: '' });
   input.value = '';
   renderJobChecklist();
   flushAutoSaveJobForm();
 }
 
 function toggleJobChecklistItem(id) {
-  const item = jmDraftChecklist.find(i => i.id === id);
+  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return i.id === id; });
   if (item) item.done = !item.done;
   renderJobChecklist();
   flushAutoSaveJobForm();
 }
 
+function setJobChecklistItemAssignee(id, assignee) {
+  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return i.id === id; });
+  if (item) item.assignee = assignee;
+  flushAutoSaveJobForm();
+}
+
 function deleteJobChecklistItem(id) {
-  jmDraftChecklist = jmDraftChecklist.filter(i => i.id !== id);
+  const items = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId);
+  jmDraftChecklists[jmActiveChecklistColumnId] = items.filter(function(i) { return i.id !== id; });
   renderJobChecklist();
   flushAutoSaveJobForm();
 }
@@ -8461,26 +8580,101 @@ function closeManageFields() {
   document.getElementById('manageFieldsModal').classList.remove('show');
   saveFieldOptions();
   // Both the card modal and Job Manager can have this open behind it —
-  // refresh whichever grid(s) actually exist right now.
+  // refresh whichever grid(s)/checklist(s) actually exist right now, so a
+  // newly added/removed checklist assignee shows up in an open item's
+  // dropdown immediately instead of only after reopening.
   if (document.getElementById('customFieldsGrid')) renderCustomFieldsGrid(collectCustomFieldValues());
   if (document.getElementById('jmCustomFieldsGrid')) renderJobCustomFieldsGrid(collectJobCustomFieldValues());
+  if (document.getElementById('checklistItems')) renderChecklist();
+  if (document.getElementById('jmChecklistItems')) renderJobChecklist();
 }
 
 function renderManageFieldsBody() {
   const container = document.getElementById('manageFieldsBody');
   const selectDefs = CUSTOM_FIELD_DEFS.filter(d => d.type === 'select');
-  container.innerHTML = selectDefs.map(def => {
-    const opts = fieldOptions[def.key] || [];
-    const chips = opts.map(o => '<span class="manage-field-chip">' + escapeHtml(o) +
-      '<button onclick="removeFieldOption(\'' + def.key + '\', \'' + o.replace(/'/g, "\\'") + '\')">×</button></span>').join('');
-    return '<div class="manage-field-group">' +
-      '<h5>' + def.label + '</h5>' +
-      '<div class="manage-field-chips">' + (chips || '<span style="font-size:11px;color:#999;">No options yet</span>') + '</div>' +
-      '<div class="manage-field-add-row">' +
-      '<input type="text" id="mf_new_' + def.key + '" placeholder="Add option..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFieldOption(\'' + def.key + '\');}">' +
-      '<button class="btn btn-secondary" onclick="addFieldOption(\'' + def.key + '\')">Add</button>' +
-      '</div></div>';
+  const groups = selectDefs.map(def => buildManageFieldGroup(def.key, def.label));
+  // Checklist item assignees — not a job-form field like the groups above
+  // (see CUSTOM_FIELD_DEFS), just a shared roster checklist items can be
+  // assigned to (see the .ci-assignee dropdown in renderChecklist()/
+  // renderJobChecklist()). Reuses the exact same option-list editor.
+  groups.push(buildManageFieldGroup('checklistAssignee', 'Checklist Assignees'));
+  container.innerHTML = groups.join('');
+}
+
+function buildManageFieldGroup(key, label) {
+  const opts = fieldOptions[key] || [];
+  const chips = opts.map(o => '<span class="manage-field-chip">' + escapeHtml(o) +
+    '<button onclick="removeFieldOption(\'' + key + '\', \'' + o.replace(/'/g, "\\'") + '\')">×</button></span>').join('');
+  return '<div class="manage-field-group">' +
+    '<h5>' + escapeHtml(label) + '</h5>' +
+    '<div class="manage-field-chips">' + (chips || '<span style="font-size:11px;color:#999;">No options yet</span>') + '</div>' +
+    '<div class="manage-field-add-row">' +
+    '<input type="text" id="mf_new_' + key + '" placeholder="Add option..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFieldOption(\'' + key + '\');}">' +
+    '<button class="btn btn-secondary" onclick="addFieldOption(\'' + key + '\')">Add</button>' +
+    '</div></div>';
+}
+
+// ===== BOARD COLUMN: DEFAULT CHECKLIST =====
+// A column's default checklist template — see BOARD_COLUMNS[].
+// defaultChecklist and getChecklistForStage(), which materializes these
+// into a job's actual checklist the first time that stage's checklist is
+// viewed. Reuses the same chip-list UI as Manage Custom Fields' option
+// editor, just against {id, text} objects instead of plain strings, so an
+// item stays individually removable even if its text duplicates another's.
+let managingChecklistColumnId = null;
+
+function openManageColumnChecklist(colId, event) {
+  if (event) event.stopPropagation();
+  closeAllColSettings();
+  const col = BOARD_COLUMNS.find(function(c) { return c.id === colId; });
+  if (!col) return;
+  managingChecklistColumnId = colId;
+  document.getElementById('manageColumnChecklistTitle').textContent = col.label;
+  renderManageColumnChecklistBody();
+  document.getElementById('manageColumnChecklistModal').classList.add('show');
+}
+
+function closeManageColumnChecklist() {
+  document.getElementById('manageColumnChecklistModal').classList.remove('show');
+  managingChecklistColumnId = null;
+}
+
+function renderManageColumnChecklistBody() {
+  const container = document.getElementById('manageColumnChecklistBody');
+  const col = BOARD_COLUMNS.find(function(c) { return c.id === managingChecklistColumnId; });
+  if (!col) return;
+  const items = col.defaultChecklist || [];
+  const chips = items.map(function(item) {
+    return '<span class="manage-field-chip">' + escapeHtml(item.text) +
+      '<button onclick="removeColumnChecklistDefaultItem(\'' + item.id + '\')">×</button></span>';
   }).join('');
+  container.innerHTML = '<div class="manage-field-group">' +
+    '<div class="manage-field-chips">' + (chips || '<span style="font-size:11px;color:#999;">No default items yet</span>') + '</div>' +
+    '<div class="manage-field-add-row">' +
+    '<input type="text" id="mcc_new_item" placeholder="Add item..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addColumnChecklistDefaultItem();}">' +
+    '<button class="btn btn-secondary" onclick="addColumnChecklistDefaultItem()">Add</button>' +
+    '</div></div>';
+}
+
+function addColumnChecklistDefaultItem() {
+  const input = document.getElementById('mcc_new_item');
+  const text = input.value.trim();
+  if (!text) return;
+  const col = BOARD_COLUMNS.find(function(c) { return c.id === managingChecklistColumnId; });
+  if (!col) return;
+  if (!col.defaultChecklist) col.defaultChecklist = [];
+  col.defaultChecklist.push({ id: genId(), text: text });
+  input.value = '';
+  saveBoardColumns();
+  renderManageColumnChecklistBody();
+}
+
+function removeColumnChecklistDefaultItem(itemId) {
+  const col = BOARD_COLUMNS.find(function(c) { return c.id === managingChecklistColumnId; });
+  if (!col) return;
+  col.defaultChecklist = (col.defaultChecklist || []).filter(function(i) { return i.id !== itemId; });
+  saveBoardColumns();
+  renderManageColumnChecklistBody();
 }
 
 function addFieldOption(key) {
@@ -8499,18 +8693,39 @@ function removeFieldOption(key, val) {
 }
 
 // ----- Checklist -----
+function renderChecklistStageSelect() {
+  const sel = document.getElementById('checklistStageSelect');
+  if (!sel) return;
+  sel.innerHTML = BOARD_COLUMNS.map(function(c) {
+    return '<option value="' + c.id + '"' + (c.id === activeChecklistColumnId ? ' selected' : '') + '>' + escapeHtml(c.label) + '</option>';
+  }).join('');
+}
+
+function setActiveChecklistStage(colId) {
+  activeChecklistColumnId = colId;
+  getChecklistForStage(draftChecklists, colId);
+  renderChecklist();
+  flushCardAutosave(); // persists a freshly-seeded default list right away, same as any other checklist edit
+}
+
 function renderChecklist() {
   const container = document.getElementById('checklistItems');
-  container.innerHTML = draftChecklist.map(item =>
-    '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
-    '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleChecklistItem(' + item.id + ')">' +
-    '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-    '<button class="ci-delete" onclick="deleteChecklistItem(' + item.id + ')">×</button>' +
-    '</div>'
-  ).join('');
+  const items = getChecklistForStage(draftChecklists, activeChecklistColumnId);
+  const assignees = fieldOptions.checklistAssignee || [];
+  container.innerHTML = items.map(function(item) {
+    const options = '<option value="">Unassigned</option>' + assignees.map(function(a) {
+      return '<option value="' + escapeHtml(a) + '"' + (item.assignee === a ? ' selected' : '') + '>' + escapeHtml(a) + '</option>';
+    }).join('');
+    return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
+      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleChecklistItem(' + item.id + ')">' +
+      '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
+      '<select class="ci-assignee" onchange="setChecklistItemAssignee(' + item.id + ', this.value)">' + options + '</select>' +
+      '<button class="ci-delete" onclick="deleteChecklistItem(' + item.id + ')">×</button>' +
+      '</div>';
+  }).join('');
 
-  const total = draftChecklist.length;
-  const done = draftChecklist.filter(i => i.done).length;
+  const total = items.length;
+  const done = items.filter(function(i) { return i.done; }).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
   document.getElementById('checklistProgressFill').style.width = pct + '%';
   document.getElementById('checklistProgressPct').textContent = pct + '%';
@@ -8520,21 +8735,28 @@ function addChecklistItem() {
   const input = document.getElementById('checklistNewItem');
   const text = input.value.trim();
   if (!text) return;
-  draftChecklist.push({ id: Date.now(), text, done: false });
+  getChecklistForStage(draftChecklists, activeChecklistColumnId).push({ id: Date.now(), text, done: false, assignee: '' });
   input.value = '';
   renderChecklist();
   flushCardAutosave();
 }
 
 function toggleChecklistItem(id) {
-  const item = draftChecklist.find(i => i.id === id);
+  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return i.id === id; });
   if (item) item.done = !item.done;
   renderChecklist();
   flushCardAutosave();
 }
 
+function setChecklistItemAssignee(id, assignee) {
+  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return i.id === id; });
+  if (item) item.assignee = assignee;
+  flushCardAutosave();
+}
+
 function deleteChecklistItem(id) {
-  draftChecklist = draftChecklist.filter(i => i.id !== id);
+  const items = getChecklistForStage(draftChecklists, activeChecklistColumnId);
+  draftChecklists[activeChecklistColumnId] = items.filter(function(i) { return i.id !== id; });
   renderChecklist();
   flushCardAutosave();
 }
@@ -8687,7 +8909,10 @@ function openEditCard(id) {
   if (!card) return;
   editingCardId = card.id;
   setCardTitleHint(false);
-  draftChecklist = JSON.parse(JSON.stringify(card.checklist || []));
+  ensureCardChecklists(card);
+  draftChecklists = JSON.parse(JSON.stringify(card.checklists || {}));
+  activeChecklistColumnId = card.column || (BOARD_COLUMNS[0] && BOARD_COLUMNS[0].id) || null;
+  getChecklistForStage(draftChecklists, activeChecklistColumnId); // seed the default-view stage if it's never been opened
   draftAttachments = JSON.parse(JSON.stringify(card.attachments || []));
   document.getElementById('cardModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Card';
   document.getElementById('cardDeleteBtn').style.display = 'inline-flex';
@@ -8701,6 +8926,7 @@ function openEditCard(id) {
   updateColorSwatch();
   toggleColorPanel(false);
   renderCustomFieldsGrid(card.customFields || {});
+  renderChecklistStageSelect();
   renderChecklist();
   renderAttachments();
   document.getElementById('cardModal').classList.add('show');
@@ -8713,7 +8939,8 @@ function closeCardModal() {
   document.getElementById('cardModal').classList.remove('show');
   editingCardId = null;
   setCardTitleHint(false);
-  draftChecklist = [];
+  draftChecklists = {};
+  activeChecklistColumnId = null;
   draftAttachments = [];
 }
 
@@ -8753,7 +8980,7 @@ function autoSaveCardForm() {
     due: document.getElementById('c_due').value,
     color: document.getElementById('c_color').value,
     customFields: collectCustomFieldValues(),
-    checklist: draftChecklist,
+    checklists: draftChecklists,
     attachments: draftAttachments
   };
   if (title) cardData.title = title; // never blank out an already-saved title
