@@ -1143,11 +1143,24 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        element, not nested in the Gantt panel), so hiding that panel alone
        doesn't hide it — it needs its own rule or it's left floating over
        the job list with nothing on-screen for it to be a legend of. */
-    .app-shell-main, .rail-tab-row, .activity-sidebar, #activityToggleBtn, .legend-float { display: none; }
+    .rail-tab-row, .activity-sidebar, #activityToggleBtn, .legend-float { display: none; }
     .manager-sidebar { width: 100%; min-width: 0; }
     .manager-sidebar-header { padding: 12px; }
 
-    .manager-form-area { padding: 16px; }
+    /* NOT display:none — the job drawer (#formArea) lives inside
+       .app-shell-main too, and display:none on an ancestor hides a
+       descendant no matter what that descendant's own classes/state say,
+       so that would've taken the drawer down with the Gantt/Board/
+       Calendar panels it's meant to overlay. Collapsed to zero width
+       instead, with overflow hidden so the tab panels inside are
+       invisible without needing display:none — #jobRail (width:100%)
+       gets the row to itself either way. */
+    .app-shell-main { flex: 0 0 0; width: 0; min-width: 0; overflow: hidden; }
+    /* #formArea escapes that zero-width collapse via position:fixed —
+       its width:min(888px,100%) then resolves against the viewport
+       instead of its now-collapsed containing block, and fixed
+       positioning isn't clipped by an ancestor's overflow:hidden. */
+    .manager-form-area { position: fixed; padding: 16px; }
     .form-container { padding: 16px; }
     /* Start/Days/Finish were sized for a ~460px-wide desktop drawer column
        (92/50/92px) — at phone width that leaves almost nothing for the
