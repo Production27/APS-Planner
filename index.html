@@ -15,7 +15,15 @@
     --radius: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+  /* 100dvh (falls back to 100vh in browsers that don't support it) rather
+     than plain 100vh — on mobile browsers 100vh is sized for the address
+     bar hidden, so anything laid out against it (like the calendar's
+     .calendar-days scroll area computing its own available height) ends
+     up taller than what's actually visible whenever the address bar is
+     showing, silently clipping content at the bottom instead of it being
+     reachable by scrolling. dvh tracks the real visible viewport as the
+     browser chrome shows/hides. */
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
 
   /* Stale-cache guard — see checkForNewerVersion(). Fixed overlay rather
      than pushing layout down, since the rest of the app sizes itself off
@@ -4222,6 +4230,39 @@ function initCalendarDragHandlers() {
   if (!daysEl) return;
   daysEl.removeEventListener('mousedown', handleCalBarMouseDown);
   daysEl.addEventListener('mousedown', handleCalBarMouseDown);
+
+  // Swipe left/right to go to next/prev month — mobile month view only
+  // (see @media(max-width:480px); week view isn't reachable there, and
+  // desktop never gets touch events in the first place). passive:true
+  // since neither handler calls preventDefault — vertical scroll (see the
+  // 100dvh fix for .calendar-days actually having room to need it) stays
+  // completely native and unaffected.
+  daysEl.removeEventListener('touchstart', handleCalSwipeStart);
+  daysEl.removeEventListener('touchend', handleCalSwipeEnd);
+  daysEl.addEventListener('touchstart', handleCalSwipeStart, { passive: true });
+  daysEl.addEventListener('touchend', handleCalSwipeEnd, { passive: true });
+}
+
+let calSwipeStartX = null, calSwipeStartY = null, calSwipeStartedOnBar = false;
+function handleCalSwipeStart(e) {
+  if (calendarViewMode !== 'month' || e.touches.length !== 1) { calSwipeStartX = null; return; }
+  // A swipe that starts on an event bar is already spoken for — tapping/
+  // dragging a bar always opens it on mobile (see handleCalBarMouseUp),
+  // so treating the same gesture as a month-swipe too would fire both.
+  calSwipeStartedOnBar = !!e.target.closest('.cal-event-bar');
+  calSwipeStartX = e.touches[0].clientX;
+  calSwipeStartY = e.touches[0].clientY;
+}
+function handleCalSwipeEnd(e) {
+  if (calSwipeStartX == null || calSwipeStartedOnBar) { calSwipeStartX = null; return; }
+  const touch = e.changedTouches[0];
+  const deltaX = touch.clientX - calSwipeStartX;
+  const deltaY = touch.clientY - calSwipeStartY;
+  calSwipeStartX = null;
+  // Require a deliberate, mostly-horizontal swipe so an ordinary vertical
+  // scroll through the grid never gets misread as a month change.
+  if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+  if (deltaX < 0) calendarNext(); else calendarPrev();
 }
 
 function handleCalBarMouseDown(e) {
