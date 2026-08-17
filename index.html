@@ -405,10 +405,25 @@
   /* Phase-boundary tick on a condensed Jobs/Leads bar — see the
      task.isJobSpan block in renderGantt(). Taller than the bar itself so
      the bottom few pixels "stick down" below it as a small flag marking
-     where one task ends and the next begins. */
+     where one task ends and the next begins. Draggable (see
+     startTickResize()) to change that task's finish date, the tick
+     equivalent of a normal task bar's right-edge resize handle — a wider
+     invisible hit box than the visual line itself (via margin-left, which
+     doesn't affect the element's own "left" that the drag math and the
+     whole-job move's drag-along (see the isJobSpan branch in
+     onBarMoveMove()) both read/write) since 2px is too thin to reliably
+     grab on its own. */
   .job-span-task-tick {
-    position: absolute; width: 2px; height: 32px; background: rgba(255,255,255,0.9);
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.25); border-radius: 1px; z-index: 65; pointer-events: none;
+    position: absolute; width: 10px; margin-left: -5px; height: 32px;
+    cursor: ew-resize; z-index: 65; pointer-events: auto;
+  }
+  .job-span-task-tick::after {
+    content: ''; position: absolute; left: 4px; top: 0; width: 2px; height: 100%;
+    background: rgba(255,255,255,0.9); box-shadow: 0 0 0 1px rgba(0,0,0,0.25); border-radius: 1px;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .job-span-task-tick:hover::after, .job-span-task-tick.resizing::after {
+    background: #fff; box-shadow: 0 0 0 1.5px rgba(0,0,0,0.5);
   }
   /* Day-by-day segments drawn over a condensed Jobs/Leads bar — see the
      day-sweep in renderGantt(). All three sit below the ticks (z-index 65)
@@ -5433,10 +5448,13 @@ function renderGantt() {
           const tick = document.createElement('div');
           tick.className = 'job-span-task-tick';
           tick.dataset.jobId = job.id;
+          tick.dataset.taskId = dt.t.id;
           tick.dataset.origLeft = tickLeft;
           tick.style.left = tickLeft + 'px';
           tick.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
-          tick.title = dt.t.name;
+          tick.title = dt.t.name + ' — drag to change finish date';
+          tick.addEventListener('mousedown', function(e) { startTickResize(e, job.id, dt.t.id, tick); });
+          tick.addEventListener('click', function(e) { e.stopPropagation(); });
           grid.appendChild(tick);
         });
 
@@ -5610,9 +5628,13 @@ function cascadeShiftLaterTasks(jobId, taskId, deltaDays) {
   if (idx === -1) return;
   for (let i = idx + 1; i < sorted.length; i++) {
     const t = sorted[i];
+    // Not every later task necessarily has dates set yet (e.g. an
+    // "Invoiced" column task nobody's scheduled) — nothing to shift there.
+    if (!t.start || !t.finish) continue;
     const newStart = new Date(t.start + 'T00:00:00');
-    newStart.setDate(newStart.getDate() + deltaDays);
     const newFinish = new Date(t.finish + 'T00:00:00');
+    if (isNaN(newStart.getTime()) || isNaN(newFinish.getTime())) continue;
+    newStart.setDate(newStart.getDate() + deltaDays);
     newFinish.setDate(newFinish.getDate() + deltaDays);
     t.start = newStart.toISOString().split('T')[0];
     t.finish = newFinish.toISOString().split('T')[0];
@@ -5731,6 +5753,82 @@ function onBarResizeEnd(e) {
   }
 
   barResizeState = null;
+  renderGantt();
+}
+
+// --- Condensed Jobs/Leads bar: drag a phase-boundary tick to resize the
+// task ending there (see the isJobSpan day-sweep in renderGantt(), which
+// wires this up on each tick's mousedown). The tick equivalent of
+// startBarResizeRight() above — same "drag right to extend, left to
+// shorten" semantics and the same cascadeShiftLaterTasks() call to keep
+// later tasks in the job at their own duration/gaps — just moving the
+// tick element itself for live feedback instead of a bar's width, since
+// there's no single bar representing one task in this condensed view.
+let tickResizeState = null;
+
+function startTickResize(e, jobId, taskId, tick) {
+  e.preventDefault();
+  e.stopPropagation();
+  const found = findTask(jobId, taskId);
+  if (!found) return;
+  const task = found.task;
+  const s = new Date(task.start + 'T00:00:00');
+  const f = new Date(task.finish + 'T00:00:00');
+  const initialDuration = getDaysDiff(s, f) + 1;
+
+  tickResizeState = {
+    jobId, taskId, task, tick, startX: e.clientX,
+    startDateObj: s, origLeftPx: parseFloat(tick.style.left),
+    initialDuration, currentDuration: initialDuration
+  };
+
+  tick.classList.add('resizing');
+  document.addEventListener('mousemove', onTickResizeMove);
+  document.addEventListener('mouseup', onTickResizeEnd);
+}
+
+function onTickResizeMove(e) {
+  if (!tickResizeState) return;
+  const deltaX = e.clientX - tickResizeState.startX;
+  const rawDeltaDays = Math.round(deltaX / dayWidth);
+  const newDuration = Math.max(1, tickResizeState.initialDuration + rawDeltaDays);
+  tickResizeState.currentDuration = newDuration;
+  tickResizeState.tick.style.left =
+    (tickResizeState.origLeftPx + (newDuration - tickResizeState.initialDuration) * dayWidth) + 'px';
+
+  const newFinish = new Date(tickResizeState.startDateObj);
+  newFinish.setDate(newFinish.getDate() + newDuration - 1);
+
+  const tt = document.getElementById('tooltip');
+  tt.innerHTML = '<div class="tt-title">' + escapeHtml(tickResizeState.task.name) + '</div>' +
+    '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' +
+    newFinish.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>' +
+    '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' +
+    newDuration + ' day' + (newDuration > 1 ? 's' : '') + '</span></div>';
+  tt.classList.add('show');
+  moveTooltip(e);
+}
+
+function onTickResizeEnd(e) {
+  if (!tickResizeState) return;
+  const { jobId, taskId, task, currentDuration, initialDuration } = tickResizeState;
+  document.removeEventListener('mousemove', onTickResizeMove);
+  document.removeEventListener('mouseup', onTickResizeEnd);
+  hideTooltip();
+
+  if (currentDuration !== initialDuration) {
+    const newFinish = new Date(tickResizeState.startDateObj);
+    newFinish.setDate(newFinish.getDate() + currentDuration - 1);
+    task.finish = newFinish.toISOString().split('T')[0];
+    cascadeShiftLaterTasks(jobId, taskId, currentDuration - initialDuration);
+    saveJobs();
+    logActivity('rescheduled task "' + task.name + '"');
+    renderJobList();
+    refreshJobFormIfOpen(jobId);
+    showToast('Finish date updated', 'success');
+  }
+
+  tickResizeState = null;
   renderGantt();
 }
 
