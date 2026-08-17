@@ -63,6 +63,9 @@
     outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
   }
   .header-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  /* Mobile-only Jobs/Board toggle — see setMobileBoardView() and the
+     @media (max-width:480px) rules that turn this into a visible tab bar. */
+  .mobile-view-switcher { display: none; }
   .project-toggle-btn {
     width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
     transition: all 0.15s; border: 2px solid rgba(255,255,255,0.4);
@@ -785,6 +788,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-add-card-btn:hover { background: #dde0ec; color: var(--primary); }
   .board-card { background: white; border-radius: 8px; padding: 10px 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.14); cursor: grab; border-left: 4px solid var(--primary-light); transition: box-shadow 0.15s, transform 0.15s; }
   .board-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+  /* Mobile-only "Move to" fallback for touch, where native HTML5 drag
+     doesn't work — see the @media (max-width:480px) rule that reveals
+     this and buildCardEl() for where it's built. */
+  .board-card-move-select { display: none; }
   .board-card.dragging { opacity: 0.4; }
   .board-card .board-card-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; word-break: break-word; }
   .board-card .board-card-desc { font-size: 11px; color: var(--text-light); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
@@ -1121,14 +1128,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   @media (max-width: 1100px) { .left-panel, .gantt-view-toggle-row { width: 260px; min-width: 260px; } .manager-sidebar { width: 210px; min-width: 210px; } }
 
   /* ===== MOBILE (phone-width) =====
-     First mobile-friendly pass, scoped to the Job list + editor only —
-     that's the "quick check/edit from the field" use case, and the most
-     tractable to get right in one pass. Gantt/Board/Calendar are each a
-     wide, dense, desktop-oriented layout that need their own dedicated
-     mobile treatment rather than just shrinking, so for now they (and the
-     tab switcher that reaches them) are hidden instead of shown broken —
-     the job rail takes over the full screen instead of sharing it with a
-     panel that doesn't fit. Revisit this per-view in a later pass. */
+     Job list + editor and Board each get their own full-screen mode, since
+     neither fits next to the other on a phone — .mobile-view-switcher
+     toggles between them via setMobileBoardView(), which flips
+     body.mobile-board-active. Gantt/Calendar are still a wide, dense,
+     desktop-oriented layout that needs its own dedicated mobile treatment
+     rather than just shrinking, so for now there's no way to reach them
+     from a phone at all. Revisit that in a later pass. */
   @media (max-width: 480px) {
     .app-header { padding: 10px 14px; }
     /* The title/subtitle's desktop min-width (200px/300px) is what was
@@ -1147,6 +1153,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .manager-sidebar { width: 100%; min-width: 0; }
     .manager-sidebar-header { padding: 12px; }
 
+    .mobile-view-switcher { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .mobile-view-btn {
+      flex: 1; padding: 10px; border: none; background: transparent; font-size: 13px;
+      font-weight: 700; color: var(--text-light); cursor: pointer; border-bottom: 3px solid transparent;
+    }
+    .mobile-view-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
     /* NOT display:none — the job drawer (#formArea) lives inside
        .app-shell-main too, and display:none on an ancestor hides a
        descendant no matter what that descendant's own classes/state say,
@@ -1154,8 +1167,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        Calendar panels it's meant to overlay. Collapsed to zero width
        instead, with overflow hidden so the tab panels inside are
        invisible without needing display:none — #jobRail (width:100%)
-       gets the row to itself either way. */
+       gets the row to itself either way. Reversed below when Board mode
+       is active: the rail collapses instead and this expands back out. */
     .app-shell-main { flex: 0 0 0; width: 0; min-width: 0; overflow: hidden; }
+    /* Board mode: setMobileBoardView(true) adds this to <body> and calls
+       switchTab('board') so #panel-board is the one .tab-panel with
+       .active (Gantt/Calendar stay display:none via the existing
+       .tab-panel rule, so there's no way to land on them from here). */
+    body.mobile-board-active .manager-sidebar { display: none; }
+    body.mobile-board-active .app-shell-main { flex: 1 1 auto; width: auto; min-width: 0; }
     /* #formArea escapes that zero-width collapse via position:fixed —
        its width:min(888px,100%) then resolves against the viewport
        instead of its now-collapsed containing block, and fixed
@@ -1204,6 +1224,25 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     }
     .mobile-collapsible .mobile-field-body { display: none; }
     .mobile-collapsible.expanded .mobile-field-body { display: block; margin-top: 8px; }
+
+    /* ===== BOARD ===== */
+    /* One column at a time instead of a 270px-wide strip with the next
+       column half-peeking in — scroll-snap makes swiping between columns
+       land cleanly instead of stopping wherever the finger happened to
+       lift. */
+    .board-wrapper { padding: 12px; gap: 12px; scroll-snap-type: x mandatory; }
+    .board-column, .board-add-column {
+      width: calc(100vw - 48px); min-width: calc(100vw - 48px); scroll-snap-align: start;
+    }
+    /* Drag-and-drop (native HTML5 DnD) doesn't fire on touchscreens at
+       all, so moving a card needs a non-drag path on mobile — a plain
+       <select> per card (see buildCardEl()), native-picker on tap, no
+       custom dropdown positioning to get right. Hidden above this width
+       since desktop still has real drag. */
+    .board-card-move-select { display: block; width: 100%; margin-top: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: inherit; background: var(--card); color: var(--text); }
+    /* Card edit modal: two columns of custom fields is too tight at
+       phone width. */
+    .custom-fields-grid { grid-template-columns: 1fr; }
   }
 
   /* ===== DARK MODE ===== */
@@ -1428,6 +1467,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     </div>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
   </div>
+</div>
+
+<!-- MOBILE VIEW SWITCHER: only shown ≤480px (see @media rules) — the job
+     rail and the Board panel can't both fit on a phone screen, so this
+     toggles which one takes over. Gantt/Calendar aren't mobile-ready yet,
+     so they're deliberately not options here; see setMobileBoardView(). -->
+<div class="mobile-view-switcher" id="mobileViewSwitcher">
+  <button class="mobile-view-btn active" data-view="jobs" onclick="setMobileBoardView(false)">Jobs</button>
+  <button class="mobile-view-btn" data-view="board" onclick="setMobileBoardView(true)">Board</button>
 </div>
 
 <div class="app-shell">
@@ -3511,6 +3559,19 @@ function switchTab(tab) {
   if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
   else if (tab === 'board') { renderBoard(); }
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
+}
+
+// Mobile-only Jobs/Board toggle — see .mobile-view-switcher and the
+// body.mobile-board-active rules under @media (max-width:480px). The job
+// rail and the Board panel each take the full screen on a phone, so
+// there's no "both visible" state to preserve here the way switchTab()
+// does on desktop.
+function setMobileBoardView(showBoard) {
+  document.body.classList.toggle('mobile-board-active', showBoard);
+  document.querySelectorAll('.mobile-view-btn').forEach(function(b) {
+    b.classList.toggle('active', (b.dataset.view === 'board') === showBoard);
+  });
+  if (showBoard) switchTab('board');
 }
 
 // Every board column's "+ New Job" button (formerly "+ Add a card", which
@@ -7078,6 +7139,24 @@ function buildCardEl(card) {
       '</div>' +
     '</div>';
 
+  // Mobile-only "Move to" fallback — hidden above 480px (see the
+  // .board-card-move-select rules), where dragging still works. Built as
+  // a real element rather than an innerHTML string so the card id doesn't
+  // need escaping into an inline onchange handler.
+  const moveSelect = document.createElement('select');
+  moveSelect.className = 'board-card-move-select';
+  moveSelect.title = 'Move to a different board';
+  BOARD_COLUMNS.forEach(function(col) {
+    const opt = document.createElement('option');
+    opt.value = col.id;
+    opt.textContent = col.label;
+    if (col.id === card.column) opt.selected = true;
+    moveSelect.appendChild(opt);
+  });
+  moveSelect.addEventListener('click', function(e) { e.stopPropagation(); });
+  moveSelect.addEventListener('change', function() { moveCardToColumn(card.id, moveSelect.value); });
+  el.appendChild(moveSelect);
+
   el.addEventListener('click', () => openEditCard(card.id));
   el.addEventListener('dragstart', handleCardDragStart);
   el.addEventListener('dragend', handleCardDragEnd);
@@ -7267,6 +7346,26 @@ function handleColumnDrop(e) {
   syncBoardCardsFromDOM();
   saveBoardCards();
   requestAnimationFrame(() => renderBoard());
+}
+
+// Touch-friendly equivalent of dropping a card into a different column via
+// handleColumnDrop() above — same logic (manual-override on job-linked
+// cards, activity log, save+re-render), just triggered from the mobile
+// <select> in buildCardEl() instead of a native HTML5 drag, which doesn't
+// fire on touchscreens.
+function moveCardToColumn(cardId, targetColumnId) {
+  const card = boardCards.find(function(c) { return String(c.id) === String(cardId); });
+  if (!card || card.column === targetColumnId) return;
+  const targetCol = BOARD_COLUMNS.find(function(c) { return c.id === targetColumnId; });
+  card.column = targetColumnId;
+  if (card.jobId) {
+    card.manualColumn = targetColumnId;
+    card.manualColumnUntil = Date.now() + 24 * 60 * 60 * 1000;
+    logActivity('manually moved "' + card.title + '" to "' + (targetCol ? targetCol.label : targetColumnId) + '"');
+  }
+  saveBoardCards();
+  renderBoard();
+  showToast('Moved to "' + (targetCol ? targetCol.label : targetColumnId) + '"', 'success');
 }
 
 function getDragAfterElement(container, y) {
