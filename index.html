@@ -635,8 +635,33 @@
     flex: 0 0 340px; width: 340px; max-height: calc(100vh - 220px);
     background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
     padding: 20px 22px; display: none; flex-direction: column;
+    transition: flex-basis 0.2s ease, width 0.2s ease, padding 0.2s ease;
   }
   .job-comments-panel h4 { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--text); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .job-comments-collapse-btn { margin-left: auto; background: none; border: none; color: var(--text-light); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .job-comments-collapse-btn:hover { background: #eef1fa; color: var(--primary); }
+  /* Collapsed (the default each time a job opens — see editJob()/
+     the justCreated branch) shrinks the panel down to a narrow tab
+     standing in for it, showing just the comment count; the full h4/
+     list/input swap out for it rather than being scaled down. */
+  .job-comments-tab { display: none; }
+  .job-comments-panel.collapsed {
+    flex-basis: 44px; width: 44px; padding: 18px 0; align-items: center; cursor: pointer;
+  }
+  .job-comments-panel.collapsed:hover { background: #eef1fa; }
+  .job-comments-panel.collapsed h4,
+  .job-comments-panel.collapsed .mobile-field-body { display: none; }
+  .job-comments-panel.collapsed .job-comments-tab {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: none; border: none; cursor: pointer; padding: 0; color: var(--primary);
+  }
+  .job-comments-tab-count {
+    background: var(--primary-light); color: #fff; font-size: 11px; font-weight: 700;
+    min-width: 18px; height: 18px; border-radius: 9px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; padding: 0 5px;
+  }
+  body.dark-mode .job-comments-panel.collapsed:hover { background: rgba(57,73,171,0.18); }
+  body.dark-mode .job-comments-collapse-btn:hover { background: rgba(57,73,171,0.18); }
   .job-comments-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; min-height: 60px; }
   .job-comments-empty { font-size: 12px; color: var(--text-light); text-align: center; padding: 24px 0; }
   .job-comment-item { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
@@ -671,6 +696,16 @@
        bottom of a very long form and look like it disappeared. Put it right
        after the job header instead, before the rest of the form. */
     .job-comments-panel { width: 100%; max-width: 460px; flex: none; max-height: 400px; order: -1; }
+    /* The collapsed-tab treatment (see .job-comments-panel.collapsed) is
+       for the wide side-by-side layout only — "a tab to the right of the
+       edit box" doesn't apply once the panel has stacked above the form.
+       Selector beats the base .collapsed rule on specificity alone, but
+       spelled out for clarity. */
+    .job-comments-panel.collapsed { width: 100%; max-width: 460px; flex: none; padding: 20px 22px; align-items: stretch; cursor: default; }
+    .job-comments-panel.collapsed:hover { background: var(--card); }
+    .job-comments-panel.collapsed h4 { display: flex; }
+    .job-comments-panel.collapsed .mobile-field-body { display: block; }
+    .job-comments-panel.collapsed .job-comments-tab { display: none; }
   }
 
   /* Section 3: fixed task grid — rows locked to board columns.
@@ -1779,7 +1814,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           </div>
         </div>
         <div class="job-comments-panel mobile-collapsible" id="jobCommentsPanel" style="display:none;">
-          <h4 onclick="toggleMobileField(this)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> Comments</h4>
+          <!-- Desktop-only collapsed state (see .job-comments-panel.collapsed
+               and toggleJobCommentsPanel()) — a narrow tab standing in for
+               the full panel, showing just the comment count. Distinct from
+               .mobile-collapsible/toggleMobileField above, which is the
+               phone-width accordion for this and the other job-drawer
+               sections; this one defaults collapsed on desktop instead. -->
+          <button class="job-comments-tab" id="jobCommentsTab" onclick="toggleJobCommentsPanel()" title="Show comments">
+            <svg viewBox="0 0 24 24" width="17" height="17" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg>
+            <span class="job-comments-tab-count" id="jobCommentsTabCount">0</span>
+          </button>
+          <h4 onclick="toggleMobileField(this)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> Comments
+            <button class="job-comments-collapse-btn" onclick="event.stopPropagation(); toggleJobCommentsPanel();" title="Collapse">›</button>
+          </h4>
           <div class="mobile-field-body">
             <div class="job-comments-list" id="jobCommentsList"></div>
             <div class="job-comments-input-row">
@@ -6082,6 +6129,17 @@ function collapseAllMobileFields() {
   });
 }
 
+// Desktop-only collapse for the Comments panel (see .job-comments-panel.
+// collapsed) — separate from the .mobile-collapsible accordion above,
+// which is phone-width only and covers every job-drawer section, not just
+// this one. Defaults collapsed each time a job opens (editJob()/the
+// justCreated branch in autoSaveJobForm()), showing just a narrow tab with
+// the comment count until clicked open.
+function toggleJobCommentsPanel() {
+  const panel = document.getElementById('jobCommentsPanel');
+  if (panel) panel.classList.toggle('collapsed');
+}
+
 function renderJobList() {
   const list = document.getElementById('jobList');
   const search = document.getElementById('jobSearch').value.toLowerCase();
@@ -6462,7 +6520,9 @@ function editJob(jobId) {
   renderJobChecklist();
   renderJobAttachments();
 
-  document.getElementById('jobCommentsPanel').style.display = 'flex';
+  const commentsPanel = document.getElementById('jobCommentsPanel');
+  commentsPanel.style.display = 'flex';
+  commentsPanel.classList.add('collapsed'); // collapsed is the resting state each time a job opens — see toggleJobCommentsPanel()
   document.getElementById('newJobCommentText').value = '';
   renderJobComments(job);
   ensureJobTasksMatchColumns(job);
@@ -6501,6 +6561,15 @@ function renderJobComments(job) {
   const listEl = document.getElementById('jobCommentsList');
   if (!listEl) return;
   const comments = (job.comments || []).slice().sort(function(a, b) { return (b.when || 0) - (a.when || 0); });
+
+  // Keeps the collapsed tab's badge (see .job-comments-panel.collapsed)
+  // in sync — same count convention as the job list's own comment badge.
+  const tabCountEl = document.getElementById('jobCommentsTabCount');
+  if (tabCountEl) {
+    tabCountEl.textContent = comments.length;
+    tabCountEl.style.display = comments.length ? 'flex' : 'none';
+  }
+
   if (!comments.length) {
     listEl.innerHTML = '<div class="job-comments-empty">No comments yet.</div>';
     return;
@@ -6803,7 +6872,9 @@ function autoSaveJobForm() {
     archiveBtn.style.display = 'inline-flex';
     archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive';
     archiveBtn.onclick = function() { archiveJob(job.id); };
-    document.getElementById('jobCommentsPanel').style.display = 'flex';
+    const commentsPanel = document.getElementById('jobCommentsPanel');
+    commentsPanel.style.display = 'flex';
+    commentsPanel.classList.add('collapsed');
     renderJobComments(job);
     showToast('Job created', 'success');
   }
