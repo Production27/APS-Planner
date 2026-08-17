@@ -467,6 +467,24 @@
     position: absolute; height: 26px; border-radius: 5px; border-width: 2px;
     border-style: solid; box-sizing: border-box; z-index: 80; pointer-events: none;
   }
+  /* Condensed Jobs/Leads bar's due-date marker — see the isJobSpan branch
+     in renderGantt(). Same circular look as a Tasks-view due-marker bar
+     (.task-bar.milestone); z-index 82 puts it above .job-span-border (80)
+     so it visibly sits on top of the span when the due date falls within
+     it, rather than being painted over. */
+  .job-span-due-marker {
+    position: absolute; width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; cursor: grab; z-index: 82; transition: filter 0.15s;
+    border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935, 0 1px 3px rgba(0,0,0,0.25);
+  }
+  .job-span-due-marker:hover { filter: brightness(1.1); }
+  .job-span-due-marker.moving { cursor: grabbing; transition: none; }
+  /* The bridge between the span and its due marker — only drawn when
+     there's an actual gap to bridge (see renderGantt()); sits below the
+     day-segments (64) since it only ever occupies empty space next to the
+     bar, never overlapping it. */
+  .job-span-due-line { position: absolute; height: 2px; z-index: 63; pointer-events: none; }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
   .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
@@ -5367,6 +5385,65 @@ function renderGantt() {
         borderOverlay.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
         borderOverlay.style.borderColor = job.color || '#3949ab';
         grid.appendChild(borderOverlay);
+
+        // Due date marker: its own little flagged circle (same look as a
+        // Tasks-view due-marker bar), connected back to the condensed span
+        // by a line in the bar's own color — unless the span's own finish
+        // already reaches the due date, in which case there's nothing to
+        // bridge and the circle just sits on top of the bar instead (see
+        // the z-index on .job-span-due-marker). Deliberately left out of
+        // the whole-job-move drag-along list below (unlike the ticks/
+        // segments) — moving the scheduled tasks doesn't move the deadline
+        // itself, only re-render() catching up on drop should change how
+        // far apart they are. It's independently draggable on its own via
+        // startBarMove()'s existing DUE_MARKER_TASK_ID handling, same as
+        // the Tasks-view due marker.
+        const dueTask = getJobDueMarkerTask(job);
+        if (dueTask) {
+          const dueDate = new Date(dueTask.start + 'T00:00:00');
+          const dueIdx = getDaysDiff(startDate, dueDate);
+          const barEndIdx = startIdx + duration - 1;
+          const dueLeft = dueIdx * dayWidth;
+          const markerColor = task.color || '#e53935';
+
+          const dueEl = document.createElement('div');
+          dueEl.className = 'job-span-due-marker';
+          dueEl.dataset.jobId = job.id;
+          dueEl.dataset.dragged = 'false';
+          dueEl.style.left = dueLeft + 'px';
+          dueEl.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
+          dueEl.style.background = markerColor;
+          dueEl.textContent = '🚩';
+          dueEl.title = dueTask.name + ': ' + dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          dueEl.addEventListener('mouseenter', function(e) { showTooltip(e, job, dueTask); });
+          dueEl.addEventListener('mouseleave', hideTooltip);
+          dueEl.addEventListener('mousemove', moveTooltip);
+          dueEl.addEventListener('mousedown', function(e) { startBarMove(e, job.id, DUE_MARKER_TASK_ID, dueEl); });
+          dueEl.addEventListener('click', function() {
+            if (dueEl.dataset.dragged === 'true') { dueEl.dataset.dragged = 'false'; return; }
+            editJob(job.id, DUE_MARKER_TASK_ID);
+          });
+          grid.appendChild(dueEl);
+
+          let lineLeft = null, lineWidth = 0;
+          if (dueIdx > barEndIdx) {
+            lineLeft = (barEndIdx + 1) * dayWidth;
+            lineWidth = dueLeft - lineLeft;
+          } else if (dueIdx < startIdx) {
+            lineLeft = dueLeft + 18;
+            lineWidth = (startIdx * dayWidth) - lineLeft;
+          }
+          if (lineLeft !== null && lineWidth > 0) {
+            const dueLine = document.createElement('div');
+            dueLine.className = 'job-span-due-line';
+            dueLine.dataset.jobId = job.id;
+            dueLine.style.left = lineLeft + 'px';
+            dueLine.style.width = lineWidth + 'px';
+            dueLine.style.top = (barVisibleIdx * GANTT_ROW_H + Math.round(GANTT_ROW_H / 2) - 1) + 'px';
+            dueLine.style.background = markerColor;
+            grid.appendChild(dueLine);
+          }
+        }
       } else {
         bar.style.background = task.color || job.color;
         // Same job-color outline as a condensed Jobs/Leads bar, so which
