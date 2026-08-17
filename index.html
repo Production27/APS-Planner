@@ -282,7 +282,9 @@
   .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-  .task-row { display: flex; height: 34px; border-bottom: 1px solid #f0f0f0; font-size: 12px; align-items: center; transition: background 0.15s; cursor: pointer; }
+  /* 40px — kept in sync with GANTT_ROW_H (see its declaration near
+     "let dayWidth"), which drives the matching right-panel bar rows. */
+  .task-row { display: flex; height: 40px; border-bottom: 1px solid #f0f0f0; font-size: 12px; align-items: center; transition: background 0.15s; cursor: pointer; }
   .task-row:hover { background: #e3f2fd; }
   .task-row:nth-child(even) { background: #fafafa; }
   .task-row:nth-child(even):hover { background: #e3f2fd; }
@@ -361,8 +363,13 @@
   }
 
   /* ===== TASK BARS ===== */
+  /* height/top here are 26px/7px — kept in sync with GANTT_BAR_H/
+     GANTT_BAR_PAD, which is what actually positions each bar (the JS
+     always sets an inline top per row, beating this top value in
+     practice; it's kept matching anyway as the correct fallback/first-
+     paint value). */
   .task-bar {
-    position: absolute; height: 22px; border-radius: 5px; top: 6px;
+    position: absolute; height: 26px; border-radius: 5px; top: 7px;
     cursor: grab; transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
     display: flex; align-items: center; padding: 0 8px;
     font-size: 10px; color: white; font-weight: 600;
@@ -377,7 +384,7 @@
   .task-bar.moving { transition: none; z-index: 60; filter: brightness(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: grabbing; }
   .task-bar.reordering { opacity: 0.35; filter: grayscale(0.4); cursor: ns-resize; }
   .reorder-ghost {
-    position: fixed; height: 22px; border-radius: 5px; pointer-events: none; z-index: 100;
+    position: fixed; height: 26px; border-radius: 5px; pointer-events: none; z-index: 100;
     box-shadow: 0 4px 16px rgba(0,0,0,0.35); display: flex; align-items: center;
     padding: 0 8px; font-size: 10px; color: white; font-weight: 600;
     white-space: nowrap; overflow: hidden; border: 1px solid rgba(255,255,255,0.25);
@@ -400,7 +407,7 @@
      the bottom few pixels "stick down" below it as a small flag marking
      where one task ends and the next begins. */
   .job-span-task-tick {
-    position: absolute; width: 2px; height: 28px; background: rgba(255,255,255,0.9);
+    position: absolute; width: 2px; height: 32px; background: rgba(255,255,255,0.9);
     box-shadow: 0 0 0 1px rgba(0,0,0,0.25); border-radius: 1px; z-index: 65; pointer-events: none;
   }
   /* Day-by-day segments drawn over a condensed Jobs/Leads bar — see the
@@ -413,7 +420,7 @@
        color, set inline per element since it varies per task. Unlike the
        other overlays it's interactive: pointer-events are left on so it
        can be grabbed to move just that one task (see renderGantt()). */
-    position: absolute; height: 22px; border-radius: 2px; z-index: 64; cursor: grab;
+    position: absolute; height: 26px; border-radius: 2px; z-index: 64; cursor: grab;
     transition: filter 0.15s;
   }
   .job-span-task-solid:hover { filter: brightness(1.12); }
@@ -421,13 +428,13 @@
   .job-span-task-hatch {
     /* Two or more tasks overlap on this stretch — hard-edged stripes
        alternating between their colors, set inline per element. */
-    position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
+    position: absolute; height: 26px; border-radius: 2px; z-index: 64; pointer-events: none;
   }
   .job-span-gap-hash {
     /* No task covers this stretch at all — a real scheduling gap. Left
        fully transparent (no fill) so the gantt grid/background shows
        through instead of the bar having anything drawn over it here. */
-    position: absolute; height: 22px; border-radius: 2px; z-index: 64; pointer-events: none;
+    position: absolute; height: 26px; border-radius: 2px; z-index: 64; pointer-events: none;
   }
   /* Hosts the job-name pill (.task-bar-job-tag, same look as on a regular
      task bar) above everything else on a condensed Jobs/Leads row — the
@@ -435,14 +442,14 @@
      plain text drawn inside the bar itself. pointer-events:none so drag/
      click/hover still land on the real bar underneath. */
   .job-span-name-wrap {
-    position: absolute; height: 22px; display: flex; align-items: center;
+    position: absolute; height: 26px; display: flex; align-items: center;
     padding: 0 8px; overflow: hidden; z-index: 70; pointer-events: none;
   }
   /* Outline around the whole condensed span in the job's own color — the
      topmost overlay on the row (above the name pill's z-index 70) so it
      frames everything else instead of being painted over by it. */
   .job-span-border {
-    position: absolute; height: 22px; border-radius: 5px; border-width: 2px;
+    position: absolute; height: 26px; border-radius: 5px; border-width: 2px;
     border-style: solid; box-sizing: border-box; z-index: 80; pointer-events: none;
   }
   .task-row.due-marker-row { font-style: italic; }
@@ -498,18 +505,18 @@
   }
   .task-bar.milestone .task-bar-job-tag { display: none; }
   .task-bar-resize-handle {
-    position: absolute; top: 0; bottom: 0; width: 10px;
+    position: absolute; top: 0; bottom: 0; width: 14px;
     cursor: ew-resize; z-index: 5;
   }
   .task-bar-resize-handle-left { left: 0; }
   .task-bar-resize-handle-right { right: 0; }
   .task-bar-resize-handle::after {
     content: ''; position: absolute; top: 50%; transform: translateY(-50%);
-    width: 3px; height: 12px; border-radius: 2px;
+    width: 4px; height: 14px; border-radius: 2px;
     background: rgba(255,255,255,0.7); opacity: 0; transition: opacity 0.15s;
   }
-  .task-bar-resize-handle-left::after { left: 3px; }
-  .task-bar-resize-handle-right::after { right: 3px; }
+  .task-bar-resize-handle-left::after { left: 5px; }
+  .task-bar-resize-handle-right::after { right: 5px; }
   .task-bar:hover .task-bar-resize-handle::after,
   .task-bar.resizing .task-bar-resize-handle::after { opacity: 1; }
 
@@ -531,7 +538,7 @@
     pointer-events: none;
   }
 
-  .row-bg { position: absolute; left: 0; right: 0; height: 34px; border-bottom: 1px solid #f5f5f5; }
+  .row-bg { position: absolute; left: 0; right: 0; height: 40px; border-bottom: 1px solid #f5f5f5; }
   .row-bg:nth-child(even) { background: #fafafa; }
   /* Sits in .gantt-top-row next to .gantt-view-toggle-row, sharing that
      row's background/border rather than carrying its own — see the
@@ -2770,7 +2777,16 @@ function ensureCalendarEventIds(arr) {
 let jobs = [];
 let editingJobId = null;
 let editingTaskId = null;
-let dayWidth = 28;
+let dayWidth = 34;
+// Gantt row/bar sizing — kept in one place since it's threaded through
+// renderGantt(), the drag/resize/reorder handlers, and the SVG connector
+// lines between split job-span segments. The matching CSS (.task-row,
+// .task-bar, .row-bg, .job-span-*, .reorder-ghost) is hand-kept in sync
+// with these since plain CSS can't reference JS constants — search for
+// GANTT_ROW_H/GANTT_BAR_H in a comment there if these ever change again.
+const GANTT_ROW_H = 40;
+const GANTT_BAR_H = 26;
+const GANTT_BAR_PAD = (GANTT_ROW_H - GANTT_BAR_H) / 2;
 let startDate, endDate;
 let deleteTargetJobId = null;
 let showArchived = false;
@@ -5201,7 +5217,7 @@ function renderGantt() {
     {
       const bg = document.createElement('div');
       bg.className = 'row-bg';
-      bg.style.top = (visibleRowIdx * 34) + 'px';
+      bg.style.top = (visibleRowIdx * GANTT_ROW_H) + 'px';
       bg.style.width = gridWidth + 'px';
       grid.appendChild(bg);
 
@@ -5259,7 +5275,7 @@ function renderGantt() {
       bar.className = 'task-bar ghost';
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
-      bar.style.top = (ghostVisibleIdx * 34 + 6) + 'px';
+      bar.style.top = (ghostVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
       bar.style.background = task.color || job.color || '#999';
       if (duration !== 1) {
         const jobTag = document.createElement('span');
@@ -5293,7 +5309,7 @@ function renderGantt() {
       if (duration === 1) bar.classList.add('milestone');
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
-      bar.style.top = (barVisibleIdx * 34 + 6) + 'px';
+      bar.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
       if (task.isJobSpan) {
         // Condensed 'jobs'/'leads' bar: left transparent — a solid fill
         // here would otherwise show through in gap stretches, which are
@@ -5309,7 +5325,7 @@ function renderGantt() {
         labelWrap.dataset.origLeft = startIdx * dayWidth;
         labelWrap.style.left = (startIdx * dayWidth) + 'px';
         labelWrap.style.width = (duration * dayWidth) + 'px';
-        labelWrap.style.top = (barVisibleIdx * 34 + 6) + 'px';
+        labelWrap.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
         const jobTag = document.createElement('span');
         jobTag.className = 'task-bar-job-tag';
         jobTag.style.background = job.color || '#999';
@@ -5328,7 +5344,7 @@ function renderGantt() {
         borderOverlay.dataset.origLeft = startIdx * dayWidth;
         borderOverlay.style.left = (startIdx * dayWidth) + 'px';
         borderOverlay.style.width = (duration * dayWidth) + 'px';
-        borderOverlay.style.top = (barVisibleIdx * 34 + 6) + 'px';
+        borderOverlay.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
         borderOverlay.style.borderColor = job.color || '#3949ab';
         grid.appendChild(borderOverlay);
       } else {
@@ -5419,7 +5435,7 @@ function renderGantt() {
           tick.dataset.jobId = job.id;
           tick.dataset.origLeft = tickLeft;
           tick.style.left = tickLeft + 'px';
-          tick.style.top = (barVisibleIdx * 34 + 6) + 'px';
+          tick.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
           tick.title = dt.t.name;
           grid.appendChild(tick);
         });
@@ -5443,7 +5459,7 @@ function renderGantt() {
           while (dj + 1 < duration && dayTasks[dj + 1].map(function(dt) { return dt.t.id; }).sort().join('|') === key) dj++;
           const segLeft = (startIdx + di) * dayWidth;
           const segWidth = (dj - di + 1) * dayWidth;
-          const segTop = (barVisibleIdx * 34 + 6) + 'px';
+          const segTop = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
 
           if (covering.length === 0) {
             const hash = document.createElement('div');
@@ -5507,7 +5523,7 @@ function renderGantt() {
       jobBarMap[job.id].push({
         left: startIdx * dayWidth,
         width: duration * dayWidth,
-        top: barVisibleIdx * 34 + 6,
+        top: barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD,
         bar: bar,
         jobColor: job.color
       });
@@ -5524,9 +5540,9 @@ function renderGantt() {
     for (let i = 0; i < bars.length - 1; i++) {
       const a = bars[i], b = bars[i+1];
       const x1 = a.left + a.width;
-      const y1 = a.top + 11;
+      const y1 = a.top + GANTT_BAR_H / 2;
       const x2 = b.left;
-      const y2 = b.top + 11;
+      const y2 = b.top + GANTT_BAR_H / 2;
       const path = document.createElementNS(svgNs, 'path');
       let d;
       if (x2 >= x1) {
@@ -5539,7 +5555,7 @@ function renderGantt() {
         // straight-through elbow would cut across one or both bars. Route
         // it out to the right of the predecessor, through the empty gap
         // between the rows, then down/up into the left of the successor.
-        const laneY = Math.min(a.top, b.top) + 31;
+        const laneY = Math.min(a.top, b.top) + GANTT_BAR_H + GANTT_BAR_PAD + 3;
         const rightX = x1 + 10;
         const leftX = x2 - 10;
         d = 'M ' + x1 + ' ' + y1 + ' L ' + rightX + ' ' + y1 + ' L ' + rightX + ' ' + laneY + ' L ' + leftX + ' ' + laneY + ' L ' + leftX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
@@ -5926,7 +5942,7 @@ function createReorderGhost(bar, e) {
 function updateReorderGhost(e) {
   if (!reorderGhostEl) return;
   reorderGhostEl.style.left = (e.clientX - reorderGhostEl.offsetWidth / 2) + 'px';
-  reorderGhostEl.style.top = (e.clientY - 11) + 'px';
+  reorderGhostEl.style.top = (e.clientY - GANTT_BAR_H / 2) + 'px';
 }
 
 function removeReorderGhost() {
@@ -5942,7 +5958,7 @@ function createReorderIndicator() {
 
 function updateReorderIndicator(newIndex) {
   if (!reorderIndicatorEl) return;
-  reorderIndicatorEl.style.top = (newIndex * 34) + 'px';
+  reorderIndicatorEl.style.top = (newIndex * GANTT_ROW_H) + 'px';
 }
 
 function removeReorderIndicator() {
@@ -5976,7 +5992,7 @@ function scrollToToday() {
 
 function zoomIn() { dayWidth = Math.min(dayWidth + 6, 80); renderGantt(); }
 function zoomOut() { dayWidth = Math.max(dayWidth - 6, 14); renderGantt(); }
-function resetZoom() { dayWidth = 28; renderGantt(); }
+function resetZoom() { dayWidth = 34; renderGantt(); }
 function fitToView() {
   const containerWidth = document.getElementById('timelineBody').clientWidth - 20;
   computeDateRange();
