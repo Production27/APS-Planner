@@ -2877,7 +2877,8 @@ function addJobPhase(job) {
 }
 
 // Blocked by the caller (Job Manager UI) when it's the job's last phase —
-// a job must always have at least one trackable unit.
+// use unsplitJobFromPhases() instead in that case, which reverts the job
+// back to unphased rather than leaving it with zero (an invalid state).
 function removeJobPhase(job, phaseId) {
   if (!job.phases) return;
   job.phases = job.phases.filter(function(p) { return p.id !== phaseId; });
@@ -2890,6 +2891,28 @@ function removeJobPhase(job, phaseId) {
   // client's phase-orphan self-heal (see applyLiveblocksState()) could
   // resurrect this phase from a stale copy of its card.
   recordTombstone(activeProjectId, phaseId);
+}
+
+// Undoes splitJobIntoPhases() — only valid with exactly one phase left (the
+// "Phase 1" a split creates, or whatever's left after deleting down to it).
+// Merges that phase's tasks back into job.tasks and re-points its card back
+// to being the job's own (unphased) card, same shape a job that was never
+// split has. Refuses if that last phase still has sub-phases of its own —
+// those would have nowhere to go; the caller should have the user delete
+// them first, same as a phase with sub-phases can't itself be deleted.
+function unsplitJobFromPhases(job) {
+  if (!job.phases || job.phases.length !== 1) return false;
+  const phase = job.phases[0];
+  if (phase.subPhases && phase.subPhases.length) return false;
+  job.tasks = phase.tasks || [];
+  const card = getPhaseCard(job, phase.id);
+  if (card) {
+    card.phaseId = null;
+    card.title = job.name;
+  }
+  job.phases = [];
+  recordTombstone(activeProjectId, phase.id);
+  return true;
 }
 
 // Sub-phases mirror phases one level down, minus the card: no
@@ -2913,10 +2936,22 @@ function addPhaseSubUnit(phase) {
 }
 
 // Blocked by the caller (Job Manager UI) when it's the phase's last
-// sub-phase — a phase must always have at least one trackable unit.
+// sub-phase — use unsplitPhaseFromSubPhases() instead in that case, which
+// reverts the phase back to unsplit rather than leaving it with zero.
 function removePhaseSubUnit(phase, subId) {
   if (!phase.subPhases) return;
   phase.subPhases = phase.subPhases.filter(function(s) { return s.id !== subId; });
+}
+
+// Undoes splitPhaseIntoSubPhases() — only valid with exactly one sub-phase
+// left. Merges its tasks back into phase.tasks; no card involved (a
+// sub-phase never has one of its own), so unlike unsplitJobFromPhases()
+// there's nothing to re-point.
+function unsplitPhaseFromSubPhases(phase) {
+  if (!phase.subPhases || phase.subPhases.length !== 1) return false;
+  phase.tasks = phase.subPhases[0].tasks || [];
+  phase.subPhases = [];
+  return true;
 }
 
 function ensureJobHasCards(job) {
@@ -7438,9 +7473,11 @@ function renderJobPhaseStrip(job) {
     const card = getPhaseCard(job, phase.id);
     const col = card ? BOARD_COLUMNS.find(function(c) { return c.id === card.column; }) : null;
     const active = (phase.id || null) === (editingPhaseId || null);
-    const delBtn = phases.length > 1
-      ? '<span class="job-phase-chip-del" onclick="event.stopPropagation(); deleteJobPhaseUI(\'' + phase.id + '\')" title="Delete phase">×</span>'
-      : '';
+    // Even the last remaining phase gets a delete button — deleting it
+    // un-splits the job back to a single unphased task list instead of
+    // being blocked, see deleteJobPhaseUI().
+    const delBtn = '<span class="job-phase-chip-del" onclick="event.stopPropagation(); deleteJobPhaseUI(\'' + phase.id + '\')" title="' +
+      (phases.length > 1 ? 'Delete phase' : 'Remove phasing (merge back into the job)') + '">×</span>';
     return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobPhase(\'' + phase.id + '\')" title="Click to select, click the pencil to rename">' +
       '<span class="job-card-board-dot" style="background:' + (col ? (col.color || '#3949ab') : '#ccc') + ';"></span>' +
       escapeHtml(phase.name) +
@@ -7467,9 +7504,10 @@ function renderJobSubPhaseStrip(job, phase) {
   const subUnits = getPhaseSubUnits(phase);
   strip.innerHTML = subUnits.map(function(sub) {
     const active = (sub.id || null) === (editingSubPhaseId || null);
-    const delBtn = subUnits.length > 1
-      ? '<span class="job-phase-chip-del" onclick="event.stopPropagation(); deleteSubPhaseUI(\'' + sub.id + '\')" title="Delete sub-phase">×</span>'
-      : '';
+    // Same "last one un-splits instead of being blocked" treatment as the
+    // phase strip above — see deleteSubPhaseUI().
+    const delBtn = '<span class="job-phase-chip-del" onclick="event.stopPropagation(); deleteSubPhaseUI(\'' + sub.id + '\')" title="' +
+      (subUnits.length > 1 ? 'Delete sub-phase' : 'Remove sub-phasing (merge back into the phase)') + '">×</span>';
     return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobSubPhase(\'' + sub.id + '\')" title="Click to select, click the pencil to rename">' +
       escapeHtml(sub.name) +
       '<span class="job-phase-chip-edit" onclick="event.stopPropagation(); renameSubPhaseUI(\'' + sub.id + '\')" title="Rename sub-phase">✎</span>' +
@@ -7589,9 +7627,34 @@ function deleteJobPhaseUI(phaseId) {
   const found = findJob(editingJobId);
   if (!found) return;
   const phases = found.job.phases || [];
-  if (phases.length <= 1) { showToast('A job needs at least one phase', 'info'); return; }
   const phase = phases.find(function(p) { return p.id === phaseId; });
   if (!phase) return;
+
+  if (phases.length <= 1) {
+    // Deleting the job's only remaining phase doesn't leave it with zero
+    // phases (not a valid state) — it un-splits the job back to a plain
+    // unphased task list instead, the inverse of "+ Split into phases".
+    if (phase.subPhases && phase.subPhases.length) {
+      showToast('Delete this phase\'s sub-phases first', 'info');
+      return;
+    }
+    if (!window.confirm('Remove phasing from "' + found.job.name + '"? Its tasks and card merge back into the job itself.')) return;
+    flushAutoSaveJobForm();
+    unsplitJobFromPhases(found.job);
+    editingPhaseId = null;
+    editingSubPhaseId = null;
+    saveJobs();
+    logActivity('removed phasing from job "' + found.job.name + '"');
+    renderJobFormForPhase(found.job);
+    renderJobList();
+    renderGantt();
+    renderCalendar();
+    renderBoard();
+    queueSharedSync();
+    showToast('Job un-phased', 'success');
+    return;
+  }
+
   if (!window.confirm('Delete phase "' + phase.name + '"? This removes its card and dates.')) return;
   flushAutoSaveJobForm();
   removeJobPhase(found.job, phaseId);
@@ -7685,9 +7748,26 @@ function deleteSubPhaseUI(subId) {
   if (!found) return;
   const phase = getCurrentEditingPhase(found.job);
   const subUnits = phase.subPhases || [];
-  if (subUnits.length <= 1) { showToast('A phase needs at least one sub-phase', 'info'); return; }
   const sub = subUnits.find(function(s) { return s.id === subId; });
   if (!sub) return;
+
+  if (subUnits.length <= 1) {
+    // Same "last one un-splits instead of being blocked" treatment as
+    // deleteJobPhaseUI() one level up — merges back into phase.tasks.
+    if (!window.confirm('Remove sub-phasing from "' + phase.name + '"? Its dates merge back into the phase itself.')) return;
+    flushAutoSaveJobForm();
+    unsplitPhaseFromSubPhases(phase);
+    editingSubPhaseId = null;
+    saveJobs();
+    logActivity('removed sub-phasing from phase "' + phase.name + '"');
+    renderJobFormForPhase(found.job);
+    renderGantt();
+    renderCalendar();
+    queueSharedSync();
+    showToast('Phase un-sub-phased', 'success');
+    return;
+  }
+
   if (!window.confirm('Delete sub-phase "' + sub.name + '"? This removes its dates.')) return;
   flushAutoSaveJobForm();
   removePhaseSubUnit(phase, subId);
