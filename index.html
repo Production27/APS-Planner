@@ -9689,6 +9689,17 @@ function isBusyEditing() {
   });
   if (openModal) return true;
 
+  // A Gantt/Calendar bar drag or resize in progress is just as disruptable
+  // by a mid-gesture remote refresh as typing in a form field is: a remote
+  // update replaces `jobs` with freshly-parsed objects (see
+  // applyLiveblocksState()'s "── jobs ──" merge), and renderGantt()/
+  // renderCalendar() tear down and rebuild every bar element — while the
+  // in-progress drag's state (barMoveState.bar, task references, etc.)
+  // still points at the pre-refresh DOM/objects. Left unguarded, dropping
+  // the drag after that lands on stale objects instead of the fresh ones,
+  // which can end up mutating the wrong task's dates entirely.
+  if (barMoveState || tickResizeState || barResizeState || calDragState) return true;
+
   const active = document.activeElement;
   if (active) {
     if (active.isContentEditable) return true;
