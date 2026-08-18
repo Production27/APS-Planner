@@ -5506,10 +5506,20 @@ function renderGantt() {
       // plain-text repeat of the same name next to it. Leads view swaps
       // that plain-text slot for the lead's name instead, with the job
       // pill still alongside it so which job it belongs to stays visible.
+      // A phased job is the exception: this column truncates with an
+      // ellipsis (see .task-row .col CSS), and the phase name used to be
+      // appended to the END of the pill — exactly the part that gets cut
+      // off first, leaving every one of a job's phase rows showing the
+      // identical truncated text with no way to tell them apart. Showing
+      // the phase name as the plain-text mainLabel instead puts it FIRST,
+      // so it survives truncation even when the job name pill after it
+      // doesn't; the row's title attribute carries the untruncated
+      // "Job — Phase" text as a hover fallback either way.
       const mainLabel = task.isJobSpan
-        ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : '')
-        : (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name);
-      const jobPill = '<span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + (phaseName ? ' — ' + escapeHtml(phaseName) : '') + '</span>';
+        ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : (phaseName ? escapeHtml(phaseName) : ''))
+        : (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + (phaseName ? ' (' + escapeHtml(phaseName) + ')' : '');
+      const jobPill = '<span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>';
+      row.title = job.name + (phaseName ? ' — ' + phaseName : '');
       row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobPill + noteDot + '</div>';
       row.addEventListener('click', () => { editJob(job.id, phaseId); });
       leftBody.appendChild(row);
