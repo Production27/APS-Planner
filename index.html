@@ -2057,7 +2057,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <div class="modal-overlay" id="archivedJobsModal">
   <div class="modal-box" style="max-width:560px;">
     <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</h4>
-    <p>Jobs older than 30 days are auto-archived. Restore a job to bring it back onto the board, or delete it permanently.</p>
+    <p>Jobs older than 90 days are auto-archived. Restore a job to bring it back onto the board, or delete it permanently.</p>
     <div id="archivedJobsList" style="max-height:360px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="closeArchivedJobsModal()">Close</button>
@@ -3182,7 +3182,7 @@ function setGanttViewMode(mode) {
   syncGanttViewModeButtons();
   renderGantt();
 }
-const ARCHIVE_CUTOFF_DAYS = 30;
+const ARCHIVE_CUTOFF_DAYS = 90;
 let ganttFirstRender = true;
 // Fallback only — per-board default lives on col.defaultDuration, set from
 // each board's ⋮ settings menu (see setColumnDefaultDuration).
