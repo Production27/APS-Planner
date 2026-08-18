@@ -659,6 +659,8 @@
   .job-phase-chip .job-card-board-dot { width: 7px; height: 7px; }
   .job-phase-chip-del { opacity: 0.6; font-size: 13px; line-height: 1; padding: 0 1px; }
   .job-phase-chip-del:hover { opacity: 1; }
+  .job-phase-chip-edit { opacity: 0.55; font-size: 11px; line-height: 1; padding: 0 1px; margin-left: 2px; }
+  .job-phase-chip-edit:hover { opacity: 1; }
   .job-phase-strip-btn { padding: 5px 10px; border-radius: 14px; background: transparent; border: 1.5px dashed #c5cae9; color: var(--text-light); font-size: 12px; font-weight: 600; cursor: pointer; }
   .job-phase-strip-btn:hover { border-color: var(--primary-light); color: var(--primary-light); }
   .field-error-hint { display: block; font-size: 11px; font-weight: 600; color: var(--danger); margin-top: 6px; }
@@ -7004,9 +7006,11 @@ function renderJobPhaseStrip(job) {
     const delBtn = phases.length > 1
       ? '<span class="job-phase-chip-del" onclick="event.stopPropagation(); deleteJobPhaseUI(\'' + phase.id + '\')" title="Delete phase">×</span>'
       : '';
-    return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobPhase(\'' + phase.id + '\')" ondblclick="renameJobPhaseUI(\'' + phase.id + '\')" title="Double-click to rename">' +
+    return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobPhase(\'' + phase.id + '\')" title="Click to select, click the pencil to rename">' +
       '<span class="job-card-board-dot" style="background:' + (col ? (col.color || '#3949ab') : '#ccc') + ';"></span>' +
-      escapeHtml(phase.name) + delBtn + '</span>';
+      escapeHtml(phase.name) +
+      '<span class="job-phase-chip-edit" onclick="event.stopPropagation(); renameJobPhaseUI(\'' + phase.id + '\')" title="Rename phase">✎</span>' +
+      delBtn + '</span>';
   }).join('') + '<button type="button" class="job-phase-strip-btn" onclick="addJobPhaseUI()">+ Add Phase</button>';
 }
 
@@ -7049,7 +7053,10 @@ function splitJobIntoPhasesUI() {
   flushAutoSaveJobForm();
   const found = findJob(editingJobId);
   if (!found) return;
+  const name = window.prompt('Name for the first phase:', 'Phase 1');
+  if (name === null) return; // cancelled — leave the job unphased
   splitJobIntoPhases(found.job);
+  if (name.trim()) found.job.phases[0].name = name.trim();
   editingPhaseId = found.job.phases[0].id;
   saveJobs();
   logActivity('split job "' + found.job.name + '" into phases');
@@ -7067,7 +7074,13 @@ function addJobPhaseUI() {
   flushAutoSaveJobForm();
   const found = findJob(editingJobId);
   if (!found) return;
+  const nextNum = (found.job.phases ? found.job.phases.length : 0) + 1;
+  const name = window.prompt('Name for the new phase:', 'Phase ' + nextNum);
+  if (name === null) return; // cancelled — don't add a phase
   const phase = addJobPhase(found.job);
+  if (name.trim()) phase.name = name.trim();
+  const card = getPhaseCard(found.job, phase.id);
+  if (card) card.title = found.job.name + ' — ' + phase.name;
   editingPhaseId = phase.id;
   saveJobs();
   logActivity('added phase "' + phase.name + '" to job "' + found.job.name + '"');
