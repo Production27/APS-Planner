@@ -3185,19 +3185,35 @@ function setGanttViewMode(mode) {
   renderGantt();
 }
 
-// ===== CONDENSED VIEW: PER-JOB PHASE COLLAPSE =====
-// Jobs/Leads view normally gives a multi-phase job one bar per phase (and
-// one level deeper, per sub-phase). Collapsing a job folds those back into
-// a single job-wide bar with one solid segment per phase, all in the job's
-// own color (phases are told apart by boundary ticks + name labels, not by
-// distinct colors — see buildCondensedJobRows()/the isJobSpan collapsed
-// branch in renderGantt()). Purely a local view preference, like
-// ganttViewMode itself — not synced to other users.
-let collapsedJobIds = new Set(JSON.parse(localStorage.getItem('gantt_collapsed_jobs_v1') || '[]'));
-function toggleJobCollapse(jobId) {
-  if (collapsedJobIds.has(jobId)) collapsedJobIds.delete(jobId); else collapsedJobIds.add(jobId);
-  localStorage.setItem('gantt_collapsed_jobs_v1', JSON.stringify(Array.from(collapsedJobIds)));
+// ===== CONDENSED VIEW: PER-PHASE SUB-PHASE COLLAPSE =====
+// A phase split into sub-phases normally gets one bar per sub-phase in
+// Jobs/Leads view. Collapsing that phase folds its sub-phase bars back
+// into one phase-wide bar with one solid segment per sub-phase, all in the
+// job's own color (sub-phases are told apart by boundary ticks + name
+// labels/tooltips, not by distinct colors — per-task-type coloring doesn't
+// generalize once the same task types repeat across sub-phases). See
+// buildCondensedJobRows()/the isJobSpan collapsed branch in renderGantt().
+// Purely a local view preference, like ganttViewMode itself — not synced
+// to other users. Keyed by phase id (globally unique) rather than job id,
+// since a job's OTHER phases stay exactly as they are regardless of one
+// phase's collapse state.
+let collapsedPhaseIds = new Set(JSON.parse(localStorage.getItem('gantt_collapsed_phases_v1') || '[]'));
+function togglePhaseCollapse(phaseId) {
+  if (collapsedPhaseIds.has(phaseId)) collapsedPhaseIds.delete(phaseId); else collapsedPhaseIds.add(phaseId);
+  localStorage.setItem('gantt_collapsed_phases_v1', JSON.stringify(Array.from(collapsedPhaseIds)));
   renderGantt();
+}
+// Darkens a hex color by `amount` (0-1) — used to give the overlap hatch
+// inside a collapsed sub-phase bar two visually distinct shades of the same
+// job color, since every sub-phase segment already shares that one color.
+function darkenColor(hex, amount) {
+  hex = (hex || '#3949ab').replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
+  const num = parseInt(hex, 16) || 0;
+  const r = Math.max(0, Math.round(((num >> 16) & 255) * (1 - amount)));
+  const g = Math.max(0, Math.round(((num >> 8) & 255) * (1 - amount)));
+  const b = Math.max(0, Math.round((num & 255) * (1 - amount)));
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
 }
 const ARCHIVE_CUTOFF_DAYS = 90;
 let ganttFirstRender = true;
@@ -5655,12 +5671,13 @@ function renderGantt() {
       // than crashing; acceptable for a read-only cross-project preview.
       const leadName = ganttViewMode === 'leads' && !job.isLinkedReference ? getJobLeadName(job) : null;
 
-      // Gather one segment per phase/sub-unit unconditionally first — both
-      // to know whether this job even has more than one (only then is a
-      // collapse toggle offered) and, when collapsed, to reuse as the
-      // per-phase solid blocks drawn inside the one combined bar.
-      const segments = [];
       getJobPhases(job).forEach(function(phase) {
+        // Gather one segment per sub-unit unconditionally first — both to
+        // know whether this phase even has more than one real sub-phase
+        // (only then is a collapse toggle offered) and, when collapsed, to
+        // reuse as the per-sub-phase solid blocks drawn inside the one
+        // combined phase bar.
+        const segments = [];
         getPhaseSubUnits(phase).forEach(function(subUnit) {
           let minStart = null, maxFinish = null;
           (subUnit.tasks || []).forEach(function(task) {
@@ -5674,51 +5691,55 @@ function renderGantt() {
           });
           if (!minStart || !maxFinish) return;
           segments.push({
-            phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name,
             subPhaseId: subUnit.id, subPhaseName: subUnit.isDefault ? null : subUnit.name,
-            name: (phase.isDefault ? job.name : phase.name) + (subUnit.isDefault ? '' : ' — ' + subUnit.name),
+            name: subUnit.isDefault ? (phase.isDefault ? job.name : phase.name) : subUnit.name,
             start: minStart, finish: maxFinish
           });
         });
-      });
-      if (!segments.length) return;
+        if (!segments.length) return;
 
-      const collapsible = segments.length > 1;
-      if (collapsible && collapsedJobIds.has(job.id)) {
-        let overallStart = null, overallFinish = null;
-        segments.forEach(function(seg) {
-          if (!overallStart || seg.start < overallStart) overallStart = seg.start;
-          if (!overallFinish || seg.finish > overallFinish) overallFinish = seg.finish;
-        });
-        const pseudoTask = {
-          id: 'jobspan-collapsed|' + job.id,
-          name: job.name,
-          start: overallStart.toISOString().split('T')[0],
-          finish: overallFinish.toISOString().split('T')[0],
-          notes: '',
-          color: leadName ? colorForLead(leadName) : job.color,
-          order: 0,
-          isJobSpan: true,
-          leadName: leadName
-        };
-        rows.push({ job: job, task: pseudoTask, phaseId: null, phaseName: null, subPhaseId: null, subPhaseName: null, collapsible: true, collapsedSegments: segments });
-      } else {
-        segments.forEach(function(seg) {
-          const namePart = (seg.phaseName ? ' — ' + seg.phaseName : '') + (seg.subPhaseName ? ' — ' + seg.subPhaseName : '');
+        // Only a phase actually split into 2+ real sub-phases offers a
+        // collapse toggle — an unsplit phase (or an unphased job, via the
+        // synthetic default phase) already renders as one row per the
+        // `else` branch below, same as before this feature existed.
+        const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
+        if (collapsible && collapsedPhaseIds.has(phase.id)) {
+          let overallStart = null, overallFinish = null;
+          segments.forEach(function(seg) {
+            if (!overallStart || seg.start < overallStart) overallStart = seg.start;
+            if (!overallFinish || seg.finish > overallFinish) overallFinish = seg.finish;
+          });
+          const namePart = phase.isDefault ? '' : ' — ' + phase.name;
           const pseudoTask = {
-            id: 'jobspan|' + job.id + '|' + (seg.phaseId || '') + '|' + (seg.subPhaseId || ''),
+            id: 'jobspan-collapsed|' + job.id + '|' + (phase.id || ''),
             name: job.name + namePart,
-            start: seg.start.toISOString().split('T')[0],
-            finish: seg.finish.toISOString().split('T')[0],
+            start: overallStart.toISOString().split('T')[0],
+            finish: overallFinish.toISOString().split('T')[0],
             notes: '',
             color: leadName ? colorForLead(leadName) : job.color,
             order: 0,
             isJobSpan: true,
             leadName: leadName
           };
-          rows.push({ job: job, task: pseudoTask, phaseId: seg.phaseId, phaseName: seg.phaseName, subPhaseId: seg.subPhaseId, subPhaseName: seg.subPhaseName, collapsible: collapsible });
-        });
-      }
+          rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name, subPhaseId: null, subPhaseName: null, collapsible: true, collapsedSegments: segments });
+        } else {
+          segments.forEach(function(seg) {
+            const namePart = (phase.isDefault ? '' : ' — ' + phase.name) + (seg.subPhaseName ? ' — ' + seg.subPhaseName : '');
+            const pseudoTask = {
+              id: 'jobspan|' + job.id + '|' + (phase.id || '') + '|' + (seg.subPhaseId || ''),
+              name: job.name + namePart,
+              start: seg.start.toISOString().split('T')[0],
+              finish: seg.finish.toISOString().split('T')[0],
+              notes: '',
+              color: leadName ? colorForLead(leadName) : job.color,
+              order: 0,
+              isJobSpan: true,
+              leadName: leadName
+            };
+            rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name, subPhaseId: seg.subPhaseId, subPhaseName: seg.subPhaseName, collapsible: collapsible });
+          });
+        }
+      });
     });
     rows.sort(function(a, b) {
       return byStartDate(a.task, b.task) || ((a.job.order || 0) - (b.job.order || 0));
@@ -5846,19 +5867,19 @@ function renderGantt() {
       const mainLabel = task.isJobSpan
         ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : (phaseLabel ? linkGlyph + escapeHtml(phaseLabel) : (linkGlyph ? linkGlyph.trim() : '')))
         : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + (phaseLabel ? ' (' + escapeHtml(phaseLabel) + ')' : '');
-      // A job with more than one phase/sub-phase row gets a collapse
-      // toggle on its name pill (see collapsedJobIds/toggleJobCollapse) —
-      // the chevron shows current state, click folds/unfolds it without
-      // also triggering the row's own click-to-edit.
-      const collapseGlyph = entry.collapsible ? (collapsedJobIds.has(job.id) ? '▸ ' : '▾ ') : '';
-      const collapseTitle = entry.collapsible ? (collapsedJobIds.has(job.id) ? 'Click to expand phases' : 'Click to collapse phases into one bar') : '';
+      // A phase split into 2+ sub-phases gets a collapse toggle on its
+      // name pill (see collapsedPhaseIds/togglePhaseCollapse) — the
+      // chevron shows current state, click folds/unfolds just that phase's
+      // sub-phase bars without also triggering the row's own click-to-edit.
+      const collapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? '▸ ' : '▾ ') : '';
+      const collapseTitle = entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') : '';
       const jobPill = '<span class="task-row-jobname' + (entry.collapsible ? ' collapsible' : '') + '"' + (collapseTitle ? ' title="' + collapseTitle + '"' : '') + ' style="background:' + (job.color || '#999') + ';">' + collapseGlyph + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
       row.title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
       row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobPill + noteDot + '</div>';
       row.addEventListener('click', () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); });
       if (entry.collapsible) {
         const pillEl = row.querySelector('.task-row-jobname');
-        if (pillEl) pillEl.addEventListener('click', function(e) { e.stopPropagation(); toggleJobCollapse(job.id); });
+        if (pillEl) pillEl.addEventListener('click', function(e) { e.stopPropagation(); togglePhaseCollapse(phaseId); });
       }
       leftBody.appendChild(row);
       visibleRowIdx++;
@@ -5986,13 +6007,15 @@ function renderGantt() {
         // the Tasks-view due marker. Only drawn on the FIRST sub-unit's bar
         // (there's no per-sub-phase card to carry a second due date) — same
         // gating as flattenJobs()/buildVisibleTaskRows().
-        // A collapsed row has no phaseId of its own (it spans every phase)
-        // — fall back to the first segment's phase, same "first unit only"
-        // precedent used for sub-phases.
-        const dueLookupPhaseId = entry.collapsedSegments ? entry.collapsedSegments[0].phaseId : phaseId;
-        const parentPhaseForDue = getJobPhases(job).find(function(p) { return (p.id || null) === (dueLookupPhaseId || null); });
+        // phaseId is always the row's real phase — even when collapsed, the
+        // collapsed row still belongs to one specific phase (unlike the
+        // sub-phases it folds together). A collapsed row's own subPhaseId
+        // is null (it stands for all of them at once), which the due
+        // marker treats the same as "the first sub-unit" since the card —
+        // and its due date — is per-phase either way.
+        const parentPhaseForDue = getJobPhases(job).find(function(p) { return (p.id || null) === (phaseId || null); });
         const isFirstSubUnit = entry.collapsedSegments ? true : (!parentPhaseForDue || (getPhaseSubUnits(parentPhaseForDue)[0].id || null) === (subPhaseId || null));
-        const dueTask = isFirstSubUnit ? getJobDueMarkerTask(job, dueLookupPhaseId) : null;
+        const dueTask = isFirstSubUnit ? getJobDueMarkerTask(job, phaseId) : null;
         if (dueTask) {
           const dueDate = new Date(dueTask.start + 'T00:00:00');
           const dueIdx = getDaysDiff(startDate, dueDate);
@@ -6012,10 +6035,10 @@ function renderGantt() {
           dueEl.addEventListener('mouseenter', function(e) { showTooltip(e, job, dueTask); });
           dueEl.addEventListener('mouseleave', hideTooltip);
           dueEl.addEventListener('mousemove', moveTooltip);
-          dueEl.addEventListener('mousedown', function(e) { startBarMove(e, job.id, DUE_MARKER_TASK_ID, dueEl, false, dueLookupPhaseId); });
+          dueEl.addEventListener('mousedown', function(e) { startBarMove(e, job.id, DUE_MARKER_TASK_ID, dueEl, false, phaseId); });
           dueEl.addEventListener('click', function() {
             if (dueEl.dataset.dragged === 'true') { dueEl.dataset.dragged = 'false'; return; }
-            editJob(job.id, dueLookupPhaseId);
+            editJob(job.id, phaseId);
           });
           grid.appendChild(dueEl);
 
@@ -6119,15 +6142,16 @@ function renderGantt() {
       // segment from another) has nothing to offer; the plain outline+
       // label from the isJobSpan branch above is enough.
       if (task.isJobSpan && !job.isLinkedReference) {
-        // A collapsed row (see collapsedJobIds/buildCondensedJobRows) has no
-        // single phase/sub-unit to read tasks from — it spans every phase.
-        // Build one synthetic "task" per phase/sub-phase segment instead,
-        // each covering that segment's own date range in the job's own
-        // color (per-task coloring doesn't generalize across phases that
-        // reuse the same task types — see the collapse feature's design
-        // discussion). Everything below (ticks, solid/hash/hatch grouping)
-        // is identical either way; only which list feeds it, and how a
-        // solid segment's drag/click is wired, differs.
+        // A collapsed row (see collapsedPhaseIds/buildCondensedJobRows)
+        // still belongs to one specific phase — phaseId stays the row's
+        // real phase either way — it just has no single sub-unit to read
+        // tasks from (it spans every sub-phase of that phase). Build one
+        // synthetic "task" per sub-phase segment instead, each covering
+        // that sub-phase's own date range in the job's own color
+        // (per-task coloring doesn't generalize once the same task types
+        // repeat across sub-phases). Everything below (ticks, solid/hash/
+        // hatch grouping) is identical either way; only which list feeds
+        // it, and how a solid segment's drag/click is wired, differs.
         const isCollapsedRow = !!entry.collapsedSegments;
         const jobEndIdx = startIdx + duration - 1;
         let datedTasks;
@@ -6135,10 +6159,10 @@ function renderGantt() {
           datedTasks = entry.collapsedSegments.map(function(seg) {
             return {
               t: {
-                id: 'phaseseg|' + (seg.phaseId || '') + '|' + (seg.subPhaseId || ''),
+                id: 'subphaseseg|' + (seg.subPhaseId || ''),
                 name: seg.name, color: job.color, notes: '',
                 start: seg.start.toISOString().split('T')[0], finish: seg.finish.toISOString().split('T')[0],
-                phaseId: seg.phaseId, subPhaseId: seg.subPhaseId
+                subPhaseId: seg.subPhaseId
               },
               sIdx: getDaysDiff(startDate, seg.start), eIdx: getDaysDiff(startDate, seg.finish)
             };
@@ -6162,16 +6186,17 @@ function renderGantt() {
           const tick = document.createElement('div');
           tick.className = 'job-span-task-tick';
           tick.dataset.jobId = job.id;
-          tick.dataset.phaseId = isCollapsedRow ? (dt.t.phaseId || '') : (phaseId || '');
+          tick.dataset.phaseId = phaseId || '';
           tick.dataset.subPhaseId = isCollapsedRow ? (dt.t.subPhaseId || '') : (subPhaseId || '');
           tick.dataset.taskId = dt.t.id;
           tick.dataset.origLeft = tickLeft;
           tick.style.left = tickLeft + 'px';
           tick.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
-          // A phase boundary (collapsed row) has no single task to resize —
-          // moving it would mean shifting every task in that phase, which
-          // is what dragging the solid segment itself already does. Static
-          // divider only; a real task's tick still resizes as before.
+          // A sub-phase boundary (collapsed row) has no single task to
+          // resize — moving it would mean shifting every task in that
+          // sub-phase, which is what dragging the solid segment itself
+          // already does. Static divider only; a real task's tick still
+          // resizes as before.
           if (isCollapsedRow) {
             tick.title = dt.t.name + ' ends';
             tick.style.cursor = 'default';
@@ -6208,7 +6233,7 @@ function renderGantt() {
             const hash = document.createElement('div');
             hash.className = 'job-span-gap-hash';
             hash.dataset.jobId = job.id;
-            hash.dataset.phaseId = isCollapsedRow ? '' : (phaseId || '');
+            hash.dataset.phaseId = phaseId || '';
             hash.dataset.subPhaseId = isCollapsedRow ? '' : (subPhaseId || '');
             hash.dataset.origLeft = segLeft;
             hash.style.left = segLeft + 'px';
@@ -6217,16 +6242,16 @@ function renderGantt() {
             hash.title = 'No task scheduled here';
             grid.appendChild(hash);
           } else if (covering.length === 1) {
-            // Unambiguously one task's (or, collapsed, one phase's) own
-            // stretch — grabbable to move just that task/phase, same as an
-            // individual bar in Tasks view. Overlap (below) stays
+            // Unambiguously one task's (or, collapsed, one sub-phase's) own
+            // stretch — grabbable to move just that task/sub-phase, same as
+            // an individual bar in Tasks view. Overlap (below) stays
             // click-through since there's no single one to target there;
             // it falls through to the whole-job drag on `bar`.
             const dt = covering[0];
             const solid = document.createElement('div');
             solid.className = 'job-span-task-solid';
             solid.dataset.jobId = job.id;
-            solid.dataset.phaseId = isCollapsedRow ? (dt.t.phaseId || '') : (phaseId || '');
+            solid.dataset.phaseId = phaseId || '';
             solid.dataset.subPhaseId = isCollapsedRow ? (dt.t.subPhaseId || '') : (subPhaseId || '');
             solid.dataset.dragged = 'false';
             solid.dataset.origLeft = segLeft;
@@ -6239,10 +6264,10 @@ function renderGantt() {
             solid.addEventListener('mouseleave', hideTooltip);
             solid.addEventListener('mousemove', moveTooltip);
             if (isCollapsedRow) {
-              solid.addEventListener('mousedown', function(e) { startBarMove(e, job.id, dt.t.id, solid, true, dt.t.phaseId, dt.t.subPhaseId); });
+              solid.addEventListener('mousedown', function(e) { startBarMove(e, job.id, dt.t.id, solid, true, phaseId, dt.t.subPhaseId); });
               solid.addEventListener('click', function() {
                 if (solid.dataset.dragged === 'true') { solid.dataset.dragged = 'false'; return; }
-                editJob(job.id, dt.t.phaseId, dt.t.subPhaseId);
+                editJob(job.id, phaseId, dt.t.subPhaseId);
               });
             } else {
               solid.addEventListener('mousedown', function(e) { startBarMove(e, job.id, dt.t.id, solid); });
@@ -6253,24 +6278,36 @@ function renderGantt() {
             }
             grid.appendChild(solid);
           } else {
-            const uniqColors = Array.from(new Set(covering.map(function(dt) { return dt.t.color || job.color || '#3949ab'; })));
-            const stripe = 6;
-            const stops = [];
-            uniqColors.forEach(function(c, idx) {
-              stops.push(c + ' ' + (idx * stripe) + 'px');
-              stops.push(c + ' ' + ((idx + 1) * stripe) + 'px');
-            });
             const hatch = document.createElement('div');
             hatch.className = 'job-span-task-hatch';
             hatch.dataset.jobId = job.id;
-            hatch.dataset.phaseId = isCollapsedRow ? '' : (phaseId || '');
+            hatch.dataset.phaseId = phaseId || '';
             hatch.dataset.subPhaseId = isCollapsedRow ? '' : (subPhaseId || '');
             hatch.dataset.origLeft = segLeft;
             hatch.style.left = segLeft + 'px';
             hatch.style.width = segWidth + 'px';
             hatch.style.top = segTop;
-            hatch.style.background = 'repeating-linear-gradient(45deg, ' + stops.join(', ') + ')';
-            hatch.title = isCollapsedRow ? ('Overlapping phases: ' + covering.map(function(dt) { return dt.t.name; }).join(', ')) : 'Overlapping tasks';
+            if (isCollapsedRow) {
+              // Every sub-phase segment already shares the same job color,
+              // so a normal same-color-dedup hatch would render as a flat
+              // fill indistinguishable from a solid segment. Alternate the
+              // job color with a darker shade of itself instead, so an
+              // overlap still reads as a hatch.
+              const base = job.color || '#3949ab';
+              const dark = darkenColor(base, 0.28);
+              hatch.style.background = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
+              hatch.title = 'Overlapping sub-phases: ' + covering.map(function(dt) { return dt.t.name; }).join(', ');
+            } else {
+              const uniqColors = Array.from(new Set(covering.map(function(dt) { return dt.t.color || job.color || '#3949ab'; })));
+              const stripe = 6;
+              const stops = [];
+              uniqColors.forEach(function(c, idx) {
+                stops.push(c + ' ' + (idx * stripe) + 'px');
+                stops.push(c + ' ' + ((idx + 1) * stripe) + 'px');
+              });
+              hatch.style.background = 'repeating-linear-gradient(45deg, ' + stops.join(', ') + ')';
+              hatch.title = 'Overlapping tasks';
+            }
             grid.appendChild(hatch);
           }
           di = dj + 1;
