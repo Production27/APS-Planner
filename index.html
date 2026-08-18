@@ -3408,10 +3408,13 @@ function isJobFinished(job) {
   return job.tasks.every(function(t) { return isTaskFinished(job, t); });
 }
 
-function saveBoardColumns() { saveActiveProject(); queueSharedSync(); }
+// Targeted, immediate pushes (not the debounced queueSharedSync()) — see
+// pushBoardColumnsToShared()/pushFieldOptionsToShared() for why routine
+// saves must never touch these two fields.
+function saveBoardColumns() { saveActiveProject(); pushBoardColumnsToShared(activeProjectId); }
 function saveBoardCards() { ensureCardIds(boardCards); saveActiveProject(); queueSharedSync(); }
 function saveCalendarEvents() { ensureCalendarEventIds(calendarEvents); saveActiveProject(); queueSharedSync(); }
-function saveFieldOptions() { saveActiveProject(); queueSharedSync(); }
+function saveFieldOptions() { saveActiveProject(); pushFieldOptionsToShared(activeProjectId); }
 function saveHeader() { saveActiveProject(); logActivity('updated header'); queueSharedSync(); }
 
 // ===== GHOST OVERLAY =====
@@ -9677,8 +9680,13 @@ function pushProjectToShared(projectId, headerOverride) {
           jobsMap: new LiveMapCtor(),
           boardCardsMap: new LiveMapCtor(),
           calendarEventsMap: new LiveMapCtor(),
-          boardColumns: [],
-          fieldOptions: {},
+          // Seeded from this client's own current values, not left empty —
+          // safe only because a brand-new entry means nothing else exists
+          // yet to be stale relative to. Once the entry exists, routine
+          // saves never touch these two fields again — see the comment
+          // below where the old unconditional entry.set() calls used to be.
+          boardColumns: proj.boardColumns,
+          fieldOptions: proj.fieldOptions,
           deletedIds: {},
           header: new LiveObjectCtor({
             title: header.title || proj.name,
@@ -9761,9 +9769,22 @@ function pushProjectToShared(projectId, headerOverride) {
       }
       (proj.calendarEvents || []).forEach(function (e) { if (!deletedIds[String(e.id)]) safeSet(calEventsMap, e.id, e, 'calendar event "' + (e.title || e.id) + '"'); });
 
-      entry.set('boardColumns', proj.boardColumns);
-      entry.set('fieldOptions', proj.fieldOptions);
-
+      // boardColumns/fieldOptions deliberately NOT pushed here (unlike
+      // everything above) — this function runs on every routine save
+      // (any job/card/comment edit debounces into queueSharedSync(), which
+      // calls this), and proj.boardColumns/proj.fieldOptions can be stale
+      // relative to what's already shared if this tab hasn't caught up
+      // with someone else's more recent column/field-option change yet.
+      // Unlike jobs/cards (a map, upserted per-item) these are single
+      // whole-array/object values with no per-item merge to fall back on,
+      // so a stale routine push here would just silently clobber the
+      // other change outright — this was the exact bug behind a "hide
+      // board from schedule" toggle sticking for the person who set it
+      // but reverting for everyone else the moment they saved anything
+      // unrelated. Pushed instead via their own targeted, immediate
+      // pushBoardColumnsToShared()/pushFieldOptionsToShared() calls, fired
+      // only at the exact moment those specific things actually change —
+      // see saveBoardColumns()/saveFieldOptions().
       const headerObj = entry.get('header');
       if (headerObj && typeof headerObj.set === 'function') {
         headerObj.set('title', header.title);
@@ -9824,6 +9845,34 @@ function deleteFromSharedMap(projectId, mapKey, id) {
 function deleteJobFromShared(projectId, jobId) { deleteFromSharedMap(projectId, 'jobsMap', jobId); }
 function deleteCardFromShared(projectId, cardId) { deleteFromSharedMap(projectId, 'boardCardsMap', cardId); }
 function deleteCalendarEventFromShared(projectId, eventId) { deleteFromSharedMap(projectId, 'calendarEventsMap', eventId); }
+
+// Targeted pushes for the two whole-array/object project fields that
+// pushProjectToShared() deliberately stopped touching on routine saves —
+// see the comment there. Fired only from the exact functions that
+// intentionally change these (saveBoardColumns()/saveFieldOptions()), so
+// an unrelated job/card edit on a tab with a stale local copy of either
+// can never silently overwrite someone else's more recent change to them.
+function pushFieldToShared(projectId, fieldKey, value) {
+  if (!liveblocksRoot || !liveblocksRoom) return;
+  liveblocksUpdateDepth++;
+  try {
+    const projectsMap = liveblocksRoot.get('projects');
+    if (!projectsMap || typeof projectsMap.get !== 'function') return;
+    const entry = projectsMap.get(projectId);
+    if (!entry || typeof entry.set !== 'function') return;
+    entry.set(fieldKey, value);
+  } finally {
+    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
+  }
+}
+function pushBoardColumnsToShared(projectId) {
+  const proj = projects[projectId];
+  if (proj) pushFieldToShared(projectId, 'boardColumns', proj.boardColumns);
+}
+function pushFieldOptionsToShared(projectId) {
+  const proj = projects[projectId];
+  if (proj) pushFieldToShared(projectId, 'fieldOptions', proj.fieldOptions);
+}
 
 function logActivity(actionText) {
   const p = getActiveProject();
