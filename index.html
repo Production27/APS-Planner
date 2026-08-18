@@ -3180,6 +3180,7 @@ function enforceFixedProjectSet() {
       jobs: JSON.parse(JSON.stringify(DEFAULT_JOBS)),
       boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
       boardCards: [],
+      deletedIds: {},
       fieldOptions: {
         pm: [], foreman: [],
         jobType: ['New Home', 'Remodel', 'Commercial', 'Addition', 'Service Call'],
@@ -9119,6 +9120,27 @@ document.getElementById('headerSubtitle').addEventListener('paste', function(e) 
 const LIVEBLOCKS_AUTH_ENDPOINT = "https://lucky-snow-8179.production-db3.workers.dev/";
 const LIVEBLOCKS_ROOM_ID = "aps-production-room"; // must match ROOM_ID in the worker
 
+// How long a delete tombstone (see recordTombstone()/deleteFromSharedMap())
+// sticks around before it's pruned. Needs to outlast any realistically-
+// stale tab/device — a browser left open over a long weekend, say — so its
+// eventual upsert-only push (see pushProjectToShared()'s jobsMap comment)
+// still gets blocked from resurrecting whatever it deleted, rather than
+// deleting-by-absence (which would risk destroying a teammate's newer,
+// unrelated addition instead — the exact failure mode that design avoids).
+const TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Combines two {id: deletedAtMs} tombstone objects (e.g. this tab's own
+// knowledge and whatever the shared room already has) and drops anything
+// past TOMBSTONE_TTL_MS in the same pass, so the set doesn't grow forever.
+function mergeTombstones(a, b) {
+  const merged = Object.assign({}, a || {}, b || {});
+  const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+  Object.keys(merged).forEach(function(id) {
+    if (!merged[id] || merged[id] < cutoff) delete merged[id];
+  });
+  return merged;
+}
+
 const TEAM_PASSWORD_KEY = "gantt_team_password_v1";
 const DISPLAY_NAME_KEY = "gantt_display_name_v1";
 
@@ -9657,6 +9679,7 @@ function pushProjectToShared(projectId, headerOverride) {
           calendarEventsMap: new LiveMapCtor(),
           boardColumns: [],
           fieldOptions: {},
+          deletedIds: {},
           header: new LiveObjectCtor({
             title: header.title || proj.name,
             subtitle: header.subtitle || '',
@@ -9667,6 +9690,17 @@ function pushProjectToShared(projectId, headerOverride) {
       }
 
       entry.set('name', proj.name);
+
+      // Merge this tab's own tombstone knowledge with whatever the shared
+      // room already has (in case another client deleted something this
+      // tab doesn't know about yet) — then use the merged set below to
+      // skip re-upserting anything tombstoned, even if this tab's stale
+      // proj.jobs/proj.boardCards/proj.calendarEvents snapshot still has
+      // it. See recordTombstone()/deleteFromSharedMap() for where these
+      // get created, and mergeTombstones() for the TTL/pruning.
+      const deletedIds = mergeTombstones(proj.deletedIds, entry.get('deletedIds'));
+      proj.deletedIds = deletedIds;
+      entry.set('deletedIds', deletedIds);
 
       // jobs (nested model) — each job object is pushed whole, so its fixed-
       // shape tasks array (name/start/finish/notes/color/order, locked to
@@ -9707,7 +9741,7 @@ function pushProjectToShared(projectId, headerOverride) {
 
       const jobsMap = entry.get('jobsMap');
       if (jobsMap && typeof jobsMap.set === 'function') {
-        proj.jobs.forEach(function (j) { safeSet(jobsMap, j.id, j, 'job "' + (j.name || j.id) + '"'); });
+        proj.jobs.forEach(function (j) { if (!deletedIds[String(j.id)]) safeSet(jobsMap, j.id, j, 'job "' + (j.name || j.id) + '"'); });
       }
 
       // cards — likewise pushed whole (upsert only, see above), so jobId,
@@ -9715,7 +9749,7 @@ function pushProjectToShared(projectId, headerOverride) {
       // travel with every job-linked card automatically.
       const cardsMap = entry.get('boardCardsMap');
       if (cardsMap && typeof cardsMap.set === 'function') {
-        proj.boardCards.forEach(function (c) { safeSet(cardsMap, c.id, c, 'card "' + (c.title || c.id) + '"'); });
+        proj.boardCards.forEach(function (c) { if (!deletedIds[String(c.id)]) safeSet(cardsMap, c.id, c, 'card "' + (c.title || c.id) + '"'); });
       }
 
       // calendar-only events — same whole-object upsert pattern. Lazily
@@ -9725,7 +9759,7 @@ function pushProjectToShared(projectId, headerOverride) {
         calEventsMap = new LiveMapCtor();
         entry.set('calendarEventsMap', calEventsMap);
       }
-      (proj.calendarEvents || []).forEach(function (e) { safeSet(calEventsMap, e.id, e, 'calendar event "' + (e.title || e.id) + '"'); });
+      (proj.calendarEvents || []).forEach(function (e) { if (!deletedIds[String(e.id)]) safeSet(calEventsMap, e.id, e, 'calendar event "' + (e.title || e.id) + '"'); });
 
       entry.set('boardColumns', proj.boardColumns);
       entry.set('fieldOptions', proj.fieldOptions);
@@ -9761,6 +9795,12 @@ function removeProjectFromShared(projectId) {
 // never infer a deletion from "this id is missing from my local snapshot"
 // anymore. These are the only things that actually remove a key from the
 // shared maps, called at the exact moment the user deletes something.
+//
+// Also tombstones the id (see mergeTombstones()) — deleting the map entry
+// alone isn't enough, since a stale tab's later routine save (see
+// pushProjectToShared()) upserts its own local snapshot, which can still
+// contain the very thing just deleted here and would otherwise resurrect
+// it right back into the map.
 function deleteFromSharedMap(projectId, mapKey, id) {
   if (!liveblocksRoot || !liveblocksRoom) return;
   liveblocksUpdateDepth++;
@@ -9771,6 +9811,12 @@ function deleteFromSharedMap(projectId, mapKey, id) {
     if (!entry || typeof entry.get !== 'function') return;
     const map = entry.get(mapKey);
     if (map && typeof map.delete === 'function') map.delete(String(id));
+
+    const proj = projects[projectId];
+    const deletedIds = mergeTombstones(proj && proj.deletedIds, entry.get('deletedIds'));
+    deletedIds[String(id)] = Date.now();
+    if (proj) proj.deletedIds = deletedIds;
+    entry.set('deletedIds', deletedIds);
   } finally {
     Promise.resolve().then(() => { liveblocksUpdateDepth--; });
   }
@@ -9896,6 +9942,7 @@ function applyLiveblocksState(root) {
     const remoteColumns   = entry.get('boardColumns');
     const remoteFieldOpts = entry.get('fieldOptions');
     const remoteHeader    = entry.get('header');
+    const remoteDeletedIds = entry.get('deletedIds');
 
     let local = projects[projectId];
     if (!local) {
@@ -9906,6 +9953,7 @@ function applyLiveblocksState(root) {
         boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
         boardCards: [],
         calendarEvents: [],
+        deletedIds: {},
         fieldOptions: {},
         header: { title: remoteName || 'Untitled Project', subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
       };
@@ -9918,16 +9966,23 @@ function applyLiveblocksState(root) {
       listChanged = true;
     }
 
+    // ── delete tombstones ── merged/pruned before jobs/cards/events below
+    // so they can be filtered against it — belt-and-suspenders alongside
+    // pushProjectToShared()'s own skip-if-tombstoned check, in case a
+    // tombstoned id still made it into a remote map through some other path.
+    local.deletedIds = mergeTombstones(local.deletedIds, remoteDeletedIds);
+
     // ── jobs ──
     if (remoteJobsMap && typeof remoteJobsMap.values === 'function') {
-      const j = Array.from(remoteJobsMap.values());
+      const j = Array.from(remoteJobsMap.values()).filter(function (job) { return !local.deletedIds[String(job.id)]; });
       ensureJobAndTaskIds(j);
       j.forEach(function (job) { if (!job.notes) job.notes = ''; });
       j.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
       local.jobs = j;
     } else if (Array.isArray(remoteJobsMap)) {
-      ensureJobAndTaskIds(remoteJobsMap);
-      local.jobs = remoteJobsMap.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      const j = remoteJobsMap.filter(function (job) { return !local.deletedIds[String(job.id)]; });
+      ensureJobAndTaskIds(j);
+      local.jobs = j.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
     }
 
     // ── columns ──
@@ -9935,22 +9990,24 @@ function applyLiveblocksState(root) {
 
     // ── cards ──
     if (remoteCardsMap && typeof remoteCardsMap.values === 'function') {
-      const c = Array.from(remoteCardsMap.values());
+      const c = Array.from(remoteCardsMap.values()).filter(function (card) { return !local.deletedIds[String(card.id)]; });
       ensureCardIds(c);
       local.boardCards = c;
     } else if (Array.isArray(remoteCardsMap)) {
-      ensureCardIds(remoteCardsMap);
-      local.boardCards = remoteCardsMap.slice();
+      const c = remoteCardsMap.filter(function (card) { return !local.deletedIds[String(card.id)]; });
+      ensureCardIds(c);
+      local.boardCards = c;
     }
 
     // ── calendar-only events ──
     if (remoteCalEventsMap && typeof remoteCalEventsMap.values === 'function') {
-      const ce = Array.from(remoteCalEventsMap.values());
+      const ce = Array.from(remoteCalEventsMap.values()).filter(function (ev) { return !local.deletedIds[String(ev.id)]; });
       ensureCalendarEventIds(ce);
       local.calendarEvents = ce;
     } else if (Array.isArray(remoteCalEventsMap)) {
-      ensureCalendarEventIds(remoteCalEventsMap);
-      local.calendarEvents = remoteCalEventsMap.slice();
+      const ce = remoteCalEventsMap.filter(function (ev) { return !local.deletedIds[String(ev.id)]; });
+      ensureCalendarEventIds(ce);
+      local.calendarEvents = ce;
     }
 
     // ── fields ──
@@ -9970,8 +10027,13 @@ function applyLiveblocksState(root) {
     // pushProjectToShared() above (a stale tab's upsert can't destroy a
     // job, but the busy-editing defer + wholesale local.jobs replacement
     // here can still leave a card's jobId pointing at nothing for a
-    // while). Reconstructs a minimal job shell from what the card still
-    // has and re-links it — the original job's own dates/notes/tasks are
+    // while). Two different reasons a card's job can be missing, handled
+    // differently: if the jobId is tombstoned, the job was deliberately
+    // deleted (see deleteFromSharedMap()) and this card is just a leftover
+    // that should have gone with it — clean the card up instead of
+    // resurrecting a job nobody wants back. Otherwise it's the genuine
+    // sync gap: reconstruct a minimal job shell from what the card still
+    // has and re-link it — the original job's own dates/notes/tasks are
     // gone (only the card survived), so this recovers the job's
     // existence, not its history. Scoped to isActive since that's the
     // only project whose merged local.jobs is actually being viewed/
@@ -9979,14 +10041,27 @@ function applyLiveblocksState(root) {
     if (isActive) {
       const orphanCards = local.boardCards.filter(function(c) { return c.jobId && !local.jobs.some(function(j) { return j.id === c.jobId; }); });
       if (orphanCards.length) {
-        console.warn('applyLiveblocksState: recovering ' + orphanCards.length + ' orphaned card(s) — jobId missing from the merged jobsMap for project ' + projectId, orphanCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
-        orphanCards.forEach(function(card) {
-          local.jobs.push(synthesizeJobFromOrphanCard(card, local.boardColumns));
-        });
-        // Recovered locally — sync it back out so every other client picks
-        // up the fix too, not just this one (queueSharedSync() just arms a
-        // debounced timer, so this is safe to call from inside a storage
-        // subscription callback — no synchronous Liveblocks write here).
+        const staleCards = orphanCards.filter(function(c) { return local.deletedIds[String(c.jobId)]; });
+        const trulyOrphaned = orphanCards.filter(function(c) { return !local.deletedIds[String(c.jobId)]; });
+
+        if (staleCards.length) {
+          console.warn('applyLiveblocksState: dropping ' + staleCards.length + ' card(s) whose job was deliberately deleted for project ' + projectId, staleCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
+          local.boardCards = local.boardCards.filter(function(c) { return staleCards.indexOf(c) === -1; });
+          staleCards.forEach(function(c) { deleteCardFromShared(projectId, c.id); });
+        }
+
+        if (trulyOrphaned.length) {
+          console.warn('applyLiveblocksState: recovering ' + trulyOrphaned.length + ' orphaned card(s) — jobId missing from the merged jobsMap for project ' + projectId, trulyOrphaned.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
+          trulyOrphaned.forEach(function(card) {
+            local.jobs.push(synthesizeJobFromOrphanCard(card, local.boardColumns));
+          });
+        }
+
+        // Recovered/cleaned up locally — sync it back out so every other
+        // client picks up the fix too, not just this one (queueSharedSync()
+        // just arms a debounced timer, so this is safe to call from inside
+        // a storage subscription callback — no synchronous Liveblocks
+        // write here).
         queueSharedSync();
       }
     }
