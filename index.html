@@ -2722,9 +2722,33 @@ function ensureJobTasksMatchColumns(job) {
     job.phases.forEach(function(phase) {
       phase.tasks = normalizeTasksToColumns(phase.tasks, phase.color || job.color);
     });
+    dedupeTaskIdsAcrossPhases(job);
     return;
   }
   job.tasks = normalizeTasksToColumns(job.tasks, job.color);
+}
+
+// Defensive repair: a task id must be unique within a job, never shared
+// across two of its phases — findTask()/cascadeShiftLaterTasks()/etc. all
+// resolve "which phase does this task id belong to" by returning the
+// FIRST phase (in array order) whose tasks contain a matching id, so a
+// shared id makes every later phase's interaction with that task
+// silently resolve to the earlier phase instead — dragging phase 2's bar
+// visibly moving phase 1's, with no error anywhere. Confirmed on real
+// production data; the most likely origin is a stale snapshot merging
+// back in during one of this session's now-fixed sync gaps, before a
+// job actually had phases to worry about colliding across. Runs on every
+// load (this function already does, via loadActiveProjectData()) so it
+// self-heals without needing a one-off migration script — keeps each
+// duplicate's own dates/notes/etc, just hands it a fresh id.
+function dedupeTaskIdsAcrossPhases(job) {
+  const seen = new Set();
+  job.phases.forEach(function(phase) {
+    (phase.tasks || []).forEach(function(t) {
+      if (seen.has(t.id)) t.id = genId();
+      seen.add(t.id);
+    });
+  });
 }
 
 function makeBlankPhaseTasks(color) {
