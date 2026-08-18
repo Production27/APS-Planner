@@ -4139,7 +4139,7 @@ function buildCalBarHtml(seg, left, top, width) {
     const timeLabel = formatTimeLabel(task.time);
     content = (timeLabel ? '<span class="cal-event-time">' + escapeHtml(timeLabel) + '</span>' : '') + escapeHtml(task.name);
   } else {
-    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : job.name;
+    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : job.name + (seg.phaseName ? ' — ' + seg.phaseName : '');
     content = escapeHtml(task.name) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '');
   }
 
@@ -5637,8 +5637,8 @@ function renderGantt() {
         const jobTag = document.createElement('span');
         jobTag.className = 'task-bar-job-tag';
         jobTag.style.background = job.color || '#999';
-        jobTag.textContent = job.name;
-        jobTag.title = job.name;
+        jobTag.textContent = job.name + (phaseName ? ' — ' + phaseName : '');
+        jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '');
         labelWrap.appendChild(jobTag);
         grid.appendChild(labelWrap);
 
@@ -5728,8 +5728,8 @@ function renderGantt() {
           const jobTag = document.createElement('span');
           jobTag.className = 'task-bar-job-tag';
           jobTag.style.background = job.color;
-          jobTag.textContent = job.name;
-          jobTag.title = job.name;
+          jobTag.textContent = job.name + (phaseName ? ' — ' + phaseName : '');
+          jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '');
           bar.appendChild(jobTag);
         }
       }
