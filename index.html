@@ -2504,15 +2504,22 @@ function flattenJobs(jobsArr, includeArchived) {
     if (!includeArchived && job.archived) return;
     getJobPhases(job).forEach(function(phase) {
       const phaseName = phase.isDefault ? null : phase.name;
-      (phase.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-      (phase.tasks || []).forEach(function(task, taskIdx) {
-        if (hiddenOrders.has(task.order)) return;
-        rows.push({job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx, phaseId: phase.id, phaseName: phaseName});
+      getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
+        const subPhaseName = subUnit.isDefault ? null : subUnit.name;
+        (subUnit.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+        (subUnit.tasks || []).forEach(function(task, taskIdx) {
+          if (hiddenOrders.has(task.order)) return;
+          rows.push({job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName});
+        });
+        // The phase's one due marker (there's no per-sub-phase card to
+        // carry a second one) only ever shows on the FIRST sub-unit's row
+        // — real or the synthetic default — never duplicated across every
+        // sub-phase.
+        if (!job.isLinkedReference && subIdx === 0) {
+          const dueTask = getJobDueMarkerTask(job, phase.id);
+          if (dueTask) rows.push({job: job, jobIdx: jobIdx, task: dueTask, taskIdx: -1, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName});
+        }
       });
-      if (!job.isLinkedReference) {
-        const dueTask = getJobDueMarkerTask(job, phase.id);
-        if (dueTask) rows.push({job: job, jobIdx: jobIdx, task: dueTask, taskIdx: -1, phaseId: phase.id, phaseName: phaseName});
-      }
     });
   });
   return rows;
@@ -2618,9 +2625,12 @@ function findTask(jobId, taskId) {
   if (!j) return null;
   const phases = getJobPhases(j.job);
   for (let p = 0; p < phases.length; p++) {
-    const tasks = phases[p].tasks || [];
-    for (let i = 0; i < tasks.length; i++) {
-      if (tasks[i].id === taskId) return { job: j.job, jobIdx: j.idx, task: tasks[i], taskIdx: i, phaseId: phases[p].id };
+    const subUnits = getPhaseSubUnits(phases[p]);
+    for (let u = 0; u < subUnits.length; u++) {
+      const tasks = subUnits[u].tasks || [];
+      for (let i = 0; i < tasks.length; i++) {
+        if (tasks[i].id === taskId) return { job: j.job, jobIdx: j.idx, task: tasks[i], taskIdx: i, phaseId: phases[p].id, subPhaseId: subUnits[u].id };
+      }
     }
   }
   return null;
@@ -4326,6 +4336,8 @@ function buildCalBarHtml(seg, left, top, width) {
     '<div class="cal-bar-drag-body" data-drag="move"></div>' +
     '<div class="cal-bar-drag-right" data-drag="right"></div>';
 
+  const phaseLabel = seg.subPhaseName ? (seg.subPhaseName + (seg.phaseName ? ' (' + seg.phaseName + ')' : '')) : seg.phaseName;
+
   let content;
   if (isDue) {
     content = '🚩';
@@ -4334,12 +4346,12 @@ function buildCalBarHtml(seg, left, top, width) {
     content = (timeLabel ? '<span class="cal-event-time">' + escapeHtml(timeLabel) + '</span>' : '') + escapeHtml(task.name);
   } else {
     const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
-    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : linkGlyph + job.name + (seg.phaseName ? ' — ' + seg.phaseName : '');
+    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : linkGlyph + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
     content = escapeHtml(task.name) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '');
   }
 
   return '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; ' + styleExtra + '" title="' +
-    escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name) + (seg.phaseName ? ' — ' + escapeHtml(seg.phaseName) : '')) + (job.isLinkedReference ? ' (linked, read-only — click to open in ' + escapeHtml(job.linkedFromProjectName || 'its project') + ')' : '') + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-phase-id="' + (seg.phaseId || '') + '" data-cal-linked="' + (job.isLinkedReference ? '1' : '') + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+    escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name) + (seg.phaseName ? ' — ' + escapeHtml(seg.phaseName) : '') + (seg.subPhaseName ? ' — ' + escapeHtml(seg.subPhaseName) : '')) + (job.isLinkedReference ? ' (linked, read-only — click to open in ' + escapeHtml(job.linkedFromProjectName || 'its project') + ')' : '') + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-phase-id="' + (seg.phaseId || '') + '" data-cal-sub-phase-id="' + (seg.subPhaseId || '') + '" data-cal-linked="' + (job.isLinkedReference ? '1' : '') + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
     dragHandles + content + '</div>';
 }
 
@@ -4353,31 +4365,36 @@ function computeDateRange() {
   let datedTasks = [];
   jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
     getJobPhases(job).forEach(function(phase) {
-      (phase.tasks || []).forEach(function(task) {
-        if (hiddenOrders.has(task.order)) return;
-        if (!task.start || !task.finish) return;
-        const s = new Date(task.start + 'T00:00:00');
-        const f = new Date(task.finish + 'T00:00:00');
-        if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
-        datedTasks.push(task);
+      getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
+        (subUnit.tasks || []).forEach(function(task) {
+          if (hiddenOrders.has(task.order)) return;
+          if (!task.start || !task.finish) return;
+          const s = new Date(task.start + 'T00:00:00');
+          const f = new Date(task.finish + 'T00:00:00');
+          if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+          datedTasks.push(task);
+        });
+        // A due date can sit outside every task's date range (e.g. set well
+        // past the last task's finish) — without this the marker could fall
+        // off the edge of the chart entirely, with no grid to scroll into.
+        // Only the FIRST sub-unit's row carries it — see flattenJobs().
+        if (!job.isLinkedReference && subIdx === 0) {
+          const dueTask = getJobDueMarkerTask(job, phase.id);
+          if (dueTask) datedTasks.push(dueTask);
+        }
       });
-      // A due date can sit outside every task's date range (e.g. set well
-      // past the last task's finish) — without this the marker could fall
-      // off the edge of the chart entirely, with no grid to scroll into.
-      if (!job.isLinkedReference) {
-        const dueTask = getJobDueMarkerTask(job, phase.id);
-        if (dueTask) datedTasks.push(dueTask);
-      }
     });
   });
   getGhostJobs().forEach(function(job) {
     getJobPhases(job).forEach(function(phase) {
-      (phase.tasks || []).forEach(function(task) {
-        if (!task.start || !task.finish) return;
-        const s = new Date(task.start + 'T00:00:00');
-        const f = new Date(task.finish + 'T00:00:00');
-        if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
-        datedTasks.push(task);
+      getPhaseSubUnits(phase).forEach(function(subUnit) {
+        (subUnit.tasks || []).forEach(function(task) {
+          if (!task.start || !task.finish) return;
+          const s = new Date(task.start + 'T00:00:00');
+          const f = new Date(task.finish + 'T00:00:00');
+          if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+          datedTasks.push(task);
+        });
       });
     });
   });
@@ -4550,7 +4567,7 @@ function renderMonthCalendar() {
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
-    return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName };
+    return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName };
   });
   flattenCalendarEventsForRange(cellDates[0], cellDates[cellDates.length - 1]).forEach(function(row, i) {
     allJobs.push({ flatIdx: 'ce-' + i, job: row.job, task: row.task, start: row.start, finish: row.finish });
@@ -4568,7 +4585,7 @@ function renderMonthCalendar() {
         const clampedStart = j.start < rowStart ? rowStart : j.start;
         const clampedFinish = j.finish > rowEnd ? rowEnd : j.finish;
         return {
-          flatIdx: j.flatIdx, job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName,
+          flatIdx: j.flatIdx, job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName, subPhaseId: j.subPhaseId, subPhaseName: j.subPhaseName,
           colStart: Math.round((clampedStart - rowStart) / 86400000),
           colEnd: Math.round((clampedFinish - rowStart) / 86400000),
           isTrueStart: j.start.getTime() === clampedStart.getTime(),
@@ -4675,7 +4692,7 @@ function renderWeekCalendar() {
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
-    return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName };
+    return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName };
   });
   const timedCalRows = [];
   flattenCalendarEventsForRange(weekStart, weekEnd).forEach(function(row, i) {
@@ -4707,7 +4724,7 @@ function renderWeekCalendar() {
       const clampedStart = j.start < weekStart ? weekStart : j.start;
       const clampedFinish = j.finish > weekEnd ? weekEnd : j.finish;
       return {
-        flatIdx: j.flatIdx, job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName,
+        flatIdx: j.flatIdx, job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName, subPhaseId: j.subPhaseId, subPhaseName: j.subPhaseName,
         colStart: Math.round((clampedStart - weekStart) / 86400000),
         colEnd: Math.round((clampedFinish - weekStart) / 86400000),
         isTrueStart: j.start.getTime() === clampedStart.getTime(),
@@ -5035,7 +5052,7 @@ function handleCalBarMouseDown(e) {
     return;
   }
 
-  let task, job, calEventId = null, calEventSourceDate = null, phaseId = bar.dataset.calPhaseId || null;
+  let task, job, calEventId = null, calEventSourceDate = null, phaseId = bar.dataset.calPhaseId || null, subPhaseId = bar.dataset.calSubPhaseId || null;
   if (taskId === DUE_MARKER_TASK_ID) {
     const jf = findJob(jobId);
     if (!jf) return;
@@ -5058,6 +5075,7 @@ function handleCalBarMouseDown(e) {
     task = found.task;
     job = found.job;
     phaseId = found.phaseId || null;
+    subPhaseId = found.subPhaseId || null;
   }
 
   // Due-marker and calendar-event bars render no drag-zone sub-elements
@@ -5076,7 +5094,7 @@ function handleCalBarMouseDown(e) {
 
   calDragState = {
     jobId, taskId, job, task, bar, dragType, startX, origLeft, origWidth,
-    startDateObj: s, finishDateObj: f, duration, phaseId,
+    startDateObj: s, finishDateObj: f, duration, phaseId, subPhaseId,
     isCalendarEvent: !!calEventId, calEventId, calEventSourceDate,
     moved: false
   };
@@ -5569,21 +5587,27 @@ function renderGantt() {
       if (!showArchived && job.archived) return;
       getJobPhases(job).forEach(function(phase) {
         const phaseName = phase.isDefault ? null : phase.name;
-        (phase.tasks || []).forEach(function(task) {
-          if (hiddenOrders.has(task.order)) return;
-          // Unscheduled tasks (no start/finish yet) don't get a Gantt row at
-          // all — they still exist on the job and in the Job Manager grid,
-          // they just don't clutter the schedule until a date is set.
-          if (!task.start || !task.finish) return;
-          if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
-          rows.push({ job: job, task: task, phaseId: phase.id, phaseName: phaseName });
+        getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
+          const subPhaseName = subUnit.isDefault ? null : subUnit.name;
+          (subUnit.tasks || []).forEach(function(task) {
+            if (hiddenOrders.has(task.order)) return;
+            // Unscheduled tasks (no start/finish yet) don't get a Gantt row at
+            // all — they still exist on the job and in the Job Manager grid,
+            // they just don't clutter the schedule until a date is set.
+            if (!task.start || !task.finish) return;
+            if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
+            rows.push({ job: job, task: task, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
+          });
+          // A linked reference job's due marker lives on a card in ITS OWN
+          // project, not this one's boardCards — nothing to fetch here.
+          // Sub-phases never have their own card either, so the due marker
+          // only ever shows on the FIRST sub-unit's row — real or synthetic
+          // default — never duplicated across every sub-phase.
+          if (!job.isLinkedReference && subIdx === 0) {
+            const dueTask = getJobDueMarkerTask(job, phase.id);
+            if (dueTask) rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
+          }
         });
-        // A linked reference job's due marker lives on a card in ITS OWN
-        // project, not this one's boardCards — nothing to fetch here.
-        if (!job.isLinkedReference) {
-          const dueTask = getJobDueMarkerTask(job, phase.id);
-          if (dueTask) rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName });
-        }
       });
     });
     rows.sort(function(a, b) {
@@ -5614,29 +5638,32 @@ function renderGantt() {
       // than crashing; acceptable for a read-only cross-project preview.
       const leadName = ganttViewMode === 'leads' && !job.isLinkedReference ? getJobLeadName(job) : null;
       getJobPhases(job).forEach(function(phase) {
-        let minStart = null, maxFinish = null;
-        (phase.tasks || []).forEach(function(task) {
-          if (hiddenOrders.has(task.order)) return;
-          if (!task.start || !task.finish) return;
-          const s = new Date(task.start + 'T00:00:00');
-          const f = new Date(task.finish + 'T00:00:00');
-          if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
-          if (!minStart || s < minStart) minStart = s;
-          if (!maxFinish || f > maxFinish) maxFinish = f;
+        getPhaseSubUnits(phase).forEach(function(subUnit) {
+          let minStart = null, maxFinish = null;
+          (subUnit.tasks || []).forEach(function(task) {
+            if (hiddenOrders.has(task.order)) return;
+            if (!task.start || !task.finish) return;
+            const s = new Date(task.start + 'T00:00:00');
+            const f = new Date(task.finish + 'T00:00:00');
+            if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+            if (!minStart || s < minStart) minStart = s;
+            if (!maxFinish || f > maxFinish) maxFinish = f;
+          });
+          if (!minStart || !maxFinish) return;
+          const namePart = (phase.isDefault ? '' : ' — ' + phase.name) + (subUnit.isDefault ? '' : ' — ' + subUnit.name);
+          const pseudoTask = {
+            id: 'jobspan|' + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || ''),
+            name: job.name + namePart,
+            start: minStart.toISOString().split('T')[0],
+            finish: maxFinish.toISOString().split('T')[0],
+            notes: '',
+            color: leadName ? colorForLead(leadName) : job.color,
+            order: 0,
+            isJobSpan: true,
+            leadName: leadName
+          };
+          rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name, subPhaseId: subUnit.id, subPhaseName: subUnit.isDefault ? null : subUnit.name });
         });
-        if (!minStart || !maxFinish) return;
-        const pseudoTask = {
-          id: 'jobspan|' + job.id + '|' + (phase.id || ''),
-          name: phase.isDefault ? job.name : job.name + ' — ' + phase.name,
-          start: minStart.toISOString().split('T')[0],
-          finish: maxFinish.toISOString().split('T')[0],
-          notes: '',
-          color: leadName ? colorForLead(leadName) : job.color,
-          order: 0,
-          isJobSpan: true,
-          leadName: leadName
-        };
-        rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name });
       });
     });
     rows.sort(function(a, b) {
@@ -5726,7 +5753,11 @@ function renderGantt() {
   const visibleRows = ganttViewMode === 'tasks' ? buildVisibleTaskRows() : buildCondensedJobRows();
 
   visibleRows.forEach(function(entry) {
-    const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName;
+    const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
+    // "Sub-Phase (Phase)" when both exist, otherwise whichever one does —
+    // same truncation-survives-because-it's-first treatment as phaseName
+    // alone got, just one level deeper.
+    const phaseLabel = subPhaseName ? (subPhaseName + (phaseName ? ' (' + phaseName + ')' : '')) : phaseName;
     {
       const bg = document.createElement('div');
       bg.className = 'row-bg';
@@ -5753,18 +5784,18 @@ function renderGantt() {
       // appended to the END of the pill — exactly the part that gets cut
       // off first, leaving every one of a job's phase rows showing the
       // identical truncated text with no way to tell them apart. Showing
-      // the phase name as the plain-text mainLabel instead puts it FIRST,
+      // the phase label as the plain-text mainLabel instead puts it FIRST,
       // so it survives truncation even when the job name pill after it
       // doesn't; the row's title attribute carries the untruncated
-      // "Job — Phase" text as a hover fallback either way.
+      // "Job — Phase — SubPhase" text as a hover fallback either way.
       const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
       const mainLabel = task.isJobSpan
-        ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : (phaseName ? linkGlyph + escapeHtml(phaseName) : (linkGlyph ? linkGlyph.trim() : '')))
-        : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + (phaseName ? ' (' + escapeHtml(phaseName) + ')' : '');
+        ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : (phaseLabel ? linkGlyph + escapeHtml(phaseLabel) : (linkGlyph ? linkGlyph.trim() : '')))
+        : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + (phaseLabel ? ' (' + escapeHtml(phaseLabel) + ')' : '');
       const jobPill = '<span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
-      row.title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '');
+      row.title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
       row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobPill + noteDot + '</div>';
-      row.addEventListener('click', () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId); });
+      row.addEventListener('click', () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); });
       leftBody.appendChild(row);
       visibleRowIdx++;
     }
@@ -5816,7 +5847,8 @@ function renderGantt() {
 
   let barVisibleIdx = 0;
   visibleRows.forEach(function(entry) {
-    const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName;
+    const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
+    const phaseLabel = subPhaseName ? (subPhaseName + (phaseName ? ' (' + phaseName + ')' : '')) : phaseName;
     const hasDates = !!(task.start && task.finish);
     const s = hasDates ? new Date(task.start + 'T00:00:00') : null;
     const f = hasDates ? new Date(task.finish + 'T00:00:00') : null;
@@ -5847,6 +5879,7 @@ function renderGantt() {
         labelWrap.className = 'job-span-name-wrap' + (job.isLinkedReference ? ' linked-ref' : '');
         labelWrap.dataset.jobId = job.id;
         labelWrap.dataset.phaseId = phaseId || '';
+        labelWrap.dataset.subPhaseId = subPhaseId || '';
         labelWrap.dataset.origLeft = startIdx * dayWidth;
         labelWrap.style.left = (startIdx * dayWidth) + 'px';
         labelWrap.style.width = (duration * dayWidth) + 'px';
@@ -5854,8 +5887,8 @@ function renderGantt() {
         const jobTag = document.createElement('span');
         jobTag.className = 'task-bar-job-tag';
         jobTag.style.background = job.color || '#999';
-        jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseName ? ' — ' + phaseName : '');
-        jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '');
+        jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
+        jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
         labelWrap.appendChild(jobTag);
         grid.appendChild(labelWrap);
 
@@ -5867,6 +5900,7 @@ function renderGantt() {
         borderOverlay.className = 'job-span-border' + (job.isLinkedReference ? ' linked-ref' : '');
         borderOverlay.dataset.jobId = job.id;
         borderOverlay.dataset.phaseId = phaseId || '';
+        borderOverlay.dataset.subPhaseId = subPhaseId || '';
         borderOverlay.dataset.origLeft = startIdx * dayWidth;
         borderOverlay.style.left = (startIdx * dayWidth) + 'px';
         borderOverlay.style.width = (duration * dayWidth) + 'px';
@@ -5885,8 +5919,12 @@ function renderGantt() {
         // itself, only re-render() catching up on drop should change how
         // far apart they are. It's independently draggable on its own via
         // startBarMove()'s existing DUE_MARKER_TASK_ID handling, same as
-        // the Tasks-view due marker.
-        const dueTask = getJobDueMarkerTask(job, phaseId);
+        // the Tasks-view due marker. Only drawn on the FIRST sub-unit's bar
+        // (there's no per-sub-phase card to carry a second due date) — same
+        // gating as flattenJobs()/buildVisibleTaskRows().
+        const parentPhaseForDue = getJobPhases(job).find(function(p) { return (p.id || null) === (phaseId || null); });
+        const isFirstSubUnit = !parentPhaseForDue || (getPhaseSubUnits(parentPhaseForDue)[0].id || null) === (subPhaseId || null);
+        const dueTask = isFirstSubUnit ? getJobDueMarkerTask(job, phaseId) : null;
         if (dueTask) {
           const dueDate = new Date(dueTask.start + 'T00:00:00');
           const dueIdx = getDaysDiff(startDate, dueDate);
@@ -5945,8 +5983,8 @@ function renderGantt() {
           const jobTag = document.createElement('span');
           jobTag.className = 'task-bar-job-tag';
           jobTag.style.background = job.color;
-          jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseName ? ' — ' + phaseName : '');
-          jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '');
+          jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
+          jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
           bar.appendChild(jobTag);
         }
       }
@@ -5956,7 +5994,7 @@ function renderGantt() {
       bar.addEventListener('mousemove', moveTooltip);
       bar.addEventListener('click', () => {
         if (bar.dataset.dragged === 'true') { bar.dataset.dragged = 'false'; return; }
-        if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId);
+        if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId);
       });
 
       // Read-only: a linked reference job's bar is never draggable/
@@ -5965,10 +6003,10 @@ function renderGantt() {
       if (!job.isLinkedReference) {
       if (task.isJobSpan) {
         // Condensed 'jobs'/'leads' bar: dragging it moves every one of the
-        // phase's real tasks by the same number of days (see the isJobSpan
-        // branch in onBarMoveEnd), keeping the whole schedule connected.
-        // No resize handles — there's no single task to stretch.
-        bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar, true, phaseId));
+        // sub-unit's real tasks by the same number of days (see the
+        // isJobSpan branch in onBarMoveEnd), keeping the whole schedule
+        // connected. No resize handles — there's no single task to stretch.
+        bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar, true, phaseId, subPhaseId));
       } else {
         bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id, bar));
 
@@ -6015,7 +6053,8 @@ function renderGantt() {
       if (task.isJobSpan && !job.isLinkedReference) {
         const jobEndIdx = startIdx + duration - 1;
         const spanPhase = getJobPhases(job).find(function(p) { return (p.id || null) === (phaseId || null); });
-        const datedTasks = ((spanPhase && spanPhase.tasks) || []).map(function(t) {
+        const spanUnit = spanPhase && getPhaseSubUnits(spanPhase).find(function(s) { return (s.id || null) === (subPhaseId || null); });
+        const datedTasks = ((spanUnit && spanUnit.tasks) || []).map(function(t) {
           if (!t.start || !t.finish) return null;
           const ts = new Date(t.start + 'T00:00:00'), tf = new Date(t.finish + 'T00:00:00');
           if (isNaN(ts.getTime()) || isNaN(tf.getTime())) return null;
@@ -6031,6 +6070,7 @@ function renderGantt() {
           tick.className = 'job-span-task-tick';
           tick.dataset.jobId = job.id;
           tick.dataset.phaseId = phaseId || '';
+          tick.dataset.subPhaseId = subPhaseId || '';
           tick.dataset.taskId = dt.t.id;
           tick.dataset.origLeft = tickLeft;
           tick.style.left = tickLeft + 'px';
@@ -6067,6 +6107,7 @@ function renderGantt() {
             hash.className = 'job-span-gap-hash';
             hash.dataset.jobId = job.id;
             hash.dataset.phaseId = phaseId || '';
+            hash.dataset.subPhaseId = subPhaseId || '';
             hash.dataset.origLeft = segLeft;
             hash.style.left = segLeft + 'px';
             hash.style.width = segWidth + 'px';
@@ -6083,6 +6124,7 @@ function renderGantt() {
             solid.className = 'job-span-task-solid';
             solid.dataset.jobId = job.id;
             solid.dataset.phaseId = phaseId || '';
+            solid.dataset.subPhaseId = subPhaseId || '';
             solid.dataset.dragged = 'false';
             solid.dataset.origLeft = segLeft;
             solid.style.left = segLeft + 'px';
@@ -6096,7 +6138,7 @@ function renderGantt() {
             solid.addEventListener('mousedown', function(e) { startBarMove(e, job.id, dt.t.id, solid); });
             solid.addEventListener('click', function() {
               if (solid.dataset.dragged === 'true') { solid.dataset.dragged = 'false'; return; }
-              editJob(job.id, phaseId);
+              editJob(job.id, phaseId, subPhaseId);
             });
             grid.appendChild(solid);
           } else {
@@ -6111,6 +6153,7 @@ function renderGantt() {
             hatch.className = 'job-span-task-hatch';
             hatch.dataset.jobId = job.id;
             hatch.dataset.phaseId = phaseId || '';
+            hatch.dataset.subPhaseId = subPhaseId || '';
             hatch.dataset.origLeft = segLeft;
             hatch.style.left = segLeft + 'px';
             hatch.style.width = segWidth + 'px';
@@ -6212,11 +6255,15 @@ function cascadeShiftLaterTasks(jobId, taskId, deltaDays) {
   if (!deltaDays) return;
   const found = findJob(jobId);
   if (!found) return;
-  const phase = getJobPhases(found.job).find(function(p) {
-    return (p.tasks || []).some(function(t) { return t.id === taskId; });
+  let unit = null;
+  getJobPhases(found.job).some(function(p) {
+    return getPhaseSubUnits(p).some(function(u) {
+      if ((u.tasks || []).some(function(t) { return t.id === taskId; })) { unit = u; return true; }
+      return false;
+    });
   });
-  if (!phase) return;
-  const sorted = (phase.tasks || []).slice().sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+  if (!unit) return;
+  const sorted = (unit.tasks || []).slice().sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
   const idx = sorted.findIndex(function(t) { return t.id === taskId; });
   if (idx === -1) return;
   for (let i = idx + 1; i < sorted.length; i++) {
@@ -6430,18 +6477,20 @@ function onTickResizeEnd(e) {
 // in the job together (see onBarMoveEnd) rather than one real task, so
 // `task` here is a synthetic start/finish spanning all of them, recomputed
 // fresh from the job's current tasks (same rule as buildCondensedJobRows()).
-function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId) {
+function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId, subPhaseId) {
   let task;
   if (isJobSpan) {
     const jf = findJob(jobId);
     if (!jf) return;
     const phase = getJobPhases(jf.job).find(function(p) { return (p.id || null) === (phaseId || null); });
     if (!phase) return;
+    const subUnit = getPhaseSubUnits(phase).find(function(s) { return (s.id || null) === (subPhaseId || null); });
+    if (!subUnit) return;
     const hiddenOrders = new Set(
       BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
     );
     let minStart = null, maxFinish = null;
-    (phase.tasks || []).forEach(function(t) {
+    (subUnit.tasks || []).forEach(function(t) {
       if (hiddenOrders.has(t.order)) return;
       if (!t.start || !t.finish) return;
       const s = new Date(t.start + 'T00:00:00'), f = new Date(t.finish + 'T00:00:00');
@@ -6461,6 +6510,7 @@ function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId) {
     if (!found) return;
     task = found.task;
     phaseId = found.phaseId;
+    subPhaseId = found.subPhaseId;
   }
   const s = new Date(task.start + 'T00:00:00');
   const f = new Date(task.finish + 'T00:00:00');
@@ -6468,7 +6518,7 @@ function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId) {
 
   barMoveState = {
     jobId, taskId, task, bar, startX: e.clientX, startY: e.clientY,
-    startDateObj: s, duration, deltaDays: 0, moved: false, phaseId: phaseId || null,
+    startDateObj: s, duration, deltaDays: 0, moved: false, phaseId: phaseId || null, subPhaseId: subPhaseId || null,
     origLeftPx: parseFloat(bar.style.left),
     origTopPx: parseFloat(bar.style.top),
     reorderMode: false, newIndex: null, isJobSpan: !!isJobSpan
@@ -6508,15 +6558,19 @@ function onBarMoveMove(e) {
   // they don't visually detach from the bar mid-drag (they otherwise only
   // catch up once renderGantt() redraws everything on drop).
   if (barMoveState.isJobSpan) {
-    // Phase-scoped: a job with phases has one condensed bar (and one set of
-    // these decorative overlays) per phase, all sharing the same jobId — so
-    // matching on jobId alone would also drag-along a sibling phase's bar
-    // that happens to sit in a different Gantt row, snapping back only once
-    // renderGantt() redraws on drop. '' matches an unphased job's overlays,
-    // consistent with how phaseId is stamped (phaseId || '') when built.
+    // Phase-scoped (and one level deeper, sub-phase-scoped): a job with
+    // phases — or a phase with sub-phases — has one condensed bar (and one
+    // set of these decorative overlays) per unit, all sharing the same
+    // jobId (and possibly phaseId) — so matching on those alone would also
+    // drag-along a sibling phase's or sibling sub-phase's bar that happens
+    // to sit in a different Gantt row, snapping back only once
+    // renderGantt() redraws on drop. '' matches an unphased/undivided
+    // unit's overlays, consistent with how phaseId/subPhaseId are stamped
+    // (id || '') when built.
     document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap, .job-span-border').forEach(function(tk) {
       if (tk.dataset.jobId !== barMoveState.jobId) return;
       if ((tk.dataset.phaseId || '') !== (barMoveState.phaseId || '')) return;
+      if ((tk.dataset.subPhaseId || '') !== (barMoveState.subPhaseId || '')) return;
       tk.style.left = (parseFloat(tk.dataset.origLeft) + deltaDays * dayWidth) + 'px';
     });
   }
@@ -6538,7 +6592,7 @@ function onBarMoveMove(e) {
 
 function onBarMoveEnd(e) {
   if (!barMoveState) return;
-  const { task, taskId, deltaDays, moved, duration, startDateObj, bar, reorderMode, jobId, newJobIndex, isJobSpan, phaseId } = barMoveState;
+  const { task, taskId, deltaDays, moved, duration, startDateObj, bar, reorderMode, jobId, newJobIndex, isJobSpan, phaseId, subPhaseId } = barMoveState;
   document.removeEventListener('mousemove', onBarMoveMove);
   document.removeEventListener('mouseup', onBarMoveEnd);
   bar.classList.remove('moving', 'reordering');
@@ -6548,8 +6602,9 @@ function onBarMoveEnd(e) {
     if (moved && deltaDays !== 0) {
       const jf = findJob(jobId);
       const phase = jf && getJobPhases(jf.job).find(function(p) { return (p.id || null) === (phaseId || null); });
-      if (jf && phase) {
-        (phase.tasks || []).forEach(function(t) {
+      const subUnit = phase && getPhaseSubUnits(phase).find(function(s) { return (s.id || null) === (subPhaseId || null); });
+      if (jf && phase && subUnit) {
+        (subUnit.tasks || []).forEach(function(t) {
           if (!t.start || !t.finish) return;
           const ns = new Date(t.start + 'T00:00:00');
           ns.setDate(ns.getDate() + deltaDays);
@@ -6559,7 +6614,7 @@ function onBarMoveEnd(e) {
           t.finish = nf.toISOString().split('T')[0];
         });
         saveJobs();
-        logActivity('moved job "' + jf.job.name + '"' + (phase.isDefault ? '' : ' phase "' + phase.name + '"'));
+        logActivity('moved job "' + jf.job.name + '"' + (phase.isDefault ? '' : ' phase "' + phase.name + '"') + (subUnit.isDefault ? '' : ' sub-phase "' + subUnit.name + '"'));
         renderJobList();
         refreshJobFormIfOpen(jobId);
         showToast('Job dates updated', 'success');
@@ -7644,7 +7699,7 @@ function addNewJob() {
   renderJobList();
 }
 
-function editJob(jobId, phaseId) {
+function editJob(jobId, phaseId, subPhaseId) {
   // Whatever job was open before (if any, and if different) gets its
   // pending autosave committed before we swap the form to this one.
   if (editingJobId !== jobId) flushAutoSaveJobForm();
@@ -7655,8 +7710,10 @@ function editJob(jobId, phaseId) {
   editingJobId = jobId;
   // phaseId undefined (e.g. the sidebar's plain click) means "whatever was
   // last selected, or the first phase" — only an explicit phaseId (from a
-  // Gantt/Calendar row for a specific phase) should override that.
+  // Gantt/Calendar row for a specific phase) should override that. Same
+  // idea one level down for subPhaseId.
   editingPhaseId = phaseId !== undefined ? phaseId : editingPhaseId;
+  editingSubPhaseId = subPhaseId !== undefined ? subPhaseId : editingSubPhaseId;
   setJobNameHint(false);
   showTaskRowWarnings([]);
 
