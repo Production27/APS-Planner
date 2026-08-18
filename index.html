@@ -5207,11 +5207,15 @@ function renderGantt() {
   // no dated tasks at all have nothing to span, so they're left out here
   // the same way an individual undated task has no bar in 'tasks' view.
   function buildCondensedJobRows() {
+    const hiddenOrders = new Set(
+      BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
+    );
     const rows = [];
     jobs.forEach(function(job) {
       if (!showArchived && job.archived) return;
       let minStart = null, maxFinish = null;
       (job.tasks || []).forEach(function(task) {
+        if (hiddenOrders.has(task.order)) return;
         if (!task.start || !task.finish) return;
         const s = new Date(task.start + 'T00:00:00');
         const f = new Date(task.finish + 'T00:00:00');
@@ -5997,8 +6001,12 @@ function startBarMove(e, jobId, taskId, bar, isJobSpan) {
   if (isJobSpan) {
     const jf = findJob(jobId);
     if (!jf) return;
+    const hiddenOrders = new Set(
+      BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
+    );
     let minStart = null, maxFinish = null;
     (jf.job.tasks || []).forEach(function(t) {
+      if (hiddenOrders.has(t.order)) return;
       if (!t.start || !t.finish) return;
       const s = new Date(t.start + 'T00:00:00'), f = new Date(t.finish + 'T00:00:00');
       if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
