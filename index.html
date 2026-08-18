@@ -9755,18 +9755,32 @@ function pushProjectToShared(projectId, headerOverride) {
         }
       }
 
-      const jobsMap = entry.get('jobsMap');
-      if (jobsMap && typeof jobsMap.set === 'function') {
-        proj.jobs.forEach(function (j) { if (!deletedIds[String(j.id)]) safeSet(jobsMap, j.id, j, 'job "' + (j.name || j.id) + '"'); });
+      // Lazily created if missing — same fallback calendarEventsMap already
+      // had below. A project entry can end up without one of these (seen in
+      // production: an entry with a real boardCardsMap but no jobsMap at
+      // all) if it was ever created or touched by a path that didn't seed
+      // every map. Silently skipping the push when the map's missing (the
+      // old behavior here) means every job push for that project quietly
+      // no-ops forever — cards sync, the job never does, and the orphan-
+      // card recovery in applyLiveblocksState() papers over it with a blank
+      // synthesized job on every other client, which looks exactly like
+      // "teammate's edits never show up" with no error anywhere.
+      let jobsMap = entry.get('jobsMap');
+      if (!jobsMap || typeof jobsMap.set !== 'function') {
+        jobsMap = new LiveMapCtor();
+        entry.set('jobsMap', jobsMap);
       }
+      proj.jobs.forEach(function (j) { if (!deletedIds[String(j.id)]) safeSet(jobsMap, j.id, j, 'job "' + (j.name || j.id) + '"'); });
 
       // cards — likewise pushed whole (upsert only, see above), so jobId,
       // manualColumn, and manualColumnUntil (Section 5's manual override)
       // travel with every job-linked card automatically.
-      const cardsMap = entry.get('boardCardsMap');
-      if (cardsMap && typeof cardsMap.set === 'function') {
-        proj.boardCards.forEach(function (c) { if (!deletedIds[String(c.id)]) safeSet(cardsMap, c.id, c, 'card "' + (c.title || c.id) + '"'); });
+      let cardsMap = entry.get('boardCardsMap');
+      if (!cardsMap || typeof cardsMap.set !== 'function') {
+        cardsMap = new LiveMapCtor();
+        entry.set('boardCardsMap', cardsMap);
       }
+      proj.boardCards.forEach(function (c) { if (!deletedIds[String(c.id)]) safeSet(cardsMap, c.id, c, 'card "' + (c.title || c.id) + '"'); });
 
       // calendar-only events — same whole-object upsert pattern. Lazily
       // created here for any project entry that predates this feature.
