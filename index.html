@@ -9842,6 +9842,27 @@ function pushLiveblocksState() {
   }
 }
 
+// Best-effort recovery for a board card whose jobId doesn't match any job
+// in the synced jobsMap (see applyLiveblocksState()'s orphan-card check) —
+// reconstructs a minimal job shell from what the card still has (title,
+// color) with one blank task per board column, the same shape addNewJob()
+// gives a brand-new job. Whatever the original job's own dates/notes/tasks
+// were are gone (only the card survived); this recovers the job's
+// existence and its link back to the card, not its history.
+function synthesizeJobFromOrphanCard(card, boardColumns) {
+  const tasks = (boardColumns || []).map(function(col, i) {
+    return { id: genId(), name: col.label, columnId: col.id, start: '', finish: '', notes: '', color: col.color || '#3949ab', order: i };
+  });
+  return {
+    id: card.jobId,
+    name: card.title || 'Recovered job',
+    color: card.color || '#3949ab',
+    archived: false,
+    comments: [],
+    tasks: tasks
+  };
+}
+
 function applyLiveblocksState(root) {
   if (!root) return;
   const projectsMap = root.get('projects');
@@ -9945,14 +9966,28 @@ function applyLiveblocksState(root) {
       if (theme) local.header.theme = theme;
     }
 
-    // Diagnostic: makes a "card shows but job doesn't" report instantly
-    // checkable in devtools — confirms whether the job is actually missing
-    // from this client's remote replica (a real sync gap) vs. present here
-    // but not making it into the rendered views (a render/local-state bug).
+    // Self-heals the "card shows but job doesn't" sync gap documented in
+    // pushProjectToShared() above (a stale tab's upsert can't destroy a
+    // job, but the busy-editing defer + wholesale local.jobs replacement
+    // here can still leave a card's jobId pointing at nothing for a
+    // while). Reconstructs a minimal job shell from what the card still
+    // has and re-links it — the original job's own dates/notes/tasks are
+    // gone (only the card survived), so this recovers the job's
+    // existence, not its history. Scoped to isActive since that's the
+    // only project whose merged local.jobs is actually being viewed/
+    // relied on for immediate feedback right now.
     if (isActive) {
       const orphanCards = local.boardCards.filter(function(c) { return c.jobId && !local.jobs.some(function(j) { return j.id === c.jobId; }); });
       if (orphanCards.length) {
-        console.warn('applyLiveblocksState: ' + orphanCards.length + ' card(s) reference a jobId not present in the merged jobsMap for project ' + projectId, orphanCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
+        console.warn('applyLiveblocksState: recovering ' + orphanCards.length + ' orphaned card(s) — jobId missing from the merged jobsMap for project ' + projectId, orphanCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
+        orphanCards.forEach(function(card) {
+          local.jobs.push(synthesizeJobFromOrphanCard(card, local.boardColumns));
+        });
+        // Recovered locally — sync it back out so every other client picks
+        // up the fix too, not just this one (queueSharedSync() just arms a
+        // debounced timer, so this is safe to call from inside a storage
+        // subscription callback — no synchronous Liveblocks write here).
+        queueSharedSync();
       }
     }
 
