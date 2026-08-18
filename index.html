@@ -663,6 +663,9 @@
   .job-phase-chip-edit:hover { opacity: 1; }
   .job-phase-strip-btn { padding: 5px 10px; border-radius: 14px; background: transparent; border: 1.5px dashed #c5cae9; color: var(--text-light); font-size: 12px; font-weight: 600; cursor: pointer; }
   .job-phase-strip-btn:hover { border-color: var(--primary-light); color: var(--primary-light); }
+  .job-subphase-strip { margin: 6px 0 0 20px; padding-left: 10px; border-left: 2px solid #dcdfe6; }
+  body.dark-mode .job-subphase-strip { border-left-color: rgba(255,255,255,0.15); }
+  .job-subphase-strip .job-phase-chip { font-size: 11px; padding: 4px 9px; }
   .job-link-active-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; background: #eef1fa; font-size: 12px; font-weight: 600; color: var(--text); }
   body.dark-mode .job-link-active-row { background: rgba(255,255,255,0.08); }
   .job-link-active-row .job-link-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1834,6 +1837,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="form-group" id="jobPhaseSection" style="display:none;">
             <label>Phases</label>
             <div id="jobPhaseStrip" class="job-phase-strip"></div>
+            <div id="jobSubPhaseStrip" class="job-phase-strip job-subphase-strip" style="display:none;"></div>
           </div>
           <div class="form-group" id="jobLinkSection" style="display:none;">
             <label>Linked Job</label>
@@ -2655,6 +2659,21 @@ function getJobPhases(job) {
   return [{ id: null, name: job.name, order: 0, tasks: job.tasks || [], isDefault: true }];
 }
 
+// ===== Sub-phases =====
+// Same pattern one level deeper: a phase is sub-phase-less by default
+// (phase.subPhases absent/empty), and getPhaseSubUnits() is the seam every
+// Gantt/Calendar render path goes through instead of reading phase.tasks
+// directly — mirrors getJobPhases() exactly, including the synthetic
+// single-entry wrap for the common (not split) case. Sub-phases
+// deliberately do NOT get their own board card (unlike phases) — the
+// parent phase keeps its single card regardless, so ensureJobHasCards()/
+// getPhaseCard()/renderBoard() never need to know sub-phases exist at
+// all; only rendering goes one level deeper.
+function getPhaseSubUnits(phase) {
+  if (phase.subPhases && phase.subPhases.length) return phase.subPhases;
+  return [{ id: null, name: phase.name, order: 0, tasks: phase.tasks || [], isDefault: true }];
+}
+
 // Every card belongs to exactly one (job, phase) pair — phaseId is null
 // for a legacy/unphased job's single card, matching getJobPhases()'s
 // synthetic default phase id above. Replaces the old
@@ -2758,7 +2777,13 @@ function normalizeTasksToColumns(tasks, fallbackColor) {
 function ensureJobTasksMatchColumns(job) {
   if (job.phases && job.phases.length) {
     job.phases.forEach(function(phase) {
-      phase.tasks = normalizeTasksToColumns(phase.tasks, phase.color || job.color);
+      if (phase.subPhases && phase.subPhases.length) {
+        phase.subPhases.forEach(function(sub) {
+          sub.tasks = normalizeTasksToColumns(sub.tasks, sub.color || phase.color || job.color);
+        });
+      } else {
+        phase.tasks = normalizeTasksToColumns(phase.tasks, phase.color || job.color);
+      }
     });
     dedupeTaskIdsAcrossPhases(job);
     return;
@@ -2767,24 +2792,27 @@ function ensureJobTasksMatchColumns(job) {
 }
 
 // Defensive repair: a task id must be unique within a job, never shared
-// across two of its phases — findTask()/cascadeShiftLaterTasks()/etc. all
-// resolve "which phase does this task id belong to" by returning the
-// FIRST phase (in array order) whose tasks contain a matching id, so a
-// shared id makes every later phase's interaction with that task
-// silently resolve to the earlier phase instead — dragging phase 2's bar
-// visibly moving phase 1's, with no error anywhere. Confirmed on real
-// production data; the most likely origin is a stale snapshot merging
-// back in during one of this session's now-fixed sync gaps, before a
-// job actually had phases to worry about colliding across. Runs on every
-// load (this function already does, via loadActiveProjectData()) so it
-// self-heals without needing a one-off migration script — keeps each
-// duplicate's own dates/notes/etc, just hands it a fresh id.
+// across two of its phases (or two of a phase's sub-phases) —
+// findTask()/cascadeShiftLaterTasks()/etc. all resolve "which unit does
+// this task id belong to" by returning the FIRST unit (in array order)
+// whose tasks contain a matching id, so a shared id makes every later
+// unit's interaction with that task silently resolve to the earlier one
+// instead — dragging phase 2's bar visibly moving phase 1's, with no
+// error anywhere. Confirmed on real production data; the most likely
+// origin is a stale snapshot merging back in during one of this session's
+// now-fixed sync gaps, before a job actually had phases to worry about
+// colliding across. Runs on every load (this function already does, via
+// loadActiveProjectData()) so it self-heals without needing a one-off
+// migration script — keeps each duplicate's own dates/notes/etc, just
+// hands it a fresh id.
 function dedupeTaskIdsAcrossPhases(job) {
   const seen = new Set();
   job.phases.forEach(function(phase) {
-    (phase.tasks || []).forEach(function(t) {
-      if (seen.has(t.id)) t.id = genId();
-      seen.add(t.id);
+    getPhaseSubUnits(phase).forEach(function(unit) {
+      (unit.tasks || []).forEach(function(t) {
+        if (seen.has(t.id)) t.id = genId();
+        seen.add(t.id);
+      });
     });
   });
 }
@@ -2850,6 +2878,33 @@ function removeJobPhase(job, phaseId) {
   // client's phase-orphan self-heal (see applyLiveblocksState()) could
   // resurrect this phase from a stale copy of its card.
   recordTombstone(activeProjectId, phaseId);
+}
+
+// Sub-phases mirror phases one level down, minus the card: no
+// ensureJobHasCards()-style self-heal or orphan-recovery tombstoning
+// applies here at all, since a sub-phase never has a card of its own to
+// go stale or get orphaned — deleting one is just an array splice.
+function splitPhaseIntoSubPhases(phase) {
+  if (phase.subPhases && phase.subPhases.length) return;
+  const sub = { id: genId(), name: 'Sub-Phase 1', order: 0, tasks: phase.tasks || [] };
+  phase.subPhases = [sub];
+  phase.tasks = [];
+}
+
+function addPhaseSubUnit(phase) {
+  splitPhaseIntoSubPhases(phase); // no-op if already split
+  const order = phase.subPhases.length;
+  const color = phase.color || null;
+  const sub = { id: genId(), name: 'Sub-Phase ' + (order + 1), order: order, tasks: makeBlankPhaseTasks(color) };
+  phase.subPhases.push(sub);
+  return sub;
+}
+
+// Blocked by the caller (Job Manager UI) when it's the phase's last
+// sub-phase — a phase must always have at least one trackable unit.
+function removePhaseSubUnit(phase, subId) {
+  if (!phase.subPhases) return;
+  phase.subPhases = phase.subPhases.filter(function(s) { return s.id !== subId; });
 }
 
 function ensureJobHasCards(job) {
@@ -3012,7 +3067,13 @@ function syncCardColumns() {
     getJobPhases(job).forEach(function(phase) {
       const card = getPhaseCard(job, phase.id);
       if (card) {
-        card.column = deriveColumnForTasks(phase.tasks, card);
+        // A phase with sub-phases has nothing left in its own phase.tasks
+        // (mirrors job.tasks emptying once split into phases) — its one
+        // card's column is deliberately derived from just the FIRST
+        // sub-phase's own dates, not a combined read across all of them
+        // (confirmed with the user).
+        const tasksForColumn = getPhaseSubUnits(phase)[0].tasks;
+        card.column = deriveColumnForTasks(tasksForColumn, card);
       }
     });
   });
@@ -3049,6 +3110,9 @@ let editingTaskId = null;
 // checklists/attachments fields currently show, when the open job has
 // phases (see getJobPhases()). null for an unphased job's single "phase".
 let editingPhaseId = null;
+// Which sub-phase's tasks the grid shows, within the currently-selected
+// phase (see getPhaseSubUnits()). null for a phase with no sub-phases.
+let editingSubPhaseId = null;
 let dayWidth = 34;
 // Gantt row/bar sizing — kept in one place since it's threaded through
 // renderGantt(), the drag/resize/reorder handlers, and the SVG connector
@@ -6954,7 +7018,10 @@ function refreshJobFormIfOpen(jobId) {
   editingPhaseId = phase.id || null;
   renderJobPhaseStrip(job);
   renderJobLinkSection(job);
-  renderFixedTaskGrid(phase.tasks);
+  const subUnit = getPhaseSubUnits(phase).find(function(s) { return (s.id || null) === (editingSubPhaseId || null); }) || getPhaseSubUnits(phase)[0];
+  editingSubPhaseId = subUnit.id || null;
+  renderJobSubPhaseStrip(job, phase);
+  renderFixedTaskGrid(subUnit.tasks);
   const card = getPhaseCard(job, editingPhaseId);
   if (!card) return;
   const dueEl = document.getElementById('f_due');
@@ -7179,6 +7246,34 @@ function renderJobPhaseStrip(job) {
   }).join('') + '<button type="button" class="job-phase-strip-btn" onclick="addJobPhaseUI()">+ Add Phase</button>';
 }
 
+// Nested one level under the phase strip — mirrors it almost exactly,
+// minus any card/stage dot (a sub-phase never has its own card, so there's
+// no "current stage" to show on its chip the way a phase chip does).
+function renderJobSubPhaseStrip(job, phase) {
+  const strip = document.getElementById('jobSubPhaseStrip');
+  if (!strip) return;
+  if (!phase) { strip.style.display = 'none'; return; }
+
+  if (!phase.subPhases || !phase.subPhases.length) {
+    strip.style.display = 'block';
+    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" onclick="splitPhaseIntoSubPhasesUI()">+ Split into sub-phases</button>';
+    return;
+  }
+
+  strip.style.display = 'block';
+  const subUnits = getPhaseSubUnits(phase);
+  strip.innerHTML = subUnits.map(function(sub) {
+    const active = (sub.id || null) === (editingSubPhaseId || null);
+    const delBtn = subUnits.length > 1
+      ? '<span class="job-phase-chip-del" onclick="event.stopPropagation(); deleteSubPhaseUI(\'' + sub.id + '\')" title="Delete sub-phase">×</span>'
+      : '';
+    return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobSubPhase(\'' + sub.id + '\')" title="Click to select, click the pencil to rename">' +
+      escapeHtml(sub.name) +
+      '<span class="job-phase-chip-edit" onclick="event.stopPropagation(); renameSubPhaseUI(\'' + sub.id + '\')" title="Rename sub-phase">✎</span>' +
+      delBtn + '</span>';
+  }).join('') + '<button type="button" class="job-phase-strip-btn" onclick="addPhaseSubUnitUI()">+ Add Sub-Phase</button>';
+}
+
 // Re-renders every phase-scoped part of the open job form for whichever
 // phase is now selected — same fields editJob() seeds on first open.
 function renderJobFormForPhase(job) {
@@ -7187,7 +7282,10 @@ function renderJobFormForPhase(job) {
   renderJobPhaseStrip(job);
   renderJobLinkSection(job);
   ensureJobTasksMatchColumns(job);
-  renderFixedTaskGrid(phase.tasks);
+  const subUnit = getPhaseSubUnits(phase).find(function(s) { return (s.id || null) === (editingSubPhaseId || null); }) || getPhaseSubUnits(phase)[0];
+  editingSubPhaseId = subUnit.id || null;
+  renderJobSubPhaseStrip(job, phase);
+  renderFixedTaskGrid(subUnit.tasks);
   updateJobCurrentBoardIndicator(job, editingPhaseId);
 
   const primaryCard = getPrimaryPhaseCard(job);
@@ -7306,6 +7404,100 @@ function deleteJobPhaseUI(phaseId) {
   showToast('Phase deleted', 'success');
 }
 
+function selectJobSubPhase(subId) {
+  if (!editingJobId) return;
+  flushAutoSaveJobForm();
+  const found = findJob(editingJobId);
+  if (!found) return;
+  editingSubPhaseId = subId;
+  renderJobFormForPhase(found.job);
+}
+
+function getCurrentEditingPhase(job) {
+  return getJobPhases(job).find(function(p) { return (p.id || null) === (editingPhaseId || null); }) || getJobPhases(job)[0];
+}
+
+function splitPhaseIntoSubPhasesUI() {
+  if (!editingJobId) return;
+  flushAutoSaveJobForm();
+  const found = findJob(editingJobId);
+  if (!found) return;
+  const phase = getCurrentEditingPhase(found.job);
+  const name = window.prompt('Name for the first sub-phase:', 'Sub-Phase 1');
+  if (name === null) return;
+  splitPhaseIntoSubPhases(phase);
+  if (name.trim()) phase.subPhases[0].name = name.trim();
+  editingSubPhaseId = phase.subPhases[0].id;
+  saveJobs();
+  logActivity('split phase "' + phase.name + '" into sub-phases');
+  renderJobFormForPhase(found.job);
+  renderGantt();
+  renderCalendar();
+  queueSharedSync();
+  showToast('Phase split into sub-phases', 'success');
+}
+
+function addPhaseSubUnitUI() {
+  if (!editingJobId) return;
+  flushAutoSaveJobForm();
+  const found = findJob(editingJobId);
+  if (!found) return;
+  const phase = getCurrentEditingPhase(found.job);
+  const nextNum = (phase.subPhases ? phase.subPhases.length : 0) + 1;
+  const name = window.prompt('Name for the new sub-phase:', 'Sub-Phase ' + nextNum);
+  if (name === null) return;
+  const sub = addPhaseSubUnit(phase);
+  if (name.trim()) sub.name = name.trim();
+  editingSubPhaseId = sub.id;
+  saveJobs();
+  logActivity('added sub-phase "' + sub.name + '" to phase "' + phase.name + '"');
+  renderJobFormForPhase(found.job);
+  renderGantt();
+  renderCalendar();
+  queueSharedSync();
+  showToast('Sub-phase added', 'success');
+}
+
+function renameSubPhaseUI(subId) {
+  if (!editingJobId) return;
+  const found = findJob(editingJobId);
+  if (!found) return;
+  const phase = getCurrentEditingPhase(found.job);
+  const sub = (phase.subPhases || []).find(function(s) { return s.id === subId; });
+  if (!sub) return;
+  const newName = window.prompt('Rename sub-phase:', sub.name);
+  if (!newName || !newName.trim() || newName.trim() === sub.name) return;
+  sub.name = newName.trim();
+  saveJobs();
+  logActivity('renamed sub-phase to "' + sub.name + '" on phase "' + phase.name + '"');
+  renderJobSubPhaseStrip(found.job, phase);
+  renderGantt();
+  renderCalendar();
+  queueSharedSync();
+}
+
+function deleteSubPhaseUI(subId) {
+  if (!editingJobId) return;
+  const found = findJob(editingJobId);
+  if (!found) return;
+  const phase = getCurrentEditingPhase(found.job);
+  const subUnits = phase.subPhases || [];
+  if (subUnits.length <= 1) { showToast('A phase needs at least one sub-phase', 'info'); return; }
+  const sub = subUnits.find(function(s) { return s.id === subId; });
+  if (!sub) return;
+  if (!window.confirm('Delete sub-phase "' + sub.name + '"? This removes its dates.')) return;
+  flushAutoSaveJobForm();
+  removePhaseSubUnit(phase, subId);
+  if ((editingSubPhaseId || null) === subId) editingSubPhaseId = phase.subPhases[0].id;
+  saveJobs();
+  logActivity('deleted sub-phase "' + sub.name + '" from phase "' + phase.name + '"');
+  renderJobFormForPhase(found.job);
+  renderGantt();
+  renderCalendar();
+  queueSharedSync();
+  showToast('Sub-phase deleted', 'success');
+}
+
 // ===== Linked Job section (Job Manager) =====
 // Only shown once the job actually exists (mirrors the phase strip's own
 // "not for the blank Add-New-Job draft" rule — nothing to link yet).
@@ -7416,7 +7608,9 @@ function addNewJob() {
   editingJobId = null;
   editingTaskId = null;
   editingPhaseId = null;
+  editingSubPhaseId = null;
   renderJobPhaseStrip(null);
+  renderJobSubPhaseStrip(null, null);
   renderJobLinkSection(null);
   openJobDrawer();
   collapseAllMobileFields();
@@ -7731,7 +7925,27 @@ function autoSaveJobForm() {
   const isNewDraft = !job;
   // A brand-new draft has no phases yet (opt-in, added afterward via the
   // phase strip once the job is real) — always editingPhaseId=null then.
-  const targetPhase = job ? getJobPhases(job).find(function(p) { return (p.id || null) === (editingPhaseId || null); }) : null;
+  // IMPORTANT: getJobPhases()/getPhaseSubUnits() always return SOMETHING
+  // (a synthetic single-entry wrapper when there's no real phases/
+  // subPhases array) so every OTHER read-only consumer can stay agnostic
+  // to whether a job is split. That wrapper is a fresh, thrown-away object
+  // each call though — writing to its .tasks only reassigns the wrapper's
+  // own property, never job.tasks/phase.tasks itself. So unlike every
+  // read-only use of these helpers elsewhere, the actual SAVE target here
+  // must only ever be a real array entry — targetPhase/targetSubUnit stay
+  // null (falling through to job.tasks) unless job.phases/phase.subPhases
+  // genuinely exist, never just because the helper always returns *a*
+  // phase-shaped object. (Bug found in review: this used to check
+  // `if (targetPhase)` — always truthy since the helper never returns
+  // null — so an unphased job's date edits silently never reached
+  // job.tasks at all.)
+  const targetPhase = (job && job.phases && job.phases.length)
+    ? getJobPhases(job).find(function(p) { return (p.id || null) === (editingPhaseId || null); })
+    : null;
+  const targetSubUnit = (targetPhase && targetPhase.subPhases && targetPhase.subPhases.length)
+    ? getPhaseSubUnits(targetPhase).find(function(s) { return (s.id || null) === (editingSubPhaseId || null); })
+    : null;
+  const taskSaveTarget = targetSubUnit || targetPhase; // null falls through to job.tasks below
 
   if (isNewDraft && !name) {
     // Waiting on a name before this draft becomes a real, shared job.
@@ -7748,7 +7962,7 @@ function autoSaveJobForm() {
     // Prior known-good value for this slot: the live phase's task if one
     // exists, otherwise whatever the grid was last rendered with (covers
     // a still-unmaterialized draft, which has no tasks yet).
-    const priorTask = (targetPhase && targetPhase.tasks && targetPhase.tasks[i]) || currentGridTasks[i] || null;
+    const priorTask = (taskSaveTarget && taskSaveTarget.tasks && taskSaveTarget.tasks[i]) || currentGridTasks[i] || null;
 
     if (col.hideFromSchedule) {
       cleanedTasks.push(priorTask ? Object.assign({}, priorTask, { columnId: col.id, order: i }) : {
@@ -7792,8 +8006,8 @@ function autoSaveJobForm() {
   if (job) {
     if (name) job.name = name; // never blank an existing job's name
     job.color = color;
-    if (targetPhase) {
-      targetPhase.tasks = cleanedTasks;
+    if (taskSaveTarget) {
+      taskSaveTarget.tasks = cleanedTasks;
     } else {
       job.tasks = cleanedTasks;
     }
