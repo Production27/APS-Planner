@@ -9966,6 +9966,18 @@ function synthesizeJobFromOrphanCard(card, boardColumns) {
   };
 }
 
+// Jobs and cards live in separate LiveMaps, pushed together but not
+// necessarily arriving in the same storage event — so a card can show up
+// slightly before its job does, which looks identical to a genuine sync
+// gap at the instant applyLiveblocksState() runs. Synthesizing (and
+// pushing) a blank replacement immediately on that first pass clobbers the
+// real job the moment it lands moments later. Giving each orphan a grace
+// period before deciding it's really gone avoids that false positive.
+// Keyed by jobId so a second pass while one's already waiting doesn't
+// stack duplicate timers.
+const ORPHAN_RECOVERY_GRACE_MS = 5000;
+const pendingOrphanRecovery = {};
+
 function applyLiveblocksState(root) {
   if (!root) return;
   const projectsMap = root.get('projects');
@@ -10105,21 +10117,36 @@ function applyLiveblocksState(root) {
           console.warn('applyLiveblocksState: dropping ' + staleCards.length + ' card(s) whose job was deliberately deleted for project ' + projectId, staleCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
           local.boardCards = local.boardCards.filter(function(c) { return staleCards.indexOf(c) === -1; });
           staleCards.forEach(function(c) { deleteCardFromShared(projectId, c.id); });
+          // Recovered/cleaned up locally — sync it back out so every other
+          // client picks up the fix too, not just this one (queueSharedSync()
+          // just arms a debounced timer, so this is safe to call from inside
+          // a storage subscription callback — no synchronous Liveblocks
+          // write here).
+          queueSharedSync();
         }
 
         if (trulyOrphaned.length) {
-          console.warn('applyLiveblocksState: recovering ' + trulyOrphaned.length + ' orphaned card(s) — jobId missing from the merged jobsMap for project ' + projectId, trulyOrphaned.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
           trulyOrphaned.forEach(function(card) {
-            local.jobs.push(synthesizeJobFromOrphanCard(card, local.boardColumns));
+            const jobId = card.jobId;
+            if (pendingOrphanRecovery[jobId]) return; // already waiting on this one
+            pendingOrphanRecovery[jobId] = setTimeout(function() {
+              delete pendingOrphanRecovery[jobId];
+              const proj = projects[projectId];
+              if (!proj) return;
+              // Re-check against live state, not the closed-over snapshot —
+              // the whole point of waiting is to let the real job (and/or a
+              // legitimate delete) land in the meantime.
+              const stillMissing = !proj.jobs.some(function(j) { return j.id === jobId; });
+              const stillTombstoned = proj.deletedIds && proj.deletedIds[String(jobId)];
+              const stillHasCard = proj.boardCards.some(function(c) { return c.id === card.id; });
+              if (!stillMissing || stillTombstoned || !stillHasCard) return;
+              console.warn('applyLiveblocksState: job ' + jobId + ' still missing ' + (ORPHAN_RECOVERY_GRACE_MS / 1000) + 's after its card arrived — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title, jobId: jobId});
+              proj.jobs.push(synthesizeJobFromOrphanCard(card, proj.boardColumns));
+              if (projectId === activeProjectId) refreshActiveProjectFromShared();
+              queueSharedSync();
+            }, ORPHAN_RECOVERY_GRACE_MS);
           });
         }
-
-        // Recovered/cleaned up locally — sync it back out so every other
-        // client picks up the fix too, not just this one (queueSharedSync()
-        // just arms a debounced timer, so this is safe to call from inside
-        // a storage subscription callback — no synchronous Liveblocks
-        // write here).
-        queueSharedSync();
       }
     }
 
