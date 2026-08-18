@@ -5593,6 +5593,7 @@ function renderGantt() {
         const labelWrap = document.createElement('div');
         labelWrap.className = 'job-span-name-wrap';
         labelWrap.dataset.jobId = job.id;
+        labelWrap.dataset.phaseId = phaseId || '';
         labelWrap.dataset.origLeft = startIdx * dayWidth;
         labelWrap.style.left = (startIdx * dayWidth) + 'px';
         labelWrap.style.width = (duration * dayWidth) + 'px';
@@ -5612,6 +5613,7 @@ function renderGantt() {
         const borderOverlay = document.createElement('div');
         borderOverlay.className = 'job-span-border';
         borderOverlay.dataset.jobId = job.id;
+        borderOverlay.dataset.phaseId = phaseId || '';
         borderOverlay.dataset.origLeft = startIdx * dayWidth;
         borderOverlay.style.left = (startIdx * dayWidth) + 'px';
         borderOverlay.style.width = (duration * dayWidth) + 'px';
@@ -5764,6 +5766,7 @@ function renderGantt() {
           const tick = document.createElement('div');
           tick.className = 'job-span-task-tick';
           tick.dataset.jobId = job.id;
+          tick.dataset.phaseId = phaseId || '';
           tick.dataset.taskId = dt.t.id;
           tick.dataset.origLeft = tickLeft;
           tick.style.left = tickLeft + 'px';
@@ -5799,6 +5802,7 @@ function renderGantt() {
             const hash = document.createElement('div');
             hash.className = 'job-span-gap-hash';
             hash.dataset.jobId = job.id;
+            hash.dataset.phaseId = phaseId || '';
             hash.dataset.origLeft = segLeft;
             hash.style.left = segLeft + 'px';
             hash.style.width = segWidth + 'px';
@@ -5814,6 +5818,7 @@ function renderGantt() {
             const solid = document.createElement('div');
             solid.className = 'job-span-task-solid';
             solid.dataset.jobId = job.id;
+            solid.dataset.phaseId = phaseId || '';
             solid.dataset.dragged = 'false';
             solid.dataset.origLeft = segLeft;
             solid.style.left = segLeft + 'px';
@@ -5841,6 +5846,7 @@ function renderGantt() {
             const hatch = document.createElement('div');
             hatch.className = 'job-span-task-hatch';
             hatch.dataset.jobId = job.id;
+            hatch.dataset.phaseId = phaseId || '';
             hatch.dataset.origLeft = segLeft;
             hatch.style.left = segLeft + 'px';
             hatch.style.width = segWidth + 'px';
@@ -6238,8 +6244,15 @@ function onBarMoveMove(e) {
   // they don't visually detach from the bar mid-drag (they otherwise only
   // catch up once renderGantt() redraws everything on drop).
   if (barMoveState.isJobSpan) {
+    // Phase-scoped: a job with phases has one condensed bar (and one set of
+    // these decorative overlays) per phase, all sharing the same jobId — so
+    // matching on jobId alone would also drag-along a sibling phase's bar
+    // that happens to sit in a different Gantt row, snapping back only once
+    // renderGantt() redraws on drop. '' matches an unphased job's overlays,
+    // consistent with how phaseId is stamped (phaseId || '') when built.
     document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap, .job-span-border').forEach(function(tk) {
       if (tk.dataset.jobId !== barMoveState.jobId) return;
+      if ((tk.dataset.phaseId || '') !== (barMoveState.phaseId || '')) return;
       tk.style.left = (parseFloat(tk.dataset.origLeft) + deltaDays * dayWidth) + 'px';
     });
   }
