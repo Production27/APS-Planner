@@ -663,6 +663,11 @@
   .job-phase-chip-edit:hover { opacity: 1; }
   .job-phase-strip-btn { padding: 5px 10px; border-radius: 14px; background: transparent; border: 1.5px dashed #c5cae9; color: var(--text-light); font-size: 12px; font-weight: 600; cursor: pointer; }
   .job-phase-strip-btn:hover { border-color: var(--primary-light); color: var(--primary-light); }
+  .job-link-active-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; background: #eef1fa; font-size: 12px; font-weight: 600; color: var(--text); }
+  body.dark-mode .job-link-active-row { background: rgba(255,255,255,0.08); }
+  .job-link-active-row .job-link-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .job-link-picker-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .job-link-picker-row select { flex: 1; min-width: 140px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 12px; }
   .field-error-hint { display: block; font-size: 11px; font-weight: 600; color: var(--danger); margin-top: 6px; }
   .job-current-board-indicator strong { color: var(--text); font-weight: 700; }
   .manager-form-area {
@@ -1156,6 +1161,24 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     pointer-events: none;
     z-index: 6;
   }
+
+  /* ===== CROSS-PROJECT LINKED JOB REFERENCE =====
+     Distinct from .ghost above: a linked reference is a real, precisely-
+     positioned row (not a loosely-overlapping translucent backdrop), just
+     read-only — so it stays legible ("real but not yours") rather than
+     nearly-invisible. Cursor stays default (not grab) since drag handlers
+     are simply never attached for these bars. */
+  .task-bar.linked-ref {
+    filter: saturate(0.55);
+    border-style: dashed !important;
+    cursor: pointer;
+  }
+  .task-row.linked-ref { background: rgba(126,87,194,0.05); }
+  body.dark-mode .task-row.linked-ref { background: rgba(126,87,194,0.12); }
+  .job-span-name-wrap.linked-ref .task-bar-job-tag,
+  .task-bar.linked-ref .task-bar-job-tag { opacity: 0.85; }
+  .job-span-border.linked-ref { border-style: dashed; }
+  .cal-event-bar.linked-ref { filter: saturate(0.55); border: 1px dashed rgba(0,0,0,0.3); cursor: pointer; }
   .ghost-toggle-btn {
     background: transparent; border: 1px solid var(--border); color: var(--text-light);
     padding: 0 10px; height: 26px; border-radius: 6px; cursor: pointer;
@@ -1812,6 +1835,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <label>Phases</label>
             <div id="jobPhaseStrip" class="job-phase-strip"></div>
           </div>
+          <div class="form-group" id="jobLinkSection" style="display:none;">
+            <label>Linked Job</label>
+            <div id="jobLinkBody"></div>
+          </div>
           <div class="form-group mobile-collapsible">
             <label onclick="toggleMobileField(this)">Tasks</label>
             <div class="mobile-field-body">
@@ -2462,7 +2489,14 @@ function flattenJobs(jobsArr, includeArchived) {
     BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
   );
   const rows = [];
-  (jobsArr || []).forEach(function(job, jobIdx) {
+  // Linked reference jobs (see getLinkedReferenceJobs()) only make sense
+  // tacked onto the active project's own list — a caller passing some
+  // other array (there currently isn't one, but just in case) gets them
+  // too, same as it always gets whatever jobsArr itself contains; skipping
+  // isLinkedReference items that show up in jobsArr already avoids ever
+  // double-adding one.
+  const combined = (jobsArr || []).concat(getLinkedReferenceJobs());
+  combined.forEach(function(job, jobIdx) {
     if (!includeArchived && job.archived) return;
     getJobPhases(job).forEach(function(phase) {
       const phaseName = phase.isDefault ? null : phase.name;
@@ -2471,8 +2505,10 @@ function flattenJobs(jobsArr, includeArchived) {
         if (hiddenOrders.has(task.order)) return;
         rows.push({job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx, phaseId: phase.id, phaseName: phaseName});
       });
-      const dueTask = getJobDueMarkerTask(job, phase.id);
-      if (dueTask) rows.push({job: job, jobIdx: jobIdx, task: dueTask, taskIdx: -1, phaseId: phase.id, phaseName: phaseName});
+      if (!job.isLinkedReference) {
+        const dueTask = getJobDueMarkerTask(job, phase.id);
+        if (dueTask) rows.push({job: job, jobIdx: jobIdx, task: dueTask, taskIdx: -1, phaseId: phase.id, phaseName: phaseName});
+      }
     });
   });
   return rows;
@@ -3656,6 +3692,96 @@ function getGhostJobs() {
   return projects[ghostProjectId].jobs || [];
 }
 
+// ===== Cross-project job links =====
+// Distinct from the ghost overlay above: a link is per-job (not
+// whole-project), synced (not a per-browser localStorage preference), and
+// renders as a real, precisely-dated row on the Gantt/Calendar — never
+// the Board — rather than a loosely-positioned translucent backdrop.
+// Stored symmetrically: linking job A (in project A) to job B (in project
+// B) writes a `.link = { jobId, projectId, enabled }` on BOTH jobs,
+// pointing at each other, with the same `enabled` value kept in sync by
+// the toggle functions below. The payoff: rendering project P only ever
+// needs to check P's own jobs for `link.enabled` and fetch the referenced
+// job — no reverse-scanning the other project, no "am I the source or
+// the target" branching anywhere else.
+function getOtherFixedProjectId(projectId) {
+  return Object.keys(projects).find(function(id) { return id !== projectId; }) || null;
+}
+
+// One entry per active-project job that has an enabled link, carrying the
+// *referenced* job's own data (tasks/phases) tagged so every render seam
+// can treat it as a normal-but-read-only row.
+function getLinkedReferenceJobs() {
+  return jobs.reduce(function(acc, job) {
+    if (!job.link || !job.link.enabled) return acc;
+    const otherProj = projects[job.link.projectId];
+    const refJob = otherProj && (otherProj.jobs || []).find(function(j) { return j.id === job.link.jobId; });
+    if (!refJob) return acc; // the other job was deleted/unlinked remotely — nothing to show
+    acc.push(Object.assign({}, refJob, {
+      isLinkedReference: true,
+      linkedFromProjectName: otherProj.name || '',
+      linkedFromProjectId: job.link.projectId
+    }));
+    return acc;
+  }, []);
+}
+
+// Read-only rows/bars for a linked reference job route clicks here instead
+// of editJob() — switches to its home project (if needed) and opens it
+// there, rather than trying to edit a job that isn't this project's own.
+function jumpToLinkedJobReference(job) {
+  if (!job.isLinkedReference || !job.linkedFromProjectId) return;
+  switchProject(job.linkedFromProjectId);
+  editJob(job.id);
+}
+
+// jobA/projectAId identify a job in the CURRENT (active) project;
+// jobBId/projectBId identify the job being linked to, which may live in
+// either project. Starts disabled — "link" and "turn on" are deliberately
+// two separate steps (see the confirmed UX).
+function linkJobs(jobA, projectAId, jobBId, projectBId) {
+  const jobB = (projects[projectBId] && projects[projectBId].jobs || []).find(function(j) { return j.id === jobBId; });
+  if (!jobB) return false;
+  jobA.link = { jobId: jobB.id, projectId: projectBId, enabled: false };
+  jobB.link = { jobId: jobA.id, projectId: projectAId, enabled: false };
+  saveJobs();
+  if (projectAId === activeProjectId) queueSharedSync(); else pushProjectToShared(projectAId);
+  if (projectBId === activeProjectId) queueSharedSync(); else pushProjectToShared(projectBId);
+  return true;
+}
+
+// Works from either side of a link — jobId/projectId can be the job the
+// user has open OR the job it's linked to, since both carry a mirrored
+// `.link` pointing at each other; only the counterpart actually needs
+// looking up.
+function setJobLinkEnabled(jobId, projectId, enabled) {
+  const proj = projects[projectId];
+  const job = proj && (proj.jobs || []).find(function(j) { return j.id === jobId; });
+  if (!job || !job.link) return;
+  const otherProj = projects[job.link.projectId];
+  const otherJob = otherProj && (otherProj.jobs || []).find(function(j) { return j.id === job.link.jobId; });
+  job.link.enabled = enabled;
+  if (otherJob && otherJob.link) otherJob.link.enabled = enabled;
+  saveJobs();
+  if (projectId === activeProjectId) queueSharedSync(); else pushProjectToShared(projectId);
+  if (job.link.projectId === activeProjectId) queueSharedSync(); else pushProjectToShared(job.link.projectId);
+}
+
+function unlinkJobById(jobId, projectId) {
+  const proj = projects[projectId];
+  const job = proj && (proj.jobs || []).find(function(j) { return j.id === jobId; });
+  if (!job || !job.link) return;
+  const otherProjectId = job.link.projectId;
+  const otherJobId = job.link.jobId;
+  const otherProj = projects[otherProjectId];
+  const otherJob = otherProj && (otherProj.jobs || []).find(function(j) { return j.id === otherJobId; });
+  delete job.link;
+  if (otherJob) delete otherJob.link;
+  saveJobs();
+  if (projectId === activeProjectId) queueSharedSync(); else pushProjectToShared(projectId);
+  if (otherProjectId === activeProjectId) queueSharedSync(); else pushProjectToShared(otherProjectId);
+}
+
 function init() {
   loadProjects();
   enforceFixedProjectSet();
@@ -4120,6 +4246,7 @@ function buildCalBarHtml(seg, left, top, width) {
   if (isDue) classes.push('due-marker');
   if (isCalEvt) classes.push('calendar-event-bar');
   if (isTimedCalEvt) classes.push('timed-style');
+  if (job.isLinkedReference) classes.push('linked-ref');
   classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
   classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
   if (isTaskFinished(job, task)) classes.push('finished');
@@ -4127,7 +4254,10 @@ function buildCalBarHtml(seg, left, top, width) {
   const barColor = task.color || job.color || '#3949ab';
   const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') : ('background:' + barColor + ';');
 
-  const dragHandles = isDue ? '' :
+  // Read-only: no drag handles for a linked reference — its real data
+  // lives in, and can only be edited from, its home project. Clicking it
+  // still works (handleCalBarMouseDown routes that to jumpToLinkedJobReference).
+  const dragHandles = (isDue || job.isLinkedReference) ? '' :
     '<div class="cal-bar-drag-left" data-drag="left"></div>' +
     '<div class="cal-bar-drag-body" data-drag="move"></div>' +
     '<div class="cal-bar-drag-right" data-drag="right"></div>';
@@ -4139,12 +4269,13 @@ function buildCalBarHtml(seg, left, top, width) {
     const timeLabel = formatTimeLabel(task.time);
     content = (timeLabel ? '<span class="cal-event-time">' + escapeHtml(timeLabel) + '</span>' : '') + escapeHtml(task.name);
   } else {
-    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : job.name + (seg.phaseName ? ' — ' + seg.phaseName : '');
+    const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
+    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : linkGlyph + job.name + (seg.phaseName ? ' — ' + seg.phaseName : '');
     content = escapeHtml(task.name) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '');
   }
 
   return '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; ' + styleExtra + '" title="' +
-    escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name) + (seg.phaseName ? ' — ' + escapeHtml(seg.phaseName) : '')) + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-phase-id="' + (seg.phaseId || '') + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
+    escapeHtml(task.name) + (isCalEvt ? '' : ' — ' + escapeHtml(job.name) + (seg.phaseName ? ' — ' + escapeHtml(seg.phaseName) : '')) + (job.isLinkedReference ? ' (linked, read-only — click to open in ' + escapeHtml(job.linkedFromProjectName || 'its project') + ')' : '') + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-phase-id="' + (seg.phaseId || '') + '" data-cal-linked="' + (job.isLinkedReference ? '1' : '') + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '">' +
     dragHandles + content + '</div>';
 }
 
@@ -4156,7 +4287,7 @@ function computeDateRange() {
     BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
   );
   let datedTasks = [];
-  jobs.forEach(function(job) {
+  jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
     getJobPhases(job).forEach(function(phase) {
       (phase.tasks || []).forEach(function(task) {
         if (hiddenOrders.has(task.order)) return;
@@ -4169,8 +4300,10 @@ function computeDateRange() {
       // A due date can sit outside every task's date range (e.g. set well
       // past the last task's finish) — without this the marker could fall
       // off the edge of the chart entirely, with no grid to scroll into.
-      const dueTask = getJobDueMarkerTask(job, phase.id);
-      if (dueTask) datedTasks.push(dueTask);
+      if (!job.isLinkedReference) {
+        const dueTask = getJobDueMarkerTask(job, phase.id);
+        if (dueTask) datedTasks.push(dueTask);
+      }
     });
   });
   getGhostJobs().forEach(function(job) {
@@ -4827,6 +4960,17 @@ function handleCalBarMouseDown(e) {
   e.preventDefault();
   const jobId = bar.dataset.calJobId;
   const taskId = bar.dataset.calTaskId;
+
+  // Read-only: a linked reference job's id only exists in its home
+  // project's jobs array, not this one's — findTask()/findJob() below
+  // would find nothing and silently no-op the click. Jump straight to its
+  // home project instead of trying to set up a drag for it.
+  if (bar.dataset.calLinked === '1') {
+    const refJob = getLinkedReferenceJobs().find(function(j) { return j.id === jobId; });
+    if (refJob) jumpToLinkedJobReference(refJob);
+    return;
+  }
+
   let task, job, calEventId = null, calEventSourceDate = null, phaseId = bar.dataset.calPhaseId || null;
   if (taskId === DUE_MARKER_TASK_ID) {
     const jf = findJob(jobId);
@@ -5357,7 +5501,7 @@ function renderGantt() {
       BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
     );
     const rows = [];
-    jobs.forEach(function(job) {
+    jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
       if (!showArchived && job.archived) return;
       getJobPhases(job).forEach(function(phase) {
         const phaseName = phase.isDefault ? null : phase.name;
@@ -5370,8 +5514,12 @@ function renderGantt() {
           if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
           rows.push({ job: job, task: task, phaseId: phase.id, phaseName: phaseName });
         });
-        const dueTask = getJobDueMarkerTask(job, phase.id);
-        if (dueTask) rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName });
+        // A linked reference job's due marker lives on a card in ITS OWN
+        // project, not this one's boardCards — nothing to fetch here.
+        if (!job.isLinkedReference) {
+          const dueTask = getJobDueMarkerTask(job, phase.id);
+          if (dueTask) rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName });
+        }
       });
     });
     rows.sort(function(a, b) {
@@ -5394,9 +5542,13 @@ function renderGantt() {
       BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
     );
     const rows = [];
-    jobs.forEach(function(job) {
+    jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
       if (!showArchived && job.archived) return;
-      const leadName = ganttViewMode === 'leads' ? getJobLeadName(job) : null;
+      // getJobLeadName() reads the job's own card (Foreman custom field),
+      // which for a linked reference job lives in the OTHER project's
+      // boardCards, not this one's — falls back to "Unassigned" rather
+      // than crashing; acceptable for a read-only cross-project preview.
+      const leadName = ganttViewMode === 'leads' && !job.isLinkedReference ? getJobLeadName(job) : null;
       getJobPhases(job).forEach(function(phase) {
         let minStart = null, maxFinish = null;
         (phase.tasks || []).forEach(function(task) {
@@ -5524,7 +5676,7 @@ function renderGantt() {
       const noteDot = task.notes ? '<span class="note-dot" title="Has notes"></span>' : '';
 
       const row = document.createElement('div');
-      row.className = 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '');
+      row.className = 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '') + (job.isLinkedReference ? ' linked-ref' : '');
       row.dataset.jobId = job.id;
       row.dataset.taskId = task.id;
       // Jobs view: the job-name pill already says everything there is to
@@ -5541,13 +5693,14 @@ function renderGantt() {
       // so it survives truncation even when the job name pill after it
       // doesn't; the row's title attribute carries the untruncated
       // "Job — Phase" text as a hover fallback either way.
+      const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
       const mainLabel = task.isJobSpan
-        ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : (phaseName ? escapeHtml(phaseName) : ''))
-        : (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + (phaseName ? ' (' + escapeHtml(phaseName) + ')' : '');
-      const jobPill = '<span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + '</span>';
-      row.title = job.name + (phaseName ? ' — ' + phaseName : '');
+        ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : (phaseName ? linkGlyph + escapeHtml(phaseName) : (linkGlyph ? linkGlyph.trim() : '')))
+        : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + (phaseName ? ' (' + escapeHtml(phaseName) + ')' : '');
+      const jobPill = '<span class="task-row-jobname" style="background:' + (job.color || '#999') + ';">' + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
+      row.title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '');
       row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobPill + noteDot + '</div>';
-      row.addEventListener('click', () => { editJob(job.id, phaseId); });
+      row.addEventListener('click', () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId); });
       leftBody.appendChild(row);
       visibleRowIdx++;
     }
@@ -5627,7 +5780,7 @@ function renderGantt() {
         // individual day-segments built below.
         bar.classList.add('job-span-bar');
         const labelWrap = document.createElement('div');
-        labelWrap.className = 'job-span-name-wrap';
+        labelWrap.className = 'job-span-name-wrap' + (job.isLinkedReference ? ' linked-ref' : '');
         labelWrap.dataset.jobId = job.id;
         labelWrap.dataset.phaseId = phaseId || '';
         labelWrap.dataset.origLeft = startIdx * dayWidth;
@@ -5637,7 +5790,7 @@ function renderGantt() {
         const jobTag = document.createElement('span');
         jobTag.className = 'task-bar-job-tag';
         jobTag.style.background = job.color || '#999';
-        jobTag.textContent = job.name + (phaseName ? ' — ' + phaseName : '');
+        jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseName ? ' — ' + phaseName : '');
         jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '');
         labelWrap.appendChild(jobTag);
         grid.appendChild(labelWrap);
@@ -5647,7 +5800,7 @@ function renderGantt() {
         // stays visible on top of the day-segments instead of being
         // painted over by them.
         const borderOverlay = document.createElement('div');
-        borderOverlay.className = 'job-span-border';
+        borderOverlay.className = 'job-span-border' + (job.isLinkedReference ? ' linked-ref' : '');
         borderOverlay.dataset.jobId = job.id;
         borderOverlay.dataset.phaseId = phaseId || '';
         borderOverlay.dataset.origLeft = startIdx * dayWidth;
@@ -5728,19 +5881,24 @@ function renderGantt() {
           const jobTag = document.createElement('span');
           jobTag.className = 'task-bar-job-tag';
           jobTag.style.background = job.color;
-          jobTag.textContent = job.name + (phaseName ? ' — ' + phaseName : '');
+          jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseName ? ' — ' + phaseName : '');
           jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '');
           bar.appendChild(jobTag);
         }
       }
+      if (job.isLinkedReference) bar.classList.add('linked-ref');
       bar.addEventListener('mouseenter', e => showTooltip(e, job, task));
       bar.addEventListener('mouseleave', hideTooltip);
       bar.addEventListener('mousemove', moveTooltip);
       bar.addEventListener('click', () => {
         if (bar.dataset.dragged === 'true') { bar.dataset.dragged = 'false'; return; }
-        editJob(job.id, phaseId);
+        if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId);
       });
 
+      // Read-only: a linked reference job's bar is never draggable/
+      // resizable — its real data lives in, and can only be edited from,
+      // its home project (see the "Interactivity" decision in the plan).
+      if (!job.isLinkedReference) {
       if (task.isJobSpan) {
         // Condensed 'jobs'/'leads' bar: dragging it moves every one of the
         // phase's real tasks by the same number of days (see the isJobSpan
@@ -5768,6 +5926,7 @@ function renderGantt() {
           bar.appendChild(handleRight);
         }
       }
+      }
 
       grid.appendChild(bar);
 
@@ -5784,7 +5943,12 @@ function renderGantt() {
       // finish date (except the last, which already coincides with the
       // bar's own right edge) so phase boundaries stay visible even
       // between two same-colored/adjacent tasks.
-      if (task.isJobSpan) {
+      // Skipped entirely for a linked reference — there's no single task
+      // to individually grab/resize on a read-only bar, so the day-by-day
+      // breakdown below (only useful for picking out one draggable task
+      // segment from another) has nothing to offer; the plain outline+
+      // label from the isJobSpan branch above is enough.
+      if (task.isJobSpan && !job.isLinkedReference) {
         const jobEndIdx = startIdx + duration - 1;
         const spanPhase = getJobPhases(job).find(function(p) { return (p.id || null) === (phaseId || null); });
         const datedTasks = ((spanPhase && spanPhase.tasks) || []).map(function(t) {
@@ -6789,6 +6953,7 @@ function refreshJobFormIfOpen(jobId) {
   const phase = getJobPhases(job).find(function(p) { return (p.id || null) === (editingPhaseId || null); }) || getJobPhases(job)[0];
   editingPhaseId = phase.id || null;
   renderJobPhaseStrip(job);
+  renderJobLinkSection(job);
   renderFixedTaskGrid(phase.tasks);
   const card = getPhaseCard(job, editingPhaseId);
   if (!card) return;
@@ -7020,6 +7185,7 @@ function renderJobFormForPhase(job) {
   const phase = getJobPhases(job).find(function(p) { return (p.id || null) === (editingPhaseId || null); }) || getJobPhases(job)[0];
   editingPhaseId = phase.id || null;
   renderJobPhaseStrip(job);
+  renderJobLinkSection(job);
   ensureJobTasksMatchColumns(job);
   renderFixedTaskGrid(phase.tasks);
   updateJobCurrentBoardIndicator(job, editingPhaseId);
@@ -7140,6 +7306,99 @@ function deleteJobPhaseUI(phaseId) {
   showToast('Phase deleted', 'success');
 }
 
+// ===== Linked Job section (Job Manager) =====
+// Only shown once the job actually exists (mirrors the phase strip's own
+// "not for the blank Add-New-Job draft" rule — nothing to link yet).
+let jobLinkPickerOpen = false;
+
+function renderJobLinkSection(job) {
+  const section = document.getElementById('jobLinkSection');
+  const body = document.getElementById('jobLinkBody');
+  if (!section || !body) return;
+  if (!job) { section.style.display = 'none'; jobLinkPickerOpen = false; return; }
+  section.style.display = 'block';
+
+  if (job.link) {
+    const otherProj = projects[job.link.projectId];
+    const otherJob = otherProj && (otherProj.jobs || []).find(function(j) { return j.id === job.link.jobId; });
+    const label = otherJob ? otherJob.name : 'Unknown job';
+    const projLabel = otherProj ? otherProj.name : '';
+    body.innerHTML = '<div class="job-link-active-row">' +
+      '<span class="job-link-name" title="' + escapeHtml(label + (projLabel ? ' (' + projLabel + ')' : '')) + '">🔗 ' + escapeHtml(label) + (projLabel ? ' <span style="opacity:0.65;">(' + escapeHtml(projLabel) + ')</span>' : '') + '</span>' +
+      '<span class="board-col-gantt-switch' + (job.link.enabled ? ' on' : '') + '" onclick="toggleJobLinkEnabledUI()" title="Show on the other project\'s Gantt & Calendar"><span class="knob"></span></span>' +
+      '<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="unlinkJobUI()">Unlink</button>' +
+      '</div>';
+    return;
+  }
+
+  const otherProjectId = getOtherFixedProjectId(activeProjectId);
+  const otherProj = otherProjectId ? projects[otherProjectId] : null;
+  const otherProjName = otherProj ? otherProj.name : 'other project';
+
+  if (!jobLinkPickerOpen) {
+    body.innerHTML = '<button type="button" class="job-phase-strip-btn" onclick="openJobLinkPickerUI()">+ Link to ' + escapeHtml(otherProjName) + ' job</button>';
+    return;
+  }
+
+  const otherJobs = (otherProj && otherProj.jobs || []).filter(function(j) { return !j.archived; });
+  const options = otherJobs.map(function(j) { return '<option value="' + j.id + '">' + escapeHtml(j.name) + '</option>'; }).join('');
+  body.innerHTML = '<div class="job-link-picker-row">' +
+    '<select id="jobLinkPickerSelect">' + (options || '<option value="">No jobs available</option>') + '</select>' +
+    '<button type="button" class="btn btn-primary" style="padding:5px 12px;font-size:11px;" onclick="confirmJobLinkUI(\'' + otherProjectId + '\')"' + (otherJobs.length ? '' : ' disabled') + '>Link</button>' +
+    '<button type="button" class="btn btn-secondary" style="padding:5px 12px;font-size:11px;" onclick="cancelJobLinkPickerUI()">Cancel</button>' +
+    '</div>';
+}
+
+function openJobLinkPickerUI() {
+  jobLinkPickerOpen = true;
+  const found = editingJobId && findJob(editingJobId);
+  if (found) renderJobLinkSection(found.job);
+}
+
+function cancelJobLinkPickerUI() {
+  jobLinkPickerOpen = false;
+  const found = editingJobId && findJob(editingJobId);
+  if (found) renderJobLinkSection(found.job);
+}
+
+function confirmJobLinkUI(otherProjectId) {
+  const found = editingJobId && findJob(editingJobId);
+  if (!found) return;
+  const select = document.getElementById('jobLinkPickerSelect');
+  const otherJobId = select && select.value;
+  if (!otherJobId) return;
+  const ok = linkJobs(found.job, activeProjectId, otherJobId, otherProjectId);
+  jobLinkPickerOpen = false;
+  if (!ok) { showToast('Could not link — that job may have been deleted', 'error'); return; }
+  logActivity('linked job "' + found.job.name + '" to another project\'s job');
+  renderJobLinkSection(found.job);
+  showToast('Jobs linked — turn on the switch to show it on both schedules', 'success');
+}
+
+function toggleJobLinkEnabledUI() {
+  const found = editingJobId && findJob(editingJobId);
+  if (!found || !found.job.link) return;
+  const newState = !found.job.link.enabled;
+  setJobLinkEnabled(found.job.id, activeProjectId, newState);
+  logActivity((newState ? 'enabled' : 'disabled') + ' link for job "' + found.job.name + '"');
+  renderJobLinkSection(found.job);
+  renderGantt();
+  renderCalendar();
+  showToast(newState ? 'Link turned on' : 'Link turned off', 'success');
+}
+
+function unlinkJobUI() {
+  const found = editingJobId && findJob(editingJobId);
+  if (!found || !found.job.link) return;
+  if (!window.confirm('Unlink this job? It will no longer show on the other project\'s schedule.')) return;
+  unlinkJobById(found.job.id, activeProjectId);
+  logActivity('unlinked job "' + found.job.name + '"');
+  renderJobLinkSection(found.job);
+  renderGantt();
+  renderCalendar();
+  showToast('Jobs unlinked', 'info');
+}
+
 // The job drawer (#formArea) slides in over whichever of Gantt/Board/
 // Calendar is currently active — see the .manager-form-area/.open CSS.
 // Opening/closing it is separate from jobForm's own display toggle (which
@@ -7158,6 +7417,7 @@ function addNewJob() {
   editingTaskId = null;
   editingPhaseId = null;
   renderJobPhaseStrip(null);
+  renderJobLinkSection(null);
   openJobDrawer();
   collapseAllMobileFields();
   document.getElementById('jobForm').style.display = 'block';
@@ -7577,7 +7837,7 @@ function autoSaveJobForm() {
   syncCardColumns();
   renderBoard();
   updateJobCurrentBoardIndicator(job, editingPhaseId);
-  if (justCreated) renderJobPhaseStrip(job);
+  if (justCreated) { renderJobPhaseStrip(job); renderJobLinkSection(job); }
 
   if (justCreated) {
     // These previously only appeared after the explicit Save Job click —
