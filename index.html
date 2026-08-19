@@ -8944,18 +8944,32 @@ async function loadUsersList() {
 }
 
 async function addUserUI() {
-  const username = (window.prompt('New username (letters, numbers, . _ - only):') || '').trim();
-  if (!username) return;
-  const password = window.prompt('Password for this account (at least 6 characters):') || '';
-  if (!password) return;
+  const usernameRaw = window.prompt('New username (letters, numbers, . _ - only):');
+  if (usernameRaw === null) { showToast('Cancelled — no user added', 'info'); return; }
+  const username = usernameRaw.trim();
+  if (!username) { showToast('Cancelled — no username entered', 'info'); return; }
+
+  const passwordRaw = window.prompt('Password for this account (at least 6 characters):');
+  if (passwordRaw === null) { showToast('Cancelled — no user added', 'info'); return; }
+  if (!passwordRaw) { showToast('Cancelled — no password entered', 'info'); return; }
+
   const displayName = (window.prompt('Display name (shown on comments/activity):', username) || username).trim();
-  const isAdmin = window.confirm('Should ' + displayName + ' be an admin (can manage other users)?\n\nOK = Admin, Cancel = Member');
+
+  // A plain confirm()'s Cancel button reads as "abort the whole thing" to
+  // most people, not "pick the other option" — using it to double as a
+  // role picker was the source of a real bug report (cancelling to mean
+  // "member" looked identical to the account silently failing to add).
+  // A typed answer with an unambiguous default avoids that: leaving it
+  // blank (or cancelling) means member, not "nothing happens."
+  const roleRaw = window.prompt('Role — type "admin" for an admin account, or leave blank for a regular member:', '');
+  const isAdmin = (roleRaw || '').trim().toLowerCase() === 'admin';
+
   try {
     await postUsersEndpoint('users/add', {
-      newUsername: username, newPassword: password, newDisplayName: displayName, newRole: isAdmin ? 'admin' : 'member'
+      newUsername: username, newPassword: passwordRaw, newDisplayName: displayName, newRole: isAdmin ? 'admin' : 'member'
     });
     logActivity('added user account "' + displayName + '"');
-    showToast('User added', 'success');
+    showToast('User added (' + (isAdmin ? 'admin' : 'member') + ')', 'success');
     loadUsersList();
   } catch (err) {
     showToast('Could not add user: ' + err.message, 'error');
@@ -8964,7 +8978,8 @@ async function addUserUI() {
 
 async function resetUserPasswordUI(username, displayName) {
   const newPassword = window.prompt('New password for ' + displayName + ' (at least 6 characters):');
-  if (!newPassword) return;
+  if (newPassword === null) { showToast('Cancelled — password not changed', 'info'); return; }
+  if (!newPassword) { showToast('Cancelled — no password entered', 'info'); return; }
   try {
     await postUsersEndpoint('users/reset-password', { targetUsername: username, newPassword: newPassword });
     logActivity('reset password for user "' + displayName + '"');
@@ -8975,7 +8990,10 @@ async function resetUserPasswordUI(username, displayName) {
 }
 
 async function removeUserUI(username, displayName) {
-  if (!window.confirm('Remove the account for "' + displayName + '"? They\'ll need a new account to sync again.')) return;
+  if (!window.confirm('Remove the account for "' + displayName + '"? They\'ll need a new account to sync again.')) {
+    showToast('Cancelled — user not removed', 'info');
+    return;
+  }
   try {
     await postUsersEndpoint('users/remove', { targetUsername: username });
     logActivity('removed user account "' + displayName + '"');
@@ -8995,7 +9013,8 @@ async function changeMyPasswordUI() {
     return;
   }
   const newPassword = window.prompt('New password (at least 6 characters):');
-  if (!newPassword) return;
+  if (newPassword === null) { showToast('Cancelled — password not changed', 'info'); return; }
+  if (!newPassword) { showToast('Cancelled — no password entered', 'info'); return; }
   try {
     await postUsersEndpoint('users/reset-password', { targetUsername: username, newPassword: newPassword });
     localStorage.setItem(USER_PASSWORD_KEY, newPassword);
