@@ -892,7 +892,12 @@ export class ApsRoom {
       return;
     }
     if (result.rejected) {
+      // The rejecting client applied its edit optimistically (this app has
+      // always worked that way) before finding out the server already had
+      // something newer — send fresh data immediately rather than leaving
+      // their local view wrong until the next unrelated broadcast.
       ws.send(JSON.stringify(Object.assign({ type: 'rejected', msgId: msg.msgId }, result.rejected)));
+      ws.send(JSON.stringify(Object.assign({ type: 'snapshot' }, this.roomState)));
       return;
     }
     if (result.ack) ws.send(JSON.stringify(result.ack));

@@ -163,7 +163,14 @@ class ApsRoom {
     }
 
     if (result.rejected) {
+      // The rejecting client applied its edit optimistically (this app has
+      // always worked that way — local state updates immediately, sync
+      // happens in the background) before finding out the server already
+      // had something newer. Their local view is now wrong until they get
+      // fresh data — send it immediately rather than leaving them stale
+      // until the next unrelated snapshot broadcast happens to correct it.
       ws.send(JSON.stringify(Object.assign({ type: 'rejected', msgId: msg.msgId }, result.rejected)));
+      ws.send(JSON.stringify(Object.assign({ type: 'snapshot' }, this.roomState)));
       return;
     }
 
