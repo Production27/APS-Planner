@@ -9893,6 +9893,49 @@ function deleteJobChecklistItem(id) {
   flushAutoSaveJobForm();
 }
 
+// ----- Attachment storage (R2, via the Worker) -----
+// Files upload to R2 (attachments/<uuid>.<ext>) instead of being embedded
+// as inline base64 — a single job/card object staying small regardless of
+// how many photos/PDFs get attached to it matters a lot now that the
+// whole project gets pushed/broadcast as one message on every routine
+// save (see pushProjectToShared() in the sync rewrite). Existing
+// attachments from before this migration still carry `dataUrl` instead of
+// `key` — attachmentSrc() below renders either shape so nothing already
+// attached silently breaks.
+const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25MB — was 3MB when attachments lived inline in localStorage; R2 has no such pressure
+
+function attachmentDownloadUrl(key) {
+  const { username, password } = ensureUserCredentials(false);
+  return LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/download?username=' + encodeURIComponent(username) +
+    '&password=' + encodeURIComponent(password) + '&key=' + encodeURIComponent(key);
+}
+function attachmentSrc(att) {
+  return att.key ? attachmentDownloadUrl(att.key) : (att.dataUrl || '');
+}
+
+async function uploadAttachmentFile(file) {
+  const { username, password } = ensureUserCredentials(false);
+  const url = LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/upload?username=' + encodeURIComponent(username) +
+    '&password=' + encodeURIComponent(password) + '&name=' + encodeURIComponent(file.name) +
+    '&type=' + encodeURIComponent(file.type || 'application/octet-stream');
+  const res = await fetch(url, { method: 'POST', body: file });
+  if (!res.ok) throw new Error('Upload failed: ' + res.status);
+  return res.json(); // { key, name }
+}
+
+// Best-effort, fire-and-forget — a failed cleanup leaves an orphaned R2
+// object (harmless, just unused storage) rather than blocking the user's
+// actual intent (removing the attachment from the job/card).
+function deleteAttachmentFile(key) {
+  if (!key) return;
+  const { username, password } = ensureUserCredentials(false);
+  fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username, password: password, key: key })
+  }).catch(function(err) { console.error('Failed to delete attachment file ' + key, err); });
+}
+
 function renderJobAttachments() {
   const container = document.getElementById('jmAttachmentItems');
   if (!container) return;
@@ -9901,11 +9944,12 @@ function renderJobAttachments() {
     return;
   }
   container.innerHTML = jmDraftAttachments.map(att => {
+    const src = attachmentSrc(att);
     const thumb = att.isImage
-      ? '<img class="att-thumb" src="' + att.dataUrl + '">'
+      ? '<img class="att-thumb" src="' + src + '">'
       : '<div class="att-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
     return '<div class="attachment-item">' +
-      '<a href="' + att.dataUrl + '" download="' + escapeHtml(att.name) + '" target="_blank" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;">' +
+      '<a href="' + src + '" download="' + escapeHtml(att.name) + '" target="_blank" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;">' +
       thumb +
       '<div class="att-info"><span class="att-name">' + escapeHtml(att.name) + '</span><span class="att-size">' + formatFileSize(att.size) + '</span></div>' +
       '</a>' +
@@ -9916,30 +9960,33 @@ function renderJobAttachments() {
 
 function handleJobAttachmentUpload(e) {
   const files = Array.from(e.target.files || []);
-  const MAX_SIZE = 3 * 1024 * 1024; // 3MB — keep localStorage happy
-  files.forEach(file => {
-    if (file.size > MAX_SIZE) {
-      showToast('"' + file.name + '" is too large (max 3MB)', 'error');
+  files.forEach(function(file) {
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      showToast('"' + file.name + '" is too large (max 25MB)', 'error');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = function(evt) {
+    const localId = Date.now() + Math.random();
+    uploadAttachmentFile(file).then(function(result) {
       jmDraftAttachments.push({
-        id: Date.now() + Math.random(),
+        id: localId,
         name: file.name,
         size: file.size,
         isImage: file.type.startsWith('image/'),
-        dataUrl: evt.target.result
+        key: result.key
       });
       renderJobAttachments();
       flushAutoSaveJobForm();
-    };
-    reader.readAsDataURL(file);
+    }).catch(function(err) {
+      console.error('Job attachment upload failed', err);
+      showToast('"' + file.name + '" failed to upload — ' + err.message, 'error');
+    });
   });
   e.target.value = '';
 }
 
 function removeJobAttachment(id) {
+  const att = jmDraftAttachments.find(function(a) { return a.id === id; });
+  if (att && att.key) deleteAttachmentFile(att.key);
   jmDraftAttachments = jmDraftAttachments.filter(a => a.id !== id);
   renderJobAttachments();
   flushAutoSaveJobForm();
@@ -10144,11 +10191,12 @@ function renderAttachments() {
     return;
   }
   container.innerHTML = draftAttachments.map(att => {
+    const src = attachmentSrc(att);
     const thumb = att.isImage
-      ? '<img class="att-thumb" src="' + att.dataUrl + '">'
+      ? '<img class="att-thumb" src="' + src + '">'
       : '<div class="att-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
     return '<div class="attachment-item">' +
-      '<a href="' + att.dataUrl + '" download="' + escapeHtml(att.name) + '" target="_blank" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;">' +
+      '<a href="' + src + '" download="' + escapeHtml(att.name) + '" target="_blank" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;">' +
       thumb +
       '<div class="att-info"><span class="att-name">' + escapeHtml(att.name) + '</span><span class="att-size">' + formatFileSize(att.size) + '</span></div>' +
       '</a>' +
@@ -10165,30 +10213,33 @@ function formatFileSize(bytes) {
 
 function handleAttachmentUpload(e) {
   const files = Array.from(e.target.files || []);
-  const MAX_SIZE = 3 * 1024 * 1024; // 3MB — keep localStorage happy
-  files.forEach(file => {
-    if (file.size > MAX_SIZE) {
-      showToast('"' + file.name + '" is too large (max 3MB)', 'error');
+  files.forEach(function(file) {
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      showToast('"' + file.name + '" is too large (max 25MB)', 'error');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = function(evt) {
+    const localId = Date.now() + Math.random();
+    uploadAttachmentFile(file).then(function(result) {
       draftAttachments.push({
-        id: Date.now() + Math.random(),
+        id: localId,
         name: file.name,
         size: file.size,
         isImage: file.type.startsWith('image/'),
-        dataUrl: evt.target.result
+        key: result.key
       });
       renderAttachments();
       flushCardAutosave();
-    };
-    reader.readAsDataURL(file);
+    }).catch(function(err) {
+      console.error('Attachment upload failed', err);
+      showToast('"' + file.name + '" failed to upload — ' + err.message, 'error');
+    });
   });
   e.target.value = '';
 }
 
 function removeAttachment(id) {
+  const att = draftAttachments.find(function(a) { return a.id === id; });
+  if (att && att.key) deleteAttachmentFile(att.key);
   draftAttachments = draftAttachments.filter(a => a.id !== id);
   renderAttachments();
   flushCardAutosave();
