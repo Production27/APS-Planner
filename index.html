@@ -3838,7 +3838,12 @@ function saveBoardColumns() { saveActiveProject(); pushBoardColumnsToShared(acti
 function saveBoardCards() { ensureCardIds(boardCards); saveActiveProject(); queueSharedSync(); }
 function saveCalendarEvents() { ensureCalendarEventIds(calendarEvents); saveActiveProject(); queueSharedSync(); }
 function saveFieldOptions() { saveActiveProject(); pushFieldOptionsToShared(activeProjectId); }
-function saveHeader() { saveActiveProject(); logActivity('updated header'); queueSharedSync(); }
+// Uses the staleness-protected setHeader path (pushHeaderToShared), not
+// the routine queueSharedSync() batch — the batch's header field has no
+// revision check, so a snapshot arriving before it's acked could revert
+// this edit back to whatever the server had before (see the comment on
+// applyRoomSnapshot()'s header merge).
+function saveHeader() { saveActiveProject(); logActivity('updated header'); pushHeaderToShared(activeProjectId); }
 
 // ===== GHOST OVERLAY =====
 let ghostProjectId = null;
@@ -4234,7 +4239,12 @@ function applyTheme() {
   closeThemeModal();
   showToast('Header color updated', 'success');
   logActivity('changed header theme');
-  queueSharedSync();
+  // saveActiveProject() picks the new theme up from localStorage (via
+  // getSavedTheme()) into proj.header, then the staleness-protected
+  // setHeader path (not the routine batch's unprotected header field)
+  // actually pushes it — see the comment on saveHeader() above.
+  saveActiveProject();
+  pushHeaderToShared(activeProjectId);
 }
 
 function resetThemeDefault() {
@@ -4243,7 +4253,8 @@ function resetThemeDefault() {
   closeThemeModal();
   showToast('Header reset to default', 'info');
   logActivity('reset header theme to default');
-  queueSharedSync();
+  saveActiveProject();
+  pushHeaderToShared(activeProjectId);
 }
 
 // ===== HEADER BACKGROUND PHOTO =====
@@ -11186,8 +11197,12 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
     // ── fields ──
     if (remoteFieldOpts) local.fieldOptions = Object.assign({}, local.fieldOptions, remoteFieldOpts);
 
-    // ── header ──
-    if (remoteHeader) {
+    // ── header ── same race this project's jobs/cards/events are guarded
+    // against above: a snapshot arriving while our own header edit (title,
+    // subtitle, or theme/color) is still in flight could otherwise revert
+    // it to whatever the server had before that edit landed — reported
+    // live as "changing the header color defaults back to red."
+    if (remoteHeader && !projectSyncPending) {
       if (typeof remoteHeader.title === 'string') local.header.title = remoteHeader.title;
       if (typeof remoteHeader.subtitle === 'string') local.header.subtitle = remoteHeader.subtitle;
       if (remoteHeader.theme) local.header.theme = remoteHeader.theme;
@@ -11447,6 +11462,10 @@ function pushBoardColumnsToShared(projectId) {
 function pushFieldOptionsToShared(projectId) {
   const proj = projects[projectId];
   if (proj) pushFieldToShared(projectId, 'fieldOptions', proj.fieldOptions);
+}
+function pushHeaderToShared(projectId) {
+  const proj = projects[projectId];
+  if (proj) pushFieldToShared(projectId, 'header', proj.header);
 }
 
 function logActivity(actionText) {
