@@ -462,6 +462,12 @@
     position: absolute; height: 26px; display: flex; align-items: center;
     padding: 0 8px; overflow: hidden; z-index: 70; pointer-events: none;
   }
+  /* A collapsible row's name tag opts back into pointer events on just
+     itself (not the whole wrap) so it's clickable to toggle collapse —
+     same affordance as the left-panel name pill — without blocking the
+     bar underneath from being dragged everywhere else on the wrap. */
+  .task-bar-job-tag.collapsible { pointer-events: auto; cursor: pointer; }
+  .task-bar-job-tag.collapsible:hover { filter: brightness(1.15); }
   /* Outline around the whole condensed span in the job's own color — the
      topmost overlay on the row (above the name pill's z-index 70) so it
      frames everything else instead of being painted over by it. */
@@ -6005,10 +6011,20 @@ function renderGantt() {
         labelWrap.style.width = (duration * dayWidth) + 'px';
         labelWrap.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
         const jobTag = document.createElement('span');
-        jobTag.className = 'task-bar-job-tag';
+        jobTag.className = 'task-bar-job-tag' + (entry.collapsible ? ' collapsible' : '');
         jobTag.style.background = job.color || '#999';
-        jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
-        jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+        const barCollapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? '▸ ' : '▾ ') : '';
+        jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + barCollapseGlyph + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
+        jobTag.title = (entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? 'Click to expand sub-phases — ' : 'Click to collapse sub-phases into one bar — ') : '') +
+          job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+        // The on-bar name tag gets the same collapse toggle as the
+        // left-panel pill (see the .collapsible CSS above for the
+        // pointer-events opt-in) — stopPropagation so it toggles instead of
+        // also starting a whole-bar drag or falling through to editJob.
+        if (entry.collapsible) {
+          jobTag.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+          jobTag.addEventListener('click', function(e) { e.stopPropagation(); togglePhaseCollapse(phaseId); });
+        }
         labelWrap.appendChild(jobTag);
         grid.appendChild(labelWrap);
 
