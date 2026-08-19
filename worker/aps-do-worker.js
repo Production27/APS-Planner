@@ -123,6 +123,68 @@ function handleUpsertCalendarEvent(project, msg) {
   return { project: next, changed: true };
 }
 
+// The client's routine (debounced) save batches every job/card/calendar-
+// event in the active project into ONE message rather than one per item —
+// keeps a save touching a few dozen items down to one storage write and
+// one broadcast instead of dozens of each. Each item inside still gets
+// its own independent staleness check. header is intentionally NOT
+// staleness-protected here (unlike setBoardColumns/setFieldOptions/
+// setHeader's baseFieldRevision) — see worker/aps-room-state.js's fuller
+// comment on this function for why that's a deliberate, known, low-
+// priority gap carried over from the pre-migration behavior rather than
+// something newly introduced.
+function handleUpsertProjectBatch(project, msg) {
+  let next = project;
+  let changed = false;
+  function ensureCloned() { if (next === project) next = cloneRoomState({ projects: { p: next } }).projects.p; }
+
+  if (typeof msg.name === 'string' && msg.name !== next.name) {
+    ensureCloned();
+    next.name = msg.name;
+    changed = true;
+  }
+
+  (msg.jobs || []).forEach(function (job) {
+    if (!job || !job.id) return;
+    if (next.deletedIds[job.id]) return;
+    const existing = next.jobs[job.id];
+    if (existing && (existing.updatedAt || 0) > (job.updatedAt || 0)) return;
+    ensureCloned();
+    next.jobs[job.id] = job;
+    changed = true;
+  });
+
+  (msg.boardCards || []).forEach(function (card) {
+    if (!card || !card.id) return;
+    if (next.deletedIds[String(card.id)]) return;
+    const existing = next.boardCards[card.id];
+    if (existing && (existing.updatedAt || 0) > (card.updatedAt || 0)) return;
+    ensureCloned();
+    next.boardCards[card.id] = card;
+    changed = true;
+  });
+
+  (msg.calendarEvents || []).forEach(function (ev) {
+    if (!ev || !ev.id) return;
+    if (next.deletedIds[String(ev.id)]) return;
+    const existing = next.calendarEvents[ev.id];
+    if (existing && (existing.updatedAt || 0) > (ev.updatedAt || 0)) return;
+    ensureCloned();
+    next.calendarEvents[ev.id] = ev;
+    changed = true;
+  });
+
+  if (msg.header && typeof msg.header === 'object') {
+    ensureCloned();
+    next.header = msg.header;
+    changed = true;
+  }
+
+  if (!changed) return { project, changed: false };
+  next.rev++;
+  return { project: next, changed: true };
+}
+
 function handleSetWholeField(project, msg, fieldName) {
   const currentRev = project.fieldRevisions[fieldName] || 0;
   const baseRev = typeof msg.baseFieldRevision === 'number' ? msg.baseFieldRevision : -1;
@@ -182,6 +244,7 @@ function applyMessage(state, msg) {
     case 'upsertJob': result = handleUpsertJob(project, msg); break;
     case 'upsertCard': result = handleUpsertCard(project, msg); break;
     case 'upsertCalendarEvent': result = handleUpsertCalendarEvent(project, msg); break;
+    case 'upsertProjectBatch': result = handleUpsertProjectBatch(project, msg); break;
     case 'setBoardColumns': result = handleSetWholeField(project, msg, 'boardColumns'); break;
     case 'setFieldOptions': result = handleSetWholeField(project, msg, 'fieldOptions'); break;
     case 'setHeader': result = handleSetWholeField(project, msg, 'header'); break;
