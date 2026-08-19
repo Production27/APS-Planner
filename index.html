@@ -10976,14 +10976,20 @@ function synthesizeJobFromOrphanCard(card, boardColumns) {
 const ORPHAN_RECOVERY_GRACE_MS = 5000;
 const pendingOrphanRecovery = {};
 
-// True while this project has a write sitting in pendingWrites that the
-// server hasn't acked yet. A snapshot broadcast can be triggered by
-// anything in the room (another user's edit, this project's own earlier
-// push) and doesn't guarantee it reflects a write we just made — applying
-// it blindly can race an optimistic local add/edit that hasn't reached
-// the server yet and wipe it back out (caught during staging testing: a
-// just-added job vanishing). See applyRoomSnapshot()'s use of this below.
+// True while this project has a local change not yet confirmed by the
+// server — either already sent and awaiting an ack (pendingWrites), or
+// still sitting in the 300ms queueSharedSync() debounce and not even
+// sent yet (syncPushTimer). Both windows matter: a snapshot broadcast can
+// be triggered by anything in the room (another user's edit, this
+// project's own earlier push) and doesn't guarantee it reflects a change
+// just made locally — applying it blindly during either window can race
+// an optimistic local add/edit and wipe it back out before it ever
+// reaches the server (caught during staging testing: a just-added job
+// vanishing). pushLiveblocksState() (what the debounce timer calls) only
+// ever pushes the active project, so the timer only implicates that one.
+// See applyRoomSnapshot()'s use of this below.
 function hasPendingWriteForProject(projectId) {
+  if (syncPushTimer && projectId === activeProjectId) return true;
   for (const entry of pendingWrites.values()) {
     if (entry.msg && entry.msg.projectId === projectId) return true;
   }
@@ -11354,6 +11360,7 @@ function logActivity(actionText) {
 
 function pushLiveblocksState() {
   clearTimeout(syncPushTimer);
+  syncPushTimer = null;
   setSyncStatus('saving…', true);
 
   const p = getActiveProject();
