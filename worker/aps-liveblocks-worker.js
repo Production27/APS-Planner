@@ -32,16 +32,37 @@ function unwrapLiveblocks(node) {
 
 // Convert the raw Liveblocks storage into YOUR app's native export format
 // (same shape as clicking Settings → Export)
+//
+// URGENT FIX (2026-08-19): this used to read `proj.tasksMap` and export a
+// flat `tasks` array — a "v2" shape that predates the current jobs-with-
+// nested-tasks-and-phases data model. The live schema has never actually
+// had a per-project `tasksMap` field (that name only exists as a LEGACY
+// ROOT-LEVEL field from before project-scoping existed, handled by
+// index.html's migrateLegacyStorageShape() — a different thing entirely).
+// The real per-project field is `jobsMap`. This meant `rawTasks` was
+// always `{}`, so `tasks` was always `[]` — every automated (every 6h)
+// and manual backup produced by this Worker has been silently missing
+// ALL job/task/phase data, only board cards + columns/options/header
+// ever actually made it into a backup file. The matching write-side bug
+// in projectToLive() below meant even a Restore would have written
+// whatever tasks WERE present into a `tasksMap` field the app doesn't
+// read from at all (it reads `jobsMap`), so restore was doubly broken.
+// Also added: calendarEventsMap and deletedIds were never included in a
+// backup at all (silently dropped, no bug needed) — now they are. Output
+// shape now matches the client's own native v3 export exactly (see
+// exportData()/importData() in index.html) instead of an unrelated,
+// years-stale "v2" shape — a downloaded backup is a real Settings →
+// Export file now, not a lossy approximation of one.
 function transformStorageToAppFormat(storage) {
   const root = unwrapLiveblocks(storage);
   const projectsMap = root.projects || {};
   const projects = {};
 
   for (const [projId, proj] of Object.entries(projectsMap)) {
-    const rawTasks = proj.tasksMap || {};
-    const tasks = Object.entries(rawTasks).map(([id, t]) => {
-      if (t && typeof t === 'object' && !t.id) t.id = id;
-      return t;
+    const rawJobs = proj.jobsMap || {};
+    const jobs = Object.entries(rawJobs).map(([id, j]) => {
+      if (j && typeof j === 'object' && !j.id) j.id = id;
+      return j;
     }).sort((a, b) => (a.order || 0) - (b.order || 0));
 
     const rawCards = proj.boardCardsMap || {};
@@ -50,19 +71,27 @@ function transformStorageToAppFormat(storage) {
       return c;
     });
 
+    const rawEvents = proj.calendarEventsMap || {};
+    const calendarEvents = Object.entries(rawEvents).map(([id, ev]) => {
+      if (ev && typeof ev === 'object' && !ev.id) ev.id = id;
+      return ev;
+    });
+
     projects[projId] = {
       id: projId,
       name: proj.name || 'Untitled Project',
-      tasks,
+      jobs,
       boardColumns: proj.boardColumns || [],
       boardCards,
+      calendarEvents,
       fieldOptions: proj.fieldOptions || {},
+      deletedIds: proj.deletedIds || {},
       header: proj.header || { title: proj.name || 'Untitled', subtitle: '', theme: { c1: '#1a237e', c2: '#3949ab' } }
     };
   }
 
   return {
-    version: 2,
+    version: 3,
     projects,
     activeProjectId: Object.keys(projects)[0] || null
   };
@@ -74,17 +103,23 @@ function transformStorageToAppFormat(storage) {
 //   root (LiveObject)
 //     projects (LiveMap)
 //       [projectId] (LiveObject): name, boardColumns (plain array),
-//         fieldOptions (plain object), header (LiveObject),
-//         tasksMap (LiveMap of plain task objects),
-//         boardCardsMap (LiveMap of plain card objects)
+//         fieldOptions (plain object), deletedIds (plain object),
+//         header (LiveObject), jobsMap (LiveMap of plain job objects,
+//         each carrying its own nested tasks/phases whole),
+//         boardCardsMap (LiveMap of plain card objects),
+//         calendarEventsMap (LiveMap of plain calendar event objects)
 function projectToLive(proj) {
-  const tasksData = {};
-  for (const t of (proj.tasks || [])) {
-    if (t && t.id) tasksData[t.id] = t;
+  const jobsData = {};
+  for (const j of (proj.jobs || [])) {
+    if (j && j.id) jobsData[j.id] = j;
   }
   const cardsData = {};
   for (const c of (proj.boardCards || [])) {
     if (c && c.id !== undefined && c.id !== null) cardsData[String(c.id)] = c;
+  }
+  const eventsData = {};
+  for (const ev of (proj.calendarEvents || [])) {
+    if (ev && ev.id !== undefined && ev.id !== null) eventsData[String(ev.id)] = ev;
   }
 
   return {
@@ -93,12 +128,14 @@ function projectToLive(proj) {
       name: proj.name || 'Untitled Project',
       boardColumns: proj.boardColumns || [],
       fieldOptions: proj.fieldOptions || {},
+      deletedIds: proj.deletedIds || {},
       boardCardsMap: { liveblocksType: "LiveMap", data: cardsData },
+      calendarEventsMap: { liveblocksType: "LiveMap", data: eventsData },
       header: {
         liveblocksType: "LiveObject",
         data: proj.header || { title: proj.name || 'Untitled', subtitle: '', theme: { c1: '#1a237e', c2: '#3949ab' } }
       },
-      tasksMap: { liveblocksType: "LiveMap", data: tasksData }
+      jobsMap: { liveblocksType: "LiveMap", data: jobsData }
     }
   };
 }
@@ -175,8 +212,14 @@ async function runRestore(env, backupKey) {
   const backupObj = await env.BACKUP_BUCKET.get(backupKey);
   if (!backupObj) throw new Error(`Backup not found in bucket: ${backupKey}`);
   const appData = JSON.parse(await backupObj.text());
-  if (!appData || appData.version !== 2 || !appData.projects) {
-    throw new Error("Backup file doesn't look like a valid v2 export (missing 'projects').");
+  // Accepts v2 (pre-fix backups, or the client's old flat-tasks export
+  // shape) as well as v3 (current) — matching index.html's own
+  // importData() acceptance of either. A v2 backup taken before the
+  // jobsMap/tasksMap fix above will restore with empty jobs (that data
+  // was never actually captured), but should still restore everything
+  // else it did capture rather than being rejected outright.
+  if (!appData || (appData.version !== 2 && appData.version !== 3) || !appData.projects) {
+    throw new Error("Backup file doesn't look like a valid v2/v3 export (missing 'projects').");
   }
 
   // 2. Safety snapshot of CURRENT live state before we touch anything
