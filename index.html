@@ -5881,6 +5881,7 @@ function renderGantt() {
   computeDateRange();
   const totalDays = getDaysDiff(startDate, endDate) + 1;
   const containerW = document.getElementById('timelineBody').clientWidth;
+  const containerH = document.getElementById('timelineBody').clientHeight;
   const gridWidth = Math.max(totalDays * dayWidth, containerW);
   const grid = document.getElementById('timelineGrid');
   const header = document.getElementById('timelineHeader');
@@ -5958,6 +5959,18 @@ function renderGantt() {
   let visibleRowIdx = 0;
   const jobBarMap = {};
   const visibleRows = ganttViewMode === 'tasks' ? buildVisibleTaskRows() : buildCondensedJobRows();
+
+  // .timeline-grid's own CSS only guarantees min-height:100% of its
+  // scroll container — every child in here (row backgrounds aside) is
+  // position:absolute, so they never grow that box themselves. Elements
+  // anchored with top:0/bottom:0 to fill it (.grid-line day separators,
+  // .today-line) were stopping at the viewport edge instead of reaching
+  // the actual last task row when there were more rows than fit on
+  // screen. Explicitly size the box to cover every row plus a few extra
+  // rows of breathing room below the last task, falling back to at least
+  // the viewport height so a short list still fills the visible area.
+  const GANTT_EXTRA_ROWS_BELOW = 4;
+  grid.style.height = Math.max(containerH, (visibleRows.length + GANTT_EXTRA_ROWS_BELOW) * GANTT_ROW_H) + 'px';
 
   visibleRows.forEach(function(entry) {
     const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
