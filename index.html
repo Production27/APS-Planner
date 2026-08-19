@@ -3315,8 +3315,15 @@ function softenColor(hex, amount) {
 // Same palette as COLOR_PRESETS (job/task colors), just softened toward
 // pastel — used only for the board column color picker, so picking a
 // board color is its own distinct, intentionally-gentler palette rather
-// than a runtime transform of whatever the job picker offers.
-const BOARD_COLOR_PRESETS = COLOR_PRESETS.map(function(c) { return softenColor(c); });
+// than a runtime transform of whatever the job picker offers. Uses a
+// stronger blend than SOFTEN_AMOUNT (used elsewhere for Gantt bars):
+// at 18%, already-light presets (yellow, cyan) barely shifted while dark
+// ones (navy, red) shifted a lot, so the palette read as an inconsistent
+// mix of "still vivid" and "clearly pastel" rather than a uniform pastel
+// set — confirmed by rendering an actual side-by-side comparison. 30%
+// reads as consistently pastel across every hue.
+const BOARD_COLOR_SOFTEN_AMOUNT = 0.30;
+const BOARD_COLOR_PRESETS = COLOR_PRESETS.map(function(c) { return softenColor(c, BOARD_COLOR_SOFTEN_AMOUNT); });
 const ARCHIVE_CUTOFF_DAYS = 90;
 let ganttFirstRender = true;
 // Fallback only — per-board default lives on col.defaultDuration, set from
