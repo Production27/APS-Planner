@@ -1249,6 +1249,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .toast.info { border-left-color: var(--primary-light); }
   @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
+  /* ===== FRESH-DEVICE LOADING SCREEN ===== */
+  /* Shown only for a device with no locally-cached project data at all
+     (first-ever load, or cleared storage) — covers the fabricated
+     placeholder content while the real snapshot loads, instead of
+     flashing fake project names. A returning device with real cached
+     data never sees this; it renders that data instantly as always. */
+  #freshLoadOverlay { position: fixed; inset: 0; background: linear-gradient(135deg, #1a237e 0%, #3949ab 100%); z-index: 9999; display: none; align-items: center; justify-content: center; flex-direction: column; color: #fff; }
+  #freshLoadOverlay.show { display: flex; }
+  #freshLoadOverlay .spinner { width: 34px; height: 34px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: freshLoadSpin 0.8s linear infinite; margin-bottom: 16px; }
+  #freshLoadOverlay .msg { font-size: 15px; font-weight: 500; letter-spacing: 0.2px; }
+  @keyframes freshLoadSpin { to { transform: rotate(360deg); } }
+
   /* ===== MODAL ===== */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 3000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
   .modal-overlay.show { display: flex; }
@@ -1659,6 +1671,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 </head>
 <body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
+
+<!-- FRESH-DEVICE LOADING SCREEN — see showFreshLoadOverlay()/hideFreshLoadOverlay() -->
+<div id="freshLoadOverlay">
+  <div class="spinner"></div>
+  <div class="msg">Loading your projects…</div>
+</div>
 
 <!-- NEW VERSION BANNER — see checkForNewerVersion(); stale-cache guard -->
 <div class="new-version-banner" id="newVersionBanner">
@@ -3948,9 +3966,33 @@ function unlinkJobById(jobId, projectId) {
   if (otherProjectId === activeProjectId) queueSharedSync(); else pushProjectToShared(otherProjectId);
 }
 
+// Only for a device with zero locally-cached project data (see
+// freshLocalSeed, set by migrateFromLegacy()) — covers the fabricated
+// placeholder projects init() still creates internally (other code
+// relies on projects/activeProjectId always being populated) so the user
+// sees a loading screen instead of a flash of fake project names, until
+// the real snapshot arrives and replaces them. Safety-net timeout in case
+// the connection never completes, so a bad network doesn't strand the
+// user on a blank spinner forever — falls back to showing whatever
+// loaded (same as pre-loading-screen behavior).
+let freshLoadOverlayTimer = null;
+function showFreshLoadOverlay() {
+  const el = document.getElementById('freshLoadOverlay');
+  if (el) el.classList.add('show');
+  clearTimeout(freshLoadOverlayTimer);
+  freshLoadOverlayTimer = setTimeout(hideFreshLoadOverlay, 20000);
+}
+function hideFreshLoadOverlay() {
+  clearTimeout(freshLoadOverlayTimer);
+  freshLoadOverlayTimer = null;
+  const el = document.getElementById('freshLoadOverlay');
+  if (el) el.classList.remove('show');
+}
+
 function init() {
   loadProjects();
   enforceFixedProjectSet();
+  if (freshLocalSeed) showFreshLoadOverlay();
   loadGhostPref();
   loadDarkModePref();
   loadActiveProjectData();
@@ -11223,7 +11265,17 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
     }
     const fixedChangedIds = enforceFixedProjectSet();
     if (fixedChangedIds.length) {
-      fixedChangedIds.forEach(function(id) { pushProjectToShared(id); });
+      // Only push these locally-fabricated placeholders to the shared room
+      // when it was genuinely empty to begin with. A device whose own
+      // local storage happens to be empty/fresh (first-ever load, cleared
+      // cache) always fabricates 2 local placeholders here regardless of
+      // what the room already has — pushing them unconditionally could
+      // spuriously create an extra project server-side even when the room
+      // already has real data (a stray empty "Untitled" project reached
+      // production this way — see git history for the diagnosis).
+      if (!hasRemoteData) {
+        fixedChangedIds.forEach(function(id) { pushProjectToShared(id); });
+      }
       loadActiveProjectData();
       renderAll();
     }
@@ -11241,6 +11293,11 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
 
   const sidebar = document.getElementById('activitySidebar');
   if (sidebar && !sidebar.classList.contains('collapsed')) renderActivityLogSidebar();
+
+  // Real data (or the deliberate empty-room bootstrap) has now been
+  // merged and rendered above — safe to reveal the app. No-op if the
+  // loading screen was never shown (the normal, returning-device case).
+  if (isFirstSnapshot) hideFreshLoadOverlay();
 }
 
 // ---- Outbound pushes ----
