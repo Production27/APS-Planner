@@ -282,6 +282,19 @@ function applyMessage(state, msg) {
     return { state, changed: false, error: 'message missing projectId' };
   }
 
+  // Special-cased ahead of ensureProject() below: removing a project
+  // operates on the whole state directly (see removeProject() at the
+  // bottom of this file), and there's no reason to first fabricate a
+  // blank project via ensureProject() just to immediately delete it.
+  if (msg.type === 'removeProject') {
+    const result = removeProject(state, msg.projectId);
+    return {
+      state: result.state,
+      changed: result.changed,
+      ack: { type: 'ack', msgId: msg.msgId }
+    };
+  }
+
   let working = ensureProject(state, msg.projectId, msg.seedProjectName);
   const project = working.projects[msg.projectId];
   let result;
@@ -327,8 +340,11 @@ function applyMessage(state, msg) {
   };
 }
 
-// Removes a project entirely (mirrors removeProjectFromShared — currently
-// unused app-wide since project deletion is disabled, kept for parity).
+// Removes a project entirely (mirrors removeProjectFromShared in
+// index.html). A real, wired-up capability now — used once to clean up a
+// stray empty project a client-side bug created (see the fix in
+// applyRoomSnapshot()'s isFirstSnapshot handling). Project deletion is
+// still not exposed anywhere in the app's own UI otherwise.
 function removeProject(state, projectId) {
   if (!state.projects[projectId]) return { state, changed: false };
   const next = cloneRoomState(state);

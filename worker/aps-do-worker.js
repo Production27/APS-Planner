@@ -236,6 +236,18 @@ function applyMessage(state, msg) {
     return { state, changed: false, error: 'message missing projectId' };
   }
 
+  // Special-cased ahead of ensureProject() below: removing a project
+  // operates on the whole state directly (see removeProject() just below
+  // applyMessage), no reason to fabricate a blank project first.
+  if (msg.type === 'removeProject') {
+    const result = removeProject(state, msg.projectId);
+    return {
+      state: result.state,
+      changed: result.changed,
+      ack: { type: 'ack', msgId: msg.msgId }
+    };
+  }
+
   let working = ensureProject(state, msg.projectId, msg.seedProjectName);
   const project = working.projects[msg.projectId];
   let result;
@@ -279,6 +291,17 @@ function applyMessage(state, msg) {
     changed: true,
     ack: { type: 'ack', msgId: msg.msgId, newFieldRevision: result.newFieldRevision }
   };
+}
+
+// Removes a project entirely — a real capability now (used once to clean
+// up a stray empty project a client-side bug created; see the fix in
+// applyRoomSnapshot()'s isFirstSnapshot handling in index.html). Project
+// deletion is still not exposed anywhere in the app's own UI otherwise.
+function removeProject(state, projectId) {
+  if (!state.projects[projectId]) return { state, changed: false };
+  const next = cloneRoomState(state);
+  delete next.projects[projectId];
+  return { state: next, changed: true };
 }
 
 // --- 2. ROOM TOKEN SIGNING (see worker/aps-room-token.js for the

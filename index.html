@@ -11327,11 +11327,11 @@ function pushProjectToShared(projectId, headerOverride) {
   });
 }
 
-// Removes a project's entry entirely — used when someone deletes a
-// project, so it disappears from everyone's shared list instead of
-// lingering. (No current call site — project deletion is disabled
-// app-wide — kept for parity with the pre-migration function of the same
-// name/purpose.)
+// Removes a project's entry entirely — no UI calls this (project
+// deletion is still disabled app-wide), but it's a real, wired-up server
+// capability now, reachable from a browser console for exactly the kind
+// of one-off admin cleanup this was built for: e.g.
+// removeProjectFromShared('some-stray-project-id').
 function removeProjectFromShared(projectId) {
   sendRoomMessage({ type: 'removeProject', projectId: projectId });
 }
