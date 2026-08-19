@@ -1,0 +1,209 @@
+// ==========================================
+// APS Planner — Room Durable Object
+// ==========================================
+//
+// The actual real-time backend, replacing Liveblocks' hosted room. Thin
+// by design: all the correctness logic (staleness rejection, tombstones,
+// delete-safety) lives in the pure, already-tested aps-room-state.js —
+// this file is just the WebSocket/hibernation plumbing and
+// state.storage persistence wrapped around it. Auth verification uses
+// aps-room-token.js's signed tokens, checked here without any KV access
+// of its own (the KV-backed credential check already happened once, in
+// the main Worker's auth endpoint, before a token was ever minted).
+//
+// IMPORTANT — flagged honestly rather than glossed over: this file was
+// written and reasoned through carefully, but could NOT be run against a
+// real Durable Objects runtime while building it (no wrangler/local
+// Workers runtime available in this dev environment). The pure logic it
+// calls into (applyMessage, signRoomToken/verifyRoomToken) is fully
+// tested; the Cloudflare-specific plumbing here (acceptWebSocket,
+// setWebSocketAutoResponse, serializeAttachment, the exact shape of the
+// constructor's first argument) is written to match Cloudflare's
+// documented Hibernation WebSocket API as of this writing, but has NOT
+// been exercised end to end. Verifying this against a real staging
+// deployment is an explicit, required step before any production
+// cutover — see the migration plan.
+//
+// ---- Wire protocol ----
+// Client -> DO (over the WebSocket): JSON messages matching
+// aps-room-state.js's applyMessage() input shape, e.g.
+//   { type: 'upsertJob', msgId, projectId, job: {...} }
+//   { type: 'setBoardColumns', msgId, projectId, value: [...], baseFieldRevision }
+// DO -> client:
+//   { type: 'snapshot', projects: {...} }        — sent on connect, and
+//                                                    broadcast after every
+//                                                    accepted change
+//   { type: 'ack', msgId, newFieldRevision? }     — one per processed message
+//   { type: 'rejected', msgId, reason, ... }       — stale whole-value write
+//   { type: 'error', msgId?, message }             — malformed/invalid message
+//
+// ---- Storage ----
+// The whole room state lives under ONE storage key ('room') as a single
+// JSON blob. Deliberate, not a placeholder: current data is ~59KB, well
+// under any per-key limit, and a single key means every read/write is
+// trivially atomic with no multi-key transaction to reason about. If
+// data size ever becomes a real concern (e.g. a huge attachment volume —
+// though attachments themselves are stored in R2, not inline, precisely
+// to avoid this) this would need revisiting, but doing that now would be
+// solving a problem that doesn't exist yet.
+
+class ApsRoom {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.roomState = null; // hydrated lazily on first use, cached for the DO's in-memory lifetime (cleared naturally on hibernation eviction/restart, re-loaded from storage on next access)
+
+    // Cloudflare answers "ping" with "pong" at the edge without waking
+    // this object — the whole point of pairing hibernation with a
+    // heartbeat. Configuring this in the constructor also means it's
+    // re-applied every time the DO wakes from hibernation and the
+    // constructor re-runs, not just on first creation.
+    if (typeof WebSocketRequestResponsePair !== 'undefined' && this.state.setWebSocketAutoResponse) {
+      this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+    }
+  }
+
+  async loadRoomState() {
+    if (this.roomState) return this.roomState;
+    const stored = await this.state.storage.get('room');
+    this.roomState = stored || emptyRoomState();
+    return this.roomState;
+  }
+
+  async persist() {
+    await this.state.storage.put('room', this.roomState);
+  }
+
+  // Only ever reachable via env.APS_ROOM.get(id).fetch(...) from the main
+  // Worker's own code (server-to-server) — there is no public route that
+  // forwards arbitrary paths into this DO, so /internal/* needs no auth
+  // of its own; the caller (the main Worker's backup/restore handlers)
+  // already gated who's allowed to trigger this before ever reaching here.
+  async fetch(request) {
+    const url = new URL(request.url);
+
+    if (url.pathname === '/internal/export') {
+      const roomState = await this.loadRoomState();
+      return new Response(JSON.stringify(roomState), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (url.pathname === '/internal/import' && request.method === 'POST') {
+      let imported;
+      try {
+        imported = await request.json();
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'invalid JSON body' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (!imported || typeof imported !== 'object' || typeof imported.projects !== 'object') {
+        return new Response(JSON.stringify({ error: 'expected { projects: {...} }' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      // One synchronous assignment + one storage write, no awaits in
+      // between — the DO's single-threaded message processing only
+      // protects a restore from interleaving with a concurrent live edit
+      // if the whole thing happens as one atomic step like this, not
+      // spread across multiple awaited writes a queued message could
+      // land in the middle of.
+      this.roomState = imported;
+      await this.persist();
+      this.broadcastSnapshot();
+      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (request.headers.get('Upgrade') === 'websocket') {
+      return this.handleWebSocketUpgrade(request);
+    }
+
+    return new Response('Not found', { status: 404 });
+  }
+
+  async handleWebSocketUpgrade(request) {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token');
+    const identity = await verifyRoomToken(this.env.ROOM_TOKEN_SECRET, token);
+    if (!identity) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+
+    // Registers the socket with the runtime so it can hibernate between
+    // messages instead of holding this DO in memory (and billing GB-s)
+    // for the entire connection lifetime — this is the actual capability
+    // this whole migration is for.
+    this.state.acceptWebSocket(server);
+    // Recall who this connection belongs to after a hibernation wake
+    // without re-verifying the token on every single message — the
+    // token was already checked once, right here, at connect time.
+    server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role });
+
+    const roomState = await this.loadRoomState();
+    server.send(JSON.stringify(Object.assign({ type: 'snapshot' }, roomState)));
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws, message) {
+    let msg;
+    try {
+      const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
+      msg = JSON.parse(text);
+    } catch (e) {
+      ws.send(JSON.stringify({ type: 'error', message: 'invalid JSON' }));
+      return;
+    }
+
+    const roomState = await this.loadRoomState();
+    const result = applyMessage(roomState, msg);
+
+    if (result.error) {
+      ws.send(JSON.stringify({ type: 'error', msgId: msg.msgId, message: result.error }));
+      return;
+    }
+
+    if (result.rejected) {
+      ws.send(JSON.stringify(Object.assign({ type: 'rejected', msgId: msg.msgId }, result.rejected)));
+      return;
+    }
+
+    if (result.ack) ws.send(JSON.stringify(result.ack));
+
+    if (result.changed) {
+      this.roomState = result.state;
+      await this.persist();
+      this.broadcastSnapshot();
+    }
+  }
+
+  broadcastSnapshot() {
+    const payload = JSON.stringify(Object.assign({ type: 'snapshot' }, this.roomState));
+    const sockets = this.state.getWebSockets();
+    for (const ws of sockets) {
+      try {
+        ws.send(payload);
+      } catch (e) {
+        // Dead socket — webSocketClose() below will clean up the
+        // connection itself; nothing further to do here.
+      }
+    }
+  }
+
+  async webSocketClose(ws, code, reason, wasClean) {
+    try {
+      ws.close(code, reason);
+    } catch (e) {
+      // Already closed — fine.
+    }
+  }
+
+  async webSocketError(ws, error) {
+    console.error('APS room websocket error:', error);
+  }
+}
+
+// Attached to globalThis (rather than only `export`ed) so this file can
+// be concatenated directly into the single deployable Worker file, same
+// no-build-step pattern as everything else in this repo — see
+// worker/README.md for the assembly/deploy process.
+if (typeof module !== 'undefined') module.exports = { ApsRoom };
