@@ -1693,6 +1693,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBoardBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board Background</div>
         <div class="settings-dropdown-divider"></div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
+        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); changeMyPasswordUI();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openArchivedJobsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</div>
 
       </div>
@@ -2057,6 +2059,23 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div id="backupsList" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="closeBackupsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE USERS MODAL -->
+<div class="modal-overlay" id="manageUsersModal">
+  <div class="modal-box" style="max-width:560px;">
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</h4>
+    <p>Only admin accounts can add, remove, or reset passwords for other users. The old shared team password still works as a fallback admin login.</p>
+    <div style="display:flex; gap:10px; margin:10px 0 16px;">
+      <button class="btn btn-secondary" onclick="addUserUI()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14m-7-7h14" stroke="#28a745" stroke-width="2.5" stroke-linecap="round"/></svg> Add User</button>
+      <button class="btn btn-secondary" onclick="loadUsersList()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 12a8 8 0 0113.7-5.7L20 8M20 8V4M20 8h-4M20 12a8 8 0 01-13.7 5.7L4 16m0 0v4m0-4h4" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Refresh List</button>
+    </div>
+    <div id="usersListStatus" style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;"></div>
+    <div id="usersList" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeManageUsersModal()">Close</button>
     </div>
   </div>
 </div>
@@ -8860,6 +8879,132 @@ async function restoreBackupFile(key, dateLabel) {
   }
 }
 
+// ===== USER ACCOUNTS (Manage Users, via the Cloudflare Worker) =====
+// Every call sends the CURRENTLY logged-in user's own cached credentials
+// (see ensureUserCredentials()) — the Worker re-verifies them, and their
+// role, on every single request; nothing here is trusted client-side.
+function getMyCredentials() {
+  return ensureUserCredentials(false);
+}
+
+async function postUsersEndpoint(path, extraBody) {
+  const { username, password } = getMyCredentials();
+  const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ username: username, password: password }, extraBody || {}))
+  });
+  const data = await res.json().catch(function() { return {}; });
+  if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
+  return data;
+}
+
+function openManageUsersModal() {
+  document.getElementById('manageUsersModal').classList.add('show');
+  loadUsersList();
+}
+function closeManageUsersModal() {
+  document.getElementById('manageUsersModal').classList.remove('show');
+}
+
+async function loadUsersList() {
+  const statusEl = document.getElementById('usersListStatus');
+  const listEl = document.getElementById('usersList');
+  statusEl.textContent = 'Loading…';
+  listEl.innerHTML = '';
+  try {
+    const data = await postUsersEndpoint('users/list');
+    const myUsername = getStoredUsername();
+    statusEl.textContent = data.users.length + ' user(s)';
+    if (!data.users.length) {
+      listEl.innerHTML = '<div style="padding:14px; color:var(--text-secondary);">No accounts yet — add one below, or keep using the shared team password.</div>';
+      return;
+    }
+    data.users.forEach(function(u) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--border); gap:8px;';
+      const isMe = u.username === myUsername;
+      row.innerHTML =
+        '<div style="min-width:0;">' +
+          '<div style="font-size:13px; font-weight:600;">' + escapeHtml(u.displayName) + (isMe ? ' <span style="font-weight:400; color:var(--text-secondary);">(you)</span>' : '') + '</div>' +
+          '<div style="font-size:12px; color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + (u.role === 'admin' ? 'Admin' : 'Member') + '</div>' +
+        '</div>' +
+        '<div style="display:flex; gap:6px; flex-shrink:0;">' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="reset">Reset Password</button>' +
+          '<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="remove">Remove</button>' +
+        '</div>';
+      row.querySelector('[data-action="reset"]').onclick = function() { resetUserPasswordUI(u.username, u.displayName); };
+      row.querySelector('[data-action="remove"]').onclick = function() { removeUserUI(u.username, u.displayName); };
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    statusEl.textContent = '';
+    listEl.innerHTML = '<div style="padding:14px; color:var(--text-secondary);">' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+async function addUserUI() {
+  const username = (window.prompt('New username (letters, numbers, . _ - only):') || '').trim();
+  if (!username) return;
+  const password = window.prompt('Password for this account (at least 6 characters):') || '';
+  if (!password) return;
+  const displayName = (window.prompt('Display name (shown on comments/activity):', username) || username).trim();
+  const isAdmin = window.confirm('Should ' + displayName + ' be an admin (can manage other users)?\n\nOK = Admin, Cancel = Member');
+  try {
+    await postUsersEndpoint('users/add', {
+      newUsername: username, newPassword: password, newDisplayName: displayName, newRole: isAdmin ? 'admin' : 'member'
+    });
+    logActivity('added user account "' + displayName + '"');
+    showToast('User added', 'success');
+    loadUsersList();
+  } catch (err) {
+    showToast('Could not add user: ' + err.message, 'error');
+  }
+}
+
+async function resetUserPasswordUI(username, displayName) {
+  const newPassword = window.prompt('New password for ' + displayName + ' (at least 6 characters):');
+  if (!newPassword) return;
+  try {
+    await postUsersEndpoint('users/reset-password', { targetUsername: username, newPassword: newPassword });
+    logActivity('reset password for user "' + displayName + '"');
+    showToast('Password reset', 'success');
+  } catch (err) {
+    showToast('Could not reset password: ' + err.message, 'error');
+  }
+}
+
+async function removeUserUI(username, displayName) {
+  if (!window.confirm('Remove the account for "' + displayName + '"? They\'ll need a new account to sync again.')) return;
+  try {
+    await postUsersEndpoint('users/remove', { targetUsername: username });
+    logActivity('removed user account "' + displayName + '"');
+    showToast('User removed', 'success');
+    loadUsersList();
+  } catch (err) {
+    showToast('Could not remove user: ' + err.message, 'error');
+  }
+}
+
+// Self-service — works for any logged-in user resetting their OWN account,
+// not just admins (the worker's reset-password endpoint allows that).
+async function changeMyPasswordUI() {
+  const { username } = getMyCredentials();
+  if (!username) {
+    showToast('You\'re using the shared team password, not a personal account — ask an admin to add you one in Manage Users first.', 'error');
+    return;
+  }
+  const newPassword = window.prompt('New password (at least 6 characters):');
+  if (!newPassword) return;
+  try {
+    await postUsersEndpoint('users/reset-password', { targetUsername: username, newPassword: newPassword });
+    localStorage.setItem(USER_PASSWORD_KEY, newPassword);
+    showToast('Password changed', 'success');
+  } catch (err) {
+    showToast('Could not change password: ' + err.message, 'error');
+  }
+}
+
 // ===== BOARD: STORAGE =====
 function loadBoardCards() {
   const saved = localStorage.getItem('gantt_board_cards_v1');
@@ -10318,12 +10463,15 @@ document.getElementById('headerSubtitle').addEventListener('paste', function(e) 
 // Note: background photos stay local-only (per-browser).
 //
 // Auth: the browser holds no Liveblocks key at all. Instead it calls
-// LIVEBLOCKS_AUTH_ENDPOINT (a small Cloudflare Worker — see
-// liveblocks-auth-worker.js) with a shared team password. The worker checks
-// the password server-side and, if it matches, mints a short-lived token
-// scoped to just this room using the Liveblocks SECRET key (which lives only
-// on the worker, never in this file). This replaces the old pk_dev_ public
-// key, which let anyone who viewed page source read/write the whole room.
+// LIVEBLOCKS_AUTH_ENDPOINT (a small Cloudflare Worker, deployed separately —
+// not part of this repo) with a per-user username+password (see
+// ensureUserCredentials()). The worker checks the credentials server-side
+// against a KV-backed user list and, if they match, mints a short-lived
+// token scoped to just this room using the Liveblocks SECRET key (which
+// lives only on the worker, never in this file). The old shared team
+// password still works too, as a break-glass admin fallback — see the
+// worker's resolveIdentity() — so nobody's locked out and it's how the
+// first real admin account gets created via Manage Users.
 //
 // Fill this in after deploying the worker (see that file's header comment
 // for deploy steps) — it'll look like https://xxx.<you>.workers.dev
@@ -10351,8 +10499,14 @@ function mergeTombstones(a, b) {
   return merged;
 }
 
+// TEAM_PASSWORD_KEY is legacy (pre-accounts) — kept only as a one-time
+// migration source (see ensureUserCredentials()) and because the Backups
+// modal still uses the shared team password directly, unrelated to the
+// per-user accounts below.
 const TEAM_PASSWORD_KEY = "gantt_team_password_v1";
 const DISPLAY_NAME_KEY = "gantt_display_name_v1";
+const USERNAME_KEY = "gantt_username_v1";
+const USER_PASSWORD_KEY = "gantt_user_password_v1";
 
 function getStoredTeamPassword() {
   return localStorage.getItem(TEAM_PASSWORD_KEY) || "";
@@ -10360,25 +10514,51 @@ function getStoredTeamPassword() {
 function getStoredDisplayName() {
   return localStorage.getItem(DISPLAY_NAME_KEY) || "";
 }
+function getStoredUsername() {
+  return localStorage.getItem(USERNAME_KEY) || "";
+}
+function getStoredUserPassword() {
+  return localStorage.getItem(USER_PASSWORD_KEY) || "";
+}
 
-// Prompts once (native prompt, matching how project rename/create already
-// ask for input elsewhere in this app) and caches the answers so people
-// aren't asked again every visit. Re-prompts for the password specifically
-// if the worker rejects it (wrong or since-changed password).
-function ensureTeamCredentials(forceRepromptPassword) {
-  let password = getStoredTeamPassword();
-  if (!password || forceRepromptPassword) {
+// Set from the Worker's confirmed identity after a successful login (see
+// the authEndpoint callback below) — 'admin' or 'member', or null before
+// the first successful connection. Purely a UI convenience (e.g. showing a
+// clearer error before even trying an admin-only action); the Worker
+// re-verifies role server-side on every admin call regardless, so nothing
+// security-relevant depends on this being accurate.
+let currentUserRole = null;
+
+// Prompts once per missing field (native prompt, matching how project
+// rename/create already ask for input elsewhere in this app) and caches
+// the answers so people aren't asked again every visit. Re-prompts for
+// both specifically if the worker rejects them (wrong/removed account).
+// One-time migration: if there's no per-user password yet but the old
+// shared team password is still cached, seed the new key from it — an
+// existing browser only gets prompted for a *username* on first load
+// after this shipped, not the password too (the old shared password still
+// works as a break-glass login server-side, see the Worker's
+// resolveIdentity()).
+function ensureUserCredentials(forceReprompt) {
+  let username = getStoredUsername();
+  if (!username || forceReprompt) {
+    username = (window.prompt(
+      forceReprompt ? "Username or password incorrect — enter your username again:" : "Username:"
+    ) || "").trim();
+    localStorage.setItem(USERNAME_KEY, username);
+  }
+  let password = getStoredUserPassword();
+  if (!password && getStoredTeamPassword()) {
+    password = getStoredTeamPassword();
+    localStorage.setItem(USER_PASSWORD_KEY, password);
+  }
+  if (!password || forceReprompt) {
     password = window.prompt(
-      forceRepromptPassword ? "Team password incorrect — try again:" : "Enter the team password to sync:"
+      forceReprompt ? "Enter your password again:" : "Password:"
     ) || "";
-    localStorage.setItem(TEAM_PASSWORD_KEY, password);
+    localStorage.setItem(USER_PASSWORD_KEY, password);
   }
-  let name = getStoredDisplayName();
-  if (!name) {
-    name = window.prompt("Your name (shown to teammates while syncing):") || "Team member";
-    localStorage.setItem(DISPLAY_NAME_KEY, name);
-  }
-  return { password, name };
+  return { username, password };
 }
 
 let liveblocksRoom = null;
@@ -10568,26 +10748,38 @@ async function setupLiveblocksSync() {
 
     const client = createClient({
       authEndpoint: async () => {
-        const { password, name } = ensureTeamCredentials(false);
+        const { username, password } = ensureUserCredentials(false);
         let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: password, name: name })
+          body: JSON.stringify({ username: username, password: password })
         });
 
-        // Wrong or changed password — clear it, ask again, retry once.
+        // Wrong or changed credentials — clear them, ask again, retry once.
         if (res.status === 401) {
-          localStorage.removeItem(TEAM_PASSWORD_KEY);
-          const retry = ensureTeamCredentials(true);
+          localStorage.removeItem(USERNAME_KEY);
+          localStorage.removeItem(USER_PASSWORD_KEY);
+          const retry = ensureUserCredentials(true);
           res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: retry.password, name: retry.name })
+            body: JSON.stringify({ username: retry.username, password: retry.password })
           });
         }
 
         if (!res.ok) throw new Error('Liveblocks auth failed: ' + res.status);
-        return res.json();
+        const data = await res.json();
+        // The worker rides the caller's confirmed identity along as a
+        // sibling `user` field on the same response the Liveblocks SDK
+        // reads `.token` from — extra properties are simply ignored by the
+        // SDK, so this needs no separate round trip. Using it here (rather
+        // than trusting a client-typed name) is what makes comments/
+        // activity-log entries actually reflect who really logged in.
+        if (data && data.user) {
+          if (data.user.displayName) localStorage.setItem(DISPLAY_NAME_KEY, data.user.displayName);
+          currentUserRole = data.user.role || null;
+        }
+        return data;
       }
     });
 
