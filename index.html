@@ -1261,6 +1261,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   #freshLoadOverlay .msg { font-size: 15px; font-weight: 500; letter-spacing: 0.2px; }
   @keyframes freshLoadSpin { to { transform: rotate(360deg); } }
 
+  /* ===== SYNC INDICATOR ===== */
+  /* Element itself is built in JS (initSyncIndicator/setSyncIndicator) —
+     only the pulse animation needs to live in an actual stylesheet. */
+  @keyframes syncDotPulse { 0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 0 rgba(229,57,53,0.55); } 50% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 7px rgba(229,57,53,0); } }
+
   /* ===== MODAL ===== */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 3000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
   .modal-overlay.show { display: flex; }
@@ -10752,76 +10757,68 @@ let msgSeq = 0;
 const pendingWrites = new Map();
 let stuckWriteTimer = null;
 let syncPushTimer = null;
-let syncBadgeEls = null;
-
 let pendingRemoteRefresh = false;
 
-let offlineBannerEl = null;
+// Single small dot, bottom-right — replaces the old always-visible
+// "connecting…/saving…/live" text badge, the full-width red top banner,
+// and the stuck-write toast popup. Deliberately says nothing while
+// everything's fine (most of the time, for most people) — normal saves
+// and a healthy connection produce zero visual noise. Only becomes
+// visible at all once there's something worth knowing: reconnecting
+// (quiet amber, no motion) or an actual problem — offline for a while,
+// or a change stuck unconfirmed (red, gently pulsing). Hovering it shows
+// the specific reason via a native tooltip rather than a popup.
+let syncDotEl = null;
 let offlineSince = null;
-let offlineBannerShowTimer = null;
-let offlineBannerTickInterval = null;
+let offlineEscalateTimer = null;
 
-// Persistent, hard-to-miss banner — the corner badge and toasts are easy to miss
-// if you're not looking right at them, and a dropped connection could otherwise
-// go unnoticed for as long as someone keeps typing.
-function initOfflineBanner() {
-  const banner = document.createElement('div');
-  banner.id = 'offlineBanner';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;background:#c0392b;color:#fff;font-family:"Segoe UI",system-ui,sans-serif;font-size:13px;font-weight:600;text-align:center;padding:9px 12px;display:none;align-items:center;justify-content:center;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,0.25);';
-  banner.innerHTML = '<span id="offlineBannerText">You\'re offline — changes aren\'t syncing</span>' +
-    '<button id="offlineBannerReload" style="background:#fff;color:#c0392b;border:none;border-radius:4px;padding:3px 11px;font-size:12px;font-weight:700;cursor:pointer;">Reload page</button>';
-  document.body.appendChild(banner);
-  banner.querySelector('#offlineBannerReload').addEventListener('click', function() { location.reload(); });
-  offlineBannerEl = banner;
+function initSyncIndicator() {
+  const dot = document.createElement('div');
+  dot.id = 'syncDot';
+  dot.style.cssText = 'position:fixed;bottom:14px;right:14px;z-index:9999;width:9px;height:9px;border-radius:50%;background:#f0ad4e;opacity:0;pointer-events:none;transition:opacity 0.4s ease,background 0.3s ease;box-shadow:0 1px 3px rgba(0,0,0,0.25);';
+  document.body.appendChild(dot);
+  syncDotEl = dot;
 }
 
-function updateOfflineBannerText(customText) {
-  const textEl = document.getElementById('offlineBannerText');
-  if (!textEl) return;
-  if (customText) { textEl.textContent = customText; return; }
-  if (!offlineSince) return;
-  const secs = Math.round((Date.now() - offlineSince) / 1000);
-  const label = secs >= 60 ? (Math.floor(secs / 60) + 'm') : (secs + 's');
-  textEl.textContent = "You're offline — changes from the last " + label + " haven't synced yet";
-}
-
-function showOfflineBanner(customText) {
-  if (!offlineBannerEl) return;
-  if (!offlineSince) offlineSince = Date.now();
-  offlineBannerEl.style.display = 'flex';
-  updateOfflineBannerText(customText);
-  if (!offlineBannerTickInterval) {
-    offlineBannerTickInterval = setInterval(function() { updateOfflineBannerText(); }, 15000);
+// state: 'ok' (hidden — the default/happy state), 'connecting' (quiet
+// amber, e.g. initial connect or a fresh disconnect that might recover
+// in a second or two), 'problem' (red, gently pulsing — offline long
+// enough to matter, or a write that hasn't confirmed in 8+ seconds).
+function setSyncIndicator(state, tooltip) {
+  if (!syncDotEl) return;
+  syncDotEl.title = tooltip || '';
+  if (state === 'ok') {
+    syncDotEl.style.opacity = '0';
+    syncDotEl.style.pointerEvents = 'none';
+    syncDotEl.style.background = '#f0ad4e';
+    syncDotEl.style.animation = 'none';
+    return;
+  }
+  syncDotEl.style.opacity = '0.85';
+  syncDotEl.style.pointerEvents = 'auto';
+  if (state === 'problem') {
+    syncDotEl.style.background = '#e53935';
+    syncDotEl.style.animation = 'syncDotPulse 1.6s ease-in-out infinite';
+  } else {
+    syncDotEl.style.background = '#f0ad4e';
+    syncDotEl.style.animation = 'none';
   }
 }
 
-function hideOfflineBanner() {
-  clearTimeout(offlineBannerShowTimer);
-  if (offlineBannerEl) offlineBannerEl.style.display = 'none';
+// Mirrors the old banner's debounce: a one-second wifi blip shouldn't
+// escalate to the red/pulsing state, only a connection that's actually
+// stayed down for a bit.
+function scheduleOfflineEscalation() {
+  clearTimeout(offlineEscalateTimer);
+  if (!offlineSince) offlineSince = Date.now();
+  offlineEscalateTimer = setTimeout(function() {
+    setSyncIndicator('problem', "You're offline — changes aren't syncing. Try reloading once you're back online.");
+  }, 8000);
+}
+function cancelOfflineEscalation() {
+  clearTimeout(offlineEscalateTimer);
+  offlineEscalateTimer = null;
   offlineSince = null;
-  if (offlineBannerTickInterval) { clearInterval(offlineBannerTickInterval); offlineBannerTickInterval = null; }
-}
-
-// Debounced so a one-second wifi blip doesn't flash the banner — only shows once
-// the connection has actually stayed down for a bit.
-function scheduleOfflineBanner() {
-  clearTimeout(offlineBannerShowTimer);
-  offlineBannerShowTimer = setTimeout(function() { showOfflineBanner(); }, 8000);
-}
-
-function initSyncBadge() {
-  const badge = document.createElement('div');
-  badge.id = 'syncBadge';
-  badge.style.cssText = 'position:fixed;bottom:14px;right:14px;z-index:9999;background:#1c2027;color:#fff;font-family:"Segoe UI",system-ui,sans-serif;font-size:11px;letter-spacing:0.03em;padding:6px 12px;border-radius:20px;display:flex;align-items:center;gap:7px;box-shadow:0 3px 12px rgba(0,0,0,0.25);opacity:0.92;transition:background 0.3s;';
-  badge.innerHTML = '<span id="syncDot" style="width:7px;height:7px;border-radius:50%;background:#43a047;flex-shrink:0;transition:background 0.2s;"></span><span id="syncText">connecting…</span>';
-  document.body.appendChild(badge);
-  syncBadgeEls = { badge: badge, dot: badge.querySelector('#syncDot'), text: badge.querySelector('#syncText') };
-}
-
-function setSyncStatus(text, busy, dotColor) {
-  if (!syncBadgeEls) return;
-  syncBadgeEls.text.textContent = text;
-  syncBadgeEls.dot.style.background = dotColor || (busy ? '#f0ad4e' : '#43a047');
 }
 
 function isBusyEditing() {
@@ -10857,7 +10854,6 @@ function isBusyEditing() {
 
 function queueSharedSync() {
   clearTimeout(syncPushTimer);
-  setSyncStatus('saving…', true);
   syncPushTimer = setTimeout(pushLiveblocksState, 300);
 }
 
@@ -10916,15 +10912,18 @@ function armStuckWriteWatch() {
     stuckWriteTimer = null;
     if (pendingWrites.size > 0) {
       console.error('Room sync stuck — ' + pendingWrites.size + ' change(s) not yet confirmed by the server after 8+ seconds.');
-      showToast('Your last change may not have saved — sync has been stuck. Try reloading.', 'error');
+      setSyncIndicator('problem', 'Last change may not have saved — try reloading if this persists.');
     }
   }, 8000);
 }
 function clearPendingWrite(msgId) {
   pendingWrites.delete(msgId);
-  if (pendingWrites.size === 0 && stuckWriteTimer) {
-    clearTimeout(stuckWriteTimer);
-    stuckWriteTimer = null;
+  if (pendingWrites.size === 0) {
+    if (stuckWriteTimer) { clearTimeout(stuckWriteTimer); stuckWriteTimer = null; }
+    // Only reached via an ack/rejection, meaning the connection is
+    // currently healthy — resolves a stuck-write indicator if one was
+    // showing, back to the default silent state.
+    setSyncIndicator('ok');
   }
 }
 
@@ -10973,8 +10972,8 @@ async function buildRoomWsUrl() {
 // without needing a real WebSocket/network connection — see the
 // sandboxed test suite this migration was built with.
 function handleRoomOpen() {
-  setSyncStatus('live', false);
-  hideOfflineBanner();
+  setSyncIndicator('ok');
+  cancelOfflineEscalation();
   // Replay anything that didn't get confirmed before the connection
   // dropped — the server will just re-apply/re-ack it (upserts are
   // idempotent by id; a delete/tombstone replay is a harmless no-op if it
@@ -10986,8 +10985,8 @@ function handleRoomOpen() {
 }
 function handleRoomClose() {
   if (roomEverConnected) {
-    setSyncStatus('offline', true);
-    scheduleOfflineBanner();
+    setSyncIndicator('connecting', 'Reconnecting…');
+    scheduleOfflineEscalation();
   }
 }
 function handleRoomSocketError(err) {
@@ -11002,9 +11001,8 @@ function handleRoomSocketMessageEvent(event) {
 }
 
 async function setupLiveblocksSync() {
-  initSyncBadge();
-  initOfflineBanner();
-  setSyncStatus('connecting…', true);
+  initSyncIndicator();
+  setSyncIndicator('connecting', 'Connecting…');
 
   try {
     const { default: ReconnectingWebSocket } = await import('https://esm.sh/reconnecting-websocket@4.4.0');
@@ -11015,12 +11013,11 @@ async function setupLiveblocksSync() {
     roomSocket.addEventListener('error', handleRoomSocketError);
     roomSocket.addEventListener('message', handleRoomSocketMessageEvent);
 
-    window.addEventListener('offline', function() { scheduleOfflineBanner(); });
+    window.addEventListener('offline', function() { scheduleOfflineEscalation(); });
 
   } catch (err) {
     console.error('Room sync init failed:', err);
-    setSyncStatus('offline', true);
-    showToast('Sync failed: ' + err.message, 'error');
+    setSyncIndicator('problem', 'Sync failed: ' + err.message);
   }
 }
 
@@ -11489,7 +11486,6 @@ function logActivity(actionText) {
 function pushLiveblocksState() {
   clearTimeout(syncPushTimer);
   syncPushTimer = null;
-  setSyncStatus('saving…', true);
 
   const p = getActiveProject();
   if (!p) return;
@@ -11502,10 +11498,9 @@ function pushLiveblocksState() {
       subtitle: document.getElementById('headerSubtitle').textContent.trim(),
       theme: getSavedTheme()
     });
-    setSyncStatus('live', false);
   } catch (e) {
     console.error(e);
-    setSyncStatus('save failed', true);
+    setSyncIndicator('problem', 'Save failed: ' + e.message);
   }
 }
 
@@ -11536,7 +11531,11 @@ function refreshActiveProjectFromShared() {
   renders.forEach(function(fn) {
     try { fn(); } catch (err) { console.error('refreshActiveProjectFromShared: ' + (fn.name || 'refreshJobFormIfOpen') + ' failed', err); }
   });
-  showToast('Synced latest changes', 'info');
+  // No toast here on purpose — this fires on every incoming change from
+  // anyone else in the room, so during normal collaborative use it was
+  // one of the most frequent, most intrusive notifications in the app.
+  // The UI updating is the notification; a routine sync doesn't need an
+  // announcement on top of it.
 }
 
 // A remote update can land while the user is mid-edit (isBusyEditing()),
