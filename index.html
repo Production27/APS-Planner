@@ -3312,6 +3312,11 @@ function softenColor(hex, amount) {
   const b = blend(num & 255);
   return '#' + toHex(r) + toHex(g) + toHex(b);
 }
+// Same palette as COLOR_PRESETS (job/task colors), just softened toward
+// pastel — used only for the board column color picker, so picking a
+// board color is its own distinct, intentionally-gentler palette rather
+// than a runtime transform of whatever the job picker offers.
+const BOARD_COLOR_PRESETS = COLOR_PRESETS.map(function(c) { return softenColor(c); });
 const ARCHIVE_CUTOFF_DAYS = 90;
 let ganttFirstRender = true;
 // Fallback only — per-board default lives on col.defaultDuration, set from
@@ -9281,12 +9286,13 @@ function renderBoard() {
   BOARD_COLUMNS.forEach(col => {
     const colEl = wrapper.querySelector('.board-column[data-column="' + col.id + '"]');
     if (colEl && col.color) {
-      const softCol = softenColor(col.color);
-      colEl.style.background = softCol;
-      // Check contrast against the softened color actually being shown,
-      // not the original — softening always lightens, so a column that
-      // used to need white text may now read better with dark text.
-      const dark = isDarkColor(softCol);
+      // col.color is stored pre-softened now — the board column picker
+      // (BOARD_COLOR_PRESETS, below) offers its own pastel palette
+      // directly, rather than this rendering a runtime-transformed
+      // version of whatever the job/task color picker offers. Render it
+      // as-is; no further transform here.
+      colEl.style.background = col.color;
+      const dark = isDarkColor(col.color);
       const header = colEl.querySelector('.board-column-header');
       const addBtn = colEl.querySelector('.board-add-card-btn');
       if (header) {
@@ -9303,7 +9309,7 @@ function renderBoard() {
       colorGrid.innerHTML =
         '<div class="board-col-color-option' + (!col.color ? ' selected' : '') + '" style="background:linear-gradient(135deg,#f5f5f5 0%,#e0e0e0 100%);position:relative;" onclick="changeColumnColor(\'' + col.id + '\', \'' + '\', event)" title="Default (no color)">' +
         '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#888;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span></div>' +
-        COLOR_PRESETS.map(c =>
+        BOARD_COLOR_PRESETS.map(c =>
         '<div class="board-col-color-option' + (col.color === c ? ' selected' : '') + '" style="background:' + c + ';" onclick="changeColumnColor(\'' + col.id + '\', \'' + c + '\', event)"></div>'
       ).join('');
     }
