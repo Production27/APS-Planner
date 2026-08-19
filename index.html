@@ -10590,6 +10590,20 @@ let unsubActivityLog = null;
 let subscribedProjectId = null;
 let syncPushTimer = null;
 let syncBadgeEls = null;
+
+// Realtime collaboration minutes are billed per connected-minute (see
+// Liveblocks pricing) — a tab left open and untouched all day keeps
+// racking those up for no real benefit. After IDLE_DISCONNECT_MS with no
+// mouse/keyboard/touch activity, the room connection is actually left
+// (not just "paused" — leave() tears down the websocket, which is what
+// stops billing), and re-entered the moment activity resumes. See
+// connectLiveblocksRoom()/disconnectForIdle()/reconnectFromIdle().
+const IDLE_DISCONNECT_MS = 10 * 60 * 1000;
+let liveblocksClient = null;
+let liveblocksLeaveFn = null;
+let idleDisconnected = false;
+let idleReconnecting = false;
+let lastActivityAt = Date.now();
 // Section 7: set when a remote update to the active project arrives while
 // the user is mid-edit (isBusyEditing()); the deferred refresh runs once
 // they're done, see refreshActiveProjectFromShared() / the focusout listener.
@@ -10687,10 +10701,10 @@ function initSyncBadge() {
   syncBadgeEls = { badge: badge, dot: badge.querySelector('#syncDot'), text: badge.querySelector('#syncText') };
 }
 
-function setSyncStatus(text, busy) {
+function setSyncStatus(text, busy, dotColor) {
   if (!syncBadgeEls) return;
   syncBadgeEls.text.textContent = text;
-  syncBadgeEls.dot.style.background = busy ? '#f0ad4e' : '#43a047';
+  syncBadgeEls.dot.style.background = dotColor || (busy ? '#f0ad4e' : '#43a047');
 }
 
 function isBusyEditing() {
@@ -10754,148 +10768,113 @@ document.addEventListener('visibilitychange', function() {
 });
 window.addEventListener('pagehide', flushPendingSync);
 
-async function setupLiveblocksSync() {
-  initSyncBadge();
-  initOfflineBanner();
-  setSyncStatus('connecting…', true);
-
-  try {
-    const { createClient, LiveObject, LiveMap, LiveList } = await import('https://esm.sh/@liveblocks/client@2.12.0');
-    LiveObjectCtor = LiveObject;
-    LiveMapCtor = LiveMap;
-    LiveListCtor = LiveList;
-
-    const client = createClient({
-      authEndpoint: async () => {
-        const { username, password } = ensureUserCredentials(false);
-        let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username, password: password })
-        });
-
-        // Wrong or changed credentials — clear them, ask again, retry once.
-        if (res.status === 401) {
-          localStorage.removeItem(USERNAME_KEY);
-          localStorage.removeItem(USER_PASSWORD_KEY);
-          const retry = ensureUserCredentials(true);
-          res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: retry.username, password: retry.password })
-          });
-        }
-
-        if (!res.ok) throw new Error('Liveblocks auth failed: ' + res.status);
-        const data = await res.json();
-        // The worker rides the caller's confirmed identity along as a
-        // sibling `user` field on the same response the Liveblocks SDK
-        // reads `.token` from — extra properties are simply ignored by the
-        // SDK, so this needs no separate round trip. Using it here (rather
-        // than trusting a client-typed name) is what makes comments/
-        // activity-log entries actually reflect who really logged in.
-        if (data && data.user) {
-          if (data.user.displayName) localStorage.setItem(DISPLAY_NAME_KEY, data.user.displayName);
-          currentUserRole = data.user.role || null;
-        }
-        return data;
-      }
-    });
-
-    // Liveblocks v2 uses enterRoom(). Storage is namespaced per project:
-    // root.projects is a LiveMap keyed by project id, and each entry holds its
-    // own tasksMap/boardCardsMap/boardColumns/fieldOptions/header — so editing
-    // or deleting one project can never touch another project's data, and two
-    // people on different projects at the same time can't stomp on each other.
-    // Tasks/cards within a project are LiveMaps keyed by their stable id, NOT
-    // plain arrays — this lets Liveblocks merge concurrent edits to different
-    // tasks/cards in the *same* project at the individual-item level instead of
-    // one full save silently overwriting another's.
-    const { room } = client.enterRoom(LIVEBLOCKS_ROOM_ID, {
-      initialStorage: {
-        projects: new LiveMap()
-      }
-    });
-
-    liveblocksRoom = room;
-
-    // Show real connection state instead of assuming "live" forever once connected.
-    // Liveblocks' client retries connecting on its own with backoff — this just makes
-    // sure the *person* can't miss it if that retry is taking a while.
-    room.subscribe('status', function(status) {
-      if (status === 'connected') {
-        setSyncStatus('live', false);
-        hideOfflineBanner();
-      } else if (status === 'reconnecting' || status === 'connecting') {
-        setSyncStatus('reconnecting…', true);
-        scheduleOfflineBanner();
-      } else if (status === 'disconnected') {
-        setSyncStatus('offline', true);
-        scheduleOfflineBanner();
-      }
-    });
-    room.subscribe('lost-connection', function(event) {
-      if (event === 'lost') showToast('Connection lost — trying to reconnect…', 'error');
-      if (event === 'restored') { showToast('Back online — synced', 'success'); hideOfflineBanner(); }
-      if (event === 'failed') {
-        showToast('Could not reconnect. Reload the page to keep syncing.', 'error');
-        showOfflineBanner("Couldn't reconnect — reload the page to keep syncing");
-      }
-    });
-
-    // Chasing a specific failure mode: a job push that the SDK accepts
-    // without throwing (pushProjectToShared's per-item safeSet already
-    // covers a synchronous rejection) but that never actually gets
-    // acknowledged by the server — the room 'status' event above only
-    // reflects the WebSocket connection, not whether queued local writes
-    // have actually been persisted. storage-status is the SDK's own signal
-    // for that: it sits on 'synchronizing' while local changes are queued
-    // but unconfirmed, and should settle back to 'synchronized' within a
-    // second or two. If it doesn't, that's a write silently not reaching
-    // the server with nothing else in the public API surfacing it.
-    try {
-      let storageStuckTimer = null;
-      room.subscribe('storage-status', function(status) {
-        clearTimeout(storageStuckTimer);
-        if (status === 'synchronizing') {
-          storageStuckTimer = setTimeout(function() {
-            if (room.getStorageStatus() === 'synchronizing') {
-              console.error('Liveblocks storage-status stuck on "synchronizing" for 8+ seconds — local changes are queued but not confirmed saved by the server.');
-              showToast('Your last change may not have saved — sync has been stuck. Try reloading.', 'error');
-            }
-          }, 8000);
-        }
-      });
-    } catch (err) {
-      console.warn('storage-status subscription not supported by this Liveblocks client version', err);
+// Enters (or re-enters, after an idle-triggered leave — see
+// disconnectForIdle()/reconnectFromIdle()) the shared room and wires up
+// every per-connection subscription. isFirstConnect gates the bootstrap
+// work that must only ever run once per page load (legacy schema
+// migration, fresh-install placeholder discard, fixed-project-set
+// convergence) — re-running that on every idle reconnect would be at
+// best wasteful and at worst risks re-triggering the exact placeholder/
+// dedup bug described in the block below. A reconnect just re-subscribes
+// and calls applyLiveblocksState() once to catch up on whatever changed
+// while disconnected.
+async function connectLiveblocksRoom(isFirstConnect) {
+  // Liveblocks v2 uses enterRoom(). Storage is namespaced per project:
+  // root.projects is a LiveMap keyed by project id, and each entry holds its
+  // own tasksMap/boardCardsMap/boardColumns/fieldOptions/header — so editing
+  // or deleting one project can never touch another project's data, and two
+  // people on different projects at the same time can't stomp on each other.
+  // Tasks/cards within a project are LiveMaps keyed by their stable id, NOT
+  // plain arrays — this lets Liveblocks merge concurrent edits to different
+  // tasks/cards in the *same* project at the individual-item level instead of
+  // one full save silently overwriting another's.
+  const { room, leave } = liveblocksClient.enterRoom(LIVEBLOCKS_ROOM_ID, {
+    initialStorage: {
+      projects: new LiveMapCtor()
     }
+  });
 
-    // Backstop for the case where the OS/browser reports the network dropping
-    // outright (e.g. wifi toggled off) — belt and suspenders alongside the
-    // Liveblocks status events above.
-    window.addEventListener('offline', function() { scheduleOfflineBanner(); });
+  liveblocksRoom = room;
+  liveblocksLeaveFn = leave;
 
-    const { root } = await room.getStorage();
-    liveblocksRoot = root;
-    migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList);
-    subscribeToActiveProjectLog();
+  // Show real connection state instead of assuming "live" forever once connected.
+  // Liveblocks' client retries connecting on its own with backoff — this just makes
+  // sure the *person* can't miss it if that retry is taking a while.
+  room.subscribe('status', function(status) {
+    if (status === 'connected') {
+      setSyncStatus('live', false);
+      hideOfflineBanner();
+    } else if (status === 'reconnecting' || status === 'connecting') {
+      setSyncStatus('reconnecting…', true);
+      scheduleOfflineBanner();
+    } else if (status === 'disconnected') {
+      setSyncStatus('offline', true);
+      scheduleOfflineBanner();
+    }
+  });
+  room.subscribe('lost-connection', function(event) {
+    if (event === 'lost') showToast('Connection lost — trying to reconnect…', 'error');
+    if (event === 'restored') { showToast('Back online — synced', 'success'); hideOfflineBanner(); }
+    if (event === 'failed') {
+      showToast('Could not reconnect. Reload the page to keep syncing.', 'error');
+      showOfflineBanner("Couldn't reconnect — reload the page to keep syncing");
+    }
+  });
 
-    // Subscribe to all storage changes, deep, so nested LiveMap/LiveList/LiveObject
-    // changes anywhere in the tree bubble up here too (not just top-level root changes).
-    room.subscribe(root, () => {
-      if (liveblocksUpdateDepth > 0) return;
-      // A bug anywhere in the merge/render chain must never take down this
-      // subscription — if it did, this client would stop receiving every
-      // future teammate update too (their pushes would keep succeeding,
-      // making it look one-directional: "they get my changes, I don't get
-      // theirs" — exactly the failure mode this guards against).
-      try {
-        applyLiveblocksState(root);
-      } catch (err) {
-        console.error('applyLiveblocksState failed — a remote update may not have fully applied', err);
+  // Chasing a specific failure mode: a job push that the SDK accepts
+  // without throwing (pushProjectToShared's per-item safeSet already
+  // covers a synchronous rejection) but that never actually gets
+  // acknowledged by the server — the room 'status' event above only
+  // reflects the WebSocket connection, not whether queued local writes
+  // have actually been persisted. storage-status is the SDK's own signal
+  // for that: it sits on 'synchronizing' while local changes are queued
+  // but unconfirmed, and should settle back to 'synchronized' within a
+  // second or two. If it doesn't, that's a write silently not reaching
+  // the server with nothing else in the public API surfacing it.
+  try {
+    let storageStuckTimer = null;
+    room.subscribe('storage-status', function(status) {
+      clearTimeout(storageStuckTimer);
+      if (status === 'synchronizing') {
+        storageStuckTimer = setTimeout(function() {
+          if (room.getStorageStatus() === 'synchronizing') {
+            console.error('Liveblocks storage-status stuck on "synchronizing" for 8+ seconds — local changes are queued but not confirmed saved by the server.');
+            showToast('Your last change may not have saved — sync has been stuck. Try reloading.', 'error');
+          }
+        }, 8000);
       }
-    }, { isDeep: true });
+    });
+  } catch (err) {
+    console.warn('storage-status subscription not supported by this Liveblocks client version', err);
+  }
 
+  const { root } = await room.getStorage();
+  liveblocksRoot = root;
+  if (isFirstConnect) migrateLegacyStorageShape(root, LiveMapCtor, LiveObjectCtor, LiveListCtor);
+
+  // subscribedProjectId persists across a leave()/re-enterRoom() cycle, but
+  // the room it was bound to doesn't — force a fresh subscription against
+  // the new room rather than skipping it as "already subscribed".
+  subscribedProjectId = null;
+  subscribeToActiveProjectLog();
+
+  // Subscribe to all storage changes, deep, so nested LiveMap/LiveList/LiveObject
+  // changes anywhere in the tree bubble up here too (not just top-level root changes).
+  room.subscribe(root, () => {
+    if (liveblocksUpdateDepth > 0) return;
+    // A bug anywhere in the merge/render chain must never take down this
+    // subscription — if it did, this client would stop receiving every
+    // future teammate update too (their pushes would keep succeeding,
+    // making it look one-directional: "they get my changes, I don't get
+    // theirs" — exactly the failure mode this guards against).
+    try {
+      applyLiveblocksState(root);
+    } catch (err) {
+      console.error('applyLiveblocksState failed — a remote update may not have fully applied', err);
+    }
+  }, { isDeep: true });
+
+  if (isFirstConnect) {
     // On first connect, if remote has any projects use them; otherwise seed
     // the room with whatever's in this browser's local project list.
     const projectsMap = root.get('projects');
@@ -10956,13 +10935,136 @@ async function setupLiveblocksSync() {
       loadActiveProjectData();
       renderAll();
     }
+  } else {
+    // Reconnecting after an idle gap — just catch up on the current remote
+    // state. Anything unsaved locally when the tab went idle was already
+    // pushed before then (the routine save/queueSharedSync path runs on
+    // every meaningful edit, not just periodically), so there's nothing
+    // queued to flush here.
+    applyLiveblocksState(root);
+  }
 
-    setSyncStatus('live', false);
+  setSyncStatus('live', false);
+}
+
+async function setupLiveblocksSync() {
+  initSyncBadge();
+  initOfflineBanner();
+  setSyncStatus('connecting…', true);
+
+  try {
+    const { createClient, LiveObject, LiveMap, LiveList } = await import('https://esm.sh/@liveblocks/client@2.12.0');
+    LiveObjectCtor = LiveObject;
+    LiveMapCtor = LiveMap;
+    LiveListCtor = LiveList;
+
+    liveblocksClient = createClient({
+      authEndpoint: async () => {
+        const { username, password } = ensureUserCredentials(false);
+        let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username, password: password })
+        });
+
+        // Wrong or changed credentials — clear them, ask again, retry once.
+        if (res.status === 401) {
+          localStorage.removeItem(USERNAME_KEY);
+          localStorage.removeItem(USER_PASSWORD_KEY);
+          const retry = ensureUserCredentials(true);
+          res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: retry.username, password: retry.password })
+          });
+        }
+
+        if (!res.ok) throw new Error('Liveblocks auth failed: ' + res.status);
+        const data = await res.json();
+        // The worker rides the caller's confirmed identity along as a
+        // sibling `user` field on the same response the Liveblocks SDK
+        // reads `.token` from — extra properties are simply ignored by the
+        // SDK, so this needs no separate round trip. Using it here (rather
+        // than trusting a client-typed name) is what makes comments/
+        // activity-log entries actually reflect who really logged in.
+        if (data && data.user) {
+          if (data.user.displayName) localStorage.setItem(DISPLAY_NAME_KEY, data.user.displayName);
+          currentUserRole = data.user.role || null;
+        }
+        return data;
+      }
+    });
+
+    // Backstop for the case where the OS/browser reports the network dropping
+    // outright (e.g. wifi toggled off) — belt and suspenders alongside the
+    // Liveblocks status events (see connectLiveblocksRoom()).
+    window.addEventListener('offline', function() { scheduleOfflineBanner(); });
+
+    await connectLiveblocksRoom(true);
+    setupIdleDisconnect();
 
   } catch (err) {
     console.error('Liveblocks init failed:', err);
     setSyncStatus('offline', true);
     showToast('Liveblocks failed: ' + err.message, 'error');
+  }
+}
+
+// Leaves the room (tearing down the websocket, which is what actually
+// stops realtime-collaboration-minute billing — see IDLE_DISCONNECT_MS's
+// comment) after a stretch of no mouse/keyboard/touch activity, and
+// re-enters the moment activity resumes. All the push functions this app
+// already has (pushFieldToShared, queueSharedSync, etc.) guard on
+// `liveblocksRoot && liveblocksRoom` before doing anything, so nulling
+// those out here is safe — it makes an idle tab behave exactly like any
+// other disconnected state those functions already tolerate.
+function setupIdleDisconnect() {
+  const markActive = function() {
+    lastActivityAt = Date.now();
+    if (idleDisconnected) reconnectFromIdle();
+  };
+  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'].forEach(function(evt) {
+    window.addEventListener(evt, markActive, { passive: true });
+  });
+  // Switching back to a backgrounded tab fires no mouse/keyboard events at
+  // all until you actually touch it — visibilitychange is the earliest
+  // signal that someone's looking at it again.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') markActive();
+  });
+  setInterval(function() {
+    if (!idleDisconnected && Date.now() - lastActivityAt >= IDLE_DISCONNECT_MS) {
+      disconnectForIdle();
+    }
+  }, 30000);
+}
+
+function disconnectForIdle() {
+  if (idleDisconnected || !liveblocksLeaveFn) return;
+  try { liveblocksLeaveFn(); } catch (err) { console.warn('Liveblocks leave() failed', err); }
+  if (unsubActivityLog) { try { unsubActivityLog(); } catch (e) {} unsubActivityLog = null; }
+  subscribedProjectId = null;
+  liveblocksRoom = null;
+  liveblocksRoot = null;
+  liveblocksLeaveFn = null;
+  idleDisconnected = true;
+  setSyncStatus('idle — paused', false, '#8993a1');
+}
+
+async function reconnectFromIdle() {
+  if (!idleDisconnected || idleReconnecting) return;
+  idleReconnecting = true;
+  setSyncStatus('reconnecting…', true);
+  try {
+    await connectLiveblocksRoom(false);
+    idleDisconnected = false;
+  } catch (err) {
+    console.error('Reconnect after idle failed:', err);
+    setSyncStatus('offline', true);
+    showToast('Could not reconnect after being idle — try reloading.', 'error');
+    // idleDisconnected stays true so the next activity event tries again.
+  } finally {
+    idleReconnecting = false;
   }
 }
 
