@@ -3293,6 +3293,25 @@ function darkenColor(hex, amount) {
   const b = Math.max(0, Math.round((num & 255) * (1 - amount)));
   return 'rgb(' + r + ',' + g + ',' + b + ')';
 }
+// How far Gantt task bars and board column backgrounds get blended
+// toward white — a gentle pastel effect rather than full saturation.
+const SOFTEN_AMOUNT = 0.18;
+// Blends a color toward white by `amount` (0-1, defaults to
+// SOFTEN_AMOUNT). Returns a hex string (not rgb(), unlike darkenColor
+// above) specifically so it composes with isDarkColor(), which needs a
+// '#rrggbb' string.
+function softenColor(hex, amount) {
+  hex = (hex || '#3949ab').replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
+  amount = typeof amount === 'number' ? amount : SOFTEN_AMOUNT;
+  const num = parseInt(hex, 16) || 0;
+  const blend = function(c) { return Math.max(0, Math.min(255, Math.round(c + (255 - c) * amount))); };
+  const toHex = function(c) { return c.toString(16).padStart(2, '0'); };
+  const r = blend((num >> 16) & 255);
+  const g = blend((num >> 8) & 255);
+  const b = blend(num & 255);
+  return '#' + toHex(r) + toHex(g) + toHex(b);
+}
 const ARCHIVE_CUTOFF_DAYS = 90;
 let ganttFirstRender = true;
 // Fallback only — per-board default lives on col.defaultDuration, set from
@@ -6017,10 +6036,14 @@ function renderGantt() {
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
       bar.style.top = (ghostVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
-      bar.style.background = task.color || job.color || '#999';
+      bar.style.background = softenColor(task.color || job.color || '#999');
       if (duration !== 1) {
         const jobTag = document.createElement('span');
         jobTag.className = 'task-bar-job-tag';
+        // Deliberately NOT softened, unlike the bar it sits on — this tag's
+        // CSS hardcodes white text, and a softened (lightened) background
+        // under white text loses too much contrast for lighter hues like
+        // yellow/purple (confirmed visually before shipping this).
         jobTag.style.background = job.color || '#999';
         jobTag.textContent = job.name;
         jobTag.title = job.name;
@@ -6072,6 +6095,8 @@ function renderGantt() {
         labelWrap.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
         const jobTag = document.createElement('span');
         jobTag.className = 'task-bar-job-tag' + (entry.collapsible ? ' collapsible' : '');
+        // Not softened — see the comment on the other task-bar-job-tag
+        // background assignment above for why (hardcoded white text).
         jobTag.style.background = job.color || '#999';
         const barCollapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? '▸ ' : '▾ ') : '';
         jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + barCollapseGlyph + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
@@ -6173,17 +6198,20 @@ function renderGantt() {
           }
         }
       } else {
-        bar.style.background = task.color || job.color;
+        bar.style.background = softenColor(task.color || job.color);
         // Same job-color outline as a condensed Jobs/Leads bar, so which
         // job a task belongs to is visible at a glance without needing the
         // job-name tag below. Due markers keep their own white/red ring
         // instead — that's a distinct "this is a due date" signal, not a
-        // job identity one.
+        // job identity one. Left at full saturation (unsoftened) so it
+        // still reads as a crisp edge against the softened fill.
         if (!task.isDueMarker) bar.style.border = '2px solid ' + (job.color || '#3949ab');
         bar.textContent = task.isDueMarker ? '🚩' : '';
         if (duration !== 1) {
           const jobTag = document.createElement('span');
           jobTag.className = 'task-bar-job-tag';
+          // Not softened — see the comment on the other task-bar-job-tag
+          // background assignments above for why (hardcoded white text).
           jobTag.style.background = job.color;
           jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
           jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
@@ -6369,7 +6397,7 @@ function renderGantt() {
             solid.style.left = segLeft + 'px';
             solid.style.width = segWidth + 'px';
             solid.style.top = segTop;
-            solid.style.background = dt.t.color || job.color || '#3949ab';
+            solid.style.background = softenColor(dt.t.color || job.color || '#3949ab');
             solid.title = dt.t.name;
             solid.addEventListener('mouseenter', function(e) { showTooltip(e, job, dt.t); });
             solid.addEventListener('mouseleave', hideTooltip);
@@ -6404,12 +6432,12 @@ function renderGantt() {
               // fill indistinguishable from a solid segment. Alternate the
               // job color with a darker shade of itself instead, so an
               // overlap still reads as a hatch.
-              const base = job.color || '#3949ab';
+              const base = softenColor(job.color || '#3949ab');
               const dark = darkenColor(base, 0.28);
               hatch.style.background = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
               hatch.title = 'Overlapping sub-phases: ' + covering.map(function(dt) { return dt.t.name; }).join(', ');
             } else {
-              const uniqColors = Array.from(new Set(covering.map(function(dt) { return dt.t.color || job.color || '#3949ab'; })));
+              const uniqColors = Array.from(new Set(covering.map(function(dt) { return softenColor(dt.t.color || job.color || '#3949ab'); })));
               const stripe = 6;
               const stops = [];
               uniqColors.forEach(function(c, idx) {
@@ -9253,8 +9281,12 @@ function renderBoard() {
   BOARD_COLUMNS.forEach(col => {
     const colEl = wrapper.querySelector('.board-column[data-column="' + col.id + '"]');
     if (colEl && col.color) {
-      colEl.style.background = col.color;
-      const dark = isDarkColor(col.color);
+      const softCol = softenColor(col.color);
+      colEl.style.background = softCol;
+      // Check contrast against the softened color actually being shown,
+      // not the original — softening always lightens, so a column that
+      // used to need white text may now read better with dark text.
+      const dark = isDarkColor(softCol);
       const header = colEl.querySelector('.board-column-header');
       const addBtn = colEl.querySelector('.board-add-card-btn');
       if (header) {
