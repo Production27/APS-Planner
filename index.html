@@ -10976,6 +10976,20 @@ function synthesizeJobFromOrphanCard(card, boardColumns) {
 const ORPHAN_RECOVERY_GRACE_MS = 5000;
 const pendingOrphanRecovery = {};
 
+// True while this project has a write sitting in pendingWrites that the
+// server hasn't acked yet. A snapshot broadcast can be triggered by
+// anything in the room (another user's edit, this project's own earlier
+// push) and doesn't guarantee it reflects a write we just made — applying
+// it blindly can race an optimistic local add/edit that hasn't reached
+// the server yet and wipe it back out (caught during staging testing: a
+// just-added job vanishing). See applyRoomSnapshot()'s use of this below.
+function hasPendingWriteForProject(projectId) {
+  for (const entry of pendingWrites.values()) {
+    if (entry.msg && entry.msg.projectId === projectId) return true;
+  }
+  return false;
+}
+
 function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
   if (!remoteProjects || typeof remoteProjects !== 'object') return;
 
@@ -11028,28 +11042,46 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
     }
 
     // ── delete tombstones ── merged/pruned before jobs/cards/events below
-    // so they can be filtered against it.
+    // so they can be filtered against it. Always safe to merge in — a
+    // tombstone only ever adds deletion knowledge, it can't itself wipe
+    // out data the way blindly re-deriving jobs/cards/events below can.
     local.deletedIds = mergeTombstones(local.deletedIds, remoteDeletedIds);
 
+    // If a write for this project is still unacked, this snapshot may be
+    // racing ahead of it (broadcast by something unrelated) and not yet
+    // reflect it — re-deriving local.jobs/boardCards/calendarEvents from
+    // it now would clobber an optimistic local add/edit before it ever
+    // reaches the server. Skip it for just this project on just this
+    // snapshot; the DO always broadcasts a fresh snapshot immediately
+    // after accepting any write, so the very next one (once acked) will
+    // already include our change and is safe to apply normally.
+    const projectSyncPending = hasPendingWriteForProject(projectId);
+
     // ── jobs (now a plain {id: job} object from the server, not a LiveMap) ──
-    const j = Object.values(remoteJobs).filter(function(job) { return !local.deletedIds[String(job.id)]; });
-    ensureJobAndTaskIds(j);
-    j.forEach(function(job) { if (!job.notes) job.notes = ''; });
-    j.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-    local.jobs = j;
+    if (!projectSyncPending) {
+      const j = Object.values(remoteJobs).filter(function(job) { return !local.deletedIds[String(job.id)]; });
+      ensureJobAndTaskIds(j);
+      j.forEach(function(job) { if (!job.notes) job.notes = ''; });
+      j.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+      local.jobs = j;
+    }
 
     // ── columns ──
     if (Array.isArray(remoteColumns) && remoteColumns.length) local.boardColumns = remoteColumns;
 
     // ── cards ──
-    const c = Object.values(remoteCards).filter(function(card) { return !local.deletedIds[String(card.id)]; });
-    ensureCardIds(c);
-    local.boardCards = c;
+    if (!projectSyncPending) {
+      const c = Object.values(remoteCards).filter(function(card) { return !local.deletedIds[String(card.id)]; });
+      ensureCardIds(c);
+      local.boardCards = c;
+    }
 
     // ── calendar-only events ──
-    const ce = Object.values(remoteCalEvents).filter(function(ev) { return !local.deletedIds[String(ev.id)]; });
-    ensureCalendarEventIds(ce);
-    local.calendarEvents = ce;
+    if (!projectSyncPending) {
+      const ce = Object.values(remoteCalEvents).filter(function(ev) { return !local.deletedIds[String(ev.id)]; });
+      ensureCalendarEventIds(ce);
+      local.calendarEvents = ce;
+    }
 
     // ── fields ──
     if (remoteFieldOpts) local.fieldOptions = Object.assign({}, local.fieldOptions, remoteFieldOpts);
