@@ -3482,7 +3482,6 @@ function switchProject(projectId) {
   saveProjects();
   loadActiveProjectData();
   renderAll();
-  subscribeToActiveProjectLog();
   const sidebar = document.getElementById('activitySidebar');
   if (sidebar && !sidebar.classList.contains('collapsed')) {
     renderActivityLogSidebar();
@@ -10276,20 +10275,18 @@ function renderActivityLogSidebar() {
   const p = getActiveProject();
   const items = [];
 
-  // Merge local fallback entries
+  // Merge local fallback entries — logActivity() pushes here immediately
+  // so an offline/not-yet-synced action still shows up right away.
   localActivityLog.forEach(function(item) { items.push(item); });
 
-  // Merge Liveblocks entries if connected
-  if (liveblocksRoot && p) {
-    const entry = liveblocksRoot.get('projects').get(p.id);
-    if (entry) {
-      const log = entry.get('activityLog');
-      if (log && log.toArray) {
-        log.toArray().forEach(function(item) { items.push(item); });
-      } else if (log && log.length) {
-        for (let i = 0; i < log.length; i++) items.push(log.get(i));
-      }
-    }
+  // Merge the project's synced activity log (populated from the room's
+  // snapshot by applyRoomSnapshot() — see "local.activityLog =" there).
+  // This used to read a live Liveblocks LiveList directly; that variable
+  // (liveblocksRoot) no longer exists post-migration, which silently
+  // broke this whole function (threw before ever reaching the render
+  // below) until caught live in production.
+  if (p && Array.isArray(p.activityLog)) {
+    p.activityLog.forEach(function(item) { items.push(item); });
   }
 
   // Deduplicate by exact who+what+when match
@@ -10301,10 +10298,7 @@ function renderActivityLogSidebar() {
   });
 
   if (!unique.length) {
-    const status = (!liveblocksRoot)
-      ? 'Make an edit to see activity here.<br><span style="font-size:11px;color:#999;">(Connect to Liveblocks to share with the team)</span>'
-      : 'No activity yet.';
-    bodyEl.innerHTML = '<div class="activity-log-empty">' + status + '</div>';
+    bodyEl.innerHTML = '<div class="activity-log-empty">No activity yet.</div>';
     return;
   }
 
