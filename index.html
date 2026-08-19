@@ -10478,37 +10478,42 @@ document.getElementById('headerSubtitle').addEventListener('paste', function(e) 
   document.execCommand('insertText', false, text);
 });
 
-// ===== LIVEBLOCKS SYNC =====
-// Note: background photos stay local-only (per-browser).
+// ===== ROOM SYNC (Durable Object backend) =====
+// Replaces Liveblocks — see the migration plan and worker/aps-do-worker.js.
+// No more Live*/CRDT types: the server is authoritative (a Durable Object
+// processes one message at a time, so there's no true concurrent-write
+// race to resolve), and every push/pull below just deals in plain JSON.
+// The application-level defenses that predate this migration (upsert-only
+// pushes, delete tombstones, orphan-card recovery, the busy-editing defer
+// gate) are NOT relics of the old backend — they protect against races
+// that exist independent of which realtime service is behind this, and
+// are kept close to unchanged on purpose. What IS new here: per-field
+// revision numbers (protects against a *stale*, not concurrent, whole-
+// value write clobbering a newer one — a Durable Object's single-
+// threaded processing doesn't prevent that on its own, only true
+// simultaneous writes) and an explicit offline write-queue with
+// stuck-write detection (Liveblocks' SDK used to queue+replay writes and
+// signal a stuck sync for free; a hand-rolled WebSocket client doesn't
+// get that automatically, so it's built here instead).
 //
-// Auth: the browser holds no Liveblocks key at all. Instead it calls
-// LIVEBLOCKS_AUTH_ENDPOINT (a small Cloudflare Worker, deployed separately —
-// not part of this repo) with a per-user username+password (see
-// ensureUserCredentials()). The worker checks the credentials server-side
-// against a KV-backed user list and, if they match, mints a short-lived
-// token scoped to just this room using the Liveblocks SECRET key (which
-// lives only on the worker, never in this file). The old shared team
-// password still works too, as a break-glass admin fallback — see the
-// worker's resolveIdentity() — so nobody's locked out and it's how the
-// first real admin account gets created via Manage Users.
-//
-// Fill this in after deploying the worker (see that file's header comment
-// for deploy steps) — it'll look like https://xxx.<you>.workers.dev
+// Auth: unchanged in spirit — the browser holds no secret. It calls
+// LIVEBLOCKS_AUTH_ENDPOINT (still named after the service it used to
+// front — renaming it would touch the several other call sites in this
+// file that also use it for backups/user-management, not worth the extra
+// diff on top of everything else changing here) with a per-user
+// username+password (see ensureUserCredentials()), gets back a short-
+// lived signed token (not a Liveblocks token anymore), and uses it to
+// open a WebSocket to the Worker's Durable Object.
 const LIVEBLOCKS_AUTH_ENDPOINT = "https://lucky-snow-8179.production-db3.workers.dev/";
-const LIVEBLOCKS_ROOM_ID = "aps-production-room"; // must match ROOM_ID in the worker
 
 // How long a delete tombstone (see recordTombstone()/deleteFromSharedMap())
-// sticks around before it's pruned. Needs to outlast any realistically-
-// stale tab/device — a browser left open over a long weekend, say — so its
-// eventual upsert-only push (see pushProjectToShared()'s jobsMap comment)
-// still gets blocked from resurrecting whatever it deleted, rather than
-// deleting-by-absence (which would risk destroying a teammate's newer,
-// unrelated addition instead — the exact failure mode that design avoids).
+// sticks around before it's pruned locally. Needs to outlast any
+// realistically-stale tab/device so its eventual reconnect-replay still
+// gets blocked from resurrecting whatever it deleted (the server enforces
+// this too — see aps-room-state.js — this is just the client's own mirror
+// of the same rule, used when merging a snapshot).
 const TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Combines two {id: deletedAtMs} tombstone objects (e.g. this tab's own
-// knowledge and whatever the shared room already has) and drops anything
-// past TOMBSTONE_TTL_MS in the same pass, so the set doesn't grow forever.
 function mergeTombstones(a, b) {
   const merged = Object.assign({}, a || {}, b || {});
   const cutoff = Date.now() - TOMBSTONE_TTL_MS;
@@ -10540,12 +10545,12 @@ function getStoredUserPassword() {
   return localStorage.getItem(USER_PASSWORD_KEY) || "";
 }
 
-// Set from the Worker's confirmed identity after a successful login (see
-// the authEndpoint callback below) — 'admin' or 'member', or null before
-// the first successful connection. Purely a UI convenience (e.g. showing a
-// clearer error before even trying an admin-only action); the Worker
-// re-verifies role server-side on every admin call regardless, so nothing
-// security-relevant depends on this being accurate.
+// Set from the Worker's confirmed identity after a successful login — see
+// fetchRoomToken() below. 'admin' or 'member', or null before the first
+// successful connection. Purely a UI convenience (e.g. showing a clearer
+// error before even trying an admin-only action); the Worker re-verifies
+// role server-side on every admin call regardless, so nothing security-
+// relevant depends on this being accurate.
 let currentUserRole = null;
 
 // Prompts once per missing field (native prompt, matching how project
@@ -10580,69 +10585,25 @@ function ensureUserCredentials(forceReprompt) {
   return { username, password };
 }
 
-let liveblocksRoom = null;
-let liveblocksRoot = null;
-let LiveMapCtor = null;
-let LiveListCtor = null;
-let LiveObjectCtor = null;
-let liveblocksUpdateDepth = 0;
-let unsubActivityLog = null;
-let subscribedProjectId = null;
+// ---- Connection state ----
+let roomSocket = null;
+let roomEverConnected = false; // true once at least one snapshot has been received on this page load
+let msgSeq = 0;
+// msgId -> { msg, sentAt } — every outbound write sits here until acked,
+// rejected, or errored. Replayed in order on reconnect (see roomSocket's
+// 'open' handler) since a plain WebSocket has no built-in "resend what
+// didn't make it" the way Liveblocks' SDK did.
+const pendingWrites = new Map();
+let stuckWriteTimer = null;
 let syncPushTimer = null;
 let syncBadgeEls = null;
 
-// Realtime collaboration minutes are billed per connected-minute (see
-// Liveblocks pricing) — a tab left open and untouched all day keeps
-// racking those up for no real benefit. After IDLE_DISCONNECT_MS with no
-// mouse/keyboard/touch activity, the room connection is actually left
-// (not just "paused" — leave() tears down the websocket, which is what
-// stops billing), and re-entered the moment activity resumes. See
-// connectLiveblocksRoom()/disconnectForIdle()/reconnectFromIdle().
-const IDLE_DISCONNECT_MS = 10 * 60 * 1000;
-let liveblocksClient = null;
-let liveblocksLeaveFn = null;
-let idleDisconnected = false;
-let idleReconnecting = false;
-let lastActivityAt = Date.now();
-// Section 7: set when a remote update to the active project arrives while
-// the user is mid-edit (isBusyEditing()); the deferred refresh runs once
-// they're done, see refreshActiveProjectFromShared() / the focusout listener.
 let pendingRemoteRefresh = false;
 
 let offlineBannerEl = null;
 let offlineSince = null;
 let offlineBannerShowTimer = null;
 let offlineBannerTickInterval = null;
-
-function subscribeToActiveProjectLog() {
-  if (!liveblocksRoom || !liveblocksRoot) return;
-  const p = getActiveProject();
-  if (!p) return;
-  if (subscribedProjectId === p.id) return;
-  const entry = liveblocksRoot.get('projects').get(p.id);
-  if (!entry) return;
-  let log = entry.get('activityLog');
-  if (!(log instanceof LiveListCtor)) {
-    // Nobody has logged an activity for this project yet this session —
-    // create the list now so we have something to subscribe to, instead of
-    // silently skipping the subscription (which never gets retried).
-    liveblocksUpdateDepth++;
-    try {
-      log = new LiveListCtor([]);
-      entry.set('activityLog', log);
-    } finally {
-      Promise.resolve().then(() => { liveblocksUpdateDepth--; });
-    }
-  }
-  if (unsubActivityLog) unsubActivityLog();
-  unsubActivityLog = liveblocksRoom.subscribe(log, () => {
-    const sidebar = document.getElementById('activitySidebar');
-    if (sidebar && !sidebar.classList.contains('collapsed')) {
-      renderActivityLogSidebar();
-    }
-  });
-  subscribedProjectId = p.id;
-}
 
 // Persistent, hard-to-miss banner — the corner badge and toasts are easy to miss
 // if you're not looking right at them, and a dropped connection could otherwise
@@ -10716,8 +10677,7 @@ function isBusyEditing() {
 
   // A Gantt/Calendar bar drag or resize in progress is just as disruptable
   // by a mid-gesture remote refresh as typing in a form field is: a remote
-  // update replaces `jobs` with freshly-parsed objects (see
-  // applyLiveblocksState()'s "── jobs ──" merge), and renderGantt()/
+  // update replaces `jobs` with freshly-parsed objects and renderGantt()/
   // renderCalendar() tear down and rebuild every bar element — while the
   // in-progress drag's state (barMoveState.bar, task references, etc.)
   // still points at the pre-refresh DOM/objects. Left unguarded, dropping
@@ -10746,15 +10706,14 @@ function queueSharedSync() {
 }
 
 // A page close/refresh within that 300ms window used to lose the edit
-// entirely: it's saved to localStorage synchronously, but the debounced
-// Liveblocks push never fires, so on reload applyLiveblocksState() pulls
-// the still-stale remote copy and overwrites the local one with it. Flush
-// any pending push the moment the tab is hidden or about to unload so it
-// actually reaches the shared project first.
+// entirely (a bug fixed earlier, kept fixed here): saved to localStorage
+// synchronously, but the debounced push never fires. Flush any pending
+// push the moment the tab is hidden or about to unload. A plain
+// WebSocket.send() during pagehide has no delivery guarantee the way the
+// old SDK's transport handling did, so this also fires a best-effort
+// fetch(..., {keepalive:true}) fallback straight to the Worker (which
+// forwards it into the room) for specifically this one path.
 function flushPendingSync() {
-  // Commit any debounced form autosave first so it's captured in this same
-  // final push, rather than scheduling its own push that might not get a
-  // chance to fire before the tab actually closes.
   flushAutoSaveJobForm();
   flushCardAutosave();
   if (syncPushTimer) {
@@ -10762,189 +10721,128 @@ function flushPendingSync() {
     syncPushTimer = null;
     pushLiveblocksState();
   }
+  if (pendingWrites.size > 0) {
+    const creds = { username: getStoredUsername(), password: getStoredUserPassword() };
+    pendingWrites.forEach(function(entry) {
+      try {
+        fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'room-fallback-write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify(Object.assign({ username: creds.username, password: creds.password }, entry.msg))
+        });
+      } catch (e) { /* best-effort only */ }
+    });
+  }
 }
 document.addEventListener('visibilitychange', function() {
   if (document.visibilityState === 'hidden') flushPendingSync();
 });
 window.addEventListener('pagehide', flushPendingSync);
 
-// Enters (or re-enters, after an idle-triggered leave — see
-// disconnectForIdle()/reconnectFromIdle()) the shared room and wires up
-// every per-connection subscription. isFirstConnect gates the bootstrap
-// work that must only ever run once per page load (legacy schema
-// migration, fresh-install placeholder discard, fixed-project-set
-// convergence) — re-running that on every idle reconnect would be at
-// best wasteful and at worst risks re-triggering the exact placeholder/
-// dedup bug described in the block below. A reconnect just re-subscribes
-// and calls applyLiveblocksState() once to catch up on whatever changed
-// while disconnected.
-async function connectLiveblocksRoom(isFirstConnect) {
-  // Liveblocks v2 uses enterRoom(). Storage is namespaced per project:
-  // root.projects is a LiveMap keyed by project id, and each entry holds its
-  // own tasksMap/boardCardsMap/boardColumns/fieldOptions/header — so editing
-  // or deleting one project can never touch another project's data, and two
-  // people on different projects at the same time can't stomp on each other.
-  // Tasks/cards within a project are LiveMaps keyed by their stable id, NOT
-  // plain arrays — this lets Liveblocks merge concurrent edits to different
-  // tasks/cards in the *same* project at the individual-item level instead of
-  // one full save silently overwriting another's.
-  const { room, leave } = liveblocksClient.enterRoom(LIVEBLOCKS_ROOM_ID, {
-    initialStorage: {
-      projects: new LiveMapCtor()
+// ---- Outbound: send a message, track it until acked ----
+function sendRoomMessage(msg) {
+  msg.msgId = 'm' + (++msgSeq) + '-' + Date.now();
+  pendingWrites.set(msg.msgId, { msg: msg, sentAt: Date.now() });
+  armStuckWriteWatch();
+  if (roomSocket && roomSocket.readyState === 1) {
+    try { roomSocket.send(JSON.stringify(msg)); } catch (err) { console.error('Failed to send room message', err); }
+  }
+  // If the socket isn't open, the message just waits in pendingWrites —
+  // the 'open' handler below replays everything still pending once
+  // (re)connected, so nothing needs to happen here in that case.
+  return msg.msgId;
+}
+
+function armStuckWriteWatch() {
+  if (stuckWriteTimer) return;
+  stuckWriteTimer = setTimeout(function() {
+    stuckWriteTimer = null;
+    if (pendingWrites.size > 0) {
+      console.error('Room sync stuck — ' + pendingWrites.size + ' change(s) not yet confirmed by the server after 8+ seconds.');
+      showToast('Your last change may not have saved — sync has been stuck. Try reloading.', 'error');
     }
+  }, 8000);
+}
+function clearPendingWrite(msgId) {
+  pendingWrites.delete(msgId);
+  if (pendingWrites.size === 0 && stuckWriteTimer) {
+    clearTimeout(stuckWriteTimer);
+    stuckWriteTimer = null;
+  }
+}
+
+async function fetchRoomToken() {
+  const { username, password } = ensureUserCredentials(false);
+  let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username, password: password })
   });
 
-  liveblocksRoom = room;
-  liveblocksLeaveFn = leave;
-
-  // Show real connection state instead of assuming "live" forever once connected.
-  // Liveblocks' client retries connecting on its own with backoff — this just makes
-  // sure the *person* can't miss it if that retry is taking a while.
-  room.subscribe('status', function(status) {
-    if (status === 'connected') {
-      setSyncStatus('live', false);
-      hideOfflineBanner();
-    } else if (status === 'reconnecting' || status === 'connecting') {
-      setSyncStatus('reconnecting…', true);
-      scheduleOfflineBanner();
-    } else if (status === 'disconnected') {
-      setSyncStatus('offline', true);
-      scheduleOfflineBanner();
-    }
-  });
-  room.subscribe('lost-connection', function(event) {
-    if (event === 'lost') showToast('Connection lost — trying to reconnect…', 'error');
-    if (event === 'restored') { showToast('Back online — synced', 'success'); hideOfflineBanner(); }
-    if (event === 'failed') {
-      showToast('Could not reconnect. Reload the page to keep syncing.', 'error');
-      showOfflineBanner("Couldn't reconnect — reload the page to keep syncing");
-    }
-  });
-
-  // Chasing a specific failure mode: a job push that the SDK accepts
-  // without throwing (pushProjectToShared's per-item safeSet already
-  // covers a synchronous rejection) but that never actually gets
-  // acknowledged by the server — the room 'status' event above only
-  // reflects the WebSocket connection, not whether queued local writes
-  // have actually been persisted. storage-status is the SDK's own signal
-  // for that: it sits on 'synchronizing' while local changes are queued
-  // but unconfirmed, and should settle back to 'synchronized' within a
-  // second or two. If it doesn't, that's a write silently not reaching
-  // the server with nothing else in the public API surfacing it.
-  try {
-    let storageStuckTimer = null;
-    room.subscribe('storage-status', function(status) {
-      clearTimeout(storageStuckTimer);
-      if (status === 'synchronizing') {
-        storageStuckTimer = setTimeout(function() {
-          if (room.getStorageStatus() === 'synchronizing') {
-            console.error('Liveblocks storage-status stuck on "synchronizing" for 8+ seconds — local changes are queued but not confirmed saved by the server.');
-            showToast('Your last change may not have saved — sync has been stuck. Try reloading.', 'error');
-          }
-        }, 8000);
-      }
+  if (res.status === 401) {
+    localStorage.removeItem(USERNAME_KEY);
+    localStorage.removeItem(USER_PASSWORD_KEY);
+    const retry = ensureUserCredentials(true);
+    res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: retry.username, password: retry.password })
     });
-  } catch (err) {
-    console.warn('storage-status subscription not supported by this Liveblocks client version', err);
   }
 
-  const { root } = await room.getStorage();
-  liveblocksRoot = root;
-  if (isFirstConnect) migrateLegacyStorageShape(root, LiveMapCtor, LiveObjectCtor, LiveListCtor);
-
-  // subscribedProjectId persists across a leave()/re-enterRoom() cycle, but
-  // the room it was bound to doesn't — force a fresh subscription against
-  // the new room rather than skipping it as "already subscribed".
-  subscribedProjectId = null;
-  subscribeToActiveProjectLog();
-
-  // Subscribe to all storage changes, deep, so nested LiveMap/LiveList/LiveObject
-  // changes anywhere in the tree bubble up here too (not just top-level root changes).
-  room.subscribe(root, () => {
-    if (liveblocksUpdateDepth > 0) return;
-    // A bug anywhere in the merge/render chain must never take down this
-    // subscription — if it did, this client would stop receiving every
-    // future teammate update too (their pushes would keep succeeding,
-    // making it look one-directional: "they get my changes, I don't get
-    // theirs" — exactly the failure mode this guards against).
-    try {
-      applyLiveblocksState(root);
-    } catch (err) {
-      console.error('applyLiveblocksState failed — a remote update may not have fully applied', err);
-    }
-  }, { isDeep: true });
-
-  if (isFirstConnect) {
-    // On first connect, if remote has any projects use them; otherwise seed
-    // the room with whatever's in this browser's local project list.
-    const projectsMap = root.get('projects');
-    const hasData = projectsMap && projectsMap.size > 0;
-    if (hasData) {
-      // If this browser only has untouched placeholder project(s) — fresh
-      // install/cache-cleared browser, nothing real typed into it yet — and
-      // the team is already sharing real project(s), drop the placeholder(s)
-      // instead of merging them in as duplicates — otherwise every new
-      // teammate (or anyone who clears their cache) who opens the site ends
-      // up "live" but stuck editing their own island that nobody else ever
-      // sees, which looks exactly like sync being broken.
-      //
-      // This used to check `Object.keys(projects).length === 1` against a
-      // single freshLocalSeedProjectId, which could never actually be true:
-      // init() runs enforceFixedProjectSet() (which tops a single fresh
-      // project up to the full two-project FIXED_PROJECT_NAMES set,
-      // fabricating a second local-only placeholder) BEFORE this code ever
-      // runs, so the local project count was already 2 by the time this
-      // ran — meaning this whole discard-and-adopt branch was silently dead
-      // code, every single time. Real project data would then get merged in
-      // ALONGSIDE the two fake placeholders (different ids, same names), and
-      // the next enforceFixedProjectSet() call's name-based dedup — which
-      // keeps whichever id it saw FIRST — would keep the placeholders (they
-      // were always inserted first) and delete the just-merged real project
-      // entries, orphaning them locally. That's the confirmed mechanism
-      // behind jobs/cards silently reverting to old demo content after a
-      // cache clear. Checking against the full freshLocalSeedProjectIds
-      // array (both placeholders, however many init() actually fabricated)
-      // fixes it by discarding every fake placeholder before the dedup ever
-      // gets a chance to run.
-      const onlyHasFreshPlaceholder = freshLocalSeed &&
-        freshLocalSeedProjectIds.length > 0 &&
-        Object.keys(projects).every(function(id) { return freshLocalSeedProjectIds.indexOf(id) !== -1; }) &&
-        freshLocalSeedProjectIds.indexOf(activeProjectId) !== -1 &&
-        !freshLocalSeedProjectIds.some(function(id) { return !!projectsMap.get(id); });
-      if (onlyHasFreshPlaceholder) {
-        freshLocalSeedProjectIds.forEach(function(id) { delete projects[id]; });
-        activeProjectId = Array.from(projectsMap.keys())[0];
-      }
-      applyLiveblocksState(root);
-      if (onlyHasFreshPlaceholder) {
-        saveProjects();
-        loadActiveProjectData();
-        renderAll();
-        showToast('Joined shared project "' + (projects[activeProjectId] ? projects[activeProjectId].name : '') + '"', 'success');
-      }
-    } else {
-      pushLiveblocksState();
-    }
-
-    // Whatever the room just gave us, converge it onto the fixed two-project
-    // set and push any rename/creation back up so every other client
-    // (including ones that connect after this) sees the same two projects.
-    const fixedChangedIds = enforceFixedProjectSet();
-    if (fixedChangedIds.length) {
-      fixedChangedIds.forEach(function(id) { pushProjectToShared(id); });
-      loadActiveProjectData();
-      renderAll();
-    }
-  } else {
-    // Reconnecting after an idle gap — just catch up on the current remote
-    // state. Anything unsaved locally when the tab went idle was already
-    // pushed before then (the routine save/queueSharedSync path runs on
-    // every meaningful edit, not just periodically), so there's nothing
-    // queued to flush here.
-    applyLiveblocksState(root);
+  if (!res.ok) throw new Error('Room auth failed: ' + res.status);
+  const data = await res.json();
+  if (data && data.user) {
+    if (data.user.displayName) localStorage.setItem(DISPLAY_NAME_KEY, data.user.displayName);
+    currentUserRole = data.user.role || null;
   }
+  if (!data || !data.token) throw new Error('Room auth response missing token');
+  return data.token;
+}
 
+// Called fresh by ReconnectingWebSocket on every (re)connect attempt, not
+// just once — passing the async function itself (not its resolved value)
+// as the url is what makes that happen, so a token minted hours ago never
+// gets reused past its expiry on a long-lived tab's reconnect.
+async function buildRoomWsUrl() {
+  const token = await fetchRoomToken();
+  const httpUrl = new URL('room', LIVEBLOCKS_AUTH_ENDPOINT);
+  httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  httpUrl.searchParams.set('token', token);
+  return httpUrl.toString();
+}
+
+// Named (not inline) specifically so each is independently testable
+// without needing a real WebSocket/network connection — see the
+// sandboxed test suite this migration was built with.
+function handleRoomOpen() {
   setSyncStatus('live', false);
+  hideOfflineBanner();
+  // Replay anything that didn't get confirmed before the connection
+  // dropped — the server will just re-apply/re-ack it (upserts are
+  // idempotent by id; a delete/tombstone replay is a harmless no-op if it
+  // already landed; a stale whole-value replay gets correctly rejected +
+  // re-synced the same as any other stale write).
+  pendingWrites.forEach(function(entry) {
+    try { roomSocket.send(JSON.stringify(entry.msg)); } catch (e) {}
+  });
+}
+function handleRoomClose() {
+  if (roomEverConnected) {
+    setSyncStatus('offline', true);
+    scheduleOfflineBanner();
+  }
+}
+function handleRoomSocketError(err) {
+  console.error('Room socket error', err);
+}
+function handleRoomSocketMessageEvent(event) {
+  try {
+    handleRoomMessage(JSON.parse(event.data));
+  } catch (err) {
+    console.error('handleRoomMessage failed — a remote update may not have fully applied', err);
+  }
 }
 
 async function setupLiveblocksSync() {
@@ -10953,566 +10851,54 @@ async function setupLiveblocksSync() {
   setSyncStatus('connecting…', true);
 
   try {
-    const { createClient, LiveObject, LiveMap, LiveList } = await import('https://esm.sh/@liveblocks/client@2.12.0');
-    LiveObjectCtor = LiveObject;
-    LiveMapCtor = LiveMap;
-    LiveListCtor = LiveList;
+    const { default: ReconnectingWebSocket } = await import('https://esm.sh/reconnecting-websocket@4.4.0');
 
-    liveblocksClient = createClient({
-      authEndpoint: async () => {
-        const { username, password } = ensureUserCredentials(false);
-        let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username, password: password })
-        });
+    roomSocket = new ReconnectingWebSocket(buildRoomWsUrl, [], { maxRetries: Infinity });
+    roomSocket.addEventListener('open', handleRoomOpen);
+    roomSocket.addEventListener('close', handleRoomClose);
+    roomSocket.addEventListener('error', handleRoomSocketError);
+    roomSocket.addEventListener('message', handleRoomSocketMessageEvent);
 
-        // Wrong or changed credentials — clear them, ask again, retry once.
-        if (res.status === 401) {
-          localStorage.removeItem(USERNAME_KEY);
-          localStorage.removeItem(USER_PASSWORD_KEY);
-          const retry = ensureUserCredentials(true);
-          res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: retry.username, password: retry.password })
-          });
-        }
-
-        if (!res.ok) throw new Error('Liveblocks auth failed: ' + res.status);
-        const data = await res.json();
-        // The worker rides the caller's confirmed identity along as a
-        // sibling `user` field on the same response the Liveblocks SDK
-        // reads `.token` from — extra properties are simply ignored by the
-        // SDK, so this needs no separate round trip. Using it here (rather
-        // than trusting a client-typed name) is what makes comments/
-        // activity-log entries actually reflect who really logged in.
-        if (data && data.user) {
-          if (data.user.displayName) localStorage.setItem(DISPLAY_NAME_KEY, data.user.displayName);
-          currentUserRole = data.user.role || null;
-        }
-        return data;
-      }
-    });
-
-    // Backstop for the case where the OS/browser reports the network dropping
-    // outright (e.g. wifi toggled off) — belt and suspenders alongside the
-    // Liveblocks status events (see connectLiveblocksRoom()).
     window.addEventListener('offline', function() { scheduleOfflineBanner(); });
 
-    await connectLiveblocksRoom(true);
-    setupIdleDisconnect();
-
   } catch (err) {
-    console.error('Liveblocks init failed:', err);
+    console.error('Room sync init failed:', err);
     setSyncStatus('offline', true);
-    showToast('Liveblocks failed: ' + err.message, 'error');
+    showToast('Sync failed: ' + err.message, 'error');
   }
 }
 
-// Leaves the room (tearing down the websocket, which is what actually
-// stops realtime-collaboration-minute billing — see IDLE_DISCONNECT_MS's
-// comment) after a stretch of no mouse/keyboard/touch activity, and
-// re-enters the moment activity resumes. All the push functions this app
-// already has (pushFieldToShared, queueSharedSync, etc.) guard on
-// `liveblocksRoot && liveblocksRoom` before doing anything, so nulling
-// those out here is safe — it makes an idle tab behave exactly like any
-// other disconnected state those functions already tolerate.
-function setupIdleDisconnect() {
-  const markActive = function() {
-    lastActivityAt = Date.now();
-    if (idleDisconnected) reconnectFromIdle();
-  };
-  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'].forEach(function(evt) {
-    window.addEventListener(evt, markActive, { passive: true });
-  });
-  // Switching back to a backgrounded tab fires no mouse/keyboard events at
-  // all until you actually touch it — visibilitychange is the earliest
-  // signal that someone's looking at it again.
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible') markActive();
-  });
-  setInterval(function() {
-    if (!idleDisconnected && Date.now() - lastActivityAt >= IDLE_DISCONNECT_MS) {
-      disconnectForIdle();
-    }
-  }, 30000);
-}
+function handleRoomMessage(msg) {
+  if (!msg || typeof msg.type !== 'string') return;
 
-function disconnectForIdle() {
-  if (idleDisconnected || !liveblocksLeaveFn) return;
-  try { liveblocksLeaveFn(); } catch (err) { console.warn('Liveblocks leave() failed', err); }
-  if (unsubActivityLog) { try { unsubActivityLog(); } catch (e) {} unsubActivityLog = null; }
-  subscribedProjectId = null;
-  liveblocksRoom = null;
-  liveblocksRoot = null;
-  liveblocksLeaveFn = null;
-  idleDisconnected = true;
-  setSyncStatus('idle — paused', false, '#8993a1');
-}
-
-async function reconnectFromIdle() {
-  if (!idleDisconnected || idleReconnecting) return;
-  idleReconnecting = true;
-  setSyncStatus('reconnecting…', true);
-  try {
-    await connectLiveblocksRoom(false);
-    idleDisconnected = false;
-  } catch (err) {
-    console.error('Reconnect after idle failed:', err);
-    setSyncStatus('offline', true);
-    showToast('Could not reconnect after being idle — try reloading.', 'error');
-    // idleDisconnected stays true so the next activity event tries again.
-  } finally {
-    idleReconnecting = false;
+  if (msg.type === 'snapshot') {
+    const isFirst = !roomEverConnected;
+    roomEverConnected = true;
+    applyRoomSnapshot(msg.projects || {}, isFirst);
+    return;
   }
-}
-
-// This room may currently be in one of three shapes: brand new (nothing yet),
-// the old flat v2 schema (tasksMap/boardCardsMap/boardColumns/header at root,
-// from before project-scoping), or the oldest schema (plain 'tasks'/'boardCards'
-// arrays). This folds either legacy shape into a single project entry under a
-// fixed, well-known id so whatever was already being shared doesn't disappear
-// when this update ships — every client converges on the same id instead of
-// each one seeding its own copy. Safe to run every connect: it only acts if
-// root.projects doesn't exist yet, and is a no-op after the first successful run.
-const LEGACY_MIGRATION_PROJECT_ID = 'aps-shared-legacy';
-
-function migrateLegacyStorageShape(root, LiveMap, LiveObject, LiveList) {
-  const projects = root.get('projects');
-
-  // instanceof can lie across realms/bundles — also check for LiveMap methods
-  const looksLikeLiveMap = projects &&
-    typeof projects.get === 'function' &&
-    typeof projects.set === 'function' &&
-    typeof projects.forEach === 'function';
-
-  if (looksLikeLiveMap) return; // already migrated
-
-  liveblocksRoom.batch(() => {
-    const projectsMap = new LiveMap();
-
-    const flatTasksMap = root.get('tasksMap');
-    const flatCardsMap = root.get('boardCardsMap');
-    const flatHeader  = root.get('header');
-    const legacyTasks = root.get('tasks');
-    const legacyCards = root.get('boardCards');
-
-    const hadAnyLegacyData =
-      (flatTasksMap && typeof flatTasksMap.forEach === 'function') ||
-      (flatCardsMap && typeof flatCardsMap.forEach === 'function') ||
-      (flatHeader && typeof flatHeader.get === 'function') ||
-      Array.isArray(legacyTasks) ||
-      Array.isArray(legacyCards);
-
-    if (hadAnyLegacyData) {
-      const jobsMap = new LiveMap();
-      if (flatTasksMap && typeof flatTasksMap.forEach === 'function') {
-        flatTasksMap.forEach(function (v, k) {
-          const job = {
-            id: genId(),
-            name: v.job || 'Untitled',
-            color: v.color || '#3949ab',
-            archived: v.archived || false,
-            notes: v.notes || '',
-            tasks: [{
-              id: v.id || genId(),
-              name: v.job || 'Task',
-              start: v.start,
-              finish: v.finish,
-              notes: v.notes || '',
-              order: 0
-            }]
-          };
-          jobsMap.set(String(k), job);
-        });
-      } else if (Array.isArray(legacyTasks)) {
-        legacyTasks.forEach(function (t) {
-          const job = {
-            id: genId(),
-            name: t.job || 'Untitled',
-            color: t.color || '#3949ab',
-            archived: t.archived || false,
-            notes: t.notes || '',
-            tasks: [{
-              id: t.id || genId(),
-              name: t.job || 'Task',
-              start: t.start,
-              finish: t.finish,
-              notes: t.notes || '',
-              order: 0
-            }]
-          };
-          jobsMap.set(String(t.id), job);
-        });
-      }
-
-      const cardsMap = new LiveMap();
-      if (flatCardsMap && typeof flatCardsMap.forEach === 'function') {
-        flatCardsMap.forEach(function (v, k) { cardsMap.set(String(k), v); });
-      } else if (Array.isArray(legacyCards)) {
-        ensureCardIds(legacyCards);
-        legacyCards.forEach(function (c) { cardsMap.set(String(c.id), c); });
-      }
-
-      const headerTitle    = flatHeader && flatHeader.get ? flatHeader.get('title')    : 'APS Production';
-      const headerSubtitle = flatHeader && flatHeader.get ? flatHeader.get('subtitle') : '';
-      const headerTheme    = (flatHeader && flatHeader.get ? flatHeader.get('theme') : null) || DEFAULT_THEME;
-
-      projectsMap.set(LEGACY_MIGRATION_PROJECT_ID, new LiveObject({
-        name: headerTitle || 'APS Production',
-        jobsMap: jobsMap,
-        boardCardsMap: cardsMap,
-        boardColumns: root.get('boardColumns') || [],
-        fieldOptions: root.get('fieldOptions') || {},
-        header: new LiveObject({
-          title: headerTitle || 'APS Production',
-          subtitle: headerSubtitle || '',
-          theme: headerTheme
-        }),
-        activityLog: new LiveList([])
-      }));
-    }
-
-    root.set('projects', projectsMap);
-
-    // clean up old root keys
-    ['tasksMap','boardCardsMap','boardColumns','fieldOptions','header','tasks','boardCards'].forEach(function (k) {
-      if (root.get(k) !== undefined) root.delete(k);
-    });
-  });
-}
-
-// Upserts one project's full data into its own entry under root.projects.
-// Scoped to a single project id, so this can never delete or overwrite another
-// project's tasks/cards/columns/header — only this project's own map entries.
-function pushProjectToShared(projectId, headerOverride) {
-  if (!liveblocksRoot || !liveblocksRoom) return;
-  const proj = projects[projectId];
-  if (!proj) return;
-  const header = headerOverride || proj.header;
-
-  liveblocksUpdateDepth++;
-  try {
-    liveblocksRoom.batch(function () {
-      const projectsMap = liveblocksRoot.get('projects');
-
-      // Guard: if projectsMap got corrupted, recreate it
-      if (!projectsMap || typeof projectsMap.get !== 'function') {
-        const freshMap = new LiveMapCtor();
-        liveblocksRoot.set('projects', freshMap);
-        return; // next push will populate it
-      }
-
-      let entry = projectsMap.get(projectId);
-      if (!(entry instanceof LiveObjectCtor)) {
-        entry = new LiveObjectCtor({
-          name: proj.name,
-          jobsMap: new LiveMapCtor(),
-          boardCardsMap: new LiveMapCtor(),
-          calendarEventsMap: new LiveMapCtor(),
-          // Seeded from this client's own current values, not left empty —
-          // safe only because a brand-new entry means nothing else exists
-          // yet to be stale relative to. Once the entry exists, routine
-          // saves never touch these two fields again — see the comment
-          // below where the old unconditional entry.set() calls used to be.
-          boardColumns: proj.boardColumns,
-          fieldOptions: proj.fieldOptions,
-          deletedIds: {},
-          header: new LiveObjectCtor({
-            title: header.title || proj.name,
-            subtitle: header.subtitle || '',
-            theme: header.theme || DEFAULT_THEME
-          })
-        });
-        projectsMap.set(projectId, entry);
-      }
-
-      entry.set('name', proj.name);
-
-      // Merge this tab's own tombstone knowledge with whatever the shared
-      // room already has (in case another client deleted something this
-      // tab doesn't know about yet) — then use the merged set below to
-      // skip re-upserting anything tombstoned, even if this tab's stale
-      // proj.jobs/proj.boardCards/proj.calendarEvents snapshot still has
-      // it. See recordTombstone()/deleteFromSharedMap() for where these
-      // get created, and mergeTombstones() for the TTL/pruning.
-      const deletedIds = mergeTombstones(proj.deletedIds, entry.get('deletedIds'));
-      proj.deletedIds = deletedIds;
-      entry.set('deletedIds', deletedIds);
-
-      // jobs (nested model) — each job object is pushed whole, so its fixed-
-      // shape tasks array (name/start/finish/notes/color/order, locked to
-      // BOARD_COLUMNS as of Section 3) travels automatically; no per-field
-      // enumeration needed here.
-      //
-      // Upsert only — deliberately never delete-by-absence here. This local
-      // snapshot (proj.jobs) can be stale relative to what's already in the
-      // live jobsMap: if this tab was busy-editing (isBusyEditing()) when a
-      // teammate's concurrent addition arrived, applyLiveblocksState() defers
-      // merging it into the globals (pendingRemoteRefresh), but a save fired
-      // from this tab in the meantime still overwrites proj.jobs from those
-      // stale globals. Diffing against "what's not in my stale snapshot" and
-      // deleting it would silently destroy the teammate's new job/card — this
-      // is exactly the bug that caused a newly-added job to vanish for
-      // everyone but its card to survive (cards and jobs are separate
-      // LiveMaps, so the race didn't necessarily hit both the same way).
-      // Real deletions instead go through deleteJobFromShared() /
-      // deleteCardFromShared() / deleteCalendarEventFromShared() as explicit,
-      // targeted ops fired at the exact moment the user deletes something —
-      // immune to how stale the rest of local state is.
-      // Each .set() is wrapped individually — a single item Liveblocks
-      // rejects (e.g. an undefined value buried in a custom field, which
-      // Storage doesn't allow) must never abort the rest of the batch. Before
-      // this, one bad job could silently block every other job AND every
-      // card behind it in the same push, which looked exactly like "this one
-      // job never synced" with zero indication why. Surfacing it (console +
-      // toast) instead of swallowing it turns a silent, unreproducible-
-      // looking gap into a concrete, fixable error.
-      function safeSet(map, id, value, label) {
-        try {
-          map.set(String(id), value);
-        } catch (err) {
-          console.error('pushProjectToShared: failed to sync ' + label + ' ' + id, err, value);
-          showToast('Sync error: "' + label + '" failed to save — see console (F12)', 'error');
-        }
-      }
-
-      // Lazily created if missing — same fallback calendarEventsMap already
-      // had below. A project entry can end up without one of these (seen in
-      // production: an entry with a real boardCardsMap but no jobsMap at
-      // all) if it was ever created or touched by a path that didn't seed
-      // every map. Silently skipping the push when the map's missing (the
-      // old behavior here) means every job push for that project quietly
-      // no-ops forever — cards sync, the job never does, and the orphan-
-      // card recovery in applyLiveblocksState() papers over it with a blank
-      // synthesized job on every other client, which looks exactly like
-      // "teammate's edits never show up" with no error anywhere.
-      let jobsMap = entry.get('jobsMap');
-      if (!jobsMap || typeof jobsMap.set !== 'function') {
-        jobsMap = new LiveMapCtor();
-        entry.set('jobsMap', jobsMap);
-      }
-      proj.jobs.forEach(function (j) { if (!deletedIds[String(j.id)]) safeSet(jobsMap, j.id, j, 'job "' + (j.name || j.id) + '"'); });
-
-      // cards — likewise pushed whole (upsert only, see above), so jobId,
-      // manualColumn, and manualColumnUntil (Section 5's manual override)
-      // travel with every job-linked card automatically.
-      let cardsMap = entry.get('boardCardsMap');
-      if (!cardsMap || typeof cardsMap.set !== 'function') {
-        cardsMap = new LiveMapCtor();
-        entry.set('boardCardsMap', cardsMap);
-      }
-      proj.boardCards.forEach(function (c) { if (!deletedIds[String(c.id)]) safeSet(cardsMap, c.id, c, 'card "' + (c.title || c.id) + '"'); });
-
-      // calendar-only events — same whole-object upsert pattern. Lazily
-      // created here for any project entry that predates this feature.
-      let calEventsMap = entry.get('calendarEventsMap');
-      if (!calEventsMap || typeof calEventsMap.set !== 'function') {
-        calEventsMap = new LiveMapCtor();
-        entry.set('calendarEventsMap', calEventsMap);
-      }
-      (proj.calendarEvents || []).forEach(function (e) { if (!deletedIds[String(e.id)]) safeSet(calEventsMap, e.id, e, 'calendar event "' + (e.title || e.id) + '"'); });
-
-      // boardColumns/fieldOptions deliberately NOT pushed here (unlike
-      // everything above) — this function runs on every routine save
-      // (any job/card/comment edit debounces into queueSharedSync(), which
-      // calls this), and proj.boardColumns/proj.fieldOptions can be stale
-      // relative to what's already shared if this tab hasn't caught up
-      // with someone else's more recent column/field-option change yet.
-      // Unlike jobs/cards (a map, upserted per-item) these are single
-      // whole-array/object values with no per-item merge to fall back on,
-      // so a stale routine push here would just silently clobber the
-      // other change outright — this was the exact bug behind a "hide
-      // board from schedule" toggle sticking for the person who set it
-      // but reverting for everyone else the moment they saved anything
-      // unrelated. Pushed instead via their own targeted, immediate
-      // pushBoardColumnsToShared()/pushFieldOptionsToShared() calls, fired
-      // only at the exact moment those specific things actually change —
-      // see saveBoardColumns()/saveFieldOptions().
-      const headerObj = entry.get('header');
-      if (headerObj && typeof headerObj.set === 'function') {
-        headerObj.set('title', header.title);
-        headerObj.set('subtitle', header.subtitle);
-        headerObj.set('theme', header.theme);
-      }
-    });
-  } finally {
-    Promise.resolve().then(function () { liveblocksUpdateDepth--; });
+  if (msg.type === 'ack') {
+    clearPendingWrite(msg.msgId);
+    return;
   }
-}
-
-// Removes a project's entry entirely — used when someone deletes a project,
-// so it disappears from everyone's shared list instead of lingering.
-function removeProjectFromShared(projectId) {
-  if (!liveblocksRoot || !liveblocksRoom) return;
-  liveblocksUpdateDepth++;
-  try {
-    liveblocksRoom.batch(() => {
-      liveblocksRoot.get('projects').delete(projectId);
-    });
-  } finally {
-    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
+  if (msg.type === 'rejected') {
+    console.warn('Room rejected a stale write (a fresh snapshot follows to re-sync)', msg);
+    clearPendingWrite(msg.msgId);
+    return;
   }
-}
-
-// Explicit, targeted deletes for one job/card/calendar event — see the
-// comment above pushProjectToShared's jobsMap upsert for why routine saves
-// never infer a deletion from "this id is missing from my local snapshot"
-// anymore. These are the only things that actually remove a key from the
-// shared maps, called at the exact moment the user deletes something.
-//
-// Also tombstones the id (see mergeTombstones()) — deleting the map entry
-// alone isn't enough, since a stale tab's later routine save (see
-// pushProjectToShared()) upserts its own local snapshot, which can still
-// contain the very thing just deleted here and would otherwise resurrect
-// it right back into the map.
-function deleteFromSharedMap(projectId, mapKey, id) {
-  if (!liveblocksRoot || !liveblocksRoom) return;
-  liveblocksUpdateDepth++;
-  try {
-    const projectsMap = liveblocksRoot.get('projects');
-    if (!projectsMap || typeof projectsMap.get !== 'function') return;
-    const entry = projectsMap.get(projectId);
-    if (!entry || typeof entry.get !== 'function') return;
-    const map = entry.get(mapKey);
-    if (map && typeof map.delete === 'function') map.delete(String(id));
-
-    const proj = projects[projectId];
-    const deletedIds = mergeTombstones(proj && proj.deletedIds, entry.get('deletedIds'));
-    deletedIds[String(id)] = Date.now();
-    if (proj) proj.deletedIds = deletedIds;
-    entry.set('deletedIds', deletedIds);
-  } finally {
-    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
-  }
-}
-// Same tombstone bookkeeping as deleteFromSharedMap() above, without a
-// LiveMap entry to delete alongside it — for ids that don't have their own
-// top-level map, like a deleted phase (nested inside job.phases, which
-// rides along inside the whole job object push). Without this, the phase-
-// orphan self-heal in applyLiveblocksState() could resurrect a
-// deliberately-deleted phase from a stale card the same way an untombstoned
-// job delete used to (see mergeTombstones()/recordTombstone() callers).
-function recordTombstone(projectId, id) {
-  if (!liveblocksRoot || !liveblocksRoom) return;
-  liveblocksUpdateDepth++;
-  try {
-    const projectsMap = liveblocksRoot.get('projects');
-    if (!projectsMap || typeof projectsMap.get !== 'function') return;
-    const entry = projectsMap.get(projectId);
-    if (!entry || typeof entry.get !== 'function') return;
-    const proj = projects[projectId];
-    const deletedIds = mergeTombstones(proj && proj.deletedIds, entry.get('deletedIds'));
-    deletedIds[String(id)] = Date.now();
-    if (proj) proj.deletedIds = deletedIds;
-    entry.set('deletedIds', deletedIds);
-  } finally {
-    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
-  }
-}
-function deleteJobFromShared(projectId, jobId) { deleteFromSharedMap(projectId, 'jobsMap', jobId); }
-function deleteCardFromShared(projectId, cardId) { deleteFromSharedMap(projectId, 'boardCardsMap', cardId); }
-function deleteCalendarEventFromShared(projectId, eventId) { deleteFromSharedMap(projectId, 'calendarEventsMap', eventId); }
-
-// Targeted pushes for the two whole-array/object project fields that
-// pushProjectToShared() deliberately stopped touching on routine saves —
-// see the comment there. Fired only from the exact functions that
-// intentionally change these (saveBoardColumns()/saveFieldOptions()), so
-// an unrelated job/card edit on a tab with a stale local copy of either
-// can never silently overwrite someone else's more recent change to them.
-function pushFieldToShared(projectId, fieldKey, value) {
-  if (!liveblocksRoot || !liveblocksRoom) return;
-  liveblocksUpdateDepth++;
-  try {
-    const projectsMap = liveblocksRoot.get('projects');
-    if (!projectsMap || typeof projectsMap.get !== 'function') return;
-    const entry = projectsMap.get(projectId);
-    if (!entry || typeof entry.set !== 'function') return;
-    entry.set(fieldKey, value);
-  } finally {
-    Promise.resolve().then(() => { liveblocksUpdateDepth--; });
-  }
-}
-function pushBoardColumnsToShared(projectId) {
-  const proj = projects[projectId];
-  if (proj) pushFieldToShared(projectId, 'boardColumns', proj.boardColumns);
-}
-function pushFieldOptionsToShared(projectId) {
-  const proj = projects[projectId];
-  if (proj) pushFieldToShared(projectId, 'fieldOptions', proj.fieldOptions);
-}
-
-function logActivity(actionText) {
-  const p = getActiveProject();
-  if (!p) return;
-  const name = getStoredDisplayName() || 'Someone';
-  const entry = { who: name, what: actionText, when: Date.now() };
-
-  // Always keep a local copy so it works even when offline
-  localActivityLog.push(entry);
-  while (localActivityLog.length > 50) localActivityLog.shift();
-
-  // Also push to Liveblocks if connected
-  if (liveblocksRoot && liveblocksRoom) {
-    liveblocksUpdateDepth++;
-    try {
-      liveblocksRoom.batch(() => {
-        const projectsMap = liveblocksRoot.get('projects');
-        let projEntry = projectsMap.get(p.id);
-        if (!projEntry) return;
-        let log = projEntry.get('activityLog');
-        if (!(log instanceof LiveListCtor)) {
-          log = new LiveListCtor([]);
-          projEntry.set('activityLog', log);
-        }
-        log.push(entry);
-        while (log.length > 50) log.delete(0);
-      });
-    } catch (e) {
-      console.error('logActivity Liveblocks push failed', e);
-    } finally {
-      Promise.resolve().then(() => { liveblocksUpdateDepth--; });
-    }
-  }
-
-  // Refresh sidebar if it's open
-  const sidebar = document.getElementById('activitySidebar');
-  if (sidebar && !sidebar.classList.contains('collapsed')) {
-    renderActivityLogSidebar();
-  }
-}
-
-function pushLiveblocksState() {
-  if (!liveblocksRoot || !liveblocksRoom) return;
-  clearTimeout(syncPushTimer);
-  setSyncStatus('saving…', true);
-
-  const p = getActiveProject();
-  if (!p) return;
-
-  try {
-    // Read straight from the DOM for the active project's header, since that's
-    // the freshest source (p.header is only updated on blur via saveActiveProject).
-    pushProjectToShared(p.id, {
-      title: document.getElementById('headerTitle').textContent.trim(),
-      subtitle: document.getElementById('headerSubtitle').textContent.trim(),
-      theme: getSavedTheme()
-    });
-    setSyncStatus('live', false);
-  } catch (e) {
-    console.error(e);
-    setSyncStatus('save failed', true);
+  if (msg.type === 'error') {
+    console.error('Room reported an error processing a message', msg);
+    if (msg.msgId) clearPendingWrite(msg.msgId);
+    return;
   }
 }
 
 // Best-effort recovery for a board card whose jobId doesn't match any job
-// in the synced jobsMap (see applyLiveblocksState()'s orphan-card check) —
-// reconstructs a minimal job shell from what the card still has (title,
-// color) with one blank task per board column, the same shape addNewJob()
-// gives a brand-new job. Whatever the original job's own dates/notes/tasks
-// were are gone (only the card survived); this recovers the job's
-// existence and its link back to the card, not its history.
+// in the synced jobs — reconstructs a minimal job shell from what the card
+// still has (title, color) with one blank task per board column, the same
+// shape addNewJob() gives a brand-new job. Whatever the original job's own
+// dates/notes/tasks were are gone (only the card survived); this recovers
+// the job's existence and its link back to the card, not its history.
 function synthesizeJobFromOrphanCard(card, boardColumns) {
   const tasks = (boardColumns || []).map(function(col, i) {
     return { id: genId(), name: col.label, columnId: col.id, start: '', finish: '', notes: '', color: col.color || '#3949ab', order: i };
@@ -11527,52 +10913,46 @@ function synthesizeJobFromOrphanCard(card, boardColumns) {
   };
 }
 
-// Jobs and cards live in separate LiveMaps, pushed together but not
-// necessarily arriving in the same storage event — so a card can show up
-// slightly before its job does, which looks identical to a genuine sync
-// gap at the instant applyLiveblocksState() runs. Synthesizing (and
-// pushing) a blank replacement immediately on that first pass clobbers the
-// real job the moment it lands moments later. Giving each orphan a grace
-// period before deciding it's really gone avoids that false positive.
-// Keyed by jobId so a second pass while one's already waiting doesn't
-// stack duplicate timers.
+// Jobs and cards can arrive in the same snapshot but a moment apart in
+// spirit (the server applies one message at a time, but two nearly-
+// simultaneous pushes from different tabs can still interleave which
+// snapshot each field lands in first from this client's point of view) —
+// so a card can be seen before its job in some edge case, which looks
+// identical to a genuine sync gap at the instant a snapshot is processed.
+// Giving each orphan a grace period before deciding it's really gone
+// avoids treating that as permanent. Keyed by jobId so a second pass while
+// one's already waiting doesn't stack duplicate timers.
 const ORPHAN_RECOVERY_GRACE_MS = 5000;
 const pendingOrphanRecovery = {};
 
-function applyLiveblocksState(root) {
-  if (!root) return;
-  const projectsMap = root.get('projects');
-  if (!projectsMap) return;
-
-  // Guard: if projects is not map-like, bail instead of crashing
-  if (typeof projectsMap.forEach !== 'function') {
-    console.warn('applyLiveblocksState: projects is not a LiveMap', projectsMap);
-    return;
-  }
+function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
+  if (!remoteProjects || typeof remoteProjects !== 'object') return;
 
   const remoteIds = new Set();
   let activeDataChanged = false;
   let listChanged = false;
   const busy = isBusyEditing();
 
-  projectsMap.forEach(function (entry, projectId) {
+  Object.keys(remoteProjects).forEach(function(projectId) {
+    const entry = remoteProjects[projectId];
     remoteIds.add(projectId);
     const isActive = projectId === activeProjectId;
 
-    // Guard: skip malformed entries
-    if (!entry || typeof entry.get !== 'function') {
-      console.warn('applyLiveblocksState: skipping malformed entry for', projectId);
+    if (!entry || typeof entry !== 'object') {
+      console.warn('applyRoomSnapshot: skipping malformed entry for', projectId);
       return;
     }
 
-    const remoteName      = entry.get('name');
-    const remoteJobsMap   = entry.get('jobsMap');
-    const remoteCardsMap  = entry.get('boardCardsMap');
-    const remoteCalEventsMap = entry.get('calendarEventsMap');
-    const remoteColumns   = entry.get('boardColumns');
-    const remoteFieldOpts = entry.get('fieldOptions');
-    const remoteHeader    = entry.get('header');
-    const remoteDeletedIds = entry.get('deletedIds');
+    const remoteName = entry.name;
+    const remoteJobs = entry.jobs || {};
+    const remoteCards = entry.boardCards || {};
+    const remoteCalEvents = entry.calendarEvents || {};
+    const remoteColumns = entry.boardColumns;
+    const remoteFieldOpts = entry.fieldOptions;
+    const remoteHeader = entry.header;
+    const remoteDeletedIds = entry.deletedIds;
+    const remoteActivityLog = entry.activityLog;
+    const remoteFieldRevisions = entry.fieldRevisions;
 
     let local = projects[projectId];
     if (!local) {
@@ -11597,77 +10977,56 @@ function applyLiveblocksState(root) {
     }
 
     // ── delete tombstones ── merged/pruned before jobs/cards/events below
-    // so they can be filtered against it — belt-and-suspenders alongside
-    // pushProjectToShared()'s own skip-if-tombstoned check, in case a
-    // tombstoned id still made it into a remote map through some other path.
+    // so they can be filtered against it.
     local.deletedIds = mergeTombstones(local.deletedIds, remoteDeletedIds);
 
-    // ── jobs ──
-    if (remoteJobsMap && typeof remoteJobsMap.values === 'function') {
-      const j = Array.from(remoteJobsMap.values()).filter(function (job) { return !local.deletedIds[String(job.id)]; });
-      ensureJobAndTaskIds(j);
-      j.forEach(function (job) { if (!job.notes) job.notes = ''; });
-      j.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
-      local.jobs = j;
-    } else if (Array.isArray(remoteJobsMap)) {
-      const j = remoteJobsMap.filter(function (job) { return !local.deletedIds[String(job.id)]; });
-      ensureJobAndTaskIds(j);
-      local.jobs = j.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
-    }
+    // ── jobs (now a plain {id: job} object from the server, not a LiveMap) ──
+    const j = Object.values(remoteJobs).filter(function(job) { return !local.deletedIds[String(job.id)]; });
+    ensureJobAndTaskIds(j);
+    j.forEach(function(job) { if (!job.notes) job.notes = ''; });
+    j.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    local.jobs = j;
 
     // ── columns ──
     if (Array.isArray(remoteColumns) && remoteColumns.length) local.boardColumns = remoteColumns;
 
     // ── cards ──
-    if (remoteCardsMap && typeof remoteCardsMap.values === 'function') {
-      const c = Array.from(remoteCardsMap.values()).filter(function (card) { return !local.deletedIds[String(card.id)]; });
-      ensureCardIds(c);
-      local.boardCards = c;
-    } else if (Array.isArray(remoteCardsMap)) {
-      const c = remoteCardsMap.filter(function (card) { return !local.deletedIds[String(card.id)]; });
-      ensureCardIds(c);
-      local.boardCards = c;
-    }
+    const c = Object.values(remoteCards).filter(function(card) { return !local.deletedIds[String(card.id)]; });
+    ensureCardIds(c);
+    local.boardCards = c;
 
     // ── calendar-only events ──
-    if (remoteCalEventsMap && typeof remoteCalEventsMap.values === 'function') {
-      const ce = Array.from(remoteCalEventsMap.values()).filter(function (ev) { return !local.deletedIds[String(ev.id)]; });
-      ensureCalendarEventIds(ce);
-      local.calendarEvents = ce;
-    } else if (Array.isArray(remoteCalEventsMap)) {
-      const ce = remoteCalEventsMap.filter(function (ev) { return !local.deletedIds[String(ev.id)]; });
-      ensureCalendarEventIds(ce);
-      local.calendarEvents = ce;
-    }
+    const ce = Object.values(remoteCalEvents).filter(function(ev) { return !local.deletedIds[String(ev.id)]; });
+    ensureCalendarEventIds(ce);
+    local.calendarEvents = ce;
 
     // ── fields ──
     if (remoteFieldOpts) local.fieldOptions = Object.assign({}, local.fieldOptions, remoteFieldOpts);
 
     // ── header ──
     if (remoteHeader) {
-      const title    = remoteHeader.get ? remoteHeader.get('title')    : remoteHeader.title;
-      const subtitle = remoteHeader.get ? remoteHeader.get('subtitle') : remoteHeader.subtitle;
-      const theme    = remoteHeader.get ? remoteHeader.get('theme')    : remoteHeader.theme;
-      if (typeof title === 'string') local.header.title = title;
-      if (typeof subtitle === 'string') local.header.subtitle = subtitle;
-      if (theme) local.header.theme = theme;
+      if (typeof remoteHeader.title === 'string') local.header.title = remoteHeader.title;
+      if (typeof remoteHeader.subtitle === 'string') local.header.subtitle = remoteHeader.subtitle;
+      if (remoteHeader.theme) local.header.theme = remoteHeader.theme;
     }
 
-    // Self-heals the "card shows but job doesn't" sync gap documented in
-    // pushProjectToShared() above (a stale tab's upsert can't destroy a
-    // job, but the busy-editing defer + wholesale local.jobs replacement
-    // here can still leave a card's jobId pointing at nothing for a
-    // while). Two different reasons a card's job can be missing, handled
-    // differently: if the jobId is tombstoned, the job was deliberately
-    // deleted (see deleteFromSharedMap()) and this card is just a leftover
-    // that should have gone with it — clean the card up instead of
+    // ── activity log — plain array now, no LiveList wrapping to unwrap ──
+    if (Array.isArray(remoteActivityLog)) local.activityLog = remoteActivityLog;
+
+    // ── field revisions — what pushFieldToShared() needs to include as
+    // baseFieldRevision next time it changes boardColumns/fieldOptions/
+    // header, so the server can tell a stale write from a current one.
+    // See aps-room-state.js's handleSetWholeField().
+    local.fieldRevisions = remoteFieldRevisions || local.fieldRevisions || { boardColumns: 0, fieldOptions: 0, header: 0 };
+
+    // Self-heals the "card shows but job doesn't" sync gap: if the jobId
+    // is tombstoned, the job was deliberately deleted and this card is a
+    // leftover that should have gone with it — clean it up instead of
     // resurrecting a job nobody wants back. Otherwise it's the genuine
     // sync gap: reconstruct a minimal job shell from what the card still
-    // has and re-link it — the original job's own dates/notes/tasks are
-    // gone (only the card survived), so this recovers the job's
-    // existence, not its history. Scoped to isActive since that's the
-    // only project whose merged local.jobs is actually being viewed/
-    // relied on for immediate feedback right now.
+    // has and re-link it. Scoped to isActive since that's the only
+    // project whose merged local.jobs is actually being viewed/relied on
+    // for immediate feedback right now.
     if (isActive) {
       const orphanCards = local.boardCards.filter(function(c) { return c.jobId && !local.jobs.some(function(j) { return j.id === c.jobId; }); });
       if (orphanCards.length) {
@@ -11675,33 +11034,25 @@ function applyLiveblocksState(root) {
         const trulyOrphaned = orphanCards.filter(function(c) { return !local.deletedIds[String(c.jobId)]; });
 
         if (staleCards.length) {
-          console.warn('applyLiveblocksState: dropping ' + staleCards.length + ' card(s) whose job was deliberately deleted for project ' + projectId, staleCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
+          console.warn('applyRoomSnapshot: dropping ' + staleCards.length + ' card(s) whose job was deliberately deleted for project ' + projectId, staleCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
           local.boardCards = local.boardCards.filter(function(c) { return staleCards.indexOf(c) === -1; });
           staleCards.forEach(function(c) { deleteCardFromShared(projectId, c.id); });
-          // Recovered/cleaned up locally — sync it back out so every other
-          // client picks up the fix too, not just this one (queueSharedSync()
-          // just arms a debounced timer, so this is safe to call from inside
-          // a storage subscription callback — no synchronous Liveblocks
-          // write here).
           queueSharedSync();
         }
 
         if (trulyOrphaned.length) {
           trulyOrphaned.forEach(function(card) {
             const jobId = card.jobId;
-            if (pendingOrphanRecovery[jobId]) return; // already waiting on this one
+            if (pendingOrphanRecovery[jobId]) return;
             pendingOrphanRecovery[jobId] = setTimeout(function() {
               delete pendingOrphanRecovery[jobId];
               const proj = projects[projectId];
               if (!proj) return;
-              // Re-check against live state, not the closed-over snapshot —
-              // the whole point of waiting is to let the real job (and/or a
-              // legitimate delete) land in the meantime.
               const stillMissing = !proj.jobs.some(function(j) { return j.id === jobId; });
               const stillTombstoned = proj.deletedIds && proj.deletedIds[String(jobId)];
               const stillHasCard = proj.boardCards.some(function(c) { return c.id === card.id; });
               if (!stillMissing || stillTombstoned || !stillHasCard) return;
-              console.warn('applyLiveblocksState: job ' + jobId + ' still missing ' + (ORPHAN_RECOVERY_GRACE_MS / 1000) + 's after its card arrived — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title, jobId: jobId});
+              console.warn('applyRoomSnapshot: job ' + jobId + ' still missing ' + (ORPHAN_RECOVERY_GRACE_MS / 1000) + 's after its card arrived — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title, jobId: jobId});
               proj.jobs.push(synthesizeJobFromOrphanCard(card, proj.boardColumns));
               if (projectId === activeProjectId) refreshActiveProjectFromShared();
               queueSharedSync();
@@ -11711,14 +11062,10 @@ function applyLiveblocksState(root) {
       }
 
       // A narrower version of the same gap, one level down: the card's own
-      // job DOES exist (so the check above never flags it), but that job is
-      // phased and its phases array is missing the specific phase this card
-      // belongs to — jobs and cards are still separate LiveMaps, so a
-      // phase-card can arrive slightly before the phase itself does inside
-      // the (whole-object) job push. Same stale-vs-genuine split and grace
-      // period as above, scoped to appending one phase instead of a whole
-      // job. Keyed by "jobId|phaseId" so it can't collide with the
-      // whole-job pendingOrphanRecovery keys above.
+      // job DOES exist, but that job is phased and its phases array is
+      // missing the specific phase this card belongs to. Same stale-vs-
+      // genuine split and grace period, keyed by "jobId|phaseId" so it
+      // can't collide with the whole-job pendingOrphanRecovery keys above.
       const phaseOrphanCards = local.boardCards.filter(function(c) {
         if (!c.jobId || !c.phaseId) return false;
         const j = local.jobs.find(function(j) { return j.id === c.jobId; });
@@ -11729,7 +11076,7 @@ function applyLiveblocksState(root) {
         const trulyPhaseOrphaned = phaseOrphanCards.filter(function(c) { return !local.deletedIds[String(c.phaseId)]; });
 
         if (stalePhaseCards.length) {
-          console.warn('applyLiveblocksState: dropping ' + stalePhaseCards.length + ' card(s) whose phase was deliberately deleted for project ' + projectId, stalePhaseCards.map(function(c){ return {cardId: c.id, title: c.title, phaseId: c.phaseId}; }));
+          console.warn('applyRoomSnapshot: dropping ' + stalePhaseCards.length + ' card(s) whose phase was deliberately deleted for project ' + projectId, stalePhaseCards.map(function(c){ return {cardId: c.id, title: c.title, phaseId: c.phaseId}; }));
           local.boardCards = local.boardCards.filter(function(c) { return stalePhaseCards.indexOf(c) === -1; });
           stalePhaseCards.forEach(function(c) { deleteCardFromShared(projectId, c.id); });
           queueSharedSync();
@@ -11748,7 +11095,7 @@ function applyLiveblocksState(root) {
             const stillTombstoned = proj.deletedIds && proj.deletedIds[String(card.phaseId)];
             const stillHasCard = proj.boardCards.some(function(c) { return c.id === card.id; });
             if (!stillMissing || stillTombstoned || !stillHasCard) return;
-            console.warn('applyLiveblocksState: phase ' + card.phaseId + ' of job ' + card.jobId + ' still missing after grace period — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title});
+            console.warn('applyRoomSnapshot: phase ' + card.phaseId + ' of job ' + card.jobId + ' still missing after grace period — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title});
             const shell = synthesizeJobFromOrphanCard(card, proj.boardColumns);
             j.phases.push({ id: card.phaseId, name: (card.title || 'Recovered phase').split(' — ').pop(), order: j.phases.length, tasks: shell.tasks });
             if (projectId === activeProjectId) refreshActiveProjectFromShared();
@@ -11761,28 +11108,16 @@ function applyLiveblocksState(root) {
     if (isActive) activeDataChanged = true;
   });
 
-  // prune deleted projects
-  Object.keys(projects).forEach(function (localId) {
+  // prune projects no longer present remotely
+  Object.keys(projects).forEach(function(localId) {
     if (remoteIds.has(localId)) return;
     if (Object.keys(projects).length <= 1) return;
     if (localId === activeProjectId) {
-      // The project this browser is currently viewing was deleted by
-      // someone else — leaving activeProjectId pointed at a dead id would
-      // strand this tab on a disconnected, no-longer-synced local copy
-      // (getActiveProject() doesn't care whether the id still exists
-      // remotely, so nothing would visibly break, it would just quietly
-      // stop syncing). Switch to a surviving project instead, same as
-      // enforceFixedProjectSet() already does when it deletes a duplicate
-      // out from under the active one.
       const survivor = Object.keys(projects).find(function(id) { return id !== localId; });
       if (survivor) {
         activeProjectId = survivor;
         delete projects[localId];
         listChanged = true;
-        // The forEach above already finished for this new activeProjectId
-        // without knowing it would become active — flag it directly so the
-        // caller actually reloads/re-renders instead of leaving the globals
-        // (jobs/boardCards/etc.) pointed at the just-deleted project.
         activeDataChanged = true;
       }
       return;
@@ -11793,13 +11128,26 @@ function applyLiveblocksState(root) {
 
   saveProjects();
 
+  if (isFirstSnapshot) {
+    // First snapshot of this page load: if the room already has real
+    // data, adopt it (same handling as every other snapshot, just once
+    // more explicitly named here for clarity); if the room is completely
+    // empty, seed it from whatever's in this browser's local project
+    // list, then converge onto the fixed two-project set either way.
+    const hasRemoteData = Object.keys(remoteProjects).length > 0;
+    if (!hasRemoteData) {
+      pushLiveblocksState();
+    }
+    const fixedChangedIds = enforceFixedProjectSet();
+    if (fixedChangedIds.length) {
+      fixedChangedIds.forEach(function(id) { pushProjectToShared(id); });
+      loadActiveProjectData();
+      renderAll();
+    }
+  }
+
   if (activeDataChanged) {
     if (busy) {
-      // The merge above already landed in projects[activeProjectId] — it's
-      // just not reflected in the live jobs/boardCards globals or the DOM
-      // yet, so we don't clobber whatever the user is mid-typing. Flag it
-      // so refreshActiveProjectFromShared() can catch up as soon as they're
-      // done, even if no further remote update arrives to retrigger this.
       pendingRemoteRefresh = true;
     } else {
       pendingRemoteRefresh = false;
@@ -11810,6 +11158,137 @@ function applyLiveblocksState(root) {
 
   const sidebar = document.getElementById('activitySidebar');
   if (sidebar && !sidebar.classList.contains('collapsed')) renderActivityLogSidebar();
+}
+
+// ---- Outbound pushes ----
+// Deliberately upsert-only (never delete-by-absence) for the same reason
+// this was true before the migration: a local snapshot (proj.jobs, etc.)
+// can be stale relative to the shared room — e.g. this tab deferred
+// merging a teammate's concurrent addition while isBusyEditing() was
+// true, and a save fired in the meantime still reads from those stale
+// globals. Diffing "what's missing from my stale snapshot" and deleting
+// it remotely would silently destroy the teammate's new job/card. Real
+// deletions instead go through deleteJobFromShared()/deleteCardFromShared()/
+// deleteCalendarEventFromShared() as explicit, targeted ops fired at the
+// exact moment the user deletes something.
+function pushProjectToShared(projectId, headerOverride) {
+  const proj = projects[projectId];
+  if (!proj) return;
+  const header = headerOverride || proj.header;
+
+  sendRoomMessage({
+    type: 'upsertProjectBatch',
+    projectId: projectId,
+    name: proj.name,
+    jobs: proj.jobs.map(function(j) { return Object.assign({}, j, { updatedAt: Date.now() }); }),
+    boardCards: proj.boardCards.map(function(c) { return Object.assign({}, c, { updatedAt: Date.now() }); }),
+    calendarEvents: (proj.calendarEvents || []).map(function(e) { return Object.assign({}, e, { updatedAt: Date.now() }); }),
+    header: { title: header.title || proj.name, subtitle: header.subtitle || '', theme: header.theme || DEFAULT_THEME }
+  });
+}
+
+// Removes a project's entry entirely — used when someone deletes a
+// project, so it disappears from everyone's shared list instead of
+// lingering. (No current call site — project deletion is disabled
+// app-wide — kept for parity with the pre-migration function of the same
+// name/purpose.)
+function removeProjectFromShared(projectId) {
+  sendRoomMessage({ type: 'removeProject', projectId: projectId });
+}
+
+// Explicit, targeted deletes for one job/card/calendar event — the only
+// things that actually remove a key from the shared data, called at the
+// exact moment the user deletes something. Also tombstones the id, since
+// a stale tab's later routine upsert could otherwise resurrect the very
+// thing just deleted here (see the comment above pushProjectToShared()).
+function deleteFromSharedMap(projectId, mapKey, id) {
+  const keyMap = { jobsMap: 'jobs', boardCardsMap: 'boardCards', calendarEventsMap: 'calendarEvents' };
+  sendRoomMessage({ type: 'deleteFromMap', projectId: projectId, mapKey: keyMap[mapKey] || mapKey, id: id });
+  const proj = projects[projectId];
+  if (proj) proj.deletedIds = mergeTombstones(proj.deletedIds, { [String(id)]: Date.now() });
+}
+function deleteJobFromShared(projectId, jobId) { deleteFromSharedMap(projectId, 'jobsMap', jobId); }
+function deleteCardFromShared(projectId, cardId) { deleteFromSharedMap(projectId, 'boardCardsMap', cardId); }
+function deleteCalendarEventFromShared(projectId, eventId) { deleteFromSharedMap(projectId, 'calendarEventsMap', eventId); }
+
+// Same tombstone-only bookkeeping, for ids with no top-level map entry of
+// their own — like a deleted job phase (nested inside job.phases, which
+// rides along inside the whole job object push).
+function recordTombstone(projectId, id) {
+  sendRoomMessage({ type: 'recordTombstone', projectId: projectId, id: id });
+  const proj = projects[projectId];
+  if (proj) proj.deletedIds = mergeTombstones(proj.deletedIds, { [String(id)]: Date.now() });
+}
+
+// Targeted pushes for the whole-array/object project fields that
+// pushProjectToShared() deliberately doesn't touch on its routine path —
+// fired only from the exact functions that intentionally change these
+// (saveBoardColumns()/saveFieldOptions()), each carrying the field's
+// current known revision so the server can tell a stale write (from a
+// tab that hasn't caught up with someone else's more recent change) from
+// a current one, rather than blindly overwriting either way.
+function pushFieldToShared(projectId, fieldKey, value) {
+  const proj = projects[projectId];
+  if (!proj) return;
+  const typeByField = { boardColumns: 'setBoardColumns', fieldOptions: 'setFieldOptions', header: 'setHeader' };
+  const msgType = typeByField[fieldKey];
+  if (!msgType) return;
+  const baseFieldRevision = (proj.fieldRevisions && proj.fieldRevisions[fieldKey]) || 0;
+  sendRoomMessage({ type: msgType, projectId: projectId, value: value, baseFieldRevision: baseFieldRevision });
+  // Optimistically bump the local revision so a rapid second edit before
+  // the ack lands still sends a plausible baseFieldRevision rather than
+  // the same now-stale one twice — if this guess is wrong the server's
+  // rejection (and the snapshot that immediately follows it) corrects it.
+  if (!proj.fieldRevisions) proj.fieldRevisions = { boardColumns: 0, fieldOptions: 0, header: 0 };
+  proj.fieldRevisions[fieldKey] = baseFieldRevision + 1;
+}
+function pushBoardColumnsToShared(projectId) {
+  const proj = projects[projectId];
+  if (proj) pushFieldToShared(projectId, 'boardColumns', proj.boardColumns);
+}
+function pushFieldOptionsToShared(projectId) {
+  const proj = projects[projectId];
+  if (proj) pushFieldToShared(projectId, 'fieldOptions', proj.fieldOptions);
+}
+
+function logActivity(actionText) {
+  const p = getActiveProject();
+  if (!p) return;
+  const name = getStoredDisplayName() || 'Someone';
+  const entry = { who: name, what: actionText, when: Date.now() };
+
+  // Always keep a local copy so it works even when offline
+  localActivityLog.push(entry);
+  while (localActivityLog.length > 50) localActivityLog.shift();
+
+  sendRoomMessage({ type: 'logActivity', projectId: p.id, who: name, what: actionText, when: entry.when });
+
+  const sidebar = document.getElementById('activitySidebar');
+  if (sidebar && !sidebar.classList.contains('collapsed')) {
+    renderActivityLogSidebar();
+  }
+}
+
+function pushLiveblocksState() {
+  clearTimeout(syncPushTimer);
+  setSyncStatus('saving…', true);
+
+  const p = getActiveProject();
+  if (!p) return;
+
+  try {
+    // Read straight from the DOM for the active project's header, since that's
+    // the freshest source (p.header is only updated on blur via saveActiveProject).
+    pushProjectToShared(p.id, {
+      title: document.getElementById('headerTitle').textContent.trim(),
+      subtitle: document.getElementById('headerSubtitle').textContent.trim(),
+      theme: getSavedTheme()
+    });
+    setSyncStatus('live', false);
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('save failed', true);
+  }
 }
 
 // Section 6/1 schema-lock plus Section 5's card sync both already run as
@@ -11843,7 +11322,7 @@ function refreshActiveProjectFromShared() {
 }
 
 // A remote update can land while the user is mid-edit (isBusyEditing()),
-// in which case applyLiveblocksState() defers the refresh above and sets
+// in which case applyRoomSnapshot() defers the refresh above and sets
 // pendingRemoteRefresh. Catch up the moment focus leaves the form instead
 // of waiting on another remote change to retrigger the sync.
 document.addEventListener('focusout', function() {
