@@ -912,7 +912,6 @@
   .board-column-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; font-size: 13px; font-weight: 700; color: var(--text); border-bottom: 1px solid #dfe1ea; flex-shrink: 0; cursor: grab; user-select: none; }
   .board-column-header:active { cursor: grabbing; }
   .board-column-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; font-size: 13px; font-weight: 700; color: var(--text); border-bottom: 1px solid #dfe1ea; flex-shrink: 0; }
-  .board-column-header .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
   .board-column-header-title { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
   .board-column-header-title span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -9746,12 +9745,11 @@ function renderBoard() {
   syncCardColumns();
   const wrapper = document.getElementById('boardWrapper');
   wrapper.innerHTML = BOARD_COLUMNS.map(col => {
-    const count = boardCards.filter(c => c.column === col.id && !isCardFromArchivedJob(c)).length;
     return '<div class="board-column" data-column="' + col.id + '">' +
       '<div class="board-column-header" data-col-header="' + col.id + '" draggable="' + (hasMinTier('projectAdmin') ? 'true' : 'false') + '">' +
         '<div class="board-column-header-title"><span>' + escapeHtml(col.label) + '</span>' +
           (col.scheduleDisconnected ? '<span title="Disconnected from schedule — cards here no longer auto-move" style="display:inline-flex;flex-shrink:0;"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg></span>' : '') +
-          '<span class="badge">' + count + '</span></div>' +
+          '</div>' +
         '<div class="board-col-settings-wrap" data-min-tier="projectAdmin">' +
           '<button class="board-col-settings-btn" draggable="false" onclick="toggleColSettings(\'' + col.id + '\', event)" title="Settings">⋮</button>' +
           '<div class="board-col-settings-dropdown" id="col-settings-' + col.id + '">' +
