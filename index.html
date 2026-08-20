@@ -11026,10 +11026,19 @@ function clearPendingWrite(msgId) {
 
 async function fetchRoomToken() {
   const { username, password } = ensureUserCredentials(false);
+  // `name` only actually gets used server-side for the shared-team-
+  // password fallback path (resolveIdentity() ignores it entirely for a
+  // real registered username/password match, using that account's own
+  // stored displayName instead) — so sending the locally-typed username
+  // here is safe either way, and fixes a real gap: anyone authenticating
+  // via the team password without a matching personal account otherwise
+  // showed up everywhere (activity log, presence avatars, etc.) as the
+  // generic "Team member" ("TM" as presence initials) instead of
+  // whatever name they'd actually typed in.
   let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username, password: password })
+    body: JSON.stringify({ username: username, password: password, name: username })
   });
 
   if (res.status === 401) {
@@ -11039,7 +11048,7 @@ async function fetchRoomToken() {
     res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: retry.username, password: retry.password })
+      body: JSON.stringify({ username: retry.username, password: retry.password, name: retry.username })
     });
   }
 
