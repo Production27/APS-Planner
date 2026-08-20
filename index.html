@@ -941,8 +941,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-column.card-drag-over .board-column-body {
     background: #e3e7f5;
   }
-  .board-add-card-btn { margin: 4px 10px 12px; padding: 8px 10px; border: none; background: transparent; color: var(--text-light); font-size: 12px; font-weight: 600; text-align: left; border-radius: 6px; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
-  .board-add-card-btn:hover { background: #dde0ec; color: var(--primary); }
   .board-card { background: white; border-radius: 8px; padding: 10px 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.14); cursor: grab; border-left: 4px solid var(--primary-light); transition: box-shadow 0.15s, transform 0.15s; }
   .board-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
   /* Mobile-only "Move to" fallback for touch, where native HTML5 drag
@@ -1600,7 +1598,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .board-column.card-drag-over .board-column-body {
     background: rgba(57,73,171,0.18);
   }
-  body.dark-mode .board-add-card-btn:hover { background: rgba(57,73,171,0.18); }
 
   body.dark-mode .board-card-due,
   body.dark-mode .cf-pill,
@@ -4455,14 +4452,6 @@ function setMobileView(view) {
     if (calendarViewMode === 'week') calendarViewMode = 'month';
     switchTab('calendar');
   }
-}
-
-// Every board column's "+ New Job" button (formerly "+ Add a card", which
-// created a standalone card with no linked job — invisible to Job Manager/
-// Gantt/Calendar and never auto-moved with dates) opens the real job form
-// instead, so every card on the board is always backed by a job.
-function addJobFromBoard() {
-  addNewJob();
 }
 
 function getDaysDiff(d1, d2) {
@@ -9331,7 +9320,6 @@ function renderBoard() {
         '</div>' +
       '</div>' +
       '<div class="board-column-body" id="col-body-' + col.id + '"></div>' +
-      '<button class="board-add-card-btn" onclick="addJobFromBoard()">+ New Job</button>' +
       '</div>';
   }).join('') +
   '<div class="board-add-column" id="addColumnContainer">' +
@@ -9365,7 +9353,6 @@ function renderBoard() {
       colEl.style.background = col.color;
       const dark = isDarkColor(col.color);
       const header = colEl.querySelector('.board-column-header');
-      const addBtn = colEl.querySelector('.board-add-card-btn');
       if (header) {
         header.style.color = dark ? '#fff' : '';
         const badge = header.querySelector('.badge');
@@ -9373,7 +9360,6 @@ function renderBoard() {
         const settingsBtn = header.querySelector('.board-col-settings-btn');
         if (settingsBtn) settingsBtn.style.color = dark ? 'rgba(255,255,255,0.7)' : '';
       }
-      if (addBtn) addBtn.style.color = dark ? 'rgba(255,255,255,0.7)' : '';
     }
     const colorGrid = document.getElementById('col-colors-' + col.id);
     if (colorGrid) {
@@ -10517,9 +10503,10 @@ function closeCardModal() {
 
 // ===== CARD MODAL AUTOSAVE =====
 // Replaces the old explicit "Save Card" button. This modal only ever opens
-// via openEditCard() now (the Board's "+ Add a card" was replaced by
-// "+ New Job" — see addJobFromBoard — so there's no standalone-card-
-// creation path left; editingCardId is always set while this is open).
+// via openEditCard() now — the Board's old "+ Add a card"/"+ New Job"
+// buttons are both gone, and jobs are only ever created from Job
+// Manager's own "+ Add Job" — so there's no standalone-card-creation path
+// left; editingCardId is always set while this is open.
 let cardAutosaveTimer = null;
 function scheduleCardAutosave() {
   clearTimeout(cardAutosaveTimer);
