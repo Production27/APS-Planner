@@ -3535,16 +3535,26 @@ function isChecklistStageVisibleToMe(assigneesMap, columnId) {
 // powers Manage Users and is admin-only): any logged-in team member needs
 // to be able to pick a teammate to assign a checklist stage to, not just
 // admins.
+// cachedUserRoster stays null until a fetch actually SUCCEEDS (even a
+// success with zero accounts sets it to []) — a failed fetch is not
+// cached, so the next render retries instead of the dropdown silently
+// looking identical to "no accounts exist" forever for the rest of the
+// session. userRosterLoadError holds the last failure's message, purely
+// so the dropdown can tell the user something actually went wrong instead
+// of just showing "Everyone" with no explanation either way.
 let cachedUserRoster = null;
+let userRosterLoadError = null;
 async function ensureUserRosterLoaded() {
   if (cachedUserRoster) return cachedUserRoster;
   try {
     const data = await postUsersEndpoint('users/roster');
     cachedUserRoster = data.users || [];
+    userRosterLoadError = null;
   } catch (e) {
-    cachedUserRoster = [];
+    console.error('Failed to load team roster for checklist assignment:', e);
+    userRosterLoadError = e.message || String(e);
   }
-  return cachedUserRoster;
+  return cachedUserRoster || [];
 }
 
 const CUSTOM_FIELD_DEFS = [
@@ -10209,7 +10219,19 @@ function renderJobChecklistVisibilitySelect() {
   const current = (jmDraftChecklistAssignees || {})[jmActiveChecklistColumnId] || '';
   const roster = cachedUserRoster || [];
   const hasCurrentInRoster = !current || roster.some(function(u) { return u.username === current; });
-  sel.innerHTML = '<option value="">Everyone</option>' +
+  // Distinguish "genuinely zero accounts exist yet" from "still loading"/
+  // "failed to load" — all three used to render identically as just
+  // "Everyone" with no explanation, making a real failure indistinguishable
+  // from an empty team roster.
+  let hintOption = '';
+  if (cachedUserRoster && roster.length === 0) {
+    hintOption = '<option value="" disabled>No team accounts yet — add one in Manage Users</option>';
+  } else if (userRosterLoadError) {
+    hintOption = '<option value="" disabled>Couldn\'t load teammates (' + escapeHtml(userRosterLoadError) + ')</option>';
+  } else if (!cachedUserRoster) {
+    hintOption = '<option value="" disabled>Loading teammates…</option>';
+  }
+  sel.innerHTML = '<option value="">Everyone</option>' + hintOption +
     roster.map(function(u) {
       return '<option value="' + escapeHtml(u.username) + '"' + (u.username === current ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
     }).join('') +
@@ -10571,7 +10593,17 @@ function renderChecklistVisibilitySelect() {
   const current = (draftChecklistAssignees || {})[activeChecklistColumnId] || '';
   const roster = cachedUserRoster || [];
   const hasCurrentInRoster = !current || roster.some(function(u) { return u.username === current; });
-  sel.innerHTML = '<option value="">Everyone</option>' +
+  // See renderJobChecklistVisibilitySelect() for why this distinguishes
+  // "genuinely zero accounts" from "still loading" from "failed to load".
+  let hintOption = '';
+  if (cachedUserRoster && roster.length === 0) {
+    hintOption = '<option value="" disabled>No team accounts yet — add one in Manage Users</option>';
+  } else if (userRosterLoadError) {
+    hintOption = '<option value="" disabled>Couldn\'t load teammates (' + escapeHtml(userRosterLoadError) + ')</option>';
+  } else if (!cachedUserRoster) {
+    hintOption = '<option value="" disabled>Loading teammates…</option>';
+  }
+  sel.innerHTML = '<option value="">Everyone</option>' + hintOption +
     roster.map(function(u) {
       return '<option value="' + escapeHtml(u.username) + '"' + (u.username === current ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
     }).join('') +
