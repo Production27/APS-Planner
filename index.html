@@ -87,10 +87,16 @@
      pulse for that — deliberately a different rhythm/color so the two
      never read as the same kind of signal). Each avatar gets a slightly
      different animation-delay (set inline in renderPresenceAvatars) so a
-     row of several doesn't pulse in rigid unison. */
+     row of several doesn't pulse in rigid unison.
+     Opacity is held constant across both keyframes on purpose — an
+     earlier version faded spread 0->4px while ALSO fading alpha 0.6->0,
+     so the two crossed opposite zero points and the ring was only ever
+     visible as a razor-thin flash, never as an actual steady ring
+     (confirmed by rendering each state in isolation). Animating only the
+     spread keeps it continuously visible while it breathes in and out. */
   @keyframes presenceLivePulse {
-    0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 0 rgba(67,160,71,0.6); }
-    50% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 4px rgba(67,160,71,0); }
+    0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 0 rgba(67,160,71,0.55); }
+    50% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 3px rgba(67,160,71,0.55); }
   }
   /* Mobile-only Jobs/Board toggle — see setMobileBoardView() and the
      @media (max-width:480px) rules that turn this into a visible tab bar. */
