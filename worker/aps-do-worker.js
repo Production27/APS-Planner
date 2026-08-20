@@ -600,6 +600,20 @@ async function handleUsersList(request, env, corsHeaders) {
   return jsonResponse({ users }, 200, corsHeaders);
 }
 
+// Deliberately NOT admin-gated (unlike handleUsersList above) — this
+// powers the client's per-checklist-stage "Visible to" picker, which any
+// logged-in team member needs to pick a teammate from, not just admins.
+// Strips role/createdAt/etc. down to just {username, displayName} so it
+// can't be used as a lightweight admin-only-data leak.
+async function handleUsersRoster(request, env, corsHeaders) {
+  let body;
+  try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
+  const caller = await resolveIdentity(env, body.username, body.password);
+  if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
+  const users = await listAllUsers(env);
+  return jsonResponse({ users: users.map(function(u) { return { username: u.username, displayName: u.displayName }; }) }, 200, corsHeaders);
+}
+
 async function handleUsersAdd(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
@@ -861,6 +875,9 @@ export default {
 
     if (url.pathname === "/users/list" && request.method === "POST") {
       return handleUsersList(request, env, corsHeaders);
+    }
+    if (url.pathname === "/users/roster" && request.method === "POST") {
+      return handleUsersRoster(request, env, corsHeaders);
     }
     if (url.pathname === "/users/add" && request.method === "POST") {
       return handleUsersAdd(request, env, corsHeaders);
