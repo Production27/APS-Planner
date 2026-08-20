@@ -952,12 +952,44 @@ export class ApsRoom {
     const server = pair[1];
 
     this.state.acceptWebSocket(server);
-    server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role });
+    // view/projectId start null (see handlePresenceMessage below) and
+    // live in this SAME attachment as identity specifically so they
+    // survive hibernation too — a plain instance field would not.
+    server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role, view: null, projectId: null });
 
     const roomState = await this.loadRoomState();
     server.send(JSON.stringify(Object.assign({ type: 'snapshot' }, roomState)));
+    this.broadcastPresence();
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // Presence (who's currently looking at which tab/project) is
+  // deliberately kept completely separate from applyMessage()/room
+  // state: ephemeral connection metadata, never touches state.storage,
+  // never persisted, never staleness/revision-checked. A bug here can
+  // show a wrong avatar; it cannot lose or corrupt any actual data — this
+  // returns before ever reaching applyMessage, and never calls persist().
+  handlePresenceMessage(ws, msg) {
+    const attachment = ws.deserializeAttachment() || {};
+    ws.serializeAttachment(Object.assign({}, attachment, {
+      view: typeof msg.view === 'string' ? msg.view : null,
+      projectId: typeof msg.projectId === 'string' ? msg.projectId : null
+    }));
+    this.broadcastPresence();
+  }
+
+  broadcastPresence() {
+    const users = [];
+    for (const ws of this.state.getWebSockets()) {
+      const a = ws.deserializeAttachment();
+      if (!a) continue;
+      users.push({ username: a.username, displayName: a.displayName, view: a.view || null, projectId: a.projectId || null });
+    }
+    const payload = JSON.stringify({ type: 'presence', users: users });
+    for (const ws of this.state.getWebSockets()) {
+      try { ws.send(payload); } catch (e) { /* dead socket — webSocketClose() cleans up */ }
+    }
   }
 
   async webSocketMessage(ws, message) {
@@ -967,6 +999,11 @@ export class ApsRoom {
       msg = JSON.parse(text);
     } catch (e) {
       ws.send(JSON.stringify({ type: 'error', message: 'invalid JSON' }));
+      return;
+    }
+
+    if (msg && msg.type === 'setPresence') {
+      this.handlePresenceMessage(ws, msg);
       return;
     }
 
@@ -1005,6 +1042,9 @@ export class ApsRoom {
 
   async webSocketClose(ws, code, reason, wasClean) {
     try { ws.close(code, reason); } catch (e) {}
+    // So everyone else's presence list drops this person promptly
+    // instead of waiting for the next unrelated broadcast.
+    this.broadcastPresence();
   }
 
   async webSocketError(ws, error) {

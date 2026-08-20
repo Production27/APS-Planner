@@ -71,6 +71,16 @@
     outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
   }
   .header-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  /* ===== PRESENCE AVATARS ===== */
+  .presence-avatars { display: flex; align-items: center; }
+  .presence-avatar {
+    width: 24px; height: 24px; border-radius: 50%; margin-left: -8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+    border: 2px solid var(--primary, #3949ab); box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    cursor: default; flex-shrink: 0;
+  }
+  .presence-avatar:first-child { margin-left: 0; }
   /* Mobile-only Jobs/Board toggle — see setMobileBoardView() and the
      @media (max-width:480px) rules that turn this into a visible tab bar. */
   .mobile-view-switcher { display: none; }
@@ -1694,6 +1704,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="subtitle" contenteditable="true" id="headerSubtitle" onblur="saveHeader()"></div>
   </div>
   <div class="header-actions">
+    <div class="presence-avatars" id="presenceAvatars"></div>
     <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
     <button class="activity-toggle-btn" id="activityToggleBtn" onclick="toggleActivitySidebar()" title="Activity Log"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button>
     <div class="settings-menu-wrap">
@@ -3576,6 +3587,7 @@ function switchProject(projectId) {
   }
   logActivity('switched to project "' + projects[projectId].name + '"');
   showToast('Switched to "' + projects[projectId].name + '"', 'success');
+  sendPresenceUpdate();
 }
 
 // Adding, duplicating, and deleting projects is intentionally disabled —
@@ -4462,6 +4474,7 @@ function switchTab(tab) {
   if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
   else if (tab === 'board') { renderBoard(); }
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
+  sendPresenceUpdate();
 }
 
 // Mobile-only Jobs/Board/Calendar/Gantt toggle — see .mobile-view-switcher
@@ -11066,6 +11079,58 @@ function handleRoomOpen() {
   pendingWrites.forEach(function(entry) {
     try { roomSocket.send(JSON.stringify(entry.msg)); } catch (e) {}
   });
+  sendPresenceUpdate();
+}
+
+// ===== PRESENCE (who's currently viewing which tab/project) =====
+// Deliberately a fully separate, best-effort system, not routed through
+// sendRoomMessage()/pendingWrites — there's nothing to ack, retry, or
+// check staleness for here; a dropped presence update just means a
+// stale avatar for a few seconds until the next one, never data loss.
+// Chosen instead of live cursor tracking: this app has several
+// independently scrolled/zoomed views (Gantt, Board, Calendar), so
+// there's no single shared coordinate space to place a cursor into the
+// way a single-canvas app like Figma has — a lightweight "who's here,
+// which tab are they on" indicator gets most of the value without that
+// problem.
+let latestPresenceUsers = [];
+
+function sendPresenceUpdate() {
+  if (!roomSocket || roomSocket.readyState !== 1) return;
+  const tabEl = document.querySelector('.rail-tab.active');
+  const view = tabEl ? tabEl.id.replace('tab-', '') : null;
+  try {
+    roomSocket.send(JSON.stringify({ type: 'setPresence', view: view, projectId: activeProjectId || null }));
+  } catch (e) { /* best-effort — a missed update just means a stale avatar briefly */ }
+}
+
+const PRESENCE_AVATAR_COLORS = ['#3949ab', '#00897b', '#c62828', '#f0ad4e', '#7e57c2', '#00acc1', '#8d6e63', '#5c6bc0'];
+function presenceAvatarColor(key) {
+  key = key || '';
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return PRESENCE_AVATAR_COLORS[hash % PRESENCE_AVATAR_COLORS.length];
+}
+function presenceInitials(displayName) {
+  const parts = (displayName || '?').trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+const PRESENCE_VIEW_LABELS = { gantt: 'Gantt Chart', board: 'Board', calendar: 'Calendar' };
+
+function renderPresenceAvatars() {
+  const el = document.getElementById('presenceAvatars');
+  if (!el) return;
+  const myUsername = getStoredUsername();
+  const others = latestPresenceUsers.filter(function(u) { return !myUsername || u.username !== myUsername; });
+  el.innerHTML = others.map(function(u) {
+    const name = u.displayName || u.username || 'Someone';
+    const proj = u.projectId && projects[u.projectId] ? projects[u.projectId].name : '';
+    const view = u.view ? (PRESENCE_VIEW_LABELS[u.view] || u.view) : '';
+    const whereLabel = [view, proj].filter(Boolean).join(' — ');
+    const title = whereLabel ? (name + ' — ' + whereLabel) : name;
+    return '<span class="presence-avatar" style="background:' + presenceAvatarColor(u.username || name) + ';" title="' + escapeHtml(title) + '">' + escapeHtml(presenceInitials(name)) + '</span>';
+  }).join('');
 }
 function handleRoomClose() {
   if (roomEverConnected) {
@@ -11112,6 +11177,11 @@ function handleRoomMessage(msg) {
     const isFirst = !roomEverConnected;
     roomEverConnected = true;
     applyRoomSnapshot(msg.projects || {}, isFirst);
+    return;
+  }
+  if (msg.type === 'presence') {
+    latestPresenceUsers = msg.users || [];
+    renderPresenceAvatars();
     return;
   }
   if (msg.type === 'ack') {

@@ -136,12 +136,49 @@ class ApsRoom {
     // Recall who this connection belongs to after a hibernation wake
     // without re-verifying the token on every single message — the
     // token was already checked once, right here, at connect time.
-    server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role });
+    // view/projectId start null (see setPresence handling below) and
+    // live in this SAME attachment specifically so they survive
+    // hibernation too, the same way identity already does — a plain
+    // instance field (e.g. this.presence = new Map()) would NOT survive
+    // a hibernation eviction/restart, since only serializeAttachment()
+    // data does.
+    server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role, view: null, projectId: null });
 
     const roomState = await this.loadRoomState();
     server.send(JSON.stringify(Object.assign({ type: 'snapshot' }, roomState)));
+    this.broadcastPresence();
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // Presence (who's currently looking at which tab/project) is
+  // deliberately kept completely separate from applyMessage()/room
+  // state: it's ephemeral connection metadata, not data — never touches
+  // state.storage, never persisted, never goes through staleness/
+  // revision checks. A bug here can show a wrong avatar; it can't lose
+  // or corrupt anyone's actual jobs/cards/boards, by construction (this
+  // handler returns before ever reaching applyMessage for this message
+  // type, and nothing here ever calls this.persist()).
+  handlePresenceMessage(ws, msg) {
+    const attachment = ws.deserializeAttachment() || {};
+    ws.serializeAttachment(Object.assign({}, attachment, {
+      view: typeof msg.view === 'string' ? msg.view : null,
+      projectId: typeof msg.projectId === 'string' ? msg.projectId : null
+    }));
+    this.broadcastPresence();
+  }
+
+  broadcastPresence() {
+    const users = [];
+    for (const ws of this.state.getWebSockets()) {
+      const a = ws.deserializeAttachment();
+      if (!a) continue;
+      users.push({ username: a.username, displayName: a.displayName, view: a.view || null, projectId: a.projectId || null });
+    }
+    const payload = JSON.stringify({ type: 'presence', users: users });
+    for (const ws of this.state.getWebSockets()) {
+      try { ws.send(payload); } catch (e) { /* dead socket — webSocketClose() cleans up */ }
+    }
   }
 
   async webSocketMessage(ws, message) {
@@ -151,6 +188,11 @@ class ApsRoom {
       msg = JSON.parse(text);
     } catch (e) {
       ws.send(JSON.stringify({ type: 'error', message: 'invalid JSON' }));
+      return;
+    }
+
+    if (msg && msg.type === 'setPresence') {
+      this.handlePresenceMessage(ws, msg);
       return;
     }
 
@@ -202,6 +244,9 @@ class ApsRoom {
     } catch (e) {
       // Already closed — fine.
     }
+    // So everyone else's presence list drops this person promptly
+    // instead of waiting for the next unrelated broadcast.
+    this.broadcastPresence();
   }
 
   async webSocketError(ws, error) {
