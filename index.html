@@ -4031,6 +4031,11 @@ function applyPermissionGating() {
       el.classList.toggle('perm-hidden', !allowed);
     }
   });
+  // Header icon buttons read as broken when merely grayed out (no visible
+  // label to explain why) — hidden entirely instead, same reasoning as
+  // updateProjectToggle()'s bespoke hide-vs-disable choice for its own button.
+  const activityBtn = document.getElementById('activityToggleBtn');
+  if (activityBtn) activityBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
 }
 
 function promptNewProject() {
@@ -11016,6 +11021,13 @@ function removeAttachment(id) {
 function toggleActivitySidebar() {
   const sidebar = document.getElementById('activitySidebar');
   const btn = document.getElementById('activityToggleBtn');
+  // Defense-in-depth for OPENING only — the trigger button is already
+  // data-min-tier gated, but this is also reachable from the sidebar's own
+  // close button, which must always be allowed to close it regardless of
+  // tier (e.g. if it was left open across a mid-session downgrade — see
+  // renderActivityLogSidebar()'s own force-close for that same case).
+  const wasOpen = !sidebar.classList.contains('collapsed');
+  if (!wasOpen && !hasMinTier('projectAdmin')) return;
   sidebar.classList.toggle('collapsed');
   const isOpen = !sidebar.classList.contains('collapsed');
   btn.classList.toggle('active', isOpen);
@@ -11041,6 +11053,21 @@ function getLogProp(item, key) {
 
 function renderActivityLogSidebar() {
   const bodyEl = document.getElementById('activitySidebarBody');
+  // Defense-in-depth, and the actual fix for the case that matters: this
+  // gets called from several places whenever the room data changes (not
+  // just from toggleActivitySidebar() opening it), so if the sidebar was
+  // already open when a tier downgrade landed mid-session, those refreshes
+  // would otherwise keep quietly re-populating it — the trigger button
+  // being hidden doesn't un-open an already-open sidebar. Force it closed
+  // and blank here instead.
+  if (!hasMinTier('projectAdmin')) {
+    const sidebar = document.getElementById('activitySidebar');
+    if (sidebar) sidebar.classList.add('collapsed');
+    const btn = document.getElementById('activityToggleBtn');
+    if (btn) btn.classList.remove('active');
+    if (bodyEl) bodyEl.innerHTML = '';
+    return;
+  }
   const p = getActiveProject();
   const items = [];
 
