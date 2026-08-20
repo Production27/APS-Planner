@@ -562,35 +562,16 @@ async function verifyCredentials(env, username, password) {
   return user;
 }
 
+// The shared team-password fallback (and TEAM_PASSWORD itself) is gone —
+// every caller now authenticates as a real individual account, full stop.
+// fallbackName is kept as a parameter (unused) rather than removed from
+// every call site across this file for a change that's otherwise purely
+// subtractive.
 async function resolveIdentity(env, username, password, fallbackName) {
-  // A username being present at all means the caller has (or thinks they
-  // have) an individual account — only that account's own password can
-  // authenticate it, full stop. Previously this fell through to the team-
-  // password check below on failure, which doesn't actually care whether a
-  // username was sent — just that the password matched. Combined with
-  // ensureUserCredentials() silently seeding a browser's "personal"
-  // password from the cached team password whenever no individual one was
-  // set yet (a real, intentional migration convenience), that meant anyone
-  // whose password slot got seeded that way was — invisibly, forever —
-  // authenticating as unrestricted admin via the team-password fallback
-  // instead of their own account's actual tier, no matter what that
-  // individual account's role/assignedProjectId said. Now a username that
-  // fails to verify is just rejected (401), which is what already forces
-  // the client to re-prompt for BOTH username and password fresh (see
-  // fetchRoomToken()'s 401 handling) — self-healing onto the real account
-  // on the very next login attempt.
-  if (username) {
-    const user = await verifyCredentials(env, username, password);
-    if (user) return { username: user.username, displayName: user.displayName, role: user.role, assignedProjectId: user.assignedProjectId || null };
-    return null;
-  }
-  if (password && password === env.TEAM_PASSWORD) {
-    const name = (typeof fallbackName === "string" && fallbackName.trim())
-      ? fallbackName.trim().slice(0, 60)
-      : "Team member";
-    return { username: null, displayName: name, role: "admin", assignedProjectId: null };
-  }
-  return null;
+  if (!username) return null;
+  const user = await verifyCredentials(env, username, password);
+  if (!user) return null;
+  return { username: user.username, displayName: user.displayName, role: user.role, assignedProjectId: user.assignedProjectId || null };
 }
 
 // --- 5. AUTH HANDLER — now mints a signed room token instead of calling
@@ -837,19 +818,29 @@ function jsonResponse(data, status, corsHeaders) {
   });
 }
 
-async function checkPassword(request, env) {
+// Backups used to be gated by the shared team password alone, with no tie
+// to individual accounts at all. Now they require a real Admin-tier
+// account's own credentials — same resolveIdentity() every other
+// authenticated endpoint uses, just requiring username+password instead of
+// a single shared secret.
+async function checkAdminAuth(request, env) {
   try {
     const body = await request.clone().json();
-    return body.password === env.TEAM_PASSWORD;
+    const caller = await resolveIdentity(env, body.username, body.password);
+    return !!(caller && caller.role === "admin");
   } catch (e) {
     return false;
   }
 }
 
-async function checkPasswordFlexible(request, env, url) {
-  const qp = url.searchParams.get("password");
-  if (qp && qp === env.TEAM_PASSWORD) return true;
-  return checkPassword(request, env);
+async function checkAdminAuthFlexible(request, env, url) {
+  const qUsername = url.searchParams.get("username");
+  const qPassword = url.searchParams.get("password");
+  if (qUsername && qPassword) {
+    const caller = await resolveIdentity(env, qUsername, qPassword);
+    if (caller && caller.role === "admin") return true;
+  }
+  return checkAdminAuth(request, env);
 }
 
 // --- 9. WORKER ENTRYPOINTS ---
@@ -884,7 +875,7 @@ export default {
     }
 
     if (url.pathname === "/trigger-backup") {
-      if (!(await checkPasswordFlexible(request, env, url))) {
+      if (!(await checkAdminAuthFlexible(request, env, url))) {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
       try {
@@ -897,7 +888,7 @@ export default {
     }
 
     if (url.pathname === "/list-backups") {
-      if (!(await checkPasswordFlexible(request, env, url))) {
+      if (!(await checkAdminAuthFlexible(request, env, url))) {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
       const list = await env.BACKUP_BUCKET.list({ prefix: "backups/" });
@@ -913,8 +904,8 @@ export default {
     }
 
     if (url.pathname === "/download-backup") {
-      const password = url.searchParams.get("password");
-      if (password !== env.TEAM_PASSWORD) {
+      const dlCaller = await resolveIdentity(env, url.searchParams.get("username"), url.searchParams.get("password"));
+      if (!dlCaller || dlCaller.role !== "admin") {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
       const key = url.searchParams.get("key");
@@ -933,8 +924,8 @@ export default {
     }
 
     if (url.pathname === "/restore-backup") {
-      const password = url.searchParams.get("password");
-      if (password !== env.TEAM_PASSWORD) {
+      const restoreCaller = await resolveIdentity(env, url.searchParams.get("username"), url.searchParams.get("password"));
+      if (!restoreCaller || restoreCaller.role !== "admin") {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
       const key = url.searchParams.get("key");

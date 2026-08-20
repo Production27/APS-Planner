@@ -1751,7 +1751,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openHeaderBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Header Background</div>
         <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openBoardBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board Background</div>
         <div class="settings-dropdown-divider"></div>
-        <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
+        <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
         <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); changeMyPasswordUI();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openArchivedJobsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</div>
@@ -2133,7 +2133,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <div class="modal-overlay" id="manageUsersModal">
   <div class="modal-box" style="max-width:560px;">
     <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</h4>
-    <p>Only admin accounts can add, remove, or reset passwords for other users. The old shared team password still works as a fallback admin login.</p>
+    <p>Only admin accounts can add, remove, or reset passwords for other users.</p>
     <div style="display:flex; gap:10px; margin:10px 0 16px;">
       <button class="btn btn-secondary" onclick="showAddUserForm()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14m-7-7h14" stroke="#28a745" stroke-width="2.5" stroke-linecap="round"/></svg> Add User</button>
       <button class="btn btn-secondary" onclick="loadUsersList()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 12a8 8 0 0113.7-5.7L20 8M20 8V4M20 8h-4M20 12a8 8 0 01-13.7 5.7L4 16m0 0v4m0-4h4" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Refresh List</button>
@@ -9225,16 +9225,12 @@ function importData(input) {
 }
 
 // ===== BACKUPS (shared room, via the Cloudflare Worker) =====
-// Reuses the same team password already stored for Liveblocks sync
-// (see ensureTeamCredentials / TEAM_PASSWORD_KEY further down this file)
-// so people aren't asked to type it again just to view backups.
-function getBackupsAuthPassword() {
-  let pw = getStoredTeamPassword();
-  if (!pw) {
-    pw = window.prompt("Enter the team password:") || "";
-    if (pw) localStorage.setItem(TEAM_PASSWORD_KEY, pw);
-  }
-  return pw;
+// Used to be gated by a separate shared team password, unrelated to
+// individual accounts. Now uses the caller's own logged-in credentials —
+// same as every other authenticated action (see getMyCredentials()) — and
+// the Worker itself additionally requires that account be Admin-tier.
+function getBackupsAuthCredentials() {
+  return getMyCredentials();
 }
 
 function openBackupsModal() {
@@ -9246,12 +9242,11 @@ function closeBackupsModal() {
 }
 
 async function triggerBackupNow() {
-  const pw = getBackupsAuthPassword();
-  if (!pw) return;
+  const { username, password } = getBackupsAuthCredentials();
   const statusEl = document.getElementById('backupsListStatus');
   statusEl.textContent = 'Running backup…';
   try {
-    const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}trigger-backup?password=${encodeURIComponent(pw)}`);
+    const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}trigger-backup?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || 'Backup failed');
     logActivity('triggered manual backup');
@@ -9264,14 +9259,13 @@ async function triggerBackupNow() {
 }
 
 async function loadBackupsList() {
-  const pw = getBackupsAuthPassword();
-  if (!pw) return;
+  const { username, password } = getBackupsAuthCredentials();
   const statusEl = document.getElementById('backupsListStatus');
   const listEl = document.getElementById('backupsList');
   statusEl.textContent = 'Loading…';
   listEl.innerHTML = '';
   try {
-    const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}list-backups?password=${encodeURIComponent(pw)}`);
+    const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}list-backups?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not load backups');
     statusEl.textContent = `${data.backups.length} backup(s) — most recent first`;
@@ -9289,13 +9283,14 @@ async function loadBackupsList() {
           <div style="font-size:12px; color:var(--text-secondary);">${b.date}</div>
         </div>
         <div style="display:flex; gap:6px; flex-shrink:0;">
-          <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="download"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-5-5m5 5l5-5" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="19" width="16" height="2.5" rx="1.25" fill="#28a745"/></svg></button>
+          <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="download" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-5-5m5 5l5-5" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="19" width="16" height="2.5" rx="1.25" fill="#28a745"/></svg></button>
           <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="restore" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore</button>
         </div>`;
       row.querySelector('[data-action="download"]').onclick = () => downloadBackupFile(b.key);
       row.querySelector('[data-action="restore"]').onclick = () => restoreBackupFile(b.key, b.date);
       listEl.appendChild(row);
     });
+    applyPermissionGating(); // rebuilt on every list refresh, outside renderAll()'s own sweep
   } catch (err) {
     statusEl.textContent = '';
     showToast('Could not load backups: ' + err.message, 'error');
@@ -9303,15 +9298,13 @@ async function loadBackupsList() {
 }
 
 function downloadBackupFile(key) {
-  const pw = getBackupsAuthPassword();
-  if (!pw) return;
-  const url = `${LIVEBLOCKS_AUTH_ENDPOINT}download-backup?password=${encodeURIComponent(pw)}&key=${encodeURIComponent(key)}`;
+  const { username, password } = getBackupsAuthCredentials();
+  const url = `${LIVEBLOCKS_AUTH_ENDPOINT}download-backup?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&key=${encodeURIComponent(key)}`;
   window.open(url, '_blank');
 }
 
 async function restoreBackupFile(key, dateLabel) {
-  const pw = getBackupsAuthPassword();
-  if (!pw) return;
+  const { username, password } = getBackupsAuthCredentials();
 
   const step1 = window.confirm(
     `Restore the SHARED project back to the backup from:\n\n${dateLabel}\n\n` +
@@ -9330,7 +9323,7 @@ async function restoreBackupFile(key, dateLabel) {
   statusEl.textContent = 'Restoring… please wait';
   try {
     const res = await fetch(
-      `${LIVEBLOCKS_AUTH_ENDPOINT}restore-backup?password=${encodeURIComponent(pw)}&key=${encodeURIComponent(key)}&confirm=RESTORE`
+      `${LIVEBLOCKS_AUTH_ENDPOINT}restore-backup?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&key=${encodeURIComponent(key)}&confirm=RESTORE`
     );
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || 'Restore failed');
@@ -9383,7 +9376,7 @@ async function loadUsersList() {
     const myUsername = getStoredUsername();
     statusEl.textContent = data.users.length + ' user(s)';
     if (!data.users.length) {
-      listEl.innerHTML = '<div style="padding:14px; color:var(--text-secondary);">No accounts yet — add one below, or keep using the shared team password.</div>';
+      listEl.innerHTML = '<div style="padding:14px; color:var(--text-secondary);">No accounts yet — add one below.</div>';
       return;
     }
     data.users.forEach(function(u) {
@@ -9557,10 +9550,6 @@ async function removeUserUI(username, displayName) {
 // not just admins (the worker's reset-password endpoint allows that).
 async function changeMyPasswordUI() {
   const { username } = getMyCredentials();
-  if (!username) {
-    showToast('You\'re using the shared team password, not a personal account — ask an admin to add you one in Manage Users first.', 'error');
-    return;
-  }
   const newPassword = window.prompt('New password (at least 6 characters):');
   if (newPassword === null) { showToast('Cancelled — password not changed', 'info'); return; }
   if (!newPassword) { showToast('Cancelled — no password entered', 'info'); return; }
@@ -11352,18 +11341,10 @@ function mergeTombstones(a, b) {
   return merged;
 }
 
-// TEAM_PASSWORD_KEY is legacy (pre-accounts) — kept only as a one-time
-// migration source (see ensureUserCredentials()) and because the Backups
-// modal still uses the shared team password directly, unrelated to the
-// per-user accounts below.
-const TEAM_PASSWORD_KEY = "gantt_team_password_v1";
 const DISPLAY_NAME_KEY = "gantt_display_name_v1";
 const USERNAME_KEY = "gantt_username_v1";
 const USER_PASSWORD_KEY = "gantt_user_password_v1";
 
-function getStoredTeamPassword() {
-  return localStorage.getItem(TEAM_PASSWORD_KEY) || "";
-}
 function getStoredDisplayName() {
   return localStorage.getItem(DISPLAY_NAME_KEY) || "";
 }
@@ -11416,12 +11397,8 @@ function hasMinTier(tier) {
 // rename/create already ask for input elsewhere in this app) and caches
 // the answers so people aren't asked again every visit. Re-prompts for
 // both specifically if the worker rejects them (wrong/removed account).
-// One-time migration: if there's no per-user password yet but the old
-// shared team password is still cached, seed the new key from it — an
-// existing browser only gets prompted for a *username* on first load
-// after this shipped, not the password too (the old shared password still
-// works as a break-glass login server-side, see the Worker's
-// resolveIdentity()).
+// The shared team password no longer exists as a fallback — every login
+// now needs a real individual account.
 function ensureUserCredentials(forceReprompt) {
   let username = getStoredUsername();
   if (!username || forceReprompt) {
@@ -11431,10 +11408,6 @@ function ensureUserCredentials(forceReprompt) {
     localStorage.setItem(USERNAME_KEY, username);
   }
   let password = getStoredUserPassword();
-  if (!password && getStoredTeamPassword()) {
-    password = getStoredTeamPassword();
-    localStorage.setItem(USER_PASSWORD_KEY, password);
-  }
   if (!password || forceReprompt) {
     password = window.prompt(
       forceReprompt ? "Enter your password again:" : "Password:"
@@ -11629,15 +11602,9 @@ function clearPendingWrite(msgId) {
 
 async function fetchRoomToken() {
   const { username, password } = ensureUserCredentials(false);
-  // `name` only actually gets used server-side for the shared-team-
-  // password fallback path (resolveIdentity() ignores it entirely for a
-  // real registered username/password match, using that account's own
-  // stored displayName instead) — so sending the locally-typed username
-  // here is safe either way, and fixes a real gap: anyone authenticating
-  // via the team password without a matching personal account otherwise
-  // showed up everywhere (activity log, presence avatars, etc.) as the
-  // generic "Team member" ("TM" as presence initials) instead of
-  // whatever name they'd actually typed in.
+  // `name` is vestigial now that resolveIdentity() has no team-password
+  // fallback path left to use it for — harmless to keep sending, not worth
+  // a change just to remove an unused field.
   let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
