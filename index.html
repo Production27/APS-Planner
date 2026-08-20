@@ -9788,6 +9788,19 @@ function renderBoard() {
   });
 
   document.getElementById('boardCount').textContent = boardCards.filter(c => !isCardFromArchivedJob(c)).length;
+
+  // renderBoard() rebuilds the column headers (incl. the ⋮ settings menu,
+  // data-min-tier="projectAdmin") from scratch via wrapper.innerHTML on
+  // every call — and it's called directly from ~25 places across this file
+  // (card drags, column drops, job/phase edits, etc.), not just from
+  // renderAll(). Relying on renderAll()'s own trailing applyPermissionGating()
+  // left every one of those other call sites re-rendering the settings menu
+  // back into its default (visible) state with nothing to re-hide it again
+  // until the next full renderAll() happened to run — a real gap, not just
+  // a first-paint timing issue. Calling it here too is redundant with
+  // renderAll()'s call (harmless — this is a cheap, idempotent DOM sweep)
+  // but is what actually closes the gap for every other call site.
+  applyPermissionGating();
 }
 
 function buildCardEl(card) {
