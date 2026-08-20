@@ -9819,7 +9819,16 @@ function renderBoard() {
       const dark = isDarkColor(col.color);
       const header = colEl.querySelector('.board-column-header');
       if (header) {
-        header.style.color = dark ? '#fff' : '';
+        // Trello-style: the title reads as a darker shade of the board's
+        // own color (inherited by the title span below it — see
+        // .board-column-header-title in the stylesheet, which sets no
+        // color of its own) rather than generic black text, when the
+        // background is light enough for that to stay readable. A
+        // genuinely dark board color keeps the existing white-text
+        // fallback — darkening an already-dark color further would be
+        // illegible. Doesn't touch the badge or ⋮ button, which both
+        // already carry their own explicit colors regardless.
+        header.style.color = dark ? '#fff' : darkenColor(col.color, 0.6);
         const badge = header.querySelector('.badge');
         if (badge) badge.style.background = dark ? 'rgba(255,255,255,0.25)' : '';
         const settingsBtn = header.querySelector('.board-col-settings-btn');
