@@ -3474,12 +3474,22 @@ function ensureCardChecklists(card) {
 // hasn't had its checklist opened there yet) doesn't get items materialized
 // it'll never see. Mutates `checklists` in place and returns the array.
 function getChecklistForStage(checklists, columnId) {
-  if (!checklists[columnId]) {
+  // Reseed whenever the stored list is EMPTY, not just missing — an empty
+  // array is truthy in JS, so a stage visited before it had a
+  // defaultChecklist (or one that's since been fully checked off/cleared)
+  // would otherwise permanently block a template added/changed later from
+  // ever reaching it. A list with actual items in it is always left alone
+  // either way, so nobody's real progress gets clobbered.
+  if (!checklists[columnId] || checklists[columnId].length === 0) {
     const col = BOARD_COLUMNS.find(function(c) { return c.id === columnId; });
     const defaults = (col && col.defaultChecklist) || [];
-    checklists[columnId] = defaults.map(function(d) {
-      return { id: genId(), text: d.text, done: false, assignee: '' };
-    });
+    if (defaults.length) {
+      checklists[columnId] = defaults.map(function(d) {
+        return { id: genId(), text: d.text, done: false, assignee: '' };
+      });
+    } else if (!checklists[columnId]) {
+      checklists[columnId] = [];
+    }
   }
   return checklists[columnId];
 }
@@ -9563,16 +9573,19 @@ function buildCardEl(card) {
 
   // Current stage's checklist only — a pure read (no lazy-seed/write here,
   // this renders on every board paint and could race a remote sync if it
-  // wrote to card.checklists). A stage nobody's opened yet has no
-  // card.checklists[col] entry at all (getChecklistForStage() only creates
-  // one on first open) — fall back to the column's own defaultChecklist
-  // template so its badge still shows up before that first open, matching
-  // what the card will actually get seeded with.
+  // wrote to card.checklists). Falls back to the column's own
+  // defaultChecklist template whenever the stored list is EMPTY, not just
+  // missing — a stage visited before it had a template (or whose items
+  // were fully checked off/cleared) has an empty-but-truthy array that
+  // would otherwise mask a template added/changed later, exactly mirroring
+  // getChecklistForStage()'s own reseed-on-empty rule so the badge always
+  // shows what the card will actually get seeded with once opened.
   ensureCardChecklists(card);
-  let checklist = card.checklists && card.checklists[card.column];
-  if (checklist === undefined) {
+  let checklist = (card.checklists && card.checklists[card.column]) || [];
+  if (checklist.length === 0) {
     const stageCol = BOARD_COLUMNS.find(c => c.id === card.column);
-    checklist = (stageCol && stageCol.defaultChecklist) || [];
+    const templ = (stageCol && stageCol.defaultChecklist) || [];
+    if (templ.length) checklist = templ;
   }
   // A stage assigned to someone else (see setChecklistStageAssignee()) is
   // private — no badge leaking its progress to viewers who can't open it.
