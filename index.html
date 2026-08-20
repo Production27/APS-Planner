@@ -1040,6 +1040,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .checklist-visibility-row label { font-size: 11px; color: var(--text-light); flex-shrink: 0; }
   .checklist-visibility-row select { flex: 1; min-width: 0; }
   .checklist-private-notice { font-size: 12px; color: var(--text-light); padding: 10px 0; font-style: italic; }
+  /* Permission gating — see applyPermissionGating(). Elements tagged
+     data-min-tier get this toggled on when the current account's tier is
+     below what the element requires. */
+  .perm-hidden { display: none !important; }
 
   /* Attachments */
   .attachment-item { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
@@ -1734,21 +1738,21 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="settings-menu-wrap">
       <button class="settings-dots-btn" onclick="toggleSettingsMenu()" title="Settings">⋮</button>
       <div class="settings-dropdown" id="settingsDropdown">
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); promptRenameProject(activeProjectId);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Header Title</div>
+        <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); promptRenameProject(activeProjectId);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Header Title</div>
         <div class="settings-dropdown-divider"></div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); exportData();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-5-5m5 5l5-5" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="19" width="16" height="2.5" rx="1.25" fill="#28a745"/></svg> Export</div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); document.getElementById('importFile').click();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 21V9m0 0l-5 5m5-5l5 5" stroke="#3949ab" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="2.5" width="16" height="2.5" rx="1.25" fill="#3949ab"/></svg> Import</div>
+        <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); document.getElementById('importFile').click();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 21V9m0 0l-5 5m5-5l5 5" stroke="#3949ab" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="2.5" width="16" height="2.5" rx="1.25" fill="#3949ab"/></svg> Import</div>
         <div class="settings-dropdown-divider"></div>
         <div class="settings-dropdown-item toggle-item" onclick="toggleDarkMode()">
           <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
           <span class="mini-toggle" id="darkModeToggle"></span>
         </div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openThemeModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Header Color</div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openHeaderBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Header Background</div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBoardBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board Background</div>
+        <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openThemeModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Header Color</div>
+        <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openHeaderBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Header Background</div>
+        <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openBoardBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board Background</div>
         <div class="settings-dropdown-divider"></div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
-        <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
+        <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
+        <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); changeMyPasswordUI();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</div>
         <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openArchivedJobsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</div>
 
@@ -1792,7 +1796,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <button class="rail-tab" onclick="switchTab('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
     </div>
     <div class="manager-sidebar-header">
-      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span><button class="job-rail-add-btn" onclick="addNewJob()" title="Add a new job">+</button></h2>
+      <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span><button class="job-rail-add-btn" data-min-tier="editor" onclick="addNewJob()" title="Add a new job">+</button></h2>
       <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
     </div>
     <div class="job-list" id="jobList"></div>
@@ -1816,7 +1820,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <!-- Day mode only (see renderCalendar()) — the day agenda has no
                empty-cell-to-click affordance for adding an event the way
                month/week's grid cells do. -->
-          <button class="btn btn-secondary" id="calAddEventBtn" onclick="openAddCalendarEvent(calendarViewDate.toISOString().split('T')[0])" style="display:none;">+ Add</button>
+          <button class="btn btn-secondary" id="calAddEventBtn" data-min-tier="editor" onclick="openAddCalendarEvent(calendarViewDate.toISOString().split('T')[0])" style="display:none;">+ Add</button>
           <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
             <button class="btn btn-secondary" id="calViewMonth" onclick="setCalendarView('month')" style="padding:6px 14px;font-size:12px;">Month</button>
             <button class="btn btn-secondary" id="calViewWeek" onclick="setCalendarView('week')" style="padding:6px 14px;font-size:12px;">Week</button>
@@ -1889,7 +1893,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="form-container" id="jobForm" style="display:none;">
           <div class="form-title-row">
             <h3 id="formTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job</h3>
-            <button class="duplicate-job-btn" id="duplicateJobBtn" onclick="duplicateJob(editingJobId, event)" title="Duplicate job" style="display:none;"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>
+            <button class="duplicate-job-btn" id="duplicateJobBtn" data-min-tier="editor" onclick="duplicateJob(editingJobId, event)" title="Duplicate job" style="display:none;"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>
           </div>
           <div class="job-current-board-indicator" id="jobCurrentBoardIndicator" style="display:none;"></div>
           <div class="form-group mobile-collapsible">
@@ -1948,7 +1952,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="card-section mobile-collapsible">
             <div class="card-section-header">
               <h5 onclick="toggleMobileField(this)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> Custom Fields</h5>
-              <button class="btn btn-secondary" onclick="openManageFields()">Edit</button>
+              <button class="btn btn-secondary" data-min-tier="projectAdmin" onclick="openManageFields()">Edit</button>
             </div>
             <div class="mobile-field-body">
               <div class="custom-fields-grid" id="jmCustomFieldsGrid"></div>
@@ -1976,8 +1980,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
                 </div>
                 <div id="jmChecklistItems"></div>
                 <div class="checklist-add-row">
-                  <input type="text" id="jmChecklistNewItem" placeholder="Add an item..." onkeydown="if(event.key==='Enter'){event.preventDefault();addJobChecklistItem();}">
-                  <button class="btn btn-secondary" onclick="addJobChecklistItem()">Add</button>
+                  <input type="text" id="jmChecklistNewItem" data-min-tier="editor" placeholder="Add an item..." onkeydown="if(event.key==='Enter'){event.preventDefault();addJobChecklistItem();}">
+                  <button class="btn btn-secondary" data-min-tier="editor" onclick="addJobChecklistItem()">Add</button>
                 </div>
               </div>
             </div>
@@ -1987,8 +1991,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="card-section mobile-collapsible">
             <div class="card-section-header">
               <h5 onclick="toggleMobileField(this)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Attachments</h5>
-              <button class="btn btn-secondary" onclick="document.getElementById('jm_attachment_input').click()">+ Add</button>
-              <input type="file" id="jm_attachment_input" multiple style="display:none" onchange="handleJobAttachmentUpload(event)">
+              <button class="btn btn-secondary" data-min-tier="editor" onclick="document.getElementById('jm_attachment_input').click()">+ Add</button>
+              <input type="file" id="jm_attachment_input" data-min-tier="editor" multiple style="display:none" onchange="handleJobAttachmentUpload(event)">
             </div>
             <div class="mobile-field-body">
               <div id="jmAttachmentItems"></div>
@@ -1996,8 +2000,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           </div>
 
           <div class="form-actions">
-            <button class="btn btn-secondary" onclick="confirmDelete()" id="deleteBtn" style="margin-right:auto; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
-            <button class="btn btn-secondary" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
+            <button class="btn btn-secondary" data-min-tier="editor" onclick="confirmDelete()" id="deleteBtn" style="margin-right:auto; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
+            <button class="btn btn-secondary" data-min-tier="editor" onclick="archiveCurrentJob()" id="archiveBtn" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archive</button>
             <button class="btn btn-secondary" onclick="cancelEdit()">Close</button>
           </div>
         </div>
@@ -2018,8 +2022,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="mobile-field-body">
             <div class="job-comments-list" id="jobCommentsList"></div>
             <div class="job-comments-input-row">
-              <textarea id="newJobCommentText" placeholder="Add a note or comment..." onkeydown="handleJobCommentKey(event)"></textarea>
-              <button class="btn btn-primary" onclick="addJobComment()" style="align-self:flex-end;">Post</button>
+              <textarea id="newJobCommentText" data-min-tier="commenter" placeholder="Add a note or comment..." onkeydown="handleJobCommentKey(event)"></textarea>
+              <button class="btn btn-primary" data-min-tier="commenter" onclick="addJobComment()" style="align-self:flex-end;">Post</button>
             </div>
           </div>
         </div>
@@ -2131,8 +2135,45 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</h4>
     <p>Only admin accounts can add, remove, or reset passwords for other users. The old shared team password still works as a fallback admin login.</p>
     <div style="display:flex; gap:10px; margin:10px 0 16px;">
-      <button class="btn btn-secondary" onclick="addUserUI()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14m-7-7h14" stroke="#28a745" stroke-width="2.5" stroke-linecap="round"/></svg> Add User</button>
+      <button class="btn btn-secondary" onclick="showAddUserForm()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14m-7-7h14" stroke="#28a745" stroke-width="2.5" stroke-linecap="round"/></svg> Add User</button>
       <button class="btn btn-secondary" onclick="loadUsersList()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 12a8 8 0 0113.7-5.7L20 8M20 8V4M20 8h-4M20 12a8 8 0 01-13.7 5.7L4 16m0 0v4m0-4h4" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Refresh List</button>
+    </div>
+    <!-- Inline add/edit sub-form — see showAddUserForm()/showEditUserForm()/
+         submitUserForm(). Reuses this same modal rather than opening a second
+         one, same idea as calendarEventModal's inline color-picker panel. -->
+    <div id="userFormPanel" style="display:none; border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:16px; background:var(--bg);">
+      <h5 id="userFormTitle" style="margin:0 0 12px;">Add User</h5>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="userFormUsername" placeholder="letters, numbers, . _ - only">
+      </div>
+      <div class="form-group">
+        <label id="userFormPasswordLabel">Password</label>
+        <input type="password" id="userFormPassword" placeholder="at least 6 characters">
+      </div>
+      <div class="form-group">
+        <label>Display Name</label>
+        <input type="text" id="userFormDisplayName" placeholder="shown on comments/activity">
+      </div>
+      <div class="form-group">
+        <label>Permission Level</label>
+        <select id="userFormTier" onchange="onUserFormTierChange()">
+          <option value="admin">Admin — full access, both projects, manages accounts</option>
+          <option value="projectAdmin">Project Admin — full content control, one project</option>
+          <option value="editor">Editor — create/edit jobs &amp; cards, one project</option>
+          <option value="commenter">Commenter — comments + checking off items, one project</option>
+          <option value="viewer">Viewer — read-only, one project</option>
+        </select>
+      </div>
+      <div class="form-group" id="userFormProjectGroup">
+        <label>Project</label>
+        <select id="userFormProject"></select>
+      </div>
+      <span class="field-error-hint" id="userFormHint" style="display:none;"></span>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="btn btn-primary" onclick="submitUserForm()">Save</button>
+        <button class="btn btn-secondary" onclick="hideUserFormPanel()">Cancel</button>
+      </div>
     </div>
     <div id="usersListStatus" style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;"></div>
     <div id="usersList" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
@@ -2208,10 +2249,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       </div>
     </div>
     <div class="modal-actions" style="justify-content:space-between;">
-      <button class="btn btn-secondary" id="ceDeleteBtn" onclick="deleteCalendarEventFromModal()" style="display:none; color:var(--danger);" title="Deletes the whole series, not just one occurrence"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
+      <button class="btn btn-secondary" id="ceDeleteBtn" data-min-tier="editor" onclick="deleteCalendarEventFromModal()" style="display:none; color:var(--danger);" title="Deletes the whole series, not just one occurrence"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
       <div style="display:flex; gap:10px;">
         <button class="btn btn-secondary" onclick="closeCalendarEventModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveCalendarEventFromModal()">Save</button>
+        <button class="btn btn-primary" data-min-tier="editor" onclick="saveCalendarEventFromModal()">Save</button>
       </div>
     </div>
   </div>
@@ -2278,8 +2319,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         </div>
         <div id="checklistItems"></div>
         <div class="checklist-add-row">
-          <input type="text" id="checklistNewItem" placeholder="Add an item..." onkeydown="if(event.key==='Enter'){event.preventDefault();addChecklistItem();}">
-          <button class="btn btn-secondary" onclick="addChecklistItem()">Add</button>
+          <input type="text" id="checklistNewItem" data-min-tier="editor" placeholder="Add an item..." onkeydown="if(event.key==='Enter'){event.preventDefault();addChecklistItem();}">
+          <button class="btn btn-secondary" data-min-tier="editor" onclick="addChecklistItem()">Add</button>
         </div>
         </div>
       </div>
@@ -2288,14 +2329,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="card-section">
         <div class="card-section-header">
           <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Attachments</h5>
-          <button class="btn btn-secondary" onclick="document.getElementById('c_attachment_input').click()">+ Add</button>
-          <input type="file" id="c_attachment_input" multiple style="display:none" onchange="handleAttachmentUpload(event)">
+          <button class="btn btn-secondary" data-min-tier="editor" onclick="document.getElementById('c_attachment_input').click()">+ Add</button>
+          <input type="file" id="c_attachment_input" data-min-tier="editor" multiple style="display:none" onchange="handleAttachmentUpload(event)">
         </div>
         <div id="attachmentItems"></div>
       </div>
 
       <div class="modal-actions" style="justify-content:space-between; margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
-        <button class="btn btn-secondary" id="cardDeleteBtn" onclick="deleteCardFromModal()" style="display:none; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
+        <button class="btn btn-secondary" id="cardDeleteBtn" data-min-tier="editor" onclick="deleteCardFromModal()" style="display:none; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
         <div style="display:flex; gap:10px;">
           <button class="btn btn-secondary" onclick="closeCardModal()">Close</button>
         </div>
@@ -3680,6 +3721,15 @@ function getActiveProject() {
 
 function switchProject(projectId) {
   if (!projects[projectId] || projectId === activeProjectId) return;
+  // Below-Admin tiers can be restricted to one project (see
+  // currentAssignedProjectId/enforceProjectScopeForRole()) — this is the
+  // single choke point both switchProject() call sites go through
+  // (toggleProject()'s button and jumpToLinkedJobReference()'s cross-project
+  // link jump), so gating it here covers both without touching either caller.
+  if (currentUserRole !== 'admin' && currentAssignedProjectId && projectId !== currentAssignedProjectId) {
+    showToast("You're restricted to one project — ask an admin to change your assignment", 'error');
+    return;
+  }
   // The job/card/event forms hold IDs scoped to the OLD project's data —
   // left open across a project switch, autoSaveJobForm() would find no
   // matching job in the new project's array and (since a form with a name
@@ -3701,6 +3751,26 @@ function switchProject(projectId) {
   logActivity('switched to project "' + projects[projectId].name + '"');
   showToast('Switched to "' + projects[projectId].name + '"', 'success');
   sendPresenceUpdate();
+}
+
+// Forces activeProjectId onto a restricted account's assigned project — a
+// silent boot-time/reconnect correction, not a user-initiated switch, so it
+// deliberately does NOT call switchProject() (which fires activity-log/
+// toast/presence side effects appropriate for a deliberate click, not for
+// this). Called from fetchRoomToken() (role/project assignment may arrive
+// or change on any reconnect, not just first load) and again once the first
+// real room snapshot lands, since fetchRoomToken() resolves before that
+// snapshot arrives and `projects` may still only reflect stale localStorage
+// at the point this first runs.
+function enforceProjectScopeForRole() {
+  if (currentUserRole === 'admin' || !currentAssignedProjectId) return;
+  if (!projects[currentAssignedProjectId]) return; // assigned project not loaded/known yet — fail open, not crash
+  if (activeProjectId !== currentAssignedProjectId) {
+    activeProjectId = currentAssignedProjectId;
+    saveProjects();
+    loadActiveProjectData();
+    renderAll();
+  }
 }
 
 // Adding, duplicating, and deleting projects is intentionally disabled —
@@ -3897,6 +3967,15 @@ function toggleProject() {
 function updateProjectToggle() {
   const btn = document.getElementById('projectToggleBtn');
   if (!btn) return;
+  // A restricted (non-admin, project-scoped) account has nothing to toggle
+  // to — hiding the button entirely reads more honestly than leaving a
+  // permanently-disabled control around, matching how this codebase already
+  // hides irrelevant UI outright elsewhere (e.g. the mobile view switcher).
+  if (currentUserRole !== 'admin' && currentAssignedProjectId) {
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
   const ids = Object.keys(projects);
   if (ids.length < 2) return;
   const currentIdx = ids.indexOf(activeProjectId);
@@ -3915,6 +3994,30 @@ function renderAll() {
   renderCalendar();
   updateProjectToggle();
   updateGhostBtnState();
+  applyPermissionGating();
+}
+
+// Sweeps every element tagged data-min-tier="<tier>" (added across this
+// file's template strings — job/board/checklist/comment/settings controls)
+// and disables inputs/buttons/selects or hides everything else per the
+// current account's tier, via hasMinTier(). Runs at the end of renderAll()
+// (called on init, every switchProject, and every remote snapshot refresh —
+// see its own call sites) so it self-heals after any re-render without
+// individual render functions needing to know about permissions at all.
+// Extends this file's existing convention of disabling a control at render
+// time rather than guarding inside the handler (e.g. the checklist
+// visibility picker's `sel.disabled = !isAdmin`, see canAssignChecklistStages())
+// — this is that same idea generalized across the whole app via one data
+// attribute instead of one-off boolean checks per control.
+function applyPermissionGating() {
+  document.querySelectorAll('[data-min-tier]').forEach(function(el) {
+    const allowed = hasMinTier(el.dataset.minTier);
+    if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'BUTTON' || el.tagName === 'TEXTAREA') {
+      el.disabled = !allowed;
+    } else {
+      el.classList.toggle('perm-hidden', !allowed);
+    }
+  });
 }
 
 function promptNewProject() {
@@ -5475,6 +5578,12 @@ function handleCalBarMouseDown(e) {
 
 function handleCalBarMouseMove(e) {
   if (!calDragState) return;
+  // Below Editor: never let the drag actually move anything (and never set
+  // .moved, so a click-drag attempt just resolves as a plain click on
+  // mouseup and opens the event read-only, same as any other click).
+  // Blocking this in handleCalBarMouseDown instead would also block the
+  // click-to-view path that shares the same mousedown handler.
+  if (!hasMinTier('editor')) return;
   const { bar, dragType, startX, origLeft, origWidth, duration, startDateObj, finishDateObj, job, task } = calDragState;
   const deltaX = e.clientX - startX;
   const cellWidth = document.querySelector('.cal-day')?.offsetWidth || 1;
@@ -6798,6 +6907,7 @@ function cascadeShiftLaterTasks(jobId, taskId, deltaDays) {
 function startBarResizeRight(e, jobId, taskId, bar) {
   e.preventDefault();
   e.stopPropagation();
+  if (!hasMinTier('editor')) return;
   const found = findTask(jobId, taskId);
   if (!found) return;
   const task = found.task;
@@ -6820,6 +6930,7 @@ function startBarResizeRight(e, jobId, taskId, bar) {
 function startBarResizeLeft(e, jobId, taskId, bar) {
   e.preventDefault();
   e.stopPropagation();
+  if (!hasMinTier('editor')) return;
   const found = findTask(jobId, taskId);
   if (!found) return;
   const task = found.task;
@@ -6923,6 +7034,7 @@ let tickResizeState = null;
 function startTickResize(e, jobId, taskId, tick) {
   e.preventDefault();
   e.stopPropagation();
+  if (!hasMinTier('editor')) return;
   const found = findTask(jobId, taskId);
   if (!found) return;
   const task = found.task;
@@ -7044,6 +7156,11 @@ function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId, subPhaseId) {
 
 function onBarMoveMove(e) {
   if (!barMoveState) return;
+  // Below Editor: never let the drag actually move anything (and never set
+  // .moved, so a click-drag attempt just resolves as a plain click on
+  // mouseup and opens the job read-only, same as any other click) — mirrors
+  // handleCalBarMouseMove()'s same reasoning for the calendar's bars.
+  if (!hasMinTier('editor')) return;
   const deltaX = e.clientX - barMoveState.startX;
   const deltaY = e.clientY - barMoveState.startY;
 
@@ -7797,7 +7914,8 @@ function renderJobPhaseStrip(job) {
 
   if (!job.phases || !job.phases.length) {
     section.style.display = 'block';
-    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" onclick="splitJobIntoPhasesUI()">+ Split into phases</button>';
+    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="splitJobIntoPhasesUI()">+ Split into phases</button>';
+    applyPermissionGating();
     return;
   }
 
@@ -7810,14 +7928,15 @@ function renderJobPhaseStrip(job) {
     // Even the last remaining phase gets a delete button — deleting it
     // un-splits the job back to a single unphased task list instead of
     // being blocked, see deleteJobPhaseUI().
-    const delBtn = '<span class="job-phase-chip-del" onclick="event.stopPropagation(); deleteJobPhaseUI(\'' + phase.id + '\')" title="' +
+    const delBtn = '<span class="job-phase-chip-del" data-min-tier="editor" onclick="event.stopPropagation(); deleteJobPhaseUI(\'' + phase.id + '\')" title="' +
       (phases.length > 1 ? 'Delete phase' : 'Remove phasing (merge back into the job)') + '">×</span>';
     return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobPhase(\'' + phase.id + '\')" title="Click to select, click the pencil to rename">' +
       '<span class="job-card-board-dot" style="background:' + (col ? (col.color || '#3949ab') : '#ccc') + ';"></span>' +
       escapeHtml(phase.name) +
-      '<span class="job-phase-chip-edit" onclick="event.stopPropagation(); renameJobPhaseUI(\'' + phase.id + '\')" title="Rename phase">✎</span>' +
+      '<span class="job-phase-chip-edit" data-min-tier="editor" onclick="event.stopPropagation(); renameJobPhaseUI(\'' + phase.id + '\')" title="Rename phase">✎</span>' +
       delBtn + '</span>';
-  }).join('') + '<button type="button" class="job-phase-strip-btn" onclick="addJobPhaseUI()">+ Add Phase</button>';
+  }).join('') + '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="addJobPhaseUI()">+ Add Phase</button>';
+  applyPermissionGating();
 }
 
 // Nested one level under the phase strip — mirrors it almost exactly,
@@ -7830,7 +7949,8 @@ function renderJobSubPhaseStrip(job, phase) {
 
   if (!phase.subPhases || !phase.subPhases.length) {
     strip.style.display = 'block';
-    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" onclick="splitPhaseIntoSubPhasesUI()">+ Split into sub-phases</button>';
+    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="splitPhaseIntoSubPhasesUI()">+ Split into sub-phases</button>';
+    applyPermissionGating();
     return;
   }
 
@@ -7840,13 +7960,14 @@ function renderJobSubPhaseStrip(job, phase) {
     const active = (sub.id || null) === (editingSubPhaseId || null);
     // Same "last one un-splits instead of being blocked" treatment as the
     // phase strip above — see deleteSubPhaseUI().
-    const delBtn = '<span class="job-phase-chip-del" onclick="event.stopPropagation(); deleteSubPhaseUI(\'' + sub.id + '\')" title="' +
+    const delBtn = '<span class="job-phase-chip-del" data-min-tier="editor" onclick="event.stopPropagation(); deleteSubPhaseUI(\'' + sub.id + '\')" title="' +
       (subUnits.length > 1 ? 'Delete sub-phase' : 'Remove sub-phasing (merge back into the phase)') + '">×</span>';
     return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobSubPhase(\'' + sub.id + '\')" title="Click to select, click the pencil to rename">' +
       escapeHtml(sub.name) +
-      '<span class="job-phase-chip-edit" onclick="event.stopPropagation(); renameSubPhaseUI(\'' + sub.id + '\')" title="Rename sub-phase">✎</span>' +
+      '<span class="job-phase-chip-edit" data-min-tier="editor" onclick="event.stopPropagation(); renameSubPhaseUI(\'' + sub.id + '\')" title="Rename sub-phase">✎</span>' +
       delBtn + '</span>';
-  }).join('') + '<button type="button" class="job-phase-strip-btn" onclick="addPhaseSubUnitUI()">+ Add Sub-Phase</button>';
+  }).join('') + '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="addPhaseSubUnitUI()">+ Add Sub-Phase</button>';
+  applyPermissionGating();
 }
 
 // Re-renders every phase-scoped part of the open job form for whichever
@@ -8143,8 +8264,9 @@ function renderJobLinkSection(job) {
     body.innerHTML = '<div class="job-link-active-row">' +
       '<span class="job-link-name" title="' + escapeHtml(label + (projLabel ? ' (' + projLabel + ')' : '')) + '">🔗 ' + escapeHtml(label) + (projLabel ? ' <span style="opacity:0.65;">(' + escapeHtml(projLabel) + ')</span>' : '') + '</span>' +
       '<span class="board-col-gantt-switch' + (isLinkEnabledLocally(job.id) ? ' on' : '') + '" onclick="toggleJobLinkEnabledUI()" title="Show on the other project\'s Gantt & Calendar (just for you — this doesn\'t change what anyone else sees)"><span class="knob"></span></span>' +
-      '<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="unlinkJobUI()">Unlink</button>' +
+      '<button type="button" class="btn btn-secondary" data-min-tier="editor" style="padding:4px 10px;font-size:11px;" onclick="unlinkJobUI()">Unlink</button>' +
       '</div>';
+    applyPermissionGating();
     return;
   }
 
@@ -8153,7 +8275,8 @@ function renderJobLinkSection(job) {
   const otherProjName = otherProj ? otherProj.name : 'other project';
 
   if (!jobLinkPickerOpen) {
-    body.innerHTML = '<button type="button" class="job-phase-strip-btn" onclick="openJobLinkPickerUI()">+ Link to ' + escapeHtml(otherProjName) + ' job</button>';
+    body.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="openJobLinkPickerUI()">+ Link to ' + escapeHtml(otherProjName) + ' job</button>';
+    applyPermissionGating();
     return;
   }
 
@@ -8161,9 +8284,10 @@ function renderJobLinkSection(job) {
   const options = otherJobs.map(function(j) { return '<option value="' + j.id + '">' + escapeHtml(j.name) + '</option>'; }).join('');
   body.innerHTML = '<div class="job-link-picker-row">' +
     '<select id="jobLinkPickerSelect">' + (options || '<option value="">No jobs available</option>') + '</select>' +
-    '<button type="button" class="btn btn-primary" style="padding:5px 12px;font-size:11px;" onclick="confirmJobLinkUI(\'' + otherProjectId + '\')"' + (otherJobs.length ? '' : ' disabled') + '>Link</button>' +
+    '<button type="button" class="btn btn-primary" data-min-tier="editor" style="padding:5px 12px;font-size:11px;" onclick="confirmJobLinkUI(\'' + otherProjectId + '\')"' + (otherJobs.length ? '' : ' disabled') + '>Link</button>' +
     '<button type="button" class="btn btn-secondary" style="padding:5px 12px;font-size:11px;" onclick="cancelJobLinkPickerUI()">Cancel</button>' +
     '</div>';
+  applyPermissionGating();
 }
 
 function openJobLinkPickerUI() {
@@ -8362,6 +8486,7 @@ function renderJobComments(job) {
     return;
   }
   listEl.innerHTML = comments.map(function(c) { return renderJobCommentItem(job, c); }).join('');
+  applyPermissionGating(); // rebuilt on every comment/reply edit, outside renderAll()'s own sweep
 }
 
 function renderJobCommentItem(job, c) {
@@ -8373,7 +8498,7 @@ function renderJobCommentItem(job, c) {
         '<span class="job-comment-author" title="' + escapeHtml(r.author || 'Someone') + '">' + escapeHtml(r.author || 'Someone') + '</span>' +
         '<span style="display:flex;align-items:center;gap:4px;">' +
           '<span class="job-comment-when">' + formatCommentWhen(r.when) + '</span>' +
-          '<button class="job-comment-delete" onclick="deleteJobReply(\'' + job.id + '\', \'' + c.id + '\', \'' + r.id + '\')" title="Delete reply">×</button>' +
+          '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobReply(\'' + job.id + '\', \'' + c.id + '\', \'' + r.id + '\')" title="Delete reply">×</button>' +
         '</span>' +
       '</div>' +
       '<div class="job-comment-text">' + escapeHtml(r.text) + '</div>' +
@@ -8385,15 +8510,15 @@ function renderJobCommentItem(job, c) {
       '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
       '<span style="display:flex;align-items:center;gap:4px;">' +
         '<span class="job-comment-when">' + formatCommentWhen(c.when) + '</span>' +
-        '<button class="job-comment-delete" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
+        '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
       '</span>' +
     '</div>' +
     '<div class="job-comment-text">' + escapeHtml(c.text) + '</div>' +
     (replies.length ? '<div class="job-comment-replies">' + repliesHtml + '</div>' : '') +
     '<button class="job-comment-reply-btn" onclick="toggleReplyBox(\'' + c.id + '\', event)">Reply' + (replies.length ? ' (' + replies.length + ')' : '') + '</button>' +
     '<div class="job-comment-reply-input-row" id="reply-row-' + c.id + '">' +
-      '<textarea id="reply-ta-' + c.id + '" placeholder="Write a reply..." onkeydown="handleReplyKey(event, \'' + job.id + '\', \'' + c.id + '\')"></textarea>' +
-      '<button class="btn btn-primary" style="align-self:flex-end;padding:4px 10px;font-size:12px;" onclick="addJobReply(\'' + job.id + '\', \'' + c.id + '\')">Post Reply</button>' +
+      '<textarea id="reply-ta-' + c.id + '" data-min-tier="commenter" placeholder="Write a reply..." onkeydown="handleReplyKey(event, \'' + job.id + '\', \'' + c.id + '\')"></textarea>' +
+      '<button class="btn btn-primary" data-min-tier="commenter" style="align-self:flex-end;padding:4px 10px;font-size:12px;" onclick="addJobReply(\'' + job.id + '\', \'' + c.id + '\')">Post Reply</button>' +
     '</div>' +
   '</div>';
 }
@@ -8802,13 +8927,14 @@ function renderArchivedJobsList() {
     row.innerHTML =
       '<div style="min-width:0; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + job.name + '</div>' +
       '<div style="display:flex; gap:6px; flex-shrink:0;">' +
-        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="restore"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore</button>' +
-        '<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="delete"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>' +
+        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="restore" data-min-tier="editor"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore</button>' +
+        '<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="delete" data-min-tier="editor"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>' +
       '</div>';
     row.querySelector('[data-action="restore"]').onclick = function() { restoreJob(job.id); };
     row.querySelector('[data-action="delete"]').onclick = function() { promptDeleteJob(job.id); };
     listEl.appendChild(row);
   });
+  applyPermissionGating(); // this list is rebuilt outside renderAll()'s own sweep
 }
 
 function archiveCurrentJob() {
@@ -8900,6 +9026,9 @@ function duplicateJob(jobId, event) {
 }
 
 function promptDeleteJob(jobId) {
+  // Defense-in-depth — its own trigger buttons are already data-min-tier
+  // gated, but delete is irreversible enough to warrant a second check here.
+  if (!hasMinTier('editor')) return;
   deleteTargetJobId = jobId;
   const found = findJob(jobId);
   document.getElementById('deleteJobName').textContent = found ? found.job.name : '';
@@ -9148,7 +9277,7 @@ async function loadBackupsList() {
         </div>
         <div style="display:flex; gap:6px; flex-shrink:0;">
           <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="download"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-5-5m5 5l5-5" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="19" width="16" height="2.5" rx="1.25" fill="#28a745"/></svg></button>
-          <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="restore"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore</button>
+          <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="restore" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore</button>
         </div>`;
       row.querySelector('[data-action="download"]').onclick = () => downloadBackupFile(b.key);
       row.querySelector('[data-action="restore"]').onclick = () => restoreBackupFile(b.key, b.date);
@@ -9229,6 +9358,8 @@ function closeManageUsersModal() {
   document.getElementById('manageUsersModal').classList.remove('show');
 }
 
+const TIER_LABELS = { admin: 'Admin', projectAdmin: 'Project Admin', editor: 'Editor', commenter: 'Commenter', viewer: 'Viewer' };
+
 async function loadUsersList() {
   const statusEl = document.getElementById('usersListStatus');
   const listEl = document.getElementById('usersList');
@@ -9246,15 +9377,24 @@ async function loadUsersList() {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--border); gap:8px;';
       const isMe = u.username === myUsername;
+      const tierLabel = TIER_LABELS[u.role] || u.role;
+      // Not persisted for the 'admin' tier server-side, but defensively
+      // check the tier here too — an unrestricted admin should never show
+      // a stale project label even if assignedProjectId somehow lingered.
+      const projectLabel = (u.role !== 'admin' && u.assignedProjectId)
+        ? (' — ' + ((projects[u.assignedProjectId] && projects[u.assignedProjectId].name) || '(unknown project)'))
+        : '';
       row.innerHTML =
         '<div style="min-width:0;">' +
           '<div style="font-size:13px; font-weight:600;">' + escapeHtml(u.displayName) + (isMe ? ' <span style="font-weight:400; color:var(--text-secondary);">(you)</span>' : '') + '</div>' +
-          '<div style="font-size:12px; color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + (u.role === 'admin' ? 'Admin' : 'Member') + '</div>' +
+          '<div style="font-size:12px; color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + escapeHtml(tierLabel) + escapeHtml(projectLabel) + '</div>' +
         '</div>' +
         '<div style="display:flex; gap:6px; flex-shrink:0;">' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="edit">Edit</button>' +
           '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="reset">Reset Password</button>' +
           '<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="remove">Remove</button>' +
         '</div>';
+      row.querySelector('[data-action="edit"]').onclick = function() { showEditUserForm(u.username, u.displayName, u.role, u.assignedProjectId); };
       row.querySelector('[data-action="reset"]').onclick = function() { resetUserPasswordUI(u.username, u.displayName); };
       row.querySelector('[data-action="remove"]').onclick = function() { removeUserUI(u.username, u.displayName); };
       listEl.appendChild(row);
@@ -9265,36 +9405,110 @@ async function loadUsersList() {
   }
 }
 
-async function addUserUI() {
-  const usernameRaw = window.prompt('New username (letters, numbers, . _ - only):');
-  if (usernameRaw === null) { showToast('Cancelled — no user added', 'info'); return; }
-  const username = usernameRaw.trim();
-  if (!username) { showToast('Cancelled — no username entered', 'info'); return; }
+// Populates the project <select> from the app's fixed two-project set, with
+// a leading "unrestricted" option — shared by both the Add and Edit forms.
+function populateUserFormProjectSelect(selectedId) {
+  const sel = document.getElementById('userFormProject');
+  const options = ['<option value="">All projects (unrestricted)</option>'];
+  Object.keys(projects).forEach(function(id) {
+    options.push('<option value="' + escapeHtml(id) + '"' + (id === selectedId ? ' selected' : '') + '>' + escapeHtml(projects[id].name) + '</option>');
+  });
+  sel.innerHTML = options.join('');
+}
 
-  const passwordRaw = window.prompt('Password for this account (at least 6 characters):');
-  if (passwordRaw === null) { showToast('Cancelled — no user added', 'info'); return; }
-  if (!passwordRaw) { showToast('Cancelled — no password entered', 'info'); return; }
+// Admin is never project-scoped — hide the project picker entirely rather
+// than just leaving it meaningless when that tier's selected.
+function onUserFormTierChange() {
+  const tier = document.getElementById('userFormTier').value;
+  document.getElementById('userFormProjectGroup').style.display = tier === 'admin' ? 'none' : '';
+}
 
-  const displayName = (window.prompt('Display name (shown on comments/activity):', username) || username).trim();
+// null = the form is adding a new account; a username string = editing that
+// existing one (submitUserForm() branches on this).
+let editingUserFormUsername = null;
 
-  // A plain confirm()'s Cancel button reads as "abort the whole thing" to
-  // most people, not "pick the other option" — using it to double as a
-  // role picker was the source of a real bug report (cancelling to mean
-  // "member" looked identical to the account silently failing to add).
-  // A typed answer with an unambiguous default avoids that: leaving it
-  // blank (or cancelling) means member, not "nothing happens."
-  const roleRaw = window.prompt('Role — type "admin" for an admin account, or leave blank for a regular member:', '');
-  const isAdmin = (roleRaw || '').trim().toLowerCase() === 'admin';
+function showAddUserForm() {
+  editingUserFormUsername = null;
+  document.getElementById('userFormTitle').textContent = 'Add User';
+  document.getElementById('userFormUsername').value = '';
+  document.getElementById('userFormUsername').disabled = false;
+  document.getElementById('userFormPassword').value = '';
+  document.getElementById('userFormPassword').placeholder = 'at least 6 characters';
+  document.getElementById('userFormPasswordLabel').textContent = 'Password';
+  document.getElementById('userFormDisplayName').value = '';
+  document.getElementById('userFormTier').value = 'editor';
+  populateUserFormProjectSelect('');
+  onUserFormTierChange();
+  document.getElementById('userFormHint').style.display = 'none';
+  document.getElementById('userFormPanel').style.display = 'block';
+}
+
+function showEditUserForm(username, displayName, role, assignedProjectId) {
+  editingUserFormUsername = username;
+  document.getElementById('userFormTitle').textContent = 'Edit ' + displayName;
+  document.getElementById('userFormUsername').value = username;
+  document.getElementById('userFormUsername').disabled = true; // usernames aren't renamable
+  document.getElementById('userFormPassword').value = '';
+  document.getElementById('userFormPassword').placeholder = 'leave blank to keep current password';
+  document.getElementById('userFormPasswordLabel').textContent = 'Password (optional)';
+  document.getElementById('userFormDisplayName').value = displayName;
+  document.getElementById('userFormTier').value = role;
+  populateUserFormProjectSelect(assignedProjectId || '');
+  onUserFormTierChange();
+  document.getElementById('userFormHint').style.display = 'none';
+  document.getElementById('userFormPanel').style.display = 'block';
+}
+
+function hideUserFormPanel() {
+  document.getElementById('userFormPanel').style.display = 'none';
+  editingUserFormUsername = null;
+}
+
+// Handles both Add and Edit — editingUserFormUsername (set by
+// showAddUserForm()/showEditUserForm()) decides which endpoint(s) to call.
+// Editing a role/project is a separate call (users/update) from an optional
+// password change (users/reset-password) since the Worker's update endpoint
+// deliberately doesn't touch passwords — same separation of concerns as the
+// existing standalone "Reset Password" button.
+async function submitUserForm() {
+  const hintEl = document.getElementById('userFormHint');
+  hintEl.style.display = 'none';
+  const username = document.getElementById('userFormUsername').value.trim();
+  const password = document.getElementById('userFormPassword').value;
+  const displayName = document.getElementById('userFormDisplayName').value.trim() || username;
+  const role = document.getElementById('userFormTier').value;
+  const assignedProjectId = document.getElementById('userFormProject').value || null;
+
+  if (!username) { hintEl.textContent = 'Username is required.'; hintEl.style.display = 'block'; return; }
 
   try {
-    await postUsersEndpoint('users/add', {
-      newUsername: username, newPassword: passwordRaw, newDisplayName: displayName, newRole: isAdmin ? 'admin' : 'member'
-    });
-    logActivity('added user account "' + displayName + '"');
-    showToast('User added (' + (isAdmin ? 'admin' : 'member') + ')', 'success');
+    if (editingUserFormUsername) {
+      if (password && password.length < 6) {
+        hintEl.textContent = 'Password must be at least 6 characters (leave blank to keep the current one).';
+        hintEl.style.display = 'block';
+        return;
+      }
+      await postUsersEndpoint('users/update', { targetUsername: editingUserFormUsername, newRole: role, newAssignedProjectId: assignedProjectId });
+      if (password) {
+        await postUsersEndpoint('users/reset-password', { targetUsername: editingUserFormUsername, newPassword: password });
+      }
+      logActivity('updated user account "' + displayName + '"');
+      showToast('User updated', 'success');
+    } else {
+      if (!password || password.length < 6) {
+        hintEl.textContent = 'Password must be at least 6 characters.';
+        hintEl.style.display = 'block';
+        return;
+      }
+      await postUsersEndpoint('users/add', { newUsername: username, newPassword: password, newDisplayName: displayName, newRole: role, newAssignedProjectId: assignedProjectId });
+      logActivity('added user account "' + displayName + '"');
+      showToast('User added', 'success');
+    }
+    hideUserFormPanel();
     loadUsersList();
   } catch (err) {
-    showToast('Could not add user: ' + err.message, 'error');
+    hintEl.textContent = err.message;
+    hintEl.style.display = 'block';
   }
 }
 
@@ -9471,11 +9685,11 @@ function renderBoard() {
   wrapper.innerHTML = BOARD_COLUMNS.map(col => {
     const count = boardCards.filter(c => c.column === col.id && !isCardFromArchivedJob(c)).length;
     return '<div class="board-column" data-column="' + col.id + '">' +
-      '<div class="board-column-header" data-col-header="' + col.id + '" draggable="true">' +
+      '<div class="board-column-header" data-col-header="' + col.id + '" draggable="' + (hasMinTier('projectAdmin') ? 'true' : 'false') + '">' +
         '<div class="board-column-header-title"><span>' + escapeHtml(col.label) + '</span>' +
           (col.scheduleDisconnected ? '<span title="Disconnected from schedule — cards here no longer auto-move" style="display:inline-flex;flex-shrink:0;"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg></span>' : '') +
           '<span class="badge">' + count + '</span></div>' +
-        '<div class="board-col-settings-wrap">' +
+        '<div class="board-col-settings-wrap" data-min-tier="projectAdmin">' +
           '<button class="board-col-settings-btn" draggable="false" onclick="toggleColSettings(\'' + col.id + '\', event)" title="Settings">⋮</button>' +
           '<div class="board-col-settings-dropdown" id="col-settings-' + col.id + '">' +
             '<div class="board-col-color-toggle" onclick="toggleColColorPanel(\'' + col.id + '\', event)">' +
@@ -9510,7 +9724,7 @@ function renderBoard() {
       '<div class="board-column-body" id="col-body-' + col.id + '"></div>' +
       '</div>';
   }).join('') +
-  '<div class="board-add-column" id="addColumnContainer">' +
+  '<div class="board-add-column" id="addColumnContainer" data-min-tier="projectAdmin">' +
     '<button class="board-add-column-btn" id="addColumnBtn" onclick="showAddColumnForm()">+ Add Board</button>' +
     '<div class="board-add-column-form" id="addColumnForm">' +
       '<input type="text" id="newColumnName" placeholder="Enter board title..." maxlength="30" onkeydown="handleAddColumnKey(event)">' +
@@ -9578,7 +9792,7 @@ function buildCardEl(card) {
   const el = document.createElement('div');
   const hasOverride = !!(card.manualColumn && card.manualColumnUntil && Date.now() < card.manualColumnUntil);
   el.className = 'board-card' + (hasOverride ? ' manual-override' : '');
-  el.draggable = true;
+  el.draggable = hasMinTier('editor');
   el.dataset.id = card.id;
   el.style.borderLeftColor = card.color || 'var(--primary-light)';
   if (hasOverride) {
@@ -10138,10 +10352,11 @@ function renderCustomFieldsGrid(values) {
       const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
         '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
       ).join('');
-      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '">' + optionsHtml + '</select></div>';
+      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
     }
-    return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
+    return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
   }).join('');
+  applyPermissionGating(); // rebuilt on every card-modal open, outside renderAll()'s own sweep
 }
 
 function collectCustomFieldValues() {
@@ -10167,10 +10382,11 @@ function renderJobCustomFieldsGrid(values) {
       const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
         '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
       ).join('');
-      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '">' + optionsHtml + '</select></div>';
+      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
     }
-    return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
+    return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
   }).join('');
+  applyPermissionGating(); // rebuilt on every job-form open, outside renderAll()'s own sweep
 }
 
 function collectJobCustomFieldValues() {
@@ -10205,12 +10421,16 @@ function setActiveJobChecklistStage(colId) {
 
 // See renderChecklistVisibilitySelect() (the Board card modal's twin) for
 // the rationale — same behavior, Job Manager's own draft/element ids.
-// Who a stage's checklist is visible to is admin-only to set (everyone can
-// still see the current value, read-only, since it's genuinely useful
-// context — just can't change it). Same "UI convenience" caveat as
+// Who a stage's checklist is visible to takes >= Project Admin to set
+// (everyone can still see the current value, read-only, since it's
+// genuinely useful context — just can't change it). Project Admin gets the
+// same content-editing powers as Admin within their assigned project; only
+// true Admin bypasses a checklist's own per-stage privacy restriction (see
+// isChecklistStageVisibleToMe()'s separate, deliberately-unchanged
+// currentUserRole === 'admin' check). Same "UI convenience" caveat as
 // currentUserRole itself: nothing server-side actually enforces this.
 function canAssignChecklistStages() {
-  return currentUserRole === 'admin';
+  return hasMinTier('projectAdmin');
 }
 
 function renderJobChecklistVisibilitySelect() {
@@ -10279,10 +10499,10 @@ function renderJobChecklist() {
     // attribute (e.g. toggleJobChecklistItem(c821aed9-8a6b-...) parses as
     // subtraction, not a function call) — silently doing nothing on click.
     return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
-      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(\'' + item.id + '\')">' +
+      '<input type="checkbox" data-min-tier="commenter" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(\'' + item.id + '\')">' +
       '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-      '<select class="ci-assignee" onchange="setJobChecklistItemAssignee(\'' + item.id + '\', this.value)">' + options + '</select>' +
-      '<button class="ci-delete" onclick="deleteJobChecklistItem(\'' + item.id + '\')">×</button>' +
+      '<select class="ci-assignee" data-min-tier="editor" onchange="setJobChecklistItemAssignee(\'' + item.id + '\', this.value)">' + options + '</select>' +
+      '<button class="ci-delete" data-min-tier="editor" onclick="deleteJobChecklistItem(\'' + item.id + '\')">×</button>' +
       '</div>';
   }).join('');
 
@@ -10291,6 +10511,7 @@ function renderJobChecklist() {
   const pct = total ? Math.round((done / total) * 100) : 0;
   document.getElementById('jmChecklistProgressFill').style.width = pct + '%';
   document.getElementById('jmChecklistProgressPct').textContent = pct + '%';
+  applyPermissionGating(); // rebuilt on every checklist edit, outside renderAll()'s own sweep
 }
 
 function addJobChecklistItem() {
@@ -10401,9 +10622,10 @@ function renderJobAttachments() {
       thumb +
       '<div class="att-info"><span class="att-name">' + escapeHtml(att.name) + '</span><span class="att-size">' + formatFileSize(att.size) + '</span></div>' +
       '</a>' +
-      '<button class="att-remove" onclick="removeJobAttachment(' + att.id + ')">×</button>' +
+      '<button class="att-remove" data-min-tier="editor" onclick="removeJobAttachment(' + att.id + ')">×</button>' +
       '</div>';
   }).join('');
+  applyPermissionGating(); // rebuilt on every attachment change, outside renderAll()'s own sweep
 }
 
 function handleJobAttachmentUpload(e) {
@@ -10650,10 +10872,10 @@ function renderChecklist() {
     // attribute (e.g. toggleChecklistItem(c821aed9-8a6b-...) parses as
     // subtraction, not a function call) — silently doing nothing on click.
     return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
-      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleChecklistItem(\'' + item.id + '\')">' +
+      '<input type="checkbox" data-min-tier="commenter" ' + (item.done ? 'checked' : '') + ' onchange="toggleChecklistItem(\'' + item.id + '\')">' +
       '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-      '<select class="ci-assignee" onchange="setChecklistItemAssignee(\'' + item.id + '\', this.value)">' + options + '</select>' +
-      '<button class="ci-delete" onclick="deleteChecklistItem(\'' + item.id + '\')">×</button>' +
+      '<select class="ci-assignee" data-min-tier="editor" onchange="setChecklistItemAssignee(\'' + item.id + '\', this.value)">' + options + '</select>' +
+      '<button class="ci-delete" data-min-tier="editor" onclick="deleteChecklistItem(\'' + item.id + '\')">×</button>' +
       '</div>';
   }).join('');
 
@@ -10662,6 +10884,7 @@ function renderChecklist() {
   const pct = total ? Math.round((done / total) * 100) : 0;
   document.getElementById('checklistProgressFill').style.width = pct + '%';
   document.getElementById('checklistProgressPct').textContent = pct + '%';
+  applyPermissionGating(); // rebuilt on every checklist edit, outside renderAll()'s own sweep
 }
 
 function addChecklistItem() {
@@ -10729,9 +10952,10 @@ function renderAttachments() {
       thumb +
       '<div class="att-info"><span class="att-name">' + escapeHtml(att.name) + '</span><span class="att-size">' + formatFileSize(att.size) + '</span></div>' +
       '</a>' +
-      '<button class="att-remove" onclick="removeAttachment(' + att.id + ')">×</button>' +
+      '<button class="att-remove" data-min-tier="editor" onclick="removeAttachment(' + att.id + ')">×</button>' +
       '</div>';
   }).join('');
+  applyPermissionGating(); // rebuilt on every attachment change, outside renderAll()'s own sweep
 }
 
 function formatFileSize(bytes) {
@@ -10982,6 +11206,9 @@ function initCardFormAutosaveListeners() {
 }
 
 function deleteCardFromModal() {
+  // Defense-in-depth — its trigger button is already data-min-tier gated,
+  // but delete is irreversible enough to warrant a second check here.
+  if (!hasMinTier('editor')) return;
   if (editingCardId == null) return;
   // Cancel (not flush) — the card is about to be gone, nothing left to save.
   cancelPendingCardAutosave();
@@ -11135,12 +11362,32 @@ function getStoredUserPassword() {
 }
 
 // Set from the Worker's confirmed identity after a successful login — see
-// fetchRoomToken() below. 'admin' or 'member', or null before the first
-// successful connection. Purely a UI convenience (e.g. showing a clearer
-// error before even trying an admin-only action); the Worker re-verifies
-// role server-side on every admin call regardless, so nothing security-
-// relevant depends on this being accurate.
+// fetchRoomToken() below. One of PERMISSION_TIERS below, or null before the
+// first successful connection. Purely a UI convenience (e.g. showing a
+// clearer error before even trying an admin-only action, or hiding/disabling
+// controls per tier via applyPermissionGating()); the Worker re-verifies
+// role server-side on every admin-gated call regardless (account management
+// only — content-level tiers below admin are enforced client-side only, by
+// design), so nothing security-relevant depends on this being accurate.
 let currentUserRole = null;
+
+// Which of the two fixed projects (see FIXED_PROJECT_NAMES) this account is
+// restricted to — null means unrestricted (sees both), which is always true
+// for the 'admin' tier and optionally true for any tier below it. Set
+// alongside currentUserRole in fetchRoomToken(); see enforceProjectScopeForRole().
+let currentAssignedProjectId = null;
+
+// Highest to lowest — see the 5-Tier Permission System plan for the full
+// per-tier capability breakdown. hasMinTier() is the one function nearly
+// every permission check in this file should go through, so the ordering
+// only needs to be correct in exactly one place.
+const PERMISSION_TIERS = ['viewer', 'commenter', 'editor', 'projectAdmin', 'admin'];
+function hasMinTier(tier) {
+  const mine = PERMISSION_TIERS.indexOf(currentUserRole);
+  const need = PERMISSION_TIERS.indexOf(tier);
+  if (mine === -1 || need === -1) return false;
+  return mine >= need;
+}
 
 // Prompts once per missing field (native prompt, matching how project
 // rename/create already ask for input elsewhere in this app) and caches
@@ -11390,6 +11637,13 @@ async function fetchRoomToken() {
   if (data && data.user) {
     if (data.user.displayName) localStorage.setItem(DISPLAY_NAME_KEY, data.user.displayName);
     currentUserRole = data.user.role || null;
+    currentAssignedProjectId = data.user.assignedProjectId || null;
+    // fetchRoomToken() runs on every (re)connect (see buildRoomWsUrl() below,
+    // not just once at initial load) — re-assert project scoping and gating
+    // every time in case an admin changed this account's tier/project
+    // assignment since the last connection.
+    enforceProjectScopeForRole();
+    applyPermissionGating();
   }
   if (!data || !data.token) throw new Error('Room auth response missing token');
   return data.token;
@@ -11872,6 +12126,11 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
       loadActiveProjectData();
       renderAll();
     }
+    // fetchRoomToken() (where this normally runs) resolves before the real
+    // room snapshot arrives, so `projects` may still only reflect stale/
+    // empty localStorage at that point — re-assert scoping now that
+    // enforceFixedProjectSet() above guarantees both fixed projects exist.
+    enforceProjectScopeForRole();
   }
 
   if (activeDataChanged) {

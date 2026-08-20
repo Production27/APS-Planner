@@ -510,11 +510,30 @@ function normalizeUsername(username) {
   return (typeof username === "string" ? username : "").trim().toLowerCase();
 }
 
+// Permission tiers, highest to lowest — see PERMISSION_TIERS in index.html
+// for the client-side mirror of this same ordering (enforcement is
+// client-side only; this list exists server-side just to validate incoming
+// role values in handleUsersAdd/handleUsersUpdate below).
+const VALID_TIERS = ["admin", "projectAdmin", "editor", "commenter", "viewer"];
+
+// Lazy migration: pre-tier accounts stored role:"member" (the old binary
+// scheme) — coerced to "editor" (the closest match to what an unrestricted
+// member could already do) at read time, never rewritten back to KV, so
+// there's no separate one-off migration script to run. assignedProjectId
+// defaults to null (unrestricted — sees both fixed projects) for anyone who
+// predates the field entirely.
+function normalizeUserRecord(u) {
+  if (!u) return u;
+  if (u.role === "member") u.role = "editor";
+  if (u.assignedProjectId === undefined) u.assignedProjectId = null;
+  return u;
+}
+
 async function getUser(env, username) {
   const key = normalizeUsername(username);
   if (!key) return null;
   const raw = await env.USERS_KV.get("user:" + key);
-  return raw ? JSON.parse(raw) : null;
+  return raw ? normalizeUserRecord(JSON.parse(raw)) : null;
 }
 async function putUser(env, user) {
   await env.USERS_KV.put("user:" + normalizeUsername(user.username), JSON.stringify(user));
@@ -528,8 +547,8 @@ async function listAllUsers(env) {
   for (const k of list.keys) {
     const raw = await env.USERS_KV.get(k.name);
     if (!raw) continue;
-    const u = JSON.parse(raw);
-    users.push({ username: u.username, displayName: u.displayName, role: u.role, createdAt: u.createdAt });
+    const u = normalizeUserRecord(JSON.parse(raw));
+    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt });
   }
   users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   return users;
@@ -546,13 +565,13 @@ async function verifyCredentials(env, username, password) {
 async function resolveIdentity(env, username, password, fallbackName) {
   if (username) {
     const user = await verifyCredentials(env, username, password);
-    if (user) return { username: user.username, displayName: user.displayName, role: user.role };
+    if (user) return { username: user.username, displayName: user.displayName, role: user.role, assignedProjectId: user.assignedProjectId || null };
   }
   if (password && password === env.TEAM_PASSWORD) {
     const name = (typeof fallbackName === "string" && fallbackName.trim())
       ? fallbackName.trim().slice(0, 60)
       : "Team member";
-    return { username: null, displayName: name, role: "admin" };
+    return { username: null, displayName: name, role: "admin", assignedProjectId: null };
   }
   return null;
 }
@@ -580,12 +599,13 @@ async function handleAuth(request, env, corsHeaders) {
   const token = await signRoomToken(env.ROOM_TOKEN_SECRET, {
     username: identity.username,
     displayName: identity.displayName,
-    role: identity.role
+    role: identity.role,
+    assignedProjectId: identity.assignedProjectId || null
   });
 
   return jsonResponse({
     token,
-    user: { username: identity.username, displayName: identity.displayName, role: identity.role }
+    user: { username: identity.username, displayName: identity.displayName, role: identity.role, assignedProjectId: identity.assignedProjectId || null }
   }, 200, corsHeaders);
 }
 
@@ -625,7 +645,10 @@ async function handleUsersAdd(request, env, corsHeaders) {
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
   const newDisplayName = (typeof body.newDisplayName === "string" && body.newDisplayName.trim())
     ? body.newDisplayName.trim().slice(0, 60) : newUsername;
-  const newRole = body.newRole === "admin" ? "admin" : "member";
+  const newRole = VALID_TIERS.includes(body.newRole) ? body.newRole : "editor";
+  // Only meaningful for non-admin tiers — an admin is never project-scoped.
+  const newAssignedProjectId = (newRole !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
+    ? body.newAssignedProjectId : null;
 
   if (!newUsername || !/^[a-z0-9._-]{2,40}$/.test(newUsername)) {
     return jsonResponse({ error: "Username must be 2-40 characters (letters, numbers, . _ -)" }, 400, corsHeaders);
@@ -643,10 +666,49 @@ async function handleUsersAdd(request, env, corsHeaders) {
     username: newUsername,
     displayName: newDisplayName,
     role: newRole,
+    assignedProjectId: newAssignedProjectId,
     passwordHash,
     salt,
     createdAt: Date.now()
   });
+  return jsonResponse({ success: true }, 200, corsHeaders);
+}
+
+// Admin-only: reassign an EXISTING account's tier and/or project scope
+// without deleting/recreating it (which would also force a password reset).
+// Same shape as handleUsersResetPassword below, plus handleUsersRemove's
+// last-admin guard reused here so the last true admin can't be demoted away,
+// same rationale as not being able to delete the last admin account.
+async function handleUsersUpdate(request, env, corsHeaders) {
+  let body;
+  try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
+  const caller = await resolveIdentity(env, body.username, body.password);
+  if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
+  if (caller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
+
+  const targetUsername = normalizeUsername(body.targetUsername);
+  const target = await getUser(env, targetUsername);
+  if (!target) return jsonResponse({ error: "User not found" }, 404, corsHeaders);
+
+  if (!VALID_TIERS.includes(body.newRole)) {
+    return jsonResponse({ error: "Invalid role" }, 400, corsHeaders);
+  }
+  if (body.newAssignedProjectId !== null && body.newAssignedProjectId !== undefined && typeof body.newAssignedProjectId !== "string") {
+    return jsonResponse({ error: "Invalid project assignment" }, 400, corsHeaders);
+  }
+
+  if (target.role === "admin" && body.newRole !== "admin") {
+    const all = await listAllUsers(env);
+    const adminCount = all.filter(u => u.role === "admin").length;
+    if (adminCount <= 1) {
+      return jsonResponse({ error: "Can't demote the last admin account" }, 400, corsHeaders);
+    }
+  }
+
+  target.role = body.newRole;
+  target.assignedProjectId = (target.role !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
+    ? body.newAssignedProjectId : null;
+  await putUser(env, target);
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
 
@@ -882,6 +944,9 @@ export default {
     if (url.pathname === "/users/add" && request.method === "POST") {
       return handleUsersAdd(request, env, corsHeaders);
     }
+    if (url.pathname === "/users/update" && request.method === "POST") {
+      return handleUsersUpdate(request, env, corsHeaders);
+    }
     if (url.pathname === "/users/remove" && request.method === "POST") {
       return handleUsersRemove(request, env, corsHeaders);
     }
@@ -977,7 +1042,7 @@ export class ApsRoom {
     // view/projectId start null (see handlePresenceMessage below) and
     // live in this SAME attachment as identity specifically so they
     // survive hibernation too — a plain instance field would not.
-    server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role, view: null, projectId: null });
+    server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role, assignedProjectId: identity.assignedProjectId || null, view: null, projectId: null });
 
     const roomState = await this.loadRoomState();
     server.send(JSON.stringify(Object.assign({ type: 'snapshot' }, roomState)));
