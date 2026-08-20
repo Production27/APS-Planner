@@ -8385,6 +8385,12 @@ function openJobDrawer() { document.getElementById('formArea').classList.add('op
 function closeJobDrawer() { document.getElementById('formArea').classList.remove('open'); }
 
 function addNewJob() {
+  // Defense-in-depth, matching promptDeleteJob()'s same pattern — its
+  // trigger button is already data-min-tier gated (and hidden entirely,
+  // see applyPermissionGating()), but a function-level check here doesn't
+  // depend on that DOM state having been applied correctly at the moment
+  // of the click.
+  if (!hasMinTier('projectAdmin')) return;
   // Whatever job was open before (if any) gets its pending autosave
   // committed before we swap the form over to a blank draft.
   flushAutoSaveJobForm();
@@ -8987,6 +8993,12 @@ function archiveCurrentJob() {
 // carried over — the copy starts as a fresh, active, auto-positioned job.
 function duplicateJob(jobId, event) {
   if (event) event.stopPropagation();
+  // Defense-in-depth, matching promptDeleteJob()'s same pattern — its
+  // trigger button is already data-min-tier gated (and hidden entirely,
+  // see applyPermissionGating()), but a function-level check here doesn't
+  // depend on that DOM state having been applied correctly at the moment
+  // of the click.
+  if (!hasMinTier('projectAdmin')) return;
   const found = findJob(jobId);
   if (!found) return;
   const original = found.job;
