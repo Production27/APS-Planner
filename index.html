@@ -10796,13 +10796,16 @@ let pendingRemoteRefresh = false;
 
 // Single small dot, bottom-right — replaces the old always-visible
 // "connecting…/saving…/live" text badge, the full-width red top banner,
-// and the stuck-write toast popup. Deliberately says nothing while
-// everything's fine (most of the time, for most people) — normal saves
-// and a healthy connection produce zero visual noise. Only becomes
-// visible at all once there's something worth knowing: reconnecting
-// (quiet amber, no motion) or an actual problem — offline for a while,
-// or a change stuck unconfirmed (red, gently pulsing). Hovering it shows
-// the specific reason via a native tooltip rather than a popup.
+// and the stuck-write toast popup. Stays small and quiet at every state
+// (no text, no popups) — but stays visibly PRESENT rather than
+// disappearing entirely once connected, as a first cut of this redesign
+// briefly did: a faint, low-opacity green dot when everything's fine, so
+// there's still an at-a-glance "yes, this is live" to find if you go
+// looking for it, without it demanding attention. Gets more noticeable
+// only once there's something worth knowing: reconnecting (quiet amber,
+// no motion) or an actual problem — offline for a while, or a change
+// stuck unconfirmed (red, gently pulsing). Hovering it shows the
+// specific reason via a native tooltip rather than a popup.
 let syncDotEl = null;
 let offlineSince = null;
 let offlineEscalateTimer = null;
@@ -10810,27 +10813,26 @@ let offlineEscalateTimer = null;
 function initSyncIndicator() {
   const dot = document.createElement('div');
   dot.id = 'syncDot';
-  dot.style.cssText = 'position:fixed;bottom:14px;right:14px;z-index:9999;width:9px;height:9px;border-radius:50%;background:#f0ad4e;opacity:0;pointer-events:none;transition:opacity 0.4s ease,background 0.3s ease;box-shadow:0 1px 3px rgba(0,0,0,0.25);';
+  dot.style.cssText = 'position:fixed;bottom:14px;right:14px;z-index:9999;width:9px;height:9px;border-radius:50%;background:#43a047;opacity:0.35;pointer-events:auto;transition:opacity 0.4s ease,background 0.3s ease;box-shadow:0 1px 3px rgba(0,0,0,0.25);';
   document.body.appendChild(dot);
   syncDotEl = dot;
 }
 
-// state: 'ok' (hidden — the default/happy state), 'connecting' (quiet
-// amber, e.g. initial connect or a fresh disconnect that might recover
-// in a second or two), 'problem' (red, gently pulsing — offline long
-// enough to matter, or a write that hasn't confirmed in 8+ seconds).
+// state: 'ok' (faint green — connected, nothing wrong, the default/happy
+// state most of the time), 'connecting' (quiet amber, e.g. initial
+// connect or a fresh disconnect that might recover in a second or two),
+// 'problem' (red, gently pulsing — offline long enough to matter, or a
+// write that hasn't confirmed in 8+ seconds).
 function setSyncIndicator(state, tooltip) {
   if (!syncDotEl) return;
-  syncDotEl.title = tooltip || '';
+  syncDotEl.title = tooltip || (state === 'ok' ? 'Live' : '');
   if (state === 'ok') {
-    syncDotEl.style.opacity = '0';
-    syncDotEl.style.pointerEvents = 'none';
-    syncDotEl.style.background = '#f0ad4e';
+    syncDotEl.style.opacity = '0.35';
+    syncDotEl.style.background = '#43a047';
     syncDotEl.style.animation = 'none';
     return;
   }
   syncDotEl.style.opacity = '0.85';
-  syncDotEl.style.pointerEvents = 'auto';
   if (state === 'problem') {
     syncDotEl.style.background = '#e53935';
     syncDotEl.style.animation = 'syncDotPulse 1.6s ease-in-out infinite';
