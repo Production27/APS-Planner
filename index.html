@@ -1899,7 +1899,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="form-group mobile-collapsible">
             <label onclick="toggleMobileField(this)">Job Name *</label>
             <div class="mobile-field-body">
-              <input type="text" id="f_job" placeholder="e.g. Electrical shop area">
+              <input type="text" id="f_job" data-min-tier="projectAdmin" placeholder="e.g. Electrical shop area">
               <span class="field-error-hint" id="f_job_hint" style="display:none;">Name required to save</span>
             </div>
           </div>
@@ -1920,7 +1920,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
               <div class="field-error-hint" id="taskRowsWarning" style="display:none;"></div>
             </div>
           </div>
-          <div class="form-group">
+          <div class="form-group" data-min-tier="projectAdmin">
             <div class="color-toggle-row" onclick="toggleJobColorPanel()">
               <label>Bar Color</label>
               <div class="color-toggle-swatch-wrap">
@@ -7966,7 +7966,7 @@ function renderJobPhaseStrip(job) {
 
   if (!job.phases || !job.phases.length) {
     section.style.display = 'block';
-    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="splitJobIntoPhasesUI()">+ Split into phases</button>';
+    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="projectAdmin" onclick="splitJobIntoPhasesUI()">+ Split into phases</button>';
     applyPermissionGating();
     return;
   }
@@ -7980,14 +7980,14 @@ function renderJobPhaseStrip(job) {
     // Even the last remaining phase gets a delete button — deleting it
     // un-splits the job back to a single unphased task list instead of
     // being blocked, see deleteJobPhaseUI().
-    const delBtn = '<span class="job-phase-chip-del" data-min-tier="editor" onclick="event.stopPropagation(); deleteJobPhaseUI(\'' + phase.id + '\')" title="' +
+    const delBtn = '<span class="job-phase-chip-del" data-min-tier="projectAdmin" onclick="event.stopPropagation(); deleteJobPhaseUI(\'' + phase.id + '\')" title="' +
       (phases.length > 1 ? 'Delete phase' : 'Remove phasing (merge back into the job)') + '">×</span>';
     return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobPhase(\'' + phase.id + '\')" title="Click to select, click the pencil to rename">' +
       '<span class="job-card-board-dot" style="background:' + (col ? (col.color || '#3949ab') : '#ccc') + ';"></span>' +
       escapeHtml(phase.name) +
-      '<span class="job-phase-chip-edit" data-min-tier="editor" onclick="event.stopPropagation(); renameJobPhaseUI(\'' + phase.id + '\')" title="Rename phase">✎</span>' +
+      '<span class="job-phase-chip-edit" data-min-tier="projectAdmin" onclick="event.stopPropagation(); renameJobPhaseUI(\'' + phase.id + '\')" title="Rename phase">✎</span>' +
       delBtn + '</span>';
-  }).join('') + '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="addJobPhaseUI()">+ Add Phase</button>';
+  }).join('') + '<button type="button" class="job-phase-strip-btn" data-min-tier="projectAdmin" onclick="addJobPhaseUI()">+ Add Phase</button>';
   applyPermissionGating();
 }
 
@@ -8001,7 +8001,7 @@ function renderJobSubPhaseStrip(job, phase) {
 
   if (!phase.subPhases || !phase.subPhases.length) {
     strip.style.display = 'block';
-    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="splitPhaseIntoSubPhasesUI()">+ Split into sub-phases</button>';
+    strip.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="projectAdmin" onclick="splitPhaseIntoSubPhasesUI()">+ Split into sub-phases</button>';
     applyPermissionGating();
     return;
   }
@@ -8012,13 +8012,13 @@ function renderJobSubPhaseStrip(job, phase) {
     const active = (sub.id || null) === (editingSubPhaseId || null);
     // Same "last one un-splits instead of being blocked" treatment as the
     // phase strip above — see deleteSubPhaseUI().
-    const delBtn = '<span class="job-phase-chip-del" data-min-tier="editor" onclick="event.stopPropagation(); deleteSubPhaseUI(\'' + sub.id + '\')" title="' +
+    const delBtn = '<span class="job-phase-chip-del" data-min-tier="projectAdmin" onclick="event.stopPropagation(); deleteSubPhaseUI(\'' + sub.id + '\')" title="' +
       (subUnits.length > 1 ? 'Delete sub-phase' : 'Remove sub-phasing (merge back into the phase)') + '">×</span>';
     return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobSubPhase(\'' + sub.id + '\')" title="Click to select, click the pencil to rename">' +
       escapeHtml(sub.name) +
-      '<span class="job-phase-chip-edit" data-min-tier="editor" onclick="event.stopPropagation(); renameSubPhaseUI(\'' + sub.id + '\')" title="Rename sub-phase">✎</span>' +
+      '<span class="job-phase-chip-edit" data-min-tier="projectAdmin" onclick="event.stopPropagation(); renameSubPhaseUI(\'' + sub.id + '\')" title="Rename sub-phase">✎</span>' +
       delBtn + '</span>';
-  }).join('') + '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="addPhaseSubUnitUI()">+ Add Sub-Phase</button>';
+  }).join('') + '<button type="button" class="job-phase-strip-btn" data-min-tier="projectAdmin" onclick="addPhaseSubUnitUI()">+ Add Sub-Phase</button>';
   applyPermissionGating();
 }
 
@@ -8069,6 +8069,7 @@ function selectJobPhase(phaseId) {
 }
 
 function splitJobIntoPhasesUI() {
+  if (!hasMinTier('projectAdmin')) return;
   if (!editingJobId) return;
   flushAutoSaveJobForm();
   const found = findJob(editingJobId);
@@ -8090,6 +8091,7 @@ function splitJobIntoPhasesUI() {
 }
 
 function addJobPhaseUI() {
+  if (!hasMinTier('projectAdmin')) return;
   if (!editingJobId) return;
   flushAutoSaveJobForm();
   const found = findJob(editingJobId);
@@ -8114,6 +8116,7 @@ function addJobPhaseUI() {
 }
 
 function renameJobPhaseUI(phaseId) {
+  if (!hasMinTier('projectAdmin')) return;
   if (!editingJobId) return;
   const found = findJob(editingJobId);
   if (!found) return;
@@ -8138,6 +8141,7 @@ function renameJobPhaseUI(phaseId) {
 }
 
 function deleteJobPhaseUI(phaseId) {
+  if (!hasMinTier('projectAdmin')) return;
   if (!editingJobId) return;
   const found = findJob(editingJobId);
   if (!found) return;
@@ -8199,6 +8203,7 @@ function getCurrentEditingPhase(job) {
 }
 
 function splitPhaseIntoSubPhasesUI() {
+  if (!hasMinTier('projectAdmin')) return;
   if (!editingJobId) return;
   flushAutoSaveJobForm();
   const found = findJob(editingJobId);
@@ -8219,6 +8224,7 @@ function splitPhaseIntoSubPhasesUI() {
 }
 
 function addPhaseSubUnitUI() {
+  if (!hasMinTier('projectAdmin')) return;
   if (!editingJobId) return;
   flushAutoSaveJobForm();
   const found = findJob(editingJobId);
@@ -8240,6 +8246,7 @@ function addPhaseSubUnitUI() {
 }
 
 function renameSubPhaseUI(subId) {
+  if (!hasMinTier('projectAdmin')) return;
   if (!editingJobId) return;
   const found = findJob(editingJobId);
   if (!found) return;
@@ -8258,6 +8265,7 @@ function renameSubPhaseUI(subId) {
 }
 
 function deleteSubPhaseUI(subId) {
+  if (!hasMinTier('projectAdmin')) return;
   if (!editingJobId) return;
   const found = findJob(editingJobId);
   if (!found) return;
@@ -8316,7 +8324,7 @@ function renderJobLinkSection(job) {
     body.innerHTML = '<div class="job-link-active-row">' +
       '<span class="job-link-name" title="' + escapeHtml(label + (projLabel ? ' (' + projLabel + ')' : '')) + '">🔗 ' + escapeHtml(label) + (projLabel ? ' <span style="opacity:0.65;">(' + escapeHtml(projLabel) + ')</span>' : '') + '</span>' +
       '<span class="board-col-gantt-switch' + (isLinkEnabledLocally(job.id) ? ' on' : '') + '" onclick="toggleJobLinkEnabledUI()" title="Show on the other project\'s Gantt & Calendar (just for you — this doesn\'t change what anyone else sees)"><span class="knob"></span></span>' +
-      '<button type="button" class="btn btn-secondary" data-min-tier="editor" style="padding:4px 10px;font-size:11px;" onclick="unlinkJobUI()">Unlink</button>' +
+      '<button type="button" class="btn btn-secondary" data-min-tier="projectAdmin" style="padding:4px 10px;font-size:11px;" onclick="unlinkJobUI()">Unlink</button>' +
       '</div>';
     applyPermissionGating();
     return;
@@ -8327,7 +8335,7 @@ function renderJobLinkSection(job) {
   const otherProjName = otherProj ? otherProj.name : 'other project';
 
   if (!jobLinkPickerOpen) {
-    body.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="editor" onclick="openJobLinkPickerUI()">+ Link to ' + escapeHtml(otherProjName) + ' job</button>';
+    body.innerHTML = '<button type="button" class="job-phase-strip-btn" data-min-tier="projectAdmin" onclick="openJobLinkPickerUI()">+ Link to ' + escapeHtml(otherProjName) + ' job</button>';
     applyPermissionGating();
     return;
   }
@@ -8336,7 +8344,7 @@ function renderJobLinkSection(job) {
   const options = otherJobs.map(function(j) { return '<option value="' + j.id + '">' + escapeHtml(j.name) + '</option>'; }).join('');
   body.innerHTML = '<div class="job-link-picker-row">' +
     '<select id="jobLinkPickerSelect">' + (options || '<option value="">No jobs available</option>') + '</select>' +
-    '<button type="button" class="btn btn-primary" data-min-tier="editor" style="padding:5px 12px;font-size:11px;" onclick="confirmJobLinkUI(\'' + otherProjectId + '\')"' + (otherJobs.length ? '' : ' disabled') + '>Link</button>' +
+    '<button type="button" class="btn btn-primary" data-min-tier="projectAdmin" style="padding:5px 12px;font-size:11px;" onclick="confirmJobLinkUI(\'' + otherProjectId + '\')"' + (otherJobs.length ? '' : ' disabled') + '>Link</button>' +
     '<button type="button" class="btn btn-secondary" style="padding:5px 12px;font-size:11px;" onclick="cancelJobLinkPickerUI()">Cancel</button>' +
     '</div>';
   applyPermissionGating();
@@ -8355,6 +8363,7 @@ function cancelJobLinkPickerUI() {
 }
 
 function confirmJobLinkUI(otherProjectId) {
+  if (!hasMinTier('projectAdmin')) return;
   const found = editingJobId && findJob(editingJobId);
   if (!found) return;
   const select = document.getElementById('jobLinkPickerSelect');
@@ -8382,6 +8391,7 @@ function toggleJobLinkEnabledUI() {
 }
 
 function unlinkJobUI() {
+  if (!hasMinTier('projectAdmin')) return;
   const found = editingJobId && findJob(editingJobId);
   if (!found || !found.job.link) return;
   if (!window.confirm('Unlink this job? It will no longer show on the other project\'s schedule.')) return;
