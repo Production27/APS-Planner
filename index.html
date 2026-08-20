@@ -3918,27 +3918,58 @@ function getGhostJobs() {
 }
 
 // ===== Cross-project job links =====
-// Distinct from the ghost overlay above: a link is per-job (not
-// whole-project), synced (not a per-browser localStorage preference), and
-// renders as a real, precisely-dated row on the Gantt/Calendar — never
-// the Board — rather than a loosely-positioned translucent backdrop.
-// Stored symmetrically: linking job A (in project A) to job B (in project
-// B) writes a `.link = { jobId, projectId, enabled }` on BOTH jobs,
-// pointing at each other, with the same `enabled` value kept in sync by
-// the toggle functions below. The payoff: rendering project P only ever
-// needs to check P's own jobs for `link.enabled` and fetch the referenced
-// job — no reverse-scanning the other project, no "am I the source or
-// the target" branching anywhere else.
+// A link is per-job (not whole-project) and renders as a real,
+// precisely-dated row on the Gantt/Calendar — never the Board — rather
+// than a loosely-positioned translucent backdrop like the ghost overlay
+// above. Stored symmetrically: linking job A (in project A) to job B (in
+// project B) writes a `.link = { jobId, projectId }` on BOTH jobs,
+// pointing at each other. THIS part — the link's existence — is shared,
+// synced data: everyone should see that two jobs are linked.
+//
+// Whether the link is actually turned ON, though, is deliberately a
+// per-browser localStorage preference (see LINK_ENABLED_KEY below), same
+// as the ghost overlay — turning it on used to be shared/synced, meaning
+// one person flipping it on made the linked job appear on everyone's
+// schedule, which wasn't the intent (a report from real usage: it was
+// "turning on for everyone" when only one person wanted to see it).
+const LINK_ENABLED_KEY = 'aps-planner:link-enabled-v1';
+let localEnabledLinks = {}; // { [jobId]: true }
+
+function loadLinkEnabledPref() {
+  try {
+    const saved = localStorage.getItem(LINK_ENABLED_KEY);
+    localEnabledLinks = saved ? JSON.parse(saved) : {};
+  } catch (e) {
+    localEnabledLinks = {};
+  }
+}
+function saveLinkEnabledPref() {
+  localStorage.setItem(LINK_ENABLED_KEY, JSON.stringify(localEnabledLinks));
+}
+function isLinkEnabledLocally(jobId) {
+  return !!localEnabledLinks[jobId];
+}
+// Mirrors both sides of the link locally, same as the old shared version
+// mirrored both sides remotely — so turning it on from either job (or
+// either project) shows consistently for THIS browser, without touching
+// what anyone else sees.
+function setLinkEnabledLocally(jobId, otherJobId, enabled) {
+  if (enabled) { localEnabledLinks[jobId] = true; localEnabledLinks[otherJobId] = true; }
+  else { delete localEnabledLinks[jobId]; delete localEnabledLinks[otherJobId]; }
+  saveLinkEnabledPref();
+}
+
 function getOtherFixedProjectId(projectId) {
   return Object.keys(projects).find(function(id) { return id !== projectId; }) || null;
 }
 
-// One entry per active-project job that has an enabled link, carrying the
-// *referenced* job's own data (tasks/phases) tagged so every render seam
-// can treat it as a normal-but-read-only row.
+// One entry per active-project job whose link is turned on for THIS
+// browser (see isLinkEnabledLocally), carrying the *referenced* job's own
+// data (tasks/phases) tagged so every render seam can treat it as a
+// normal-but-read-only row.
 function getLinkedReferenceJobs() {
   return jobs.reduce(function(acc, job) {
-    if (!job.link || !job.link.enabled) return acc;
+    if (!job.link || !isLinkEnabledLocally(job.id)) return acc;
     const otherProj = projects[job.link.projectId];
     const refJob = otherProj && (otherProj.jobs || []).find(function(j) { return j.id === job.link.jobId; });
     if (!refJob) return acc; // the other job was deleted/unlinked remotely — nothing to show
@@ -3962,34 +3993,32 @@ function jumpToLinkedJobReference(job) {
 
 // jobA/projectAId identify a job in the CURRENT (active) project;
 // jobBId/projectBId identify the job being linked to, which may live in
-// either project. Starts disabled — "link" and "turn on" are deliberately
-// two separate steps (see the confirmed UX).
+// either project. The link itself is shared (everyone should see the two
+// jobs are linked) — whether it's turned ON is not (see
+// isLinkEnabledLocally above), so there's no "enabled" here at all
+// anymore; "link" and "turn on" are still deliberately two separate
+// steps, the second one just doesn't leave this browser.
 function linkJobs(jobA, projectAId, jobBId, projectBId) {
   const jobB = (projects[projectBId] && projects[projectBId].jobs || []).find(function(j) { return j.id === jobBId; });
   if (!jobB) return false;
-  jobA.link = { jobId: jobB.id, projectId: projectBId, enabled: false };
-  jobB.link = { jobId: jobA.id, projectId: projectAId, enabled: false };
+  jobA.link = { jobId: jobB.id, projectId: projectBId };
+  jobB.link = { jobId: jobA.id, projectId: projectAId };
   saveJobs();
   if (projectAId === activeProjectId) queueSharedSync(); else pushProjectToShared(projectAId);
   if (projectBId === activeProjectId) queueSharedSync(); else pushProjectToShared(projectBId);
   return true;
 }
 
-// Works from either side of a link — jobId/projectId can be the job the
-// user has open OR the job it's linked to, since both carry a mirrored
-// `.link` pointing at each other; only the counterpart actually needs
-// looking up.
+// Purely local now — no sync push. jobId/projectId can be the job the
+// user has open OR the job it's linked to (both carry a mirrored `.link`
+// pointing at each other); only the counterpart's id is actually needed,
+// to mirror the on/off state locally for both sides of the link the same
+// way the old shared version mirrored it for both sides remotely.
 function setJobLinkEnabled(jobId, projectId, enabled) {
   const proj = projects[projectId];
   const job = proj && (proj.jobs || []).find(function(j) { return j.id === jobId; });
   if (!job || !job.link) return;
-  const otherProj = projects[job.link.projectId];
-  const otherJob = otherProj && (otherProj.jobs || []).find(function(j) { return j.id === job.link.jobId; });
-  job.link.enabled = enabled;
-  if (otherJob && otherJob.link) otherJob.link.enabled = enabled;
-  saveJobs();
-  if (projectId === activeProjectId) queueSharedSync(); else pushProjectToShared(projectId);
-  if (job.link.projectId === activeProjectId) queueSharedSync(); else pushProjectToShared(job.link.projectId);
+  setLinkEnabledLocally(job.id, job.link.jobId, enabled);
 }
 
 function unlinkJobById(jobId, projectId) {
@@ -4000,6 +4029,10 @@ function unlinkJobById(jobId, projectId) {
   const otherJobId = job.link.jobId;
   const otherProj = projects[otherProjectId];
   const otherJob = otherProj && (otherProj.jobs || []).find(function(j) { return j.id === otherJobId; });
+  // Local on/off state has no meaning once the link itself is gone.
+  delete localEnabledLinks[jobId];
+  delete localEnabledLinks[otherJobId];
+  saveLinkEnabledPref();
   delete job.link;
   if (otherJob) delete otherJob.link;
   saveJobs();
@@ -4035,6 +4068,7 @@ function init() {
   enforceFixedProjectSet();
   if (freshLocalSeed) showFreshLoadOverlay();
   loadGhostPref();
+  loadLinkEnabledPref();
   loadDarkModePref();
   loadActiveProjectData();
   buildColorPresets();
@@ -7945,7 +7979,7 @@ function renderJobLinkSection(job) {
     const projLabel = otherProj ? otherProj.name : '';
     body.innerHTML = '<div class="job-link-active-row">' +
       '<span class="job-link-name" title="' + escapeHtml(label + (projLabel ? ' (' + projLabel + ')' : '')) + '">🔗 ' + escapeHtml(label) + (projLabel ? ' <span style="opacity:0.65;">(' + escapeHtml(projLabel) + ')</span>' : '') + '</span>' +
-      '<span class="board-col-gantt-switch' + (job.link.enabled ? ' on' : '') + '" onclick="toggleJobLinkEnabledUI()" title="Show on the other project\'s Gantt & Calendar"><span class="knob"></span></span>' +
+      '<span class="board-col-gantt-switch' + (isLinkEnabledLocally(job.id) ? ' on' : '') + '" onclick="toggleJobLinkEnabledUI()" title="Show on the other project\'s Gantt & Calendar (just for you — this doesn\'t change what anyone else sees)"><span class="knob"></span></span>' +
       '<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="unlinkJobUI()">Unlink</button>' +
       '</div>';
     return;
@@ -7998,13 +8032,14 @@ function confirmJobLinkUI(otherProjectId) {
 function toggleJobLinkEnabledUI() {
   const found = editingJobId && findJob(editingJobId);
   if (!found || !found.job.link) return;
-  const newState = !found.job.link.enabled;
+  const newState = !isLinkEnabledLocally(found.job.id);
   setJobLinkEnabled(found.job.id, activeProjectId, newState);
-  logActivity((newState ? 'enabled' : 'disabled') + ' link for job "' + found.job.name + '"');
+  // No logActivity() here — this is a personal display preference now,
+  // not a shared change, so it doesn't belong in the shared activity log.
   renderJobLinkSection(found.job);
   renderGantt();
   renderCalendar();
-  showToast(newState ? 'Link turned on' : 'Link turned off', 'success');
+  showToast(newState ? 'Link turned on (just for you)' : 'Link turned off (just for you)', 'success');
 }
 
 function unlinkJobUI() {
