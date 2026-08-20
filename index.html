@@ -3721,6 +3721,15 @@ function getActiveProject() {
 
 function switchProject(projectId) {
   if (!projects[projectId] || projectId === activeProjectId) return;
+  // Fail closed, not open, until the account's real tier/project assignment
+  // is actually known — right after a page load/refresh, currentAssignedProjectId
+  // still holds its default null (indistinguishable from "confirmed
+  // unrestricted") until fetchRoomToken()'s first response comes back, which
+  // would otherwise let a switch through during that brief window every time.
+  if (!roleConfirmed) {
+    showToast('Still confirming your account — try again in a moment', 'info');
+    return;
+  }
   // Below-Admin tiers can be restricted to one project (see
   // currentAssignedProjectId/enforceProjectScopeForRole()) — this is the
   // single choke point both switchProject() call sites go through
@@ -3967,11 +3976,15 @@ function toggleProject() {
 function updateProjectToggle() {
   const btn = document.getElementById('projectToggleBtn');
   if (!btn) return;
+  // Fail closed until the real tier/project assignment is confirmed (see
+  // roleConfirmed) — same reasoning as switchProject()'s own guard, applied
+  // to the button itself so it doesn't sit there clickable during the brief
+  // window right after a page load/refresh before that's known.
   // A restricted (non-admin, project-scoped) account has nothing to toggle
   // to — hiding the button entirely reads more honestly than leaving a
   // permanently-disabled control around, matching how this codebase already
   // hides irrelevant UI outright elsewhere (e.g. the mobile view switcher).
-  if (currentUserRole !== 'admin' && currentAssignedProjectId) {
+  if (!roleConfirmed || (currentUserRole !== 'admin' && currentAssignedProjectId)) {
     btn.style.display = 'none';
     return;
   }
@@ -11377,6 +11390,16 @@ let currentUserRole = null;
 // alongside currentUserRole in fetchRoomToken(); see enforceProjectScopeForRole().
 let currentAssignedProjectId = null;
 
+// False until fetchRoomToken() has actually heard back from the Worker at
+// least once this page load. Before that, currentAssignedProjectId is still
+// its default null — indistinguishable from "confirmed unrestricted" if
+// nothing else guarded against it, which would let a restricted account
+// switch projects (or see the toggle button) during the brief window right
+// after a page load/refresh, before their real assignment is known. Both
+// switchProject() and updateProjectToggle() fail CLOSED (block/hide) while
+// this is false, not open.
+let roleConfirmed = false;
+
 // Highest to lowest — see the 5-Tier Permission System plan for the full
 // per-tier capability breakdown. hasMinTier() is the one function nearly
 // every permission check in this file should go through, so the ordering
@@ -11638,12 +11661,19 @@ async function fetchRoomToken() {
     if (data.user.displayName) localStorage.setItem(DISPLAY_NAME_KEY, data.user.displayName);
     currentUserRole = data.user.role || null;
     currentAssignedProjectId = data.user.assignedProjectId || null;
+    roleConfirmed = true;
     // fetchRoomToken() runs on every (re)connect (see buildRoomWsUrl() below,
     // not just once at initial load) — re-assert project scoping and gating
     // every time in case an admin changed this account's tier/project
-    // assignment since the last connection.
+    // assignment since the last connection. updateProjectToggle() is called
+    // explicitly here too (not just via enforceProjectScopeForRole()'s own
+    // conditional renderAll()) — if the account's already sitting on its
+    // newly-assigned project, that condition never fires, and the toggle
+    // button would otherwise be stuck showing whatever pre-confirmation
+    // state it rendered in (hidden, per its own fail-closed default) forever.
     enforceProjectScopeForRole();
     applyPermissionGating();
+    updateProjectToggle();
   }
   if (!data || !data.token) throw new Error('Room auth response missing token');
   return data.token;
