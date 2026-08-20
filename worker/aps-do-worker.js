@@ -563,9 +563,26 @@ async function verifyCredentials(env, username, password) {
 }
 
 async function resolveIdentity(env, username, password, fallbackName) {
+  // A username being present at all means the caller has (or thinks they
+  // have) an individual account — only that account's own password can
+  // authenticate it, full stop. Previously this fell through to the team-
+  // password check below on failure, which doesn't actually care whether a
+  // username was sent — just that the password matched. Combined with
+  // ensureUserCredentials() silently seeding a browser's "personal"
+  // password from the cached team password whenever no individual one was
+  // set yet (a real, intentional migration convenience), that meant anyone
+  // whose password slot got seeded that way was — invisibly, forever —
+  // authenticating as unrestricted admin via the team-password fallback
+  // instead of their own account's actual tier, no matter what that
+  // individual account's role/assignedProjectId said. Now a username that
+  // fails to verify is just rejected (401), which is what already forces
+  // the client to re-prompt for BOTH username and password fresh (see
+  // fetchRoomToken()'s 401 handling) — self-healing onto the real account
+  // on the very next login attempt.
   if (username) {
     const user = await verifyCredentials(env, username, password);
     if (user) return { username: user.username, displayName: user.displayName, role: user.role, assignedProjectId: user.assignedProjectId || null };
+    return null;
   }
   if (password && password === env.TEAM_PASSWORD) {
     const name = (typeof fallbackName === "string" && fallbackName.trim())
