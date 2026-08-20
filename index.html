@@ -77,10 +77,21 @@
     width: 24px; height: 24px; border-radius: 50%; margin-left: -8px;
     display: flex; align-items: center; justify-content: center;
     font-size: 10px; font-weight: 700; color: #fff;
-    border: 2px solid var(--primary, #3949ab); box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    border: 2px solid var(--primary, #3949ab);
     cursor: default; flex-shrink: 0;
+    animation: presenceLivePulse 2.6s ease-in-out infinite;
   }
   .presence-avatar:first-child { margin-left: 0; }
+  /* A slow, gentle green ring breathing outward — "this connection is
+     live right now", not an alert (see the sync dot's much faster red
+     pulse for that — deliberately a different rhythm/color so the two
+     never read as the same kind of signal). Each avatar gets a slightly
+     different animation-delay (set inline in renderPresenceAvatars) so a
+     row of several doesn't pulse in rigid unison. */
+  @keyframes presenceLivePulse {
+    0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 0 rgba(67,160,71,0.6); }
+    50% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 4px rgba(67,160,71,0); }
+  }
   /* Mobile-only Jobs/Board toggle — see setMobileBoardView() and the
      @media (max-width:480px) rules that turn this into a visible tab bar. */
   .mobile-view-switcher { display: none; }
@@ -11136,6 +11147,17 @@ function presenceInitials(displayName) {
 }
 const PRESENCE_VIEW_LABELS = { gantt: 'Gantt Chart', board: 'Board', calendar: 'Calendar' };
 
+// Deterministic per-user delay (not random-per-render, which would make
+// the pulse visibly jitter/restart every time presence re-broadcasts) so
+// a row of several avatars breathes at slightly different offsets
+// instead of in rigid unison, without ever changing for the same person.
+function presenceAnimDelay(key) {
+  key = key || '';
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 17 + key.charCodeAt(i)) >>> 0;
+  return (hash % 26) / 10; // 0.0s-2.5s
+}
+
 function renderPresenceAvatars() {
   const el = document.getElementById('presenceAvatars');
   if (!el) return;
@@ -11146,7 +11168,8 @@ function renderPresenceAvatars() {
     const view = u.view ? (PRESENCE_VIEW_LABELS[u.view] || u.view) : '';
     const whereLabel = [view, proj].filter(Boolean).join(' — ');
     const title = whereLabel ? (name + ' — ' + whereLabel) : name;
-    return '<span class="presence-avatar" style="background:' + presenceAvatarColor(u.username || name) + ';" title="' + escapeHtml(title) + '">' + escapeHtml(presenceInitials(name)) + '</span>';
+    const delayKey = u.sessionId || u.username || name;
+    return '<span class="presence-avatar" style="background:' + presenceAvatarColor(u.username || name) + ';animation-delay:' + presenceAnimDelay(delayKey) + 's;" title="' + escapeHtml(title) + '">' + escapeHtml(presenceInitials(name)) + '</span>';
   }).join('');
 }
 function handleRoomClose() {
