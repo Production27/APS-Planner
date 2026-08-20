@@ -11132,6 +11132,13 @@ function sendPresenceUpdate() {
     roomSocket.send(JSON.stringify({ type: 'setPresence', view: view, projectId: activeProjectId || null, sessionId: myPresenceSessionId }));
   } catch (e) { /* best-effort — a missed update just means a stale avatar briefly */ }
 }
+// Periodic re-affirm so the server can prune a ghost presence entry (a tab
+// closed without a clean WebSocket close) instead of it lingering as a
+// phantom bubble until someone manually finds and closes the stale tab —
+// this happened live twice before this heartbeat existed. A stopped tab's
+// entry simply stops getting refreshed and ages out server-side; nothing
+// special has to happen client-side for cleanup.
+setInterval(sendPresenceUpdate, 25000);
 
 const PRESENCE_AVATAR_COLORS = ['#3949ab', '#00897b', '#c62828', '#f0ad4e', '#7e57c2', '#00acc1', '#8d6e63', '#5c6bc0'];
 function presenceAvatarColor(key) {

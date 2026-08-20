@@ -37,6 +37,11 @@
 
 const TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ACTIVITY_LOG_CAP = 50;
+// A presence entry is dropped from the broadcast if its connection hasn't
+// sent a setPresence heartbeat in this long — well above the client's
+// heartbeat interval so a couple of missed beats (backgrounded tab,
+// brief network hiccup) don't cause a false prune.
+const PRESENCE_STALE_MS = 90 * 1000;
 
 function mergeTombstones(a, b) {
   const merged = Object.assign({}, a || {}, b || {});
@@ -978,21 +983,37 @@ export class ApsRoom {
   // comparing against the locally-typed username never matches — the
   // "seeing my own presence bubble as a phantom second user" bug
   // reported live.
+  //
+  // lastSeen + PRESENCE_STALE_MS below is a second, independent layer on
+  // top of that: webSocketClose() is the fast path for a clean disconnect,
+  // but a tab that's closed without one (crash, network drop) leaves a
+  // hibernated connection in state.getWebSockets() that Cloudflare's
+  // ping/pong heartbeat can take a while to notice is dead — in the
+  // meantime it shows up as a ghost bubble nobody can dismiss (reported
+  // live twice: once as a stray "TM" bubble, once as a duplicate "Josh"
+  // bubble on someone else's screen). Since the client re-sends setPresence
+  // periodically (see the index.html heartbeat), a live connection's
+  // lastSeen never goes stale; one that stops updating gets quietly
+  // dropped from the broadcast list on the next presence event, without
+  // needing to actually close the underlying socket.
   handlePresenceMessage(ws, msg) {
     const attachment = ws.deserializeAttachment() || {};
     ws.serializeAttachment(Object.assign({}, attachment, {
       view: typeof msg.view === 'string' ? msg.view : null,
       projectId: typeof msg.projectId === 'string' ? msg.projectId : null,
-      sessionId: typeof msg.sessionId === 'string' ? msg.sessionId : null
+      sessionId: typeof msg.sessionId === 'string' ? msg.sessionId : null,
+      lastSeen: Date.now()
     }));
     this.broadcastPresence();
   }
 
   broadcastPresence() {
+    const now = Date.now();
     const users = [];
     for (const ws of this.state.getWebSockets()) {
       const a = ws.deserializeAttachment();
       if (!a) continue;
+      if (a.lastSeen && (now - a.lastSeen) > PRESENCE_STALE_MS) continue;
       users.push({ username: a.username, displayName: a.displayName, view: a.view || null, projectId: a.projectId || null, sessionId: a.sessionId || null });
     }
     const payload = JSON.stringify({ type: 'presence', users: users });
