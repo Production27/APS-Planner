@@ -4036,6 +4036,23 @@ function applyPermissionGating() {
   // updateProjectToggle()'s bespoke hide-vs-disable choice for its own button.
   const activityBtn = document.getElementById('activityToggleBtn');
   if (activityBtn) activityBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
+  // Job add/delete/duplicate, and the Archived Jobs list's own delete
+  // button, get the same full-hide treatment — a greyed-out Delete/
+  // Duplicate button sitting right in the job form reads as "still there"
+  // even when inert. Delete/duplicate also have their own job-context
+  // visibility (see editJob()/addNewJob(), which run before this on any
+  // given call) — only ever overridden in the hide direction here, never
+  // forced back visible (showing them for a brand-new unsaved job would be
+  // wrong regardless of tier).
+  const addJobBtn = document.querySelector('.job-rail-add-btn');
+  if (addJobBtn) addJobBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
+  ['deleteBtn', 'duplicateJobBtn'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el && !hasMinTier('projectAdmin')) el.style.display = 'none';
+  });
+  document.querySelectorAll('#archivedJobsList [data-action="delete"]').forEach(function(el) {
+    if (!hasMinTier('projectAdmin')) el.style.display = 'none';
+  });
 }
 
 function promptNewProject() {
