@@ -159,11 +159,22 @@ class ApsRoom {
   // or corrupt anyone's actual jobs/cards/boards, by construction (this
   // handler returns before ever reaching applyMessage for this message
   // type, and nothing here ever calls this.persist()).
+  // sessionId is a random id the CLIENT generates once per page load and
+  // includes on every setPresence call — the only reliable way for that
+  // client to recognize its own entry in the broadcast list afterward.
+  // username doesn't work for this: anyone connected via the shared team
+  // password gets username: null server-side regardless of what they
+  // typed into the login prompt, so two different people on that path
+  // (or one person comparing against their own locally-typed username,
+  // which never matches the server's null) would either collide with
+  // each other or never match themselves — this is exactly the "seeing
+  // my own presence bubble as a phantom second user" bug reported live.
   handlePresenceMessage(ws, msg) {
     const attachment = ws.deserializeAttachment() || {};
     ws.serializeAttachment(Object.assign({}, attachment, {
       view: typeof msg.view === 'string' ? msg.view : null,
-      projectId: typeof msg.projectId === 'string' ? msg.projectId : null
+      projectId: typeof msg.projectId === 'string' ? msg.projectId : null,
+      sessionId: typeof msg.sessionId === 'string' ? msg.sessionId : null
     }));
     this.broadcastPresence();
   }
@@ -173,7 +184,7 @@ class ApsRoom {
     for (const ws of this.state.getWebSockets()) {
       const a = ws.deserializeAttachment();
       if (!a) continue;
-      users.push({ username: a.username, displayName: a.displayName, view: a.view || null, projectId: a.projectId || null });
+      users.push({ username: a.username, displayName: a.displayName, view: a.view || null, projectId: a.projectId || null, sessionId: a.sessionId || null });
     }
     const payload = JSON.stringify({ type: 'presence', users: users });
     for (const ws of this.state.getWebSockets()) {

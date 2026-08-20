@@ -11103,13 +11103,22 @@ function handleRoomOpen() {
 // which tab are they on" indicator gets most of the value without that
 // problem.
 let latestPresenceUsers = [];
+// Random per-page-load id, NOT the logged-in username, so this client can
+// reliably recognize its own entry in the broadcast presence list.
+// username doesn't work for that: the server records username: null for
+// anyone connected via the shared team password, regardless of what they
+// typed into the login prompt — comparing against the locally-typed
+// username would then never match (or, with two team-password logins at
+// once, would match the WRONG one), which is exactly what caused a real
+// user to see their own avatar as a phantom second person on the board.
+const myPresenceSessionId = genId();
 
 function sendPresenceUpdate() {
   if (!roomSocket || roomSocket.readyState !== 1) return;
   const tabEl = document.querySelector('.rail-tab.active');
   const view = tabEl ? tabEl.id.replace('tab-', '') : null;
   try {
-    roomSocket.send(JSON.stringify({ type: 'setPresence', view: view, projectId: activeProjectId || null }));
+    roomSocket.send(JSON.stringify({ type: 'setPresence', view: view, projectId: activeProjectId || null, sessionId: myPresenceSessionId }));
   } catch (e) { /* best-effort — a missed update just means a stale avatar briefly */ }
 }
 
@@ -11130,8 +11139,7 @@ const PRESENCE_VIEW_LABELS = { gantt: 'Gantt Chart', board: 'Board', calendar: '
 function renderPresenceAvatars() {
   const el = document.getElementById('presenceAvatars');
   if (!el) return;
-  const myUsername = getStoredUsername();
-  const others = latestPresenceUsers.filter(function(u) { return !myUsername || u.username !== myUsername; });
+  const others = latestPresenceUsers.filter(function(u) { return u.sessionId !== myPresenceSessionId; });
   el.innerHTML = others.map(function(u) {
     const name = u.displayName || u.username || 'Someone';
     const proj = u.projectId && projects[u.projectId] ? projects[u.projectId].name : '';
