@@ -3473,25 +3473,42 @@ function ensureCardChecklists(card) {
 // it's asked for — not before, so a job that never visits a stage (or
 // hasn't had its checklist opened there yet) doesn't get items materialized
 // it'll never see. Mutates `checklists` in place and returns the array.
+// Materialized checklist items sourced from a column's defaultChecklist
+// reuse that template item's own id directly (rather than minting a fresh
+// one), so a stage's stored list can always be diffed against the current
+// template — see the merge loop below. Manually-added items (see
+// addChecklistItem()) use a Date.now() id instead, a different type/range
+// that never collides with a template item's genId() string.
 function getChecklistForStage(checklists, columnId) {
-  // Reseed whenever the stored list is EMPTY, not just missing — an empty
-  // array is truthy in JS, so a stage visited before it had a
-  // defaultChecklist (or one that's since been fully checked off/cleared)
-  // would otherwise permanently block a template added/changed later from
-  // ever reaching it. A list with actual items in it is always left alone
-  // either way, so nobody's real progress gets clobbered.
-  if (!checklists[columnId] || checklists[columnId].length === 0) {
-    const col = BOARD_COLUMNS.find(function(c) { return c.id === columnId; });
-    const defaults = (col && col.defaultChecklist) || [];
-    if (defaults.length) {
-      checklists[columnId] = defaults.map(function(d) {
-        return { id: genId(), text: d.text, done: false, assignee: '' };
-      });
-    } else if (!checklists[columnId]) {
-      checklists[columnId] = [];
+  if (!checklists[columnId]) checklists[columnId] = [];
+  const items = checklists[columnId];
+  const col = BOARD_COLUMNS.find(function(c) { return c.id === columnId; });
+  const defaults = (col && col.defaultChecklist) || [];
+  // Merge in any template item this stage hasn't materialized before —
+  // matched by id, which covers both a totally fresh stage (nothing here
+  // yet) and one that's had items added to its template since it was
+  // first seeded. An item whose id is already present is left completely
+  // alone, whether it's still active or soft-deleted (see
+  // deleteChecklistItem()'s "removed" flag below) — so real progress is
+  // never touched and a deliberately-removed template item never
+  // resurrects itself just because some unrelated item was added to the
+  // template.
+  const existingIds = items.map(function(i) { return i.id; });
+  defaults.forEach(function(d) {
+    if (existingIds.indexOf(d.id) === -1) {
+      items.push({ id: d.id, text: d.text, done: false, assignee: '' });
     }
-  }
-  return checklists[columnId];
+  });
+  return items;
+}
+
+// The visible items for a stage — getChecklistForStage() itself must keep
+// returning the raw, unfiltered array (mutation call sites like
+// addChecklistItem() push directly onto its return value), so soft-deleted
+// template items are filtered out here instead, at the point of display/
+// counting.
+function visibleChecklistItems(checklists, columnId) {
+  return getChecklistForStage(checklists, columnId).filter(function(i) { return !i.removed; });
 }
 
 // ===== CHECKLIST STAGE VISIBILITY (whole-checklist-per-stage assignment) =====
@@ -8845,7 +8862,17 @@ function duplicateJob(jobId, event) {
     ensureCardChecklists(originalCard);
     newCard.checklists = {};
     Object.keys(originalCard.checklists || {}).forEach(function(colId) {
-      newCard.checklists[colId] = originalCard.checklists[colId].map(function(i) { return Object.assign({}, i, { id: genId() }); });
+      // A template-sourced item keeps its id (which is the template item's
+      // own id — see getChecklistForStage()) rather than getting a fresh
+      // one, so the duplicate stays correctly linked to the template: a
+      // regenerated id would look "never seen" to the merge-in logic and
+      // duplicate every still-active template item the next time the
+      // template changes. Only genuinely custom items get a fresh id.
+      const col = BOARD_COLUMNS.find(function(c) { return c.id === colId; });
+      const templateIds = ((col && col.defaultChecklist) || []).map(function(d) { return d.id; });
+      newCard.checklists[colId] = originalCard.checklists[colId].map(function(i) {
+        return Object.assign({}, i, { id: templateIds.indexOf(i.id) !== -1 ? i.id : genId() });
+      });
     });
     newCard.checklistAssignees = Object.assign({}, originalCard.checklistAssignees || {});
     newCard.attachments = (originalCard.attachments || []).map(function(a) { return Object.assign({}, a, { id: genId() }); });
@@ -9573,20 +9600,20 @@ function buildCardEl(card) {
 
   // Current stage's checklist only — a pure read (no lazy-seed/write here,
   // this renders on every board paint and could race a remote sync if it
-  // wrote to card.checklists). Falls back to the column's own
-  // defaultChecklist template whenever the stored list is EMPTY, not just
-  // missing — a stage visited before it had a template (or whose items
-  // were fully checked off/cleared) has an empty-but-truthy array that
-  // would otherwise mask a template added/changed later, exactly mirroring
-  // getChecklistForStage()'s own reseed-on-empty rule so the badge always
-  // shows what the card will actually get seeded with once opened.
+  // wrote to card.checklists). Previews exactly what getChecklistForStage()
+  // would materialize if this stage were opened right now: stored items
+  // (minus any soft-deleted ones — see deleteChecklistItem()) plus any
+  // template item this stage hasn't seen yet (matched by id, so a
+  // deliberately-removed template item never gets counted back in just
+  // because the template gained an unrelated new item).
   ensureCardChecklists(card);
-  let checklist = (card.checklists && card.checklists[card.column]) || [];
-  if (checklist.length === 0) {
-    const stageCol = BOARD_COLUMNS.find(c => c.id === card.column);
-    const templ = (stageCol && stageCol.defaultChecklist) || [];
-    if (templ.length) checklist = templ;
-  }
+  const stageCol = BOARD_COLUMNS.find(c => c.id === card.column);
+  const templ = (stageCol && stageCol.defaultChecklist) || [];
+  const stored = (card.checklists && card.checklists[card.column]) || [];
+  const storedIds = stored.map(i => i.id);
+  let checklist = stored.filter(i => !i.removed).concat(
+    templ.filter(d => storedIds.indexOf(d.id) === -1).map(d => ({ id: d.id, text: d.text, done: false, assignee: '' }))
+  );
   // A stage assigned to someone else (see setChecklistStageAssignee()) is
   // private — no badge leaking its progress to viewers who can't open it.
   if (!isChecklistStageVisibleToMe(card.checklistAssignees, card.column)) checklist = [];
@@ -10215,17 +10242,25 @@ function renderJobChecklist() {
   if (noticeEl) noticeEl.style.display = iCanSeeThisStage ? 'none' : '';
   if (!iCanSeeThisStage) return;
 
-  const items = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId);
+  // Soft-deleted template items (see deleteJobChecklistItem()) never
+  // render or count — getChecklistForStage() itself has to keep returning
+  // them (unfiltered) so id-based lookups below still find them.
+  const items = visibleChecklistItems(jmDraftChecklists, jmActiveChecklistColumnId);
   const assignees = fieldOptions.checklistAssignee || [];
   container.innerHTML = items.map(function(item) {
     const options = '<option value="">Unassigned</option>' + assignees.map(function(a) {
       return '<option value="' + escapeHtml(a) + '"' + (item.assignee === a ? ' selected' : '') + '>' + escapeHtml(a) + '</option>';
     }).join('');
+    // item.id is quoted — template-sourced items reuse the template's own
+    // genId() STRING id (see getChecklistForStage()), and an unquoted
+    // hyphenated string here would be broken JS in the onchange/onclick
+    // attribute (e.g. toggleJobChecklistItem(c821aed9-8a6b-...) parses as
+    // subtraction, not a function call) — silently doing nothing on click.
     return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
-      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(' + item.id + ')">' +
+      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(\'' + item.id + '\')">' +
       '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-      '<select class="ci-assignee" onchange="setJobChecklistItemAssignee(' + item.id + ', this.value)">' + options + '</select>' +
-      '<button class="ci-delete" onclick="deleteJobChecklistItem(' + item.id + ')">×</button>' +
+      '<select class="ci-assignee" onchange="setJobChecklistItemAssignee(\'' + item.id + '\', this.value)">' + options + '</select>' +
+      '<button class="ci-delete" onclick="deleteJobChecklistItem(\'' + item.id + '\')">×</button>' +
       '</div>';
   }).join('');
 
@@ -10246,22 +10281,40 @@ function addJobChecklistItem() {
   flushAutoSaveJobForm();
 }
 
+// ids arrive as strings from the quoted onchange/onclick attributes above
+// (see renderJobChecklist()) regardless of whether the underlying item.id
+// is a number (manually added, Date.now()) or a string (template-sourced,
+// genId()) — String(i.id) makes the comparison work either way.
 function toggleJobChecklistItem(id) {
-  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return i.id === id; });
+  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return String(i.id) === id; });
   if (item) item.done = !item.done;
   renderJobChecklist();
   flushAutoSaveJobForm();
 }
 
 function setJobChecklistItemAssignee(id, assignee) {
-  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return i.id === id; });
+  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return String(i.id) === id; });
   if (item) item.assignee = assignee;
   flushAutoSaveJobForm();
 }
 
+// A template-sourced item (its id still matches one of the column's
+// current defaultChecklist entries) is soft-deleted — flagged `removed`
+// and left in place — rather than spliced out, so getChecklistForStage()'s
+// merge-in-new-template-items logic never mistakes "deliberately removed"
+// for "never seen" and resurrects it just because some unrelated item got
+// added to the template later. A manually-added item (no template origin)
+// has nothing to resurrect, so it's just removed outright as before.
 function deleteJobChecklistItem(id) {
   const items = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId);
-  jmDraftChecklists[jmActiveChecklistColumnId] = items.filter(function(i) { return i.id !== id; });
+  const col = BOARD_COLUMNS.find(function(c) { return c.id === jmActiveChecklistColumnId; });
+  const isFromTemplate = ((col && col.defaultChecklist) || []).some(function(d) { return String(d.id) === id; });
+  if (isFromTemplate) {
+    const item = items.find(function(i) { return String(i.id) === id; });
+    if (item) item.removed = true;
+  } else {
+    jmDraftChecklists[jmActiveChecklistColumnId] = items.filter(function(i) { return String(i.id) !== id; });
+  }
   renderJobChecklist();
   flushAutoSaveJobForm();
 }
@@ -10550,17 +10603,25 @@ function renderChecklist() {
   if (!iCanSeeThisStage) return;
 
   const container = document.getElementById('checklistItems');
-  const items = getChecklistForStage(draftChecklists, activeChecklistColumnId);
+  // Soft-deleted template items (see deleteChecklistItem()) never render
+  // or count — getChecklistForStage() itself has to keep returning them
+  // (unfiltered) so id-based lookups below still find them.
+  const items = visibleChecklistItems(draftChecklists, activeChecklistColumnId);
   const assignees = fieldOptions.checklistAssignee || [];
   container.innerHTML = items.map(function(item) {
     const options = '<option value="">Unassigned</option>' + assignees.map(function(a) {
       return '<option value="' + escapeHtml(a) + '"' + (item.assignee === a ? ' selected' : '') + '>' + escapeHtml(a) + '</option>';
     }).join('');
+    // item.id is quoted — template-sourced items reuse the template's own
+    // genId() STRING id (see getChecklistForStage()), and an unquoted
+    // hyphenated string here would be broken JS in the onchange/onclick
+    // attribute (e.g. toggleChecklistItem(c821aed9-8a6b-...) parses as
+    // subtraction, not a function call) — silently doing nothing on click.
     return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
-      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleChecklistItem(' + item.id + ')">' +
+      '<input type="checkbox" ' + (item.done ? 'checked' : '') + ' onchange="toggleChecklistItem(\'' + item.id + '\')">' +
       '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-      '<select class="ci-assignee" onchange="setChecklistItemAssignee(' + item.id + ', this.value)">' + options + '</select>' +
-      '<button class="ci-delete" onclick="deleteChecklistItem(' + item.id + ')">×</button>' +
+      '<select class="ci-assignee" onchange="setChecklistItemAssignee(\'' + item.id + '\', this.value)">' + options + '</select>' +
+      '<button class="ci-delete" onclick="deleteChecklistItem(\'' + item.id + '\')">×</button>' +
       '</div>';
   }).join('');
 
@@ -10581,22 +10642,40 @@ function addChecklistItem() {
   flushCardAutosave();
 }
 
+// ids arrive as strings from the quoted onchange/onclick attributes above
+// (see renderChecklist()) regardless of whether the underlying item.id is
+// a number (manually added, Date.now()) or a string (template-sourced,
+// genId()) — String(i.id) makes the comparison work either way.
 function toggleChecklistItem(id) {
-  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return i.id === id; });
+  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return String(i.id) === id; });
   if (item) item.done = !item.done;
   renderChecklist();
   flushCardAutosave();
 }
 
 function setChecklistItemAssignee(id, assignee) {
-  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return i.id === id; });
+  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return String(i.id) === id; });
   if (item) item.assignee = assignee;
   flushCardAutosave();
 }
 
+// A template-sourced item (its id still matches one of the column's
+// current defaultChecklist entries) is soft-deleted — flagged `removed`
+// and left in place — rather than spliced out, so getChecklistForStage()'s
+// merge-in-new-template-items logic never mistakes "deliberately removed"
+// for "never seen" and resurrects it just because some unrelated item got
+// added to the template later. A manually-added item (no template origin)
+// has nothing to resurrect, so it's just removed outright as before.
 function deleteChecklistItem(id) {
   const items = getChecklistForStage(draftChecklists, activeChecklistColumnId);
-  draftChecklists[activeChecklistColumnId] = items.filter(function(i) { return i.id !== id; });
+  const col = BOARD_COLUMNS.find(function(c) { return c.id === activeChecklistColumnId; });
+  const isFromTemplate = ((col && col.defaultChecklist) || []).some(function(d) { return String(d.id) === id; });
+  if (isFromTemplate) {
+    const item = items.find(function(i) { return String(i.id) === id; });
+    if (item) item.removed = true;
+  } else {
+    draftChecklists[activeChecklistColumnId] = items.filter(function(i) { return String(i.id) !== id; });
+  }
   renderChecklist();
   flushCardAutosave();
 }
