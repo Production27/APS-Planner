@@ -323,6 +323,10 @@
   .task-row .col-jobs .task-row-jobname { display: inline-block; font-size: 10px; font-weight: 600; color: #fff; margin-left: 6px; padding: 1px 8px; border-radius: 10px; vertical-align: middle; line-height: 1.5; }
   .task-row .col-jobs .task-row-jobname.collapsible { cursor: pointer; }
   .task-row .col-jobs .task-row-jobname.collapsible:hover { filter: brightness(1.15); }
+  /* See ganttFocusedJobId/toggleGanttJobFocus() — marks which job's pill,
+     if any, is the one currently isolating the chart. */
+  .task-row .col-jobs .task-row-jobname.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
+  body.dark-mode .task-row .col-jobs .task-row-jobname.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
   body.dark-mode .task-row .col-jobs .task-row-jobname { color: #fff; }
   .task-row .col-jobs .task-row-phasename,
   .task-row .col-jobs .task-row-subphasename { display: inline-block; font-size: 10px; font-weight: 600; color: #fff; margin-left: 6px; padding: 1px 8px; border-radius: 10px; vertical-align: middle; line-height: 1.5; cursor: pointer; }
@@ -630,6 +634,18 @@
   }
   .gantt-toolbar button:hover { background: #eef1fa; color: var(--primary); border-color: var(--primary-light); box-shadow: 0 3px 6px rgba(26,35,126,0.15); transform: translateY(-1px); }
   .gantt-toolbar button:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,0.1) inset; }
+  /* See ganttFocusedJobId/syncGanttJobFocusBanner() — sits ahead of the icon
+     buttons, pushed to the toolbar's left edge via margin-right:auto so the
+     zoom/today/etc. buttons stay pinned right regardless of whether it's
+     showing. */
+  .gantt-job-focus-banner { align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text); margin-right: auto; }
+  .gantt-job-focus-banner b { color: var(--primary); }
+  .gantt-job-focus-banner button {
+    width: auto; height: auto; padding: 4px 10px; font-size: 11px; font-weight: 700;
+    border-radius: 12px; background: var(--primary-light); color: #fff; border: none;
+  }
+  .gantt-job-focus-banner button:hover { filter: brightness(1.1); background: var(--primary-light); color: #fff; transform: none; box-shadow: none; }
+  body.dark-mode .gantt-job-focus-banner b { color: var(--primary-light); }
 
   /* ===== DATE POPOVER ===== */
   .date-popover {
@@ -1852,6 +1868,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <button class="gantt-view-mode-btn" id="ganttViewLeads" data-mode="leads" onclick="setGanttViewMode('leads')" title="One row per job, tasks condensed into a single bar, colored by assigned lead/foreman">Leads</button>
           </div>
           <div class="gantt-toolbar" id="ganttToolbar">
+            <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
             <div style="position:relative;">
               <button class="ghost-toggle-btn" id="ghostToggleBtn" onclick="toggleGhostDropdown(event)" title="Ghost overlay"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a7 7 0 00-7 7v9.5l2-2 2 2 2-2 1 1 2-2 2 2 1-1 2 2V10a7 7 0 00-7-7z" fill="#b39ddb"/><circle cx="9.5" cy="10.5" r="1" fill="#fff"/><circle cx="14.5" cy="10.5" r="1" fill="#fff"/></svg></button>
               <div class="ghost-dropdown" id="ghostDropdown"></div>
@@ -3396,6 +3413,7 @@ function syncGanttViewModeButtons() {
   if (colHeader) {
     colHeader.textContent = ganttViewMode === 'leads' ? 'Leads' : 'Task';
   }
+  syncGanttJobFocusBanner();
 }
 
 function setGanttViewMode(mode) {
@@ -3457,6 +3475,43 @@ function toggleTasksSubPhaseExpanded(key) {
   if (tasksExpandedSubPhaseIds.has(key)) tasksExpandedSubPhaseIds.delete(key); else tasksExpandedSubPhaseIds.add(key);
   localStorage.setItem('gantt_tasks_expanded_subphases_v1', JSON.stringify(Array.from(tasksExpandedSubPhaseIds)));
   renderGantt();
+}
+
+// ===== TASKS VIEW: FOCUS ON ONE JOB =====
+// Clicking a job's name pill isolates the Gantt to just that job — every
+// other job's rows disappear until it's toggled back off (click the same
+// pill again, or the "Show all" control that appears in the toolbar).
+// Deliberately NOT persisted to localStorage like the collapse preferences
+// above — a filter that silently survived a reload would be confusing;
+// it's a short-lived "let me focus on this one job" tool, reset on every
+// page load and whenever the active project changes (see switchProject()).
+let ganttFocusedJobId = null;
+function toggleGanttJobFocus(jobId) {
+  ganttFocusedJobId = (ganttFocusedJobId === jobId) ? null : jobId;
+  renderGantt();
+}
+function clearGanttJobFocus() {
+  if (!ganttFocusedJobId) return;
+  ganttFocusedJobId = null;
+  renderGantt();
+}
+// Shown in the Gantt toolbar whenever a job is focused (Tasks view only —
+// see buildVisibleTaskRows()) so there's always an obvious way back to
+// seeing every job, even after scrolling away from that job's own pill.
+function syncGanttJobFocusBanner() {
+  const el = document.getElementById('ganttJobFocusBanner');
+  if (!el) return;
+  const job = ganttViewMode === 'tasks' && ganttFocusedJobId ? jobs.find(function(j) { return j.id === ganttFocusedJobId; }) : null;
+  // The focused job could vanish out from under the filter (deleted, or a
+  // project switch already cleared ganttFocusedJobId — see switchProject())
+  // — fail safe by just hiding the banner rather than showing a stale name.
+  if (!job) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  el.style.display = 'flex';
+  el.innerHTML = 'Showing only <b>' + escapeHtml(job.name) + '</b> <button type="button" onclick="clearGanttJobFocus()">Show all</button>';
 }
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
 // Gantt bar (mirrors the equivalent left-panel pills — see renderGantt()).
@@ -3832,6 +3887,9 @@ function switchProject(projectId) {
   cancelEdit();
   closeCardModal();
   closeCalendarEventModal();
+  // The old project's job id means nothing in the new one — see
+  // ganttFocusedJobId/buildVisibleTaskRows().
+  ganttFocusedJobId = null;
   activeProjectId = projectId;
   saveProjects();
   loadActiveProjectData();
@@ -6295,6 +6353,9 @@ function renderGantt() {
     const rows = [];
     jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
       if (!showArchived && job.archived) return;
+      // See ganttFocusedJobId/toggleGanttJobFocus() — isolates the chart to
+      // one job's rows when set, Tasks view only.
+      if (ganttFocusedJobId && job.id !== ganttFocusedJobId) return;
       getJobPhases(job).forEach(function(phase) {
         const phaseName = phase.isDefault ? null : phase.name;
         const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
@@ -6503,11 +6564,13 @@ function renderGantt() {
       let jobPill, phasePillHtml = '', subPillHtml = '';
       if (isTasksMode) {
         const jobColor = job.color || '#999';
-        // Job pill is a pure identity/color badge here — collapsing happens
-        // at the phase/sub-phase level instead (see below), independently
-        // per phase and per sub-phase. Phase/sub-phase pills share the
-        // job's own color so all three read as one family at a glance.
-        jobPill = '<span class="task-row-jobname" style="background:' + jobColor + ';">' + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
+        // Clicking the job pill isolates the Gantt to just this job (see
+        // ganttFocusedJobId/toggleGanttJobFocus() above) — independent of
+        // the phase/sub-phase collapse pills below, which fold THIS job's
+        // own rows rather than hiding every other job.
+        const isFocusedJob = ganttFocusedJobId === job.id;
+        const jobPillTitle = isFocusedJob ? 'Click to show every job again' : 'Click to show only this job';
+        jobPill = '<span class="task-row-jobname collapsible' + (isFocusedJob ? ' focused' : '') + '" title="' + jobPillTitle + '" style="background:' + jobColor + ';">' + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
         // Only offered when the phase actually has 2+ real sub-phases —
         // folds/unfolds just THIS phase (tasksExpandedPhaseIds), same
         // condensed-bar mechanism Jobs/Leads view uses, just with its own
@@ -6543,6 +6606,8 @@ function renderGantt() {
       row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobPill + phasePillHtml + subPillHtml + noteDot + '</div>';
       row.addEventListener('click', () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); });
       if (isTasksMode) {
+        const jobPillEl = row.querySelector('.task-row-jobname');
+        if (jobPillEl) jobPillEl.addEventListener('click', function(e) { e.stopPropagation(); toggleGanttJobFocus(job.id); });
         if (phasePillHtml) {
           const phaseEl = row.querySelector('.task-row-phasename');
           if (phaseEl) phaseEl.addEventListener('click', function(e) { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); });
