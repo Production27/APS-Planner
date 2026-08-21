@@ -1219,30 +1219,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-col-color-option:hover { transform: scale(1.2); border-color: var(--text); }
   .board-col-color-option.selected { border-color: var(--text); transform: scale(1.15); }
 
-  /* ===== CARD QUICK COLOR PICKER ===== */
-  .card-color-swatch {
-    width: 14px; height: 14px; border-radius: 50%; cursor: pointer;
-    border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-    transition: transform 0.15s; flex-shrink: 0;
-  }
-  .card-color-swatch:hover { transform: scale(1.3); }
-  .card-color-picker {
-    position: absolute; bottom: calc(100% + 6px); right: 0;
-    background: white; border-radius: 8px; box-shadow: var(--shadow-hover);
-    padding: 8px; display: none; z-index: 200; border: 1px solid var(--border);
-    flex-wrap: wrap; gap: 6px; width: 180px;
-  }
-  .card-color-picker.show { display: flex; }
-  .card-color-option {
-    width: 22px; height: 22px; border-radius: 5px; cursor: pointer;
-    border: 2px solid transparent; transition: transform 0.15s, border-color 0.15s;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-  }
-  .card-color-option:hover { transform: scale(1.2); border-color: var(--text); }
-
   /* Dark mode */
-  body.dark-mode .board-col-settings-dropdown,
-  body.dark-mode .card-color-picker { background: var(--card); }
+  body.dark-mode .board-col-settings-dropdown { background: var(--card); }
   body.dark-mode .board-col-settings-item:hover { background: rgba(220,53,69,0.15); }
 
   /* ===== CROSS-PROJECT LINKED JOB REFERENCE =====
@@ -3168,9 +3146,9 @@ function ensureJobHasCards(job) {
       // Bug found in review: this previously read `job.color || card.color`,
       // which is always truthy for job.color — so every save/load silently
       // reverted any custom card color back to the job's bar color, making
-      // the card color picker (quickChangeCardColor) effectively non-
-      // functional. Keep whatever color the card already has; only fall
-      // back to the job's color for a card that doesn't have one yet.
+      // the card modal's own color picker effectively non-functional. Keep
+      // whatever color the card already has; only fall back to the job's
+      // color for a card that doesn't have one yet.
       card.color = card.color || job.color || '#3949ab';
       if (!card.jobId) card.jobId = job.id;
       if ((card.phaseId || null) !== pid) card.phaseId = pid;
@@ -4375,7 +4353,6 @@ function promptRenameProject(projectId) {
 function closeAllDropdowns() {
   closeSettingsMenu();
   closeAllColSettings();
-  closeAllCardColorPickers();
   closeViewAsDropdown();
 }
 
@@ -4676,8 +4653,6 @@ document.addEventListener('click', function(e) {
 
   // Close column settings dropdowns
   if (!e.target.closest('.board-col-settings-wrap')) closeAllColSettings();
-  // Close card color pickers
-  if (!e.target.closest('.card-color-swatch') && !e.target.closest('.card-color-picker')) closeAllCardColorPickers();
 
   // Close the job drawer on a click outside it — but not for a click that
   // opened/switched it in the first place (a Gantt bar or Calendar entry
@@ -10262,22 +10237,11 @@ function buildCardEl(card) {
   const attachments = card.attachments || [];
   if (attachments.length) badges.push('<span class="mini-badge"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> ' + attachments.length + '</span>');
 
-  const colorPickerId = 'card-color-' + card.id;
-  const colorOptions = COLOR_PRESETS.map(c =>
-    '<div class="card-color-option" style="background:' + c + ';" onclick="quickChangeCardColor(\'' + card.id + '\', \'' + c + '\', event)"></div>'
-  ).join('');
-
   el.innerHTML = overrideBadge +
     '<div class="board-card-title">' + escapeHtml(card.title) + '</div>' +
     (card.description ? '<div class="board-card-desc">' + escapeHtml(card.description) + '</div>' : '') +
     (cfLines.length ? '<div class="board-card-meta">' + cfLines.join('') + '</div>' : '') +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;position:relative;">' +
-      (badges.length ? '<div class="board-card-badges">' + badges.join('') + '</div>' : '<div></div>') +
-      '<div style="position:relative;">' +
-        '<div class="card-color-swatch" style="background:' + (card.color || 'var(--primary-light)') + ';" onclick="toggleCardColorPicker(\'' + card.id + '\', event)" title="Change color"></div>' +
-        '<div class="card-color-picker" id="' + colorPickerId + '">' + colorOptions + '</div>' +
-      '</div>' +
-    '</div>';
+    (badges.length ? '<div class="board-card-badges">' + badges.join('') + '</div>' : '');
 
   // Mobile-only "Move to" fallback — hidden above 480px (see the
   // .board-card-move-select rules), where dragging still works. Built as
@@ -10569,7 +10533,6 @@ function toggleColSettings(colId, event) {
   const dropdown = document.getElementById('col-settings-' + colId);
   const isOpen = dropdown.classList.contains('show');
   closeAllColSettings();
-  closeAllCardColorPickers();
   if (!isOpen) dropdown.classList.add('show');
 }
 
@@ -10676,32 +10639,6 @@ function setColumnDefaultDuration(colId, value, event) {
   if (event && event.target) event.target.value = col.defaultDuration;
   logActivity('set board "' + col.label + '" default duration to ' + col.defaultDuration + ' day' + (col.defaultDuration === 1 ? '' : 's'));
   showToast('Default duration updated', 'success');
-}
-
-// ===== CARD QUICK COLOR PICKER =====
-function toggleCardColorPicker(cardId, event) {
-  event.stopPropagation();
-  const picker = document.getElementById('card-color-' + cardId);
-  const isOpen = picker.classList.contains('show');
-  closeAllCardColorPickers();
-  if (!isOpen) picker.classList.add('show');
-}
-
-function closeAllCardColorPickers() {
-  document.querySelectorAll('.card-color-picker').forEach(p => p.classList.remove('show'));
-}
-
-function quickChangeCardColor(cardId, color, event) {
-  event.stopPropagation();
-  const card = boardCards.find(c => String(c.id) === String(cardId));
-  if (card) {
-    card.color = color;
-    saveBoardCards();
-    logActivity('changed card color for "' + card.title + '"');
-    renderBoard();
-    showToast('Card color updated', 'success');
-  }
-  closeAllCardColorPickers();
 }
 
 // A manual drag pins a card to its dropped column for 24h (see
