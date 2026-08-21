@@ -1215,40 +1215,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .card-color-picker { background: var(--card); }
   body.dark-mode .board-col-settings-item:hover { background: rgba(220,53,69,0.15); }
 
-  /* ===== GHOST OVERLAY ===== */
-  .task-bar.ghost {
-    opacity: 0.22;
-    filter: grayscale(0.5) brightness(1.15);
-    pointer-events: none;
-    z-index: 5;
-    border-style: dashed;
-    border-width: 1px;
-    border-color: rgba(0,0,0,0.3);
-  }
-  .task-bar.ghost:hover {
-    transform: none;
-    box-shadow: none;
-    filter: grayscale(0.5) brightness(1.15);
-  }
-  .ghost-label {
-    position: absolute;
-    top: -18px;
-    left: 8px;
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--primary-light);
-    opacity: 0.7;
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 6;
-  }
-
   /* ===== CROSS-PROJECT LINKED JOB REFERENCE =====
-     Distinct from .ghost above: a linked reference is a real, precisely-
-     positioned row (not a loosely-overlapping translucent backdrop), just
-     read-only — so it stays legible ("real but not yours") rather than
-     nearly-invisible. Cursor stays default (not grab) since drag handlers
-     are simply never attached for these bars. */
+     A linked reference is a real, precisely-positioned row (not a
+     loosely-overlapping translucent backdrop), just read-only — so it
+     stays legible ("real but not yours"). Cursor stays default (not grab)
+     since drag handlers are simply never attached for these bars. */
   .task-bar.linked-ref {
     filter: saturate(0.55);
     border-style: dashed !important;
@@ -1260,41 +1231,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .task-bar.linked-ref .task-bar-job-tag { opacity: 0.85; }
   .job-span-border.linked-ref { border-style: dashed; }
   .cal-event-bar.linked-ref { filter: saturate(0.55); border: 1px dashed rgba(0,0,0,0.3); cursor: pointer; }
-  .ghost-toggle-btn {
-    background: transparent; border: 1px solid var(--border); color: var(--text-light);
-    padding: 0 10px; height: 26px; border-radius: 6px; cursor: pointer;
-    font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;
-    transition: all 0.15s;
-  }
-  .ghost-toggle-btn:hover { background: #eef1fa; color: var(--primary); border-color: var(--primary-light); }
-  .ghost-toggle-btn.active { background: rgba(57,73,171,0.12); color: var(--primary); border-color: var(--primary-light); }
-  .ghost-dropdown {
-    position: absolute; top: calc(100% + 6px); right: 0; background: white;
-    border-radius: 10px; box-shadow: var(--shadow-hover); min-width: 200px;
-    padding: 8px; display: none; z-index: 200; border: 1px solid var(--border);
-  }
-  .ghost-dropdown.show { display: block; }
-  .ghost-dropdown-title { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; padding: 4px 8px 8px; }
-  .ghost-dropdown-item {
-    display: flex; align-items: center; gap: 8px; padding: 7px 10px;
-    border-radius: 6px; font-size: 12px; font-weight: 600; color: var(--text);
-    cursor: pointer; transition: background 0.15s;
-  }
-  .ghost-dropdown-item:hover { background: #eef1fa; color: var(--primary); }
-  .ghost-dropdown-item.active { background: rgba(57,73,171,0.1); color: var(--primary); }
-  .ghost-dropdown-divider { height: 1px; background: var(--border); margin: 6px 4px; }
-  .ghost-dropdown-off {
-    display: flex; align-items: center; gap: 8px; padding: 7px 10px;
-    border-radius: 6px; font-size: 12px; font-weight: 600;
-    color: var(--text-light); cursor: pointer; transition: background 0.15s;
-  }
-  .ghost-dropdown-off:hover { background: #ffebee; color: var(--danger); }
-  body.dark-mode .ghost-toggle-btn { border-color: var(--border); color: var(--text-light); }
-  body.dark-mode .ghost-toggle-btn:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
-  body.dark-mode .ghost-toggle-btn.active { background: rgba(57,73,171,0.25); color: #cfd4e0; border-color: var(--primary-light); }
-  body.dark-mode .ghost-dropdown { background: var(--card); }
-  body.dark-mode .ghost-dropdown-item:hover { background: rgba(57,73,171,0.2); }
-  body.dark-mode .ghost-dropdown-off:hover { background: rgba(220,53,69,0.15); }
 
   /* ===== TOOLTIP ===== */
   .tooltip { position: fixed; background: rgba(33,33,33,0.95); color: white; padding: 12px 16px; border-radius: 10px; font-size: 12px; z-index: 1000; pointer-events: none; opacity: 0; transition: opacity 0.15s; box-shadow: 0 6px 20px rgba(0,0,0,0.3); max-width: 320px; line-height: 1.6; }
@@ -1884,10 +1820,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           </div>
           <div class="gantt-toolbar" id="ganttToolbar">
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
-            <div style="position:relative;">
-              <button class="ghost-toggle-btn" id="ghostToggleBtn" onclick="toggleGhostDropdown(event)" title="Ghost overlay"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a7 7 0 00-7 7v9.5l2-2 2 2 2-2 1 1 2-2 2 2 1-1 2 2V10a7 7 0 00-7-7z" fill="#b39ddb"/><circle cx="9.5" cy="10.5" r="1" fill="#fff"/><circle cx="14.5" cy="10.5" r="1" fill="#fff"/></svg></button>
-              <div class="ghost-dropdown" id="ghostDropdown"></div>
-            </div>
             <button class="archive-toggle-btn" id="archiveToggleBtn" onclick="toggleShowArchived()" title="Show archived jobs"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg></button>
             <button onclick="zoomIn()" title="Zoom in">+</button>
             <button onclick="zoomOut()" title="Zoom out">−</button>
@@ -4201,7 +4133,6 @@ function renderAll() {
   renderBoard();
   renderCalendar();
   updateProjectToggle();
-  updateGhostBtnState();
   applyPermissionGating();
 }
 
@@ -4376,73 +4307,6 @@ function saveFieldOptions() { saveActiveProject(); pushFieldOptionsToShared(acti
 // applyRoomSnapshot()'s header merge).
 function saveHeader() { saveActiveProject(); logActivity('updated header'); pushHeaderToShared(activeProjectId); }
 
-// ===== GHOST OVERLAY =====
-let ghostProjectId = null;
-const GHOST_KEY = 'aps-planner:ghost-v1';
-
-function loadGhostPref() {
-  const saved = localStorage.getItem(GHOST_KEY);
-  if (saved) ghostProjectId = saved;
-}
-
-function saveGhostPref() {
-  if (ghostProjectId) localStorage.setItem(GHOST_KEY, ghostProjectId);
-  else localStorage.removeItem(GHOST_KEY);
-}
-
-function toggleGhostDropdown(event) {
-  event.stopPropagation();
-  const dd = document.getElementById('ghostDropdown');
-  const isOpen = dd.classList.contains('show');
-  closeAllDropdowns();
-  if (!isOpen) {
-    dd.classList.add('show');
-    renderGhostDropdown();
-  }
-}
-
-function renderGhostDropdown() {
-  const dd = document.getElementById('ghostDropdown');
-  let html = '<div class="ghost-dropdown-title">Overlay project</div>';
-  Object.values(projects).forEach(p => {
-    if (p.id === activeProjectId) return;
-    const isGhost = p.id === ghostProjectId;
-    html += '<div class="ghost-dropdown-item' + (isGhost ? ' active' : '') + '" onclick="setGhostProject(\'' + p.id + '\')">' +
-      (isGhost ? '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a7 7 0 00-7 7v9.5l2-2 2 2 2-2 1 1 2-2 2 2 1-1 2 2V10a7 7 0 00-7-7z" fill="#b39ddb"/><circle cx="9.5" cy="10.5" r="1" fill="#fff"/><circle cx="14.5" cy="10.5" r="1" fill="#fff"/></svg> ' : '  ') + escapeHtml(p.name) + '</div>';
-  });
-  html += '<div class="ghost-dropdown-divider"></div>' +
-    '<div class="ghost-dropdown-off" onclick="clearGhostProject()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Turn off overlay</div>';
-  dd.innerHTML = html;
-}
-
-function setGhostProject(projectId) {
-  ghostProjectId = projectId;
-  saveGhostPref();
-  closeAllDropdowns();
-  updateGhostBtnState();
-  renderGantt();
-  showToast('Ghost overlay: ' + (projects[projectId] ? projects[projectId].name : ''), 'success');
-}
-
-function clearGhostProject() {
-  ghostProjectId = null;
-  saveGhostPref();
-  closeAllDropdowns();
-  updateGhostBtnState();
-  renderGantt();
-  showToast('Ghost overlay off', 'info');
-}
-
-function updateGhostBtnState() {
-  const btn = document.getElementById('ghostToggleBtn');
-  if (btn) btn.classList.toggle('active', !!ghostProjectId);
-}
-
-function getGhostJobs() {
-  if (!ghostProjectId || !projects[ghostProjectId]) return [];
-  return projects[ghostProjectId].jobs || [];
-}
-
 // ===== Cross-project job links =====
 // A link is per-job (not whole-project) and renders as a real,
 // precisely-dated row on the Gantt/Calendar — never the Board — rather
@@ -4593,7 +4457,6 @@ function init() {
   loadProjects();
   enforceFixedProjectSet();
   if (freshLocalSeed) showFreshLoadOverlay();
-  loadGhostPref();
   loadLinkEnabledPref();
   loadDarkModePref();
   loadActiveProjectData();
@@ -4655,10 +4518,6 @@ document.addEventListener('click', function(e) {
   const wrap = document.querySelector('.settings-menu-wrap');
   if (wrap && !wrap.contains(e.target)) closeSettingsMenu();
 
-  // Close ghost dropdown
-  if (!e.target.closest('.ghost-toggle-btn') && !e.target.closest('.ghost-dropdown')) {
-    document.getElementById('ghostDropdown').classList.remove('show');
-  }
   // Close column settings dropdowns
   if (!e.target.closest('.board-col-settings-wrap')) closeAllColSettings();
   // Close card color pickers
@@ -5090,9 +4949,6 @@ function buildCalBarHtml(seg, left, top, width) {
 }
 
 function computeDateRange() {
-  // Ghost jobs come from a different project with its own BOARD_COLUMNS, so
-  // hideFromSchedule indices (computed against the active project's columns)
-  // only apply to the active project's own jobs, not the ghost overlay.
   const hiddenOrders = new Set(
     BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
   );
@@ -5116,19 +4972,6 @@ function computeDateRange() {
           const dueTask = getJobDueMarkerTask(job, phase.id);
           if (dueTask) datedTasks.push(dueTask);
         }
-      });
-    });
-  });
-  getGhostJobs().forEach(function(job) {
-    getJobPhases(job).forEach(function(phase) {
-      getPhaseSubUnits(phase).forEach(function(subUnit) {
-        (subUnit.tasks || []).forEach(function(task) {
-          if (!task.start || !task.finish) return;
-          const s = new Date(task.start + 'T00:00:00');
-          const f = new Date(task.finish + 'T00:00:00');
-          if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
-          datedTasks.push(task);
-        });
       });
     });
   });
@@ -6709,41 +6552,6 @@ function renderGantt() {
     tlbl.textContent = 'Today — ' + today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     grid.appendChild(tlbl);
   }
-
-  const ghostJobs = getGhostJobs();
-  let ghostVisibleIdx = 0;
-  ghostJobs.forEach(function(job) {
-    if (!showArchived && job.archived) return;
-    (job.tasks || []).forEach(function(task) {
-      if (!task.start || !task.finish) return;
-      const s = new Date(task.start + 'T00:00:00');
-      const f = new Date(task.finish + 'T00:00:00');
-      if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
-      const startIdx = getDaysDiff(startDate, s);
-      if (getDaysDiff(startDate, f) < 0) return;
-      const duration = getDaysDiff(s, f) + 1;
-      const bar = document.createElement('div');
-      bar.className = 'task-bar ghost';
-      bar.style.left = (startIdx * dayWidth) + 'px';
-      bar.style.width = (duration * dayWidth) + 'px';
-      bar.style.top = (ghostVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
-      bar.style.background = softenColor(task.color || job.color || '#999');
-      if (duration !== 1) {
-        const jobTag = document.createElement('span');
-        jobTag.className = 'task-bar-job-tag';
-        // Deliberately NOT softened, unlike the bar it sits on — this tag's
-        // CSS hardcodes white text, and a softened (lightened) background
-        // under white text loses too much contrast for lighter hues like
-        // yellow/purple (confirmed visually before shipping this).
-        jobTag.style.background = job.color || '#999';
-        jobTag.textContent = job.name;
-        jobTag.title = job.name;
-        bar.appendChild(jobTag);
-      }
-      grid.appendChild(bar);
-      ghostVisibleIdx++;
-    });
-  });
 
   let barVisibleIdx = 0;
   visibleRows.forEach(function(entry) {
@@ -12817,7 +12625,7 @@ function refreshActiveProjectFromShared() {
   // even though the underlying data merged in fine (loadActiveProjectData
   // already succeeded above; a page refresh would show it's actually there).
   const renders = [renderGantt, renderJobList, updateJobCount, renderBoard, renderCalendar,
-    updateGhostBtnState, refreshArchivedJobsListIfOpen];
+    refreshArchivedJobsListIfOpen];
   // CRITICAL: if a job is open in Job Manager, its form fields (task dates
   // in particular) are plain DOM state — they don't track the `jobs` array
   // automatically. autoSaveJobForm() reads those fields directly on every
