@@ -4922,10 +4922,28 @@ function removeBoardBgPhoto() {
   showToast('Board background photo removed', 'info');
 }
 
+// Static, bundled board background images — a normal image file shipped
+// alongside index.html (see /assets), not an upload stored in localStorage
+// or synced project data. Sidesteps the localStorage-quota/base64-inflation
+// problem and the Durable Object's single-key room-storage size limit
+// entirely (see handleBoardBgUpload()'s history) — the browser just
+// requests and caches it like any other website asset, full resolution,
+// no size cap. Keyed by FIXED_PROJECT_NAMES (the two permanent projects
+// this app already treats as fixed) so each can eventually get its own;
+// only ADVANCED PRECUT SYSTEMS has one for now.
+const STATIC_BOARD_BG_BY_PROJECT_NAME = {
+  'ADVANCED PRECUT SYSTEMS': 'assets/aps-board-bg.jpg'
+};
 function applyBoardBgVisual() {
-  const photo = localStorage.getItem('gantt_board_bg_photo_v1');
   const wrapper = document.getElementById('boardWrapper');
   if (!wrapper) return;
+  const proj = getActiveProject();
+  // A static background is authoritative for its project — takes priority
+  // over any uploaded photo rather than being silently overridden by one,
+  // so there's no confusing "I uploaded a new one but nothing changed"
+  // trap for that project specifically.
+  const staticBg = proj && STATIC_BOARD_BG_BY_PROJECT_NAME[proj.name];
+  const photo = staticBg || localStorage.getItem('gantt_board_bg_photo_v1');
   if (photo) {
     const overlay = document.body.classList.contains('dark-mode') ? 'rgba(10,12,16,0.6)' : 'rgba(255,255,255,0.55)';
     wrapper.style.background = 'linear-gradient(' + overlay + ', ' + overlay + '), url("' + photo + '") center/cover no-repeat';
