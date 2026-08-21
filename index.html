@@ -965,7 +965,7 @@
   .board-column { width: 245px; min-width: 245px; background: #eceef4; border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; box-shadow: 0 6px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.04); transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
   .board-column.dragging-col { opacity: 0.35; transform: scale(0.98); cursor: grabbing; }
   .board-column.drag-over-col { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08); border-color: var(--primary-light); }
-  .board-column-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 5px; font-size: 13px; font-weight: 700; color: var(--text); flex-shrink: 0; cursor: grab; user-select: none; }
+  .board-column-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 2px; font-size: 13px; font-weight: 700; color: var(--text); flex-shrink: 0; cursor: grab; user-select: none; }
   .board-column-header:active { cursor: grabbing; }
   .board-column-header-title { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
   .board-column-header-title span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1001,7 +1001,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     border-color: var(--primary-light);
     box-shadow: 0 0 0 3px rgba(57,73,171,0.1);
   }
-  .board-column-body { flex: 1; overflow-y: auto; padding: 1px 10px 10px; min-height: 60px; display: flex; flex-direction: column; gap: 8px; transition: background 0.15s; }
+  .board-column-body { flex: 1; overflow-y: auto; padding: 0 10px 10px; min-height: 60px; display: flex; flex-direction: column; gap: 8px; transition: background 0.15s; }
   .board-column-body:empty::before {
     content: 'Drop cards here';
     display: block;
