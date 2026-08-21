@@ -178,11 +178,6 @@
   .theme-custom-row label { display: block; font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
   .theme-custom-row input[type="color"] { width: 100%; height: 38px; padding: 2px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); }
   .theme-preview { margin-top: 16px; height: 50px; border-radius: 8px; display: flex; align-items: center; padding: 0 16px; color: white; font-weight: 600; font-size: 13px; transition: background 0.15s; }
-  .header-bg-preview {
-    margin-top: 14px; height: 110px; border-radius: 8px; background-color: #eceef4; background-position: center; background-size: cover; background-repeat: no-repeat;
-    display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px; border: 1px solid var(--border);
-  }
-
   /* ===== VIEW SWITCHER (rail-tab-row, top of the job rail) =====
      Active tab shows full-size (icon + label); the other two collapse to
      icon-only (flex-basis 34px) and expand back to full-size on hover —
@@ -1544,8 +1539,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .timeline-header-wrap,
   body.dark-mode .timeline-header .week-header,
   body.dark-mode .timeline-header .day-header,
-  body.dark-mode .manager-sidebar-header,
-  body.dark-mode .header-bg-preview {
+  body.dark-mode .manager-sidebar-header {
     background: #1a1d25;
   }
   body.dark-mode .left-header { color: var(--text-light); }
@@ -1735,7 +1729,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <span class="mini-toggle" id="darkModeToggle"></span>
         </div>
         <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openThemeModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Header Color</div>
-        <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openHeaderBgModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Header Background</div>
         <div class="settings-dropdown-divider"></div>
         <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
         <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
@@ -2070,23 +2063,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <button class="btn btn-secondary" onclick="closeThemeModal()">Cancel</button>
         <button class="btn btn-primary" onclick="applyTheme()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Apply</button>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- HEADER BACKGROUND PHOTO MODAL -->
-<div class="modal-overlay" id="headerBgModal">
-  <div class="modal-box">
-    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Header Background Photo</h4>
-    <p>Upload a photo to use behind the header. A dark overlay is added automatically so the title stays readable.</p>
-    <div class="header-bg-preview" id="headerBgPreview">No photo selected</div>
-    <div style="display:flex; gap:10px; margin-top:14px;">
-      <button class="btn btn-secondary" onclick="document.getElementById('headerBgFileInput').click()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 21V9m0 0l-5 5m5-5l5 5" stroke="#3949ab" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="2.5" width="16" height="2.5" rx="1.25" fill="#3949ab"/></svg> Choose Photo</button>
-      <button class="btn btn-danger" id="headerBgRemoveBtn" onclick="removeHeaderBgPhoto()" style="display:none;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Remove Photo</button>
-    </div>
-    <input type="file" id="headerBgFileInput" accept="image/*" style="display:none" onchange="handleHeaderBgUpload(event)">
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="closeHeaderBgModal()">Done</button>
     </div>
   </div>
 </div>
@@ -4793,70 +4769,11 @@ function resetThemeDefault() {
 }
 
 // ===== HEADER BACKGROUND PHOTO =====
-function openHeaderBgModal() {
-  const photo = localStorage.getItem('gantt_header_bg_photo_v1');
-  updateHeaderBgPreview(photo);
-  document.getElementById('headerBgModal').classList.add('show');
-}
-
-function closeHeaderBgModal() {
-  document.getElementById('headerBgModal').classList.remove('show');
-}
-
-function updateHeaderBgPreview(photo) {
-  const preview = document.getElementById('headerBgPreview');
-  const removeBtn = document.getElementById('headerBgRemoveBtn');
-  if (photo) {
-    preview.style.backgroundImage = 'url("' + photo + '")';
-    preview.textContent = '';
-    removeBtn.style.display = 'inline-flex';
-  } else {
-    preview.style.backgroundImage = 'none';
-    preview.textContent = 'No photo selected';
-    removeBtn.style.display = 'none';
-  }
-}
-
-function handleHeaderBgUpload(e) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  const MAX_SIZE = 4 * 1024 * 1024; // 4MB — keep localStorage happy
-  if (file.size > MAX_SIZE) {
-    showToast('Image is too large (max 4MB)', 'error');
-    e.target.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    // localStorage.setItem can throw (QuotaExceededError) even under the
-    // 4MB file check above, and left unguarded that used to fail
-    // completely silently.
-    try {
-      localStorage.setItem('gantt_header_bg_photo_v1', evt.target.result);
-    } catch (err) {
-      console.error('Failed to save header background photo:', err);
-      showToast('Could not save that image — try a smaller/more compressed file', 'error');
-      return;
-    }
-    updateHeaderBgPreview(evt.target.result);
-    applyHeaderVisual();
-    logActivity('changed header background photo');
-    showToast('Header background updated', 'success');
-  };
-  reader.onerror = function() {
-    showToast('Could not read that file', 'error');
-  };
-  reader.readAsDataURL(file);
-  e.target.value = '';
-}
-
-function removeHeaderBgPhoto() {
-  localStorage.removeItem('gantt_header_bg_photo_v1');
-  updateHeaderBgPreview(null);
-  applyHeaderVisual();
-  logActivity('removed header background photo');
-  showToast('Header background photo removed', 'info');
-}
+// The Settings > Header Background upload UI (openHeaderBgModal/
+// handleHeaderBgUpload/removeHeaderBgPhoto/etc.) was removed, same as the
+// Board Background one before it. applyHeaderVisual() and
+// gantt_header_bg_photo_v1 stay: whatever was already uploaded keeps
+// displaying, it's just no longer changeable from the UI.
 
 // ===== BOARD BACKGROUND PHOTO =====
 // The Settings > Board Background upload UI (openBoardBgModal/
@@ -11657,10 +11574,6 @@ document.getElementById('themeModal').addEventListener('click', function(e) {
   if (e.target === this) closeThemeModal();
 });
 
-document.getElementById('headerBgModal').addEventListener('click', function(e) {
-  if (e.target === this) closeHeaderBgModal();
-});
-
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeModal();
@@ -11669,7 +11582,6 @@ document.addEventListener('keydown', function(e) {
     closeSettingsMenu();
     if (document.getElementById('manageFieldsModal').classList.contains('show')) closeManageFields();
     if (document.getElementById('themeModal').classList.contains('show')) closeThemeModal();
-    if (document.getElementById('headerBgModal').classList.contains('show')) closeHeaderBgModal();
     hideDatePopover();
     if (document.getElementById('jobForm').style.display !== 'none') cancelEdit();
   }
@@ -11884,7 +11796,7 @@ function cancelOfflineEscalation() {
 }
 
 function isBusyEditing() {
-  const openModal = ['cardModal', 'themeModal', 'headerBgModal', 'manageFieldsModal', 'deleteModal', 'calendarEventModal'].some(function(id) {
+  const openModal = ['cardModal', 'themeModal', 'manageFieldsModal', 'deleteModal', 'calendarEventModal'].some(function(id) {
     const el = document.getElementById(id);
     return el && el.classList.contains('show');
   });
