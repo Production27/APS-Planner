@@ -2179,6 +2179,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <label>Project</label>
         <select id="userFormProject"></select>
       </div>
+      <div class="form-group">
+        <label>Classification</label>
+        <select id="userFormIsLead">
+          <option value="0">Member</option>
+          <option value="1">Lead — eligible for Project Manager / Foreman</option>
+        </select>
+      </div>
       <span class="field-error-hint" id="userFormHint" style="display:none;"></span>
       <div style="display:flex; gap:8px; margin-top:10px;">
         <button class="btn btn-primary" onclick="submitUserForm()">Save</button>
@@ -3744,6 +3751,21 @@ function isCalendarEventVisibleToMe(evt) {
 // of just showing "Everyone" with no explanation either way.
 let cachedUserRoster = null;
 let userRosterLoadError = null;
+
+// PM/Foreman ('user-select' fields) only offer accounts marked as a Lead
+// (see the Classification field in Manage Users / handleUsersAdd's
+// newIsLead). If a job's already-stored value belongs to an account that
+// isn't (or is no longer) a Lead, keep it in the list anyway so the
+// dropdown doesn't silently blank out an existing pick.
+function getLeadRoster(currentValueUsername) {
+  const roster = cachedUserRoster || [];
+  const leads = roster.filter(function(u) { return u.isLead; });
+  if (currentValueUsername && !leads.some(function(u) { return u.username === currentValueUsername; })) {
+    const existing = roster.find(function(u) { return u.username === currentValueUsername; });
+    if (existing) leads.push(existing);
+  }
+  return leads;
+}
 async function ensureUserRosterLoaded() {
   if (cachedUserRoster) return cachedUserRoster;
   try {
@@ -9763,17 +9785,18 @@ async function loadUsersList() {
       const projectLabel = (u.role !== 'admin' && u.assignedProjectId)
         ? (' — ' + ((projects[u.assignedProjectId] && projects[u.assignedProjectId].name) || '(unknown project)'))
         : '';
+      const leadLabel = u.isLead ? ' — Lead' : '';
       row.innerHTML =
         '<div style="min-width:0;">' +
           '<div style="font-size:13px; font-weight:600;">' + escapeHtml(u.displayName) + (isMe ? ' <span style="font-weight:400; color:var(--text-secondary);">(you)</span>' : '') + '</div>' +
-          '<div style="font-size:12px; color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + escapeHtml(tierLabel) + escapeHtml(projectLabel) + '</div>' +
+          '<div style="font-size:12px; color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + escapeHtml(tierLabel) + escapeHtml(projectLabel) + escapeHtml(leadLabel) + '</div>' +
         '</div>' +
         '<div style="display:flex; gap:6px; flex-shrink:0;">' +
           '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="edit">Edit</button>' +
           '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="reset">Reset Password</button>' +
           '<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="remove">Remove</button>' +
         '</div>';
-      row.querySelector('[data-action="edit"]').onclick = function() { showEditUserForm(u.username, u.displayName, u.role, u.assignedProjectId); };
+      row.querySelector('[data-action="edit"]').onclick = function() { showEditUserForm(u.username, u.displayName, u.role, u.assignedProjectId, u.isLead); };
       row.querySelector('[data-action="reset"]').onclick = function() { resetUserPasswordUI(u.username, u.displayName); };
       row.querySelector('[data-action="remove"]').onclick = function() { removeUserUI(u.username, u.displayName); };
       listEl.appendChild(row);
@@ -9816,13 +9839,14 @@ function showAddUserForm() {
   document.getElementById('userFormPasswordLabel').textContent = 'Password';
   document.getElementById('userFormDisplayName').value = '';
   document.getElementById('userFormTier').value = 'editor';
+  document.getElementById('userFormIsLead').value = '0';
   populateUserFormProjectSelect('');
   onUserFormTierChange();
   document.getElementById('userFormHint').style.display = 'none';
   document.getElementById('userFormPanel').style.display = 'block';
 }
 
-function showEditUserForm(username, displayName, role, assignedProjectId) {
+function showEditUserForm(username, displayName, role, assignedProjectId, isLead) {
   editingUserFormUsername = username;
   document.getElementById('userFormTitle').textContent = 'Edit ' + displayName;
   document.getElementById('userFormUsername').value = username;
@@ -9832,6 +9856,7 @@ function showEditUserForm(username, displayName, role, assignedProjectId) {
   document.getElementById('userFormPasswordLabel').textContent = 'Password (optional)';
   document.getElementById('userFormDisplayName').value = displayName;
   document.getElementById('userFormTier').value = role;
+  document.getElementById('userFormIsLead').value = isLead ? '1' : '0';
   populateUserFormProjectSelect(assignedProjectId || '');
   onUserFormTierChange();
   document.getElementById('userFormHint').style.display = 'none';
@@ -9857,6 +9882,7 @@ async function submitUserForm() {
   const displayName = document.getElementById('userFormDisplayName').value.trim() || username;
   const role = document.getElementById('userFormTier').value;
   const assignedProjectId = document.getElementById('userFormProject').value || null;
+  const isLead = document.getElementById('userFormIsLead').value === '1';
 
   if (!username) { hintEl.textContent = 'Username is required.'; hintEl.style.display = 'block'; return; }
 
@@ -9867,7 +9893,7 @@ async function submitUserForm() {
         hintEl.style.display = 'block';
         return;
       }
-      await postUsersEndpoint('users/update', { targetUsername: editingUserFormUsername, newRole: role, newAssignedProjectId: assignedProjectId });
+      await postUsersEndpoint('users/update', { targetUsername: editingUserFormUsername, newRole: role, newAssignedProjectId: assignedProjectId, newIsLead: isLead });
       if (password) {
         await postUsersEndpoint('users/reset-password', { targetUsername: editingUserFormUsername, newPassword: password });
       }
@@ -9879,10 +9905,11 @@ async function submitUserForm() {
         hintEl.style.display = 'block';
         return;
       }
-      await postUsersEndpoint('users/add', { newUsername: username, newPassword: password, newDisplayName: displayName, newRole: role, newAssignedProjectId: assignedProjectId });
+      await postUsersEndpoint('users/add', { newUsername: username, newPassword: password, newDisplayName: displayName, newRole: role, newAssignedProjectId: assignedProjectId, newIsLead: isLead });
       logActivity('added user account "' + displayName + '"');
       showToast('User added', 'success');
     }
+    cachedUserRoster = null; // force a re-fetch so PM/Foreman/Members pickers see the change immediately
     hideUserFormPanel();
     loadUsersList();
   } catch (err) {
@@ -9912,6 +9939,7 @@ async function removeUserUI(username, displayName) {
   try {
     await postUsersEndpoint('users/remove', { targetUsername: username });
     logActivity('removed user account "' + displayName + '"');
+    cachedUserRoster = null;
     showToast('User removed', 'success');
     loadUsersList();
   } catch (err) {
@@ -10764,16 +10792,17 @@ function renderCustomFieldsGrid(values) {
     }
     if (def.type === 'user-select') {
       // Real-account single-select (PM/Foreman) — same roster source as
-      // Members' multiselect just below, one value instead of an array.
-      // Plain native <select>, safe here (unlike the app header's "View
-      // as" picker, which had to move off a native select — this one sits
-      // on a normal white modal background, not a colored gradient, so it
-      // doesn't hit that cross-browser closed-state styling issue).
+      // Members' multiselect just below, but narrowed to Lead-classified
+      // accounts only via getLeadRoster() (see Manage Users' Classification
+      // field). Plain native <select>, safe here (unlike the app header's
+      // "View as" picker, which had to move off a native select — this one
+      // sits on a normal white modal background, not a colored gradient, so
+      // it doesn't hit that cross-browser closed-state styling issue).
       if (!cachedUserRoster) {
         ensureUserRosterLoaded().then(function() { renderCustomFieldsGrid(collectCustomFieldValues()); });
         return '<div class="cf-field"><label>' + def.label + '</label><select disabled><option>Loading…</option></select></div>';
       }
-      const optionsHtml = '<option value="">Select...</option>' + cachedUserRoster.map(function(u) {
+      const optionsHtml = '<option value="">Select...</option>' + getLeadRoster(val).map(function(u) {
         return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
       }).join('');
       return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
@@ -10838,7 +10867,7 @@ function renderJobCustomFieldsGrid(values) {
         ensureUserRosterLoaded().then(function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); });
         return '<div class="cf-field"><label>' + def.label + '</label><select disabled><option>Loading…</option></select></div>';
       }
-      const optionsHtml = '<option value="">Select...</option>' + cachedUserRoster.map(function(u) {
+      const optionsHtml = '<option value="">Select...</option>' + getLeadRoster(val).map(function(u) {
         return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
       }).join('');
       return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';

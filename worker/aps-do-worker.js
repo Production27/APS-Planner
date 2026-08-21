@@ -548,7 +548,7 @@ async function listAllUsers(env) {
     const raw = await env.USERS_KV.get(k.name);
     if (!raw) continue;
     const u = normalizeUserRecord(JSON.parse(raw));
-    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt });
+    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead });
   }
   users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   return users;
@@ -629,7 +629,7 @@ async function handleUsersRoster(request, env, corsHeaders) {
   const caller = await resolveIdentity(env, body.username, body.password);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
   const users = await listAllUsers(env);
-  return jsonResponse({ users: users.map(function(u) { return { username: u.username, displayName: u.displayName }; }) }, 200, corsHeaders);
+  return jsonResponse({ users: users.map(function(u) { return { username: u.username, displayName: u.displayName, isLead: !!u.isLead }; }) }, 200, corsHeaders);
 }
 
 async function handleUsersAdd(request, env, corsHeaders) {
@@ -647,6 +647,7 @@ async function handleUsersAdd(request, env, corsHeaders) {
   // Only meaningful for non-admin tiers — an admin is never project-scoped.
   const newAssignedProjectId = (newRole !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
     ? body.newAssignedProjectId : null;
+  const newIsLead = !!body.newIsLead;
 
   if (!newUsername || !/^[a-z0-9._-]{2,40}$/.test(newUsername)) {
     return jsonResponse({ error: "Username must be 2-40 characters (letters, numbers, . _ -)" }, 400, corsHeaders);
@@ -665,6 +666,7 @@ async function handleUsersAdd(request, env, corsHeaders) {
     displayName: newDisplayName,
     role: newRole,
     assignedProjectId: newAssignedProjectId,
+    isLead: newIsLead,
     passwordHash,
     salt,
     createdAt: Date.now()
@@ -706,6 +708,7 @@ async function handleUsersUpdate(request, env, corsHeaders) {
   target.role = body.newRole;
   target.assignedProjectId = (target.role !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
     ? body.newAssignedProjectId : null;
+  target.isLead = !!body.newIsLead;
   await putUser(env, target);
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
