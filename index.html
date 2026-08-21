@@ -2244,6 +2244,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         </div>
       </div>
     </div>
+    <div class="form-group">
+      <label>Visibility</label>
+      <select id="ce_visibility" onchange="toggleCalendarEventVisibilityFields()">
+        <option value="all">Everyone</option>
+        <option value="private">Private (only me)</option>
+        <option value="members">Select members</option>
+      </select>
+    </div>
+    <div class="form-group" id="ce_visibility_members_group" style="display:none;">
+      <label>Visible to</label>
+      <div class="cf-multiselect" id="ce_visibility_members_list"></div>
+    </div>
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-secondary" id="ceDeleteBtn" data-min-tier="editor" onclick="deleteCalendarEventFromModal()" style="display:none; color:var(--danger);" title="Deletes the whole series, not just one occurrence"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
       <div style="display:flex; gap:10px;">
@@ -2729,7 +2741,7 @@ function getCalendarEventOccurrences(evt, rangeStart, rangeEnd) {
 // code can treat them identically to job task rows without a rewrite.
 function flattenCalendarEventsForRange(rangeStart, rangeEnd) {
   const rows = [];
-  (calendarEvents || []).forEach(function(evt) {
+  (calendarEvents || []).filter(isCalendarEventVisibleToMe).forEach(function(evt) {
     getCalendarEventOccurrences(evt, rangeStart, rangeEnd).forEach(function(occ) {
       const fakeJob = { id: 'calevt-job-' + evt.id, name: evt.title, color: evt.color, archived: false };
       const fakeTask = {
@@ -3679,6 +3691,28 @@ function isJobVisibleToMe(job) {
 }
 function getVisibleJobs() {
   return jobs.filter(isJobVisibleToMe);
+}
+
+// ===== CALENDAR EVENT VISIBILITY =====
+// A calendar event's own 'all'/'private'/'members' setting (see the
+// Visibility field in the event modal, saveCalendarEventFromModal()) —
+// same shape/bypass rules as isJobVisibleToMe() just above (Project
+// Admin/Admin see everything; viewAsUsername simulates a specific
+// member's own view when an Admin is previewing). Unset/'all' means
+// visible to everyone, same default as isChecklistStageVisibleToMe()
+// (unlike isJobVisibleToMe()'s deliberately-inverted empty-Members-hides
+// default) — an event created before this feature existed, or left on
+// the default option, is unaffected. 'private' means only the account
+// that created it (evt.createdBy) can see it.
+function isCalendarEventVisibleToMe(evt) {
+  if (!evt) return false;
+  const visibility = evt.visibility || 'all';
+  if (visibility === 'all') return true;
+  const asUsername = viewAsUsername || (hasMinTier('projectAdmin') ? null : getStoredUsername());
+  if (!asUsername) return true; // Project Admin/Admin, not previewing — bypass
+  if (visibility === 'private') return evt.createdBy === asUsername;
+  if (visibility === 'members') return (evt.visibleMembers || []).indexOf(asUsername) !== -1;
+  return true;
 }
 
 // Real user accounts (username/displayName only, no passwords/roles) for
@@ -6072,6 +6106,8 @@ function openAddCalendarEvent(dateStr, timeStr) {
   document.querySelectorAll('#ceColorPresets .color-preset').forEach(function(p) { p.classList.remove('selected'); });
   toggleCalendarEventColorPanel(false);
   toggleRepeatUntilField();
+  document.getElementById('ce_visibility').value = 'all';
+  toggleCalendarEventVisibilityFields([]);
   document.getElementById('calendarEventModal').classList.add('show');
   setTimeout(function() { document.getElementById('ce_title').focus(); }, 50);
 }
@@ -6083,6 +6119,11 @@ function openAddCalendarEvent(dateStr, timeStr) {
 function openEditCalendarEvent(eventId, sourceDate) {
   const evt = calendarEvents.find(function(e) { return e.id === eventId; });
   if (!evt) return;
+  // Defense-in-depth matching flattenCalendarEventsForRange()'s own filter
+  // — closes the gap for any entry point that resolves straight to an
+  // eventId without going through a rendered (and thus already-filtered)
+  // calendar bar. See isJobVisibleToMe()/editJob()'s identical guard.
+  if (!isCalendarEventVisibleToMe(evt)) return;
   editingCalendarEventId = eventId;
   calendarEventTargetDate = null;
   document.getElementById('calendarEventModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Event';
@@ -6101,6 +6142,8 @@ function openEditCalendarEvent(eventId, sourceDate) {
   });
   toggleCalendarEventColorPanel(false);
   toggleRepeatUntilField();
+  document.getElementById('ce_visibility').value = evt.visibility || 'all';
+  toggleCalendarEventVisibilityFields(evt.visibleMembers || []);
   document.getElementById('calendarEventModal').classList.add('show');
 }
 
@@ -6113,6 +6156,34 @@ function closeCalendarEventModal() {
 function toggleRepeatUntilField() {
   const repeat = document.getElementById('ce_repeat').value;
   document.getElementById('ce_repeat_until_group').style.display = (repeat === 'none') ? 'none' : 'block';
+}
+
+// Shows/rebuilds the Members checkbox list (see the Members custom field's
+// identical cf-multiselect pattern) only when Visibility is set to
+// 'members' — same lazy-roster-load-then-rerender idiom as
+// renderCustomFieldsGrid(). `preSelected` carries the event's own
+// evt.visibleMembers forward across a re-render (e.g. once the roster
+// finishes loading) so an in-progress selection isn't lost.
+function toggleCalendarEventVisibilityFields(preSelected) {
+  const visibility = document.getElementById('ce_visibility').value;
+  const group = document.getElementById('ce_visibility_members_group');
+  group.style.display = (visibility === 'members') ? 'block' : 'none';
+  if (visibility !== 'members') return;
+  const list = document.getElementById('ce_visibility_members_list');
+  const selected = preSelected || collectCalendarEventVisibilityMembers();
+  if (!cachedUserRoster) {
+    list.innerHTML = '<span class="cf-multiselect-loading">Loading team roster…</span>';
+    ensureUserRosterLoaded().then(function() { toggleCalendarEventVisibilityFields(selected); });
+    return;
+  }
+  list.innerHTML = cachedUserRoster.length
+    ? cachedUserRoster.map(function(u) {
+        return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>';
+      }).join('')
+    : '<span class="cf-multiselect-empty">No team accounts yet</span>';
+}
+function collectCalendarEventVisibilityMembers() {
+  return Array.from(document.querySelectorAll('#ce_visibility_members_list input:checked')).map(function(el) { return el.value; });
 }
 
 function toggleCalendarEventColorPanel(forceOpen) {
@@ -6158,6 +6229,8 @@ function saveCalendarEventFromModal() {
   const repeat = document.getElementById('ce_repeat').value;
   const repeatUntil = document.getElementById('ce_repeat_until').value;
   const color = document.getElementById('ce_color').value;
+  const visibility = document.getElementById('ce_visibility').value;
+  const visibleMembers = visibility === 'members' ? collectCalendarEventVisibilityMembers() : [];
 
   if (editingCalendarEventId) {
     const evt = calendarEvents.find(function(e) { return e.id === editingCalendarEventId; });
@@ -6169,11 +6242,18 @@ function saveCalendarEventFromModal() {
     evt.repeat = repeat;
     evt.repeatUntil = repeatUntil || null;
     evt.color = color;
+    evt.visibility = visibility;
+    evt.visibleMembers = visibleMembers;
+    // Backfill only — an event created before this feature (or by someone
+    // else) keeps whoever actually made it; never overwritten by a later
+    // editor just saving other changes.
+    if (!evt.createdBy) evt.createdBy = getStoredUsername();
     logActivity('updated calendar event "' + title + '"');
   } else {
     calendarEvents.push({
       id: genId(), title: title, start: date, time: time, duration: duration,
-      repeat: repeat, repeatUntil: repeatUntil || null, color: color, exceptions: {}
+      repeat: repeat, repeatUntil: repeatUntil || null, color: color, exceptions: {},
+      visibility: visibility, visibleMembers: visibleMembers, createdBy: getStoredUsername()
     });
     logActivity('added calendar event "' + title + '"');
   }
