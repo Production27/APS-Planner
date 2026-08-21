@@ -3425,7 +3425,7 @@ function setGanttViewMode(mode) {
   // Defense-in-depth to match the button's own hide (see
   // applyPermissionGating()) — belt-and-suspenders in case this ever gets
   // triggered some other way than clicking the (already-hidden) tab.
-  if (mode === 'leads' && !hasMinTier('projectAdmin')) return;
+  if (mode === 'tasks' && !hasMinTier('projectAdmin')) return;
   ganttViewMode = mode;
   localStorage.setItem('gantt_view_mode_v1', mode);
   syncGanttViewModeButtons();
@@ -4199,16 +4199,24 @@ function applyPermissionGating() {
   // wrong regardless of tier).
   const addJobBtn = document.querySelector('.job-rail-add-btn');
   if (addJobBtn) addJobBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
-  // Gantt "Jobs" tab (condensed one-bar-per-job view, colored by lead) —
-  // Project Admin and up only. Full-hide, not just disable, same reasoning
-  // as the other tab/nav-style buttons above — a greyed-out tab in an
-  // otherwise-normal-looking strip reads as broken. See the matching
-  // guard in setGanttViewMode() for what happens if a user already has
-  // 'leads' left over in their own browser's localStorage from before a
-  // tier downgrade — they can still get back via the always-visible "All
-  // Jobs" tab.
-  const ganttViewLeadsBtn = document.getElementById('ganttViewLeads');
-  if (ganttViewLeadsBtn) ganttViewLeadsBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
+  // Gantt "All Jobs" tab (full task-level view) — Project Admin and up
+  // only; everyone else is limited to the condensed "Jobs" tab. Full-hide,
+  // not just disable, same reasoning as the other tab/nav-style buttons
+  // above — a greyed-out tab in an otherwise-normal-looking strip reads as
+  // broken. 'tasks' is also this app's account-wide DEFAULT mode, so a
+  // restricted account landing here for the first time (nothing in their
+  // own browser's localStorage yet) needs actively bumped over to 'leads'
+  // rather than just having the tab hidden out from under an
+  // already-active mode — see the correction right below, and the
+  // matching guard in setGanttViewMode().
+  const ganttViewTasksBtn = document.getElementById('ganttViewTasks');
+  if (ganttViewTasksBtn) ganttViewTasksBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
+  if (!hasMinTier('projectAdmin') && ganttViewMode === 'tasks') {
+    ganttViewMode = 'leads';
+    localStorage.setItem('gantt_view_mode_v1', 'leads');
+    syncGanttViewModeButtons();
+    if (document.getElementById('timelineBody')) renderGantt();
+  }
   ['deleteBtn', 'duplicateJobBtn'].forEach(function(id) {
     const el = document.getElementById(id);
     if (el && !hasMinTier('projectAdmin')) el.style.display = 'none';
