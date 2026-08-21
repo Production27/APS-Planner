@@ -226,7 +226,16 @@
   .calendar-wrapper { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
   .calendar-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-shrink: 0; }
   .calendar-toolbar h3 { flex: 1; text-align: center; font-size: 16px; color: var(--text); }
-  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  /* Plain shared-border grid (Google-Calendar-style) instead of gapped
+     rounded cards — cells butt up against each other on a single border
+     color, cheaper than the negative-margin border-collapse trick since
+     nothing here needs per-cell independent borders. Scoped to the day
+     cells specifically (.calendar-days), not the bare .calendar-grid class
+     the weekday-label row above it also shares — that row has no per-cell
+     background of its own, so the same treatment there would just paint
+     the whole strip solid instead of showing thin lines. */
+  .calendar-grid.calendar-days { gap: 1px; background: var(--border); border: 1px solid var(--border); }
   #calendarWeekdays { flex-shrink: 0; margin-bottom: 6px; }
   #calendarWeekdays .cal-weekday { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; padding: 4px 0; }
   /* touch-action:pan-y — tells the browser this element only handles
@@ -238,10 +247,10 @@
      move into the hourly grid below) sized to content instead of filling
      all available height, and the hourly grid taking the rest. */
   .calendar-days.week-all-day-mode { flex: 0 0 auto; max-height: 30vh; grid-auto-rows: auto; }
-  .cal-day { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px; min-height: 90px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+  .cal-day { background: var(--card); padding: 6px; min-height: 90px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
   .cal-day.cal-outside { background: var(--bg); opacity: 0.55; }
-  .cal-day.cal-today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
-  .cal-day-num { font-size: 11px; font-weight: 700; color: var(--text-light); margin-bottom: 4px; flex-shrink: 0; }
+  .cal-day.cal-today { box-shadow: 0 0 0 1.5px var(--primary) inset; z-index: 1; }
+  .cal-day-num { font-size: 11px; font-weight: 700; color: var(--text-light); margin-bottom: 4px; flex-shrink: 0; text-align: center; }
   .cal-day.cal-today .cal-day-num { color: var(--primary); }
   .calendar-days { position: relative; align-content: start; }
   .cal-bars-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
@@ -266,7 +275,7 @@
     content: ''; position: absolute; right: 1px; top: 50%; width: 5px; height: 5px; border-top: 2px solid rgba(255,255,255,0.85);
     border-right: 2px solid rgba(255,255,255,0.85); transform: translateY(-50%) rotate(45deg);
   }
-  body.dark-mode .cal-day { background: #1e2130; border-color: #333c55; }
+  body.dark-mode .cal-day { background: #1e2130; }
   body.dark-mode .cal-day.cal-outside { background: #16182380; }
 
   /* ===== DAY VIEW (calendarViewMode = 'day') ===== */
