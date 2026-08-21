@@ -650,6 +650,7 @@
   }
   .gantt-job-focus-banner button:hover { filter: brightness(1.1); background: var(--primary-light); color: #fff; transform: none; box-shadow: none; }
   body.dark-mode .gantt-job-focus-banner b { color: var(--primary-light); }
+  .gantt-job-focus-hint { font-weight: 500; font-style: italic; color: var(--text-light); }
 
   /* ===== DATE POPOVER ===== */
   .date-popover {
@@ -3499,23 +3500,26 @@ function clearGanttJobFocus() {
   ganttFocusedJobId = null;
   renderGantt();
 }
-// Shown in the Gantt toolbar whenever a job is focused (Tasks view only —
-// see buildVisibleTaskRows()) so there's always an obvious way back to
-// seeing every job, even after scrolling away from that job's own pill.
+// Shown in the Gantt toolbar (Tasks view only — see buildVisibleTaskRows()):
+// a quiet hint when nothing's focused (so the click-to-isolate feature is
+// discoverable at all), swapping to the active "Showing only X — Show all"
+// banner once a job is, so there's always an obvious way back to seeing
+// every job again, even after scrolling away from that job's own pill.
 function syncGanttJobFocusBanner() {
   const el = document.getElementById('ganttJobFocusBanner');
   if (!el) return;
-  const job = ganttViewMode === 'tasks' && ganttFocusedJobId ? jobs.find(function(j) { return j.id === ganttFocusedJobId; }) : null;
-  // The focused job could vanish out from under the filter (deleted, or a
-  // project switch already cleared ganttFocusedJobId — see switchProject())
-  // — fail safe by just hiding the banner rather than showing a stale name.
-  if (!job) {
+  if (ganttViewMode !== 'tasks') {
     el.style.display = 'none';
     el.innerHTML = '';
     return;
   }
+  // The focused job could vanish out from under the filter (deleted, or a
+  // project switch already cleared ganttFocusedJobId — see switchProject()).
+  const job = ganttFocusedJobId ? jobs.find(function(j) { return j.id === ganttFocusedJobId; }) : null;
   el.style.display = 'flex';
-  el.innerHTML = 'Showing only <b>' + escapeHtml(job.name) + '</b> <button type="button" onclick="clearGanttJobFocus()">Show all</button>';
+  el.innerHTML = job
+    ? 'Showing only <b>' + escapeHtml(job.name) + '</b> <button type="button" onclick="clearGanttJobFocus()">Show all</button>'
+    : '<span class="gantt-job-focus-hint">Click a job name to isolate it</span>';
 }
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
 // Gantt bar (mirrors the equivalent left-panel pills — see renderGantt()).
