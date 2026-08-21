@@ -807,7 +807,18 @@
      the justCreated branch) shrinks the panel down to a narrow tab
      standing in for it, showing just the comment count; the full h4/
      list/input swap out for it rather than being scaled down. */
-  .job-comments-tab { display: none; }
+  .job-comments-tab { display: none; position: relative; }
+  /* Shown/hidden directly via style.display in renderJobComments() —
+     same convention .job-comments-tab-count already uses — whenever any
+     comment on the job has important:true (see the IMPORTANT checkbox in
+     the post row below), regardless of read/unread state; there's no
+     per-user "seen it" tracking in this app, so it just reflects whether
+     an important comment currently exists. */
+  .job-comments-tab-important-dot {
+    display: none; position: absolute; top: -2px; right: -2px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--danger); border: 2px solid var(--card);
+  }
   .job-comments-panel.collapsed {
     flex-basis: 44px; width: 44px; padding: 18px 0; align-items: center; cursor: pointer;
   }
@@ -841,6 +852,10 @@
     background: var(--card); color: var(--text);
   }
   .job-comments-input-row textarea:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
+  .job-comment-post-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .job-comment-important-check { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--danger); cursor: pointer; user-select: none; }
+  .job-comment-important-check input[type="checkbox"] { accent-color: var(--danger); cursor: pointer; }
+  .job-comment-important-badge { color: var(--danger); font-size: 9px; margin-right: 5px; }
   .job-comment-reply-btn { background: none; border: none; color: var(--primary); font-size: 11px; font-weight: 700; cursor: pointer; padding: 4px 0 0; }
   .job-comment-reply-btn:hover { text-decoration: underline; }
   .job-comment-replies { margin-top: 8px; padding-left: 12px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
@@ -1997,6 +2012,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <button class="job-comments-tab" id="jobCommentsTab" onclick="toggleJobCommentsPanel()" title="Show comments">
             <svg viewBox="0 0 24 24" width="17" height="17" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg>
             <span class="job-comments-tab-count" id="jobCommentsTabCount">0</span>
+            <span class="job-comments-tab-important-dot" id="jobCommentsTabImportantDot" title="Contains an important comment"></span>
           </button>
           <h4 onclick="toggleMobileField(this)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> Comments
             <button class="job-comments-collapse-btn" onclick="event.stopPropagation(); toggleJobCommentsPanel();" title="Collapse">›</button>
@@ -2005,7 +2021,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="job-comments-list" id="jobCommentsList"></div>
             <div class="job-comments-input-row">
               <textarea id="newJobCommentText" data-min-tier="commenter" placeholder="Add a note or comment..." onkeydown="handleJobCommentKey(event)"></textarea>
-              <button class="btn btn-primary" data-min-tier="commenter" onclick="addJobComment()" style="align-self:flex-end;">Post</button>
+              <div class="job-comment-post-row">
+                <label class="job-comment-important-check" title="Flag this comment as important">
+                  <input type="checkbox" id="newJobCommentImportant" data-min-tier="commenter"> IMPORTANT
+                </label>
+                <button class="btn btn-primary" data-min-tier="commenter" onclick="addJobComment()">Post</button>
+              </div>
             </div>
           </div>
         </div>
@@ -8649,6 +8670,8 @@ function editJob(jobId, phaseId, subPhaseId) {
   commentsPanel.classList.add('collapsed'); // collapsed is the resting state each time a job opens — see toggleJobCommentsPanel()
   document.getElementById('formArea').classList.add('comments-collapsed');
   document.getElementById('newJobCommentText').value = '';
+  const newCommentImportantEl = document.getElementById('newJobCommentImportant');
+  if (newCommentImportantEl) newCommentImportantEl.checked = false;
   renderJobComments(job);
   document.querySelectorAll('.color-preset').forEach(p => {
     p.classList.toggle('selected', p.dataset.color === job.color);
@@ -8692,6 +8715,10 @@ function renderJobComments(job) {
     tabCountEl.textContent = comments.length;
     tabCountEl.style.display = comments.length ? 'flex' : 'none';
   }
+  const importantDotEl = document.getElementById('jobCommentsTabImportantDot');
+  if (importantDotEl) {
+    importantDotEl.style.display = comments.some(function(c) { return c.important; }) ? 'block' : 'none';
+  }
 
   if (!comments.length) {
     listEl.innerHTML = '<div class="job-comments-empty">No comments yet.</div>';
@@ -8719,7 +8746,10 @@ function renderJobCommentItem(job, c) {
 
   return '<div class="job-comment-item">' +
     '<div class="job-comment-meta">' +
-      '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
+      '<span>' +
+        (c.important ? '<span class="job-comment-important-badge" title="Marked important">●</span>' : '') +
+        '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
+      '</span>' +
       '<span style="display:flex;align-items:center;gap:4px;">' +
         '<span class="job-comment-when">' + formatCommentWhen(c.when) + '</span>' +
         '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
@@ -8805,12 +8835,16 @@ function addJobComment() {
     localStorage.setItem(DISPLAY_NAME_KEY, author);
   }
 
+  const importantEl = document.getElementById('newJobCommentImportant');
+  const important = !!(importantEl && importantEl.checked);
+
   const job = found.job;
   if (!Array.isArray(job.comments)) job.comments = [];
-  job.comments.push({ id: genId(), author: author, text: text, when: Date.now() });
+  job.comments.push({ id: genId(), author: author, text: text, when: Date.now(), important: important });
   textarea.value = '';
+  if (importantEl) importantEl.checked = false;
   saveJobs();
-  logActivity('commented on job "' + job.name + '"');
+  logActivity('commented on job "' + job.name + '"' + (important ? ' (marked important)' : ''));
   renderJobComments(job);
   renderJobList();
 }
