@@ -700,6 +700,7 @@
   .job-phase-chip-del:hover { opacity: 1; }
   .job-phase-chip-edit { opacity: 0.55; font-size: 11px; line-height: 1; padding: 0 1px; margin-left: 2px; }
   .job-phase-chip-edit:hover { opacity: 1; }
+  .job-phase-chip-placeholder { font-style: italic; opacity: 0.6; font-weight: 500; }
   .job-phase-strip-btn { padding: 5px 10px; border-radius: 14px; background: transparent; border: 1.5px dashed #c5cae9; color: var(--text-light); font-size: 12px; font-weight: 600; cursor: pointer; }
   .job-phase-strip-btn:hover { border-color: var(--primary-light); color: var(--primary-light); }
   .job-subphase-strip { margin: 6px 0 0 20px; padding-left: 10px; border-left: 2px solid #dcdfe6; }
@@ -2997,12 +2998,16 @@ function makePhaseCard(job, phase) {
 function splitJobIntoPhases(job) {
   if (job.phases && job.phases.length) return;
   const existingCard = getPhaseCard(job, null);
-  const phase = { id: genId(), name: 'Phase 1', order: 0, tasks: job.tasks || [] };
+  // Left blank rather than defaulting to "Phase 1" — the phase strip shows
+  // a placeholder ("Add name") for an unnamed phase (see
+  // renderJobPhaseStrip()), and renameJobPhaseUI() allows clearing a name
+  // back to blank too.
+  const phase = { id: genId(), name: '', order: 0, tasks: job.tasks || [] };
   job.phases = [phase];
   job.tasks = [];
   if (existingCard) {
     existingCard.phaseId = phase.id;
-    existingCard.title = job.name + ' — ' + phase.name;
+    existingCard.title = job.name + (phase.name ? ' — ' + phase.name : '');
   }
 }
 
@@ -3470,7 +3475,7 @@ function buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, ph
     t.addEventListener('click', function(e) { e.stopPropagation(); onClick(); });
     return t;
   }
-  if (phaseFoldable && phaseName) {
+  if (phaseFoldable && phaseName !== null) {
     tags.push(makeTag(!tasksExpandedPhaseIds.has(phaseId), phaseName,
       'Click to expand sub-phases', 'Click to collapse sub-phases into one bar',
       function() { toggleTasksPhaseExpanded(phaseId); }));
@@ -6501,10 +6506,14 @@ function renderGantt() {
         // Only offered when the phase actually has 2+ real sub-phases —
         // folds/unfolds just THIS phase (tasksExpandedPhaseIds), same
         // condensed-bar mechanism Jobs/Leads view uses, just with its own
-        // independent (default-collapsed) state.
-        if (entry.collapsible && phaseName) {
+        // independent (default-collapsed) state. phaseName !== null (rather
+        // than just truthy) so an unnamed-but-real phase (see
+        // splitJobIntoPhases()/renameJobPhaseUI() — a phase's name can be
+        // blank) still gets this pill; null specifically means "no real
+        // phase here at all" (the synthetic default from getJobPhases()).
+        if (entry.collapsible && phaseName !== null) {
           const phaseFolded = !tasksExpandedPhaseIds.has(phaseId);
-          phasePillHtml = ' <span class="task-row-phasename collapsible" title="' + (phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') + '" style="background:' + jobColor + ';">' + (phaseFolded ? '▸ ' : '▾ ') + escapeHtml(phaseName) + '</span>';
+          phasePillHtml = ' <span class="task-row-phasename collapsible" title="' + (phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') + '" style="background:' + jobColor + ';">' + (phaseFolded ? '▸ ' : '▾ ') + (phaseName ? escapeHtml(phaseName) : 'Unnamed phase') + '</span>';
         }
         // Not shown on a whole-phase-collapsed row (task.isJobSpan with
         // collapsedSegments) — that row already stands for every
@@ -8151,9 +8160,14 @@ function renderJobPhaseStrip(job) {
     // being blocked, see deleteJobPhaseUI().
     const delBtn = '<span class="job-phase-chip-del" data-min-tier="projectAdmin" onclick="event.stopPropagation(); deleteJobPhaseUI(\'' + phase.id + '\')" title="' +
       (phases.length > 1 ? 'Delete phase' : 'Remove phasing (merge back into the job)') + '">×</span>';
+    // An unnamed phase (see splitJobIntoPhases()/renameJobPhaseUI()) shows a
+    // placeholder instead of an empty chip, styled like a real input
+    // placeholder so it reads as "click to name this" rather than a stray
+    // literal label.
+    const nameHtml = phase.name ? escapeHtml(phase.name) : '<span class="job-phase-chip-placeholder">Add name</span>';
     return '<span class="job-phase-chip' + (active ? ' active' : '') + '" onclick="selectJobPhase(\'' + phase.id + '\')" title="Click to select, click the pencil to rename">' +
       '<span class="job-card-board-dot" style="background:' + (col ? (col.color || '#3949ab') : '#ccc') + ';"></span>' +
-      escapeHtml(phase.name) +
+      nameHtml +
       '<span class="job-phase-chip-edit" data-min-tier="projectAdmin" onclick="event.stopPropagation(); renameJobPhaseUI(\'' + phase.id + '\')" title="Rename phase">✎</span>' +
       delBtn + '</span>';
   }).join('') + '<button type="button" class="job-phase-strip-btn" data-min-tier="projectAdmin" onclick="addJobPhaseUI()">+ Add Phase</button>';
@@ -8291,16 +8305,19 @@ function renameJobPhaseUI(phaseId) {
   if (!found) return;
   const phase = (found.job.phases || []).find(function(p) { return p.id === phaseId; });
   if (!phase) return;
-  const newName = window.prompt('Rename phase:', phase.name);
-  if (!newName || !newName.trim() || newName.trim() === phase.name) return;
-  phase.name = newName.trim();
+  const newName = window.prompt('Rename phase (leave blank to clear the name):', phase.name);
+  if (newName === null) return; // cancelled
+  const trimmed = newName.trim();
+  if (trimmed === (phase.name || '')) return; // unchanged
+  phase.name = trimmed;
   // Card titles default to "Job — Phase" — keep that in sync with the rename
   // rather than leaving it stale (ensureJobHasCards() only sets it when a
-  // card is first created, not on every load).
+  // card is first created, not on every load). No trailing " — " when the
+  // phase name is blank.
   const card = getPhaseCard(found.job, phaseId);
-  if (card) card.title = found.job.name + ' — ' + phase.name;
+  if (card) card.title = found.job.name + (phase.name ? ' — ' + phase.name : '');
   saveJobs();
-  logActivity('renamed phase to "' + phase.name + '" on job "' + found.job.name + '"');
+  logActivity('renamed phase to "' + (phase.name || '(blank)') + '" on job "' + found.job.name + '"');
   renderJobPhaseStrip(found.job);
   renderJobList();
   renderGantt();
