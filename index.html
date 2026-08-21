@@ -1958,6 +1958,17 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             </div>
           </div>
 
+          <!-- TEAM: see the matching section in the card modal above for
+               why pm/foreman/members live here instead of Custom Fields. -->
+          <div class="card-section mobile-collapsible">
+            <div class="card-section-header">
+              <h5 onclick="toggleMobileField(this)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Team</h5>
+            </div>
+            <div class="mobile-field-body">
+              <div class="custom-fields-grid" id="jmTeamFieldsGrid"></div>
+            </div>
+          </div>
+
           <!-- CUSTOM FIELDS -->
           <div class="card-section mobile-collapsible">
             <div class="card-section-header">
@@ -2319,6 +2330,17 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="color-presets" id="cardColorPresets"></div>
           </div>
         </div>
+      </div>
+
+      <!-- TEAM: Project Manager / Lead-Foreman / Members — pulled out of
+           Custom Fields into their own section since they're real-account
+           team assignments, not free-text job details. See
+           TEAM_FIELD_KEYS/renderTeamFieldsGrid(). -->
+      <div class="card-section">
+        <div class="card-section-header">
+          <h5><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Team</h5>
+        </div>
+        <div class="custom-fields-grid" id="teamFieldsGrid"></div>
       </div>
 
       <!-- CUSTOM FIELDS -->
@@ -3863,6 +3885,12 @@ const CUSTOM_FIELD_DEFS = [
   // renderManageFieldsBody()'s type filter.
   { key: 'members', label: 'Members', type: 'multiselect' }
 ];
+// pm/foreman/members render in their own "Team" section instead of
+// Custom Fields (see renderTeamFieldsGrid()/renderJobTeamFieldsGrid()) —
+// still defined in CUSTOM_FIELD_DEFS above and stored under the same
+// card.customFields keys, just filtered into a different grid at render
+// time. Nothing about storage/collection/visibility logic changes.
+const TEAM_FIELD_KEYS = ['pm', 'foreman', 'members'];
 let fieldOptions = {};
 
 // ===== PROJECT MANAGEMENT =====
@@ -8074,6 +8102,7 @@ function refreshJobFormIfOpen(jobId) {
   if (descEl) descEl.value = card.description || '';
   const primaryCard = getPrimaryPhaseCard(job);
   renderJobCustomFieldsGrid((primaryCard && primaryCard.customFields) || {});
+  renderJobTeamFieldsGrid((primaryCard && primaryCard.customFields) || {});
   ensureCardChecklists(card);
   jmDraftChecklists = JSON.parse(JSON.stringify(card.checklists || {}));
   jmDraftChecklistAssignees = JSON.parse(JSON.stringify(card.checklistAssignees || {}));
@@ -8352,6 +8381,7 @@ function renderJobFormForPhase(job) {
   document.getElementById('f_description').value = (phaseCard && phaseCard.description) || '';
   document.getElementById('f_due').value = (phaseCard && phaseCard.due) || '';
   renderJobCustomFieldsGrid((primaryCard && primaryCard.customFields) || {});
+  renderJobTeamFieldsGrid((primaryCard && primaryCard.customFields) || {});
   if (phaseCard) ensureCardChecklists(phaseCard);
   jmDraftChecklists = JSON.parse(JSON.stringify((phaseCard && phaseCard.checklists) || {}));
   jmDraftChecklistAssignees = JSON.parse(JSON.stringify((phaseCard && phaseCard.checklistAssignees) || {}));
@@ -8765,6 +8795,7 @@ function addNewJob() {
   jmActiveChecklistColumnId = BOARD_COLUMNS[0] ? BOARD_COLUMNS[0].id : null;
   jmDraftAttachments = [];
   renderJobCustomFieldsGrid({});
+  renderJobTeamFieldsGrid({});
   renderJobChecklistStageSelect();
   renderJobChecklistVisibilitySelect();
   renderJobChecklist();
@@ -9252,6 +9283,10 @@ function initJobFormAutosaveListeners() {
   const grid = document.getElementById('jmCustomFieldsGrid');
   grid.addEventListener('input', function(e) { if (e.target.dataset.field) scheduleAutoSaveJobForm(); });
   grid.addEventListener('change', function(e) { if (e.target.dataset.field) scheduleAutoSaveJobForm(); });
+
+  const teamGrid = document.getElementById('jmTeamFieldsGrid');
+  teamGrid.addEventListener('input', function(e) { if (e.target.dataset.field) scheduleAutoSaveJobForm(); });
+  teamGrid.addEventListener('change', function(e) { if (e.target.dataset.field) scheduleAutoSaveJobForm(); });
 
   // Leaving any field in the form (tab/click to another field, or away
   // entirely) flushes immediately instead of waiting out the debounce.
@@ -10778,61 +10813,83 @@ function toggleColorPanel(forceOpen) {
 }
 
 // ----- Custom fields -----
+// One shared per-field renderer for both grids (Team + Custom Fields) and
+// both surfaces (card modal + Job Manager) — `onNeedsRoster` is called
+// once the user-select/multiselect branches need to lazy-load
+// cachedUserRoster and re-render themselves; each caller passes its own
+// "re-render me with my current values" closure.
+function renderFieldDefHtml(def, val, onNeedsRoster) {
+  if (def.type === 'select') {
+    const opts = (fieldOptions[def.key] || []);
+    const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
+      '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
+    ).join('');
+    return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+  }
+  if (def.type === 'user-select') {
+    // Real-account single-select (PM/Foreman) — same roster source as
+    // Members' multiselect just below, but narrowed to Lead-classified
+    // accounts only via getLeadRoster() (see Manage Users' Classification
+    // field). Plain native <select>, safe here (unlike the app header's
+    // "View as" picker, which had to move off a native select — this one
+    // sits on a normal white modal background, not a colored gradient, so
+    // it doesn't hit that cross-browser closed-state styling issue).
+    if (!cachedUserRoster) {
+      ensureUserRosterLoaded().then(onNeedsRoster);
+      return '<div class="cf-field"><label>' + def.label + '</label><select disabled><option>Loading…</option></select></div>';
+    }
+    const optionsHtml = '<option value="">Select...</option>' + getLeadRoster(val).map(function(u) {
+      return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+    }).join('');
+    return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+  }
+  if (def.type === 'multiselect') {
+    // Backed by the REAL account roster (same one the "Visible to"
+    // checklist-stage picker uses — see ensureUserRosterLoaded()), not a
+    // free-text fieldOptions pool like a 'select' field — a Member has
+    // to be a real, matchable account for isJobVisibleToMe() to work.
+    // Checkbox value = username (what gets stored/matched), label =
+    // displayName. Lazy-loaded once per session; re-renders this same
+    // grid once it resolves.
+    const selected = Array.isArray(val) ? val : [];
+    if (!cachedUserRoster) {
+      ensureUserRosterLoaded().then(onNeedsRoster);
+      return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
+    }
+    const optionsHtml = cachedUserRoster.length
+      ? cachedUserRoster.map(u => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>').join('')
+      : '<span class="cf-multiselect-empty">No team accounts yet</span>';
+    return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect">' + optionsHtml + '</div></div>';
+  }
+  return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
+}
+
 function renderCustomFieldsGrid(values) {
   values = values || {};
   const grid = document.getElementById('customFieldsGrid');
-  grid.innerHTML = CUSTOM_FIELD_DEFS.map(def => {
-    const val = values[def.key] || '';
-    if (def.type === 'select') {
-      const opts = (fieldOptions[def.key] || []);
-      const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
-        '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
-      ).join('');
-      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
-    }
-    if (def.type === 'user-select') {
-      // Real-account single-select (PM/Foreman) — same roster source as
-      // Members' multiselect just below, but narrowed to Lead-classified
-      // accounts only via getLeadRoster() (see Manage Users' Classification
-      // field). Plain native <select>, safe here (unlike the app header's
-      // "View as" picker, which had to move off a native select — this one
-      // sits on a normal white modal background, not a colored gradient, so
-      // it doesn't hit that cross-browser closed-state styling issue).
-      if (!cachedUserRoster) {
-        ensureUserRosterLoaded().then(function() { renderCustomFieldsGrid(collectCustomFieldValues()); });
-        return '<div class="cf-field"><label>' + def.label + '</label><select disabled><option>Loading…</option></select></div>';
-      }
-      const optionsHtml = '<option value="">Select...</option>' + getLeadRoster(val).map(function(u) {
-        return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
-      }).join('');
-      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
-    }
-    if (def.type === 'multiselect') {
-      // Backed by the REAL account roster (same one the "Visible to"
-      // checklist-stage picker uses — see ensureUserRosterLoaded()), not a
-      // free-text fieldOptions pool like a 'select' field — a Member has
-      // to be a real, matchable account for isJobVisibleToMe() to work.
-      // Checkbox value = username (what gets stored/matched), label =
-      // displayName. Lazy-loaded once per session; re-renders this same
-      // grid once it resolves.
-      const selected = Array.isArray(val) ? val : [];
-      if (!cachedUserRoster) {
-        ensureUserRosterLoaded().then(function() { renderCustomFieldsGrid(collectCustomFieldValues()); });
-        return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
-      }
-      const optionsHtml = cachedUserRoster.length
-        ? cachedUserRoster.map(u => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>').join('')
-        : '<span class="cf-multiselect-empty">No team accounts yet</span>';
-      return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect">' + optionsHtml + '</div></div>';
-    }
-    return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
-  }).join('');
+  const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) === -1);
+  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderCustomFieldsGrid(collectCustomFieldValues()); })).join('');
   applyPermissionGating(); // rebuilt on every card-modal open, outside renderAll()'s own sweep
+}
+
+// Project Manager / Project Lead-Foreman / Members — split out of Custom
+// Fields into their own "Team" section (still CUSTOM_FIELD_DEFS entries,
+// still stored under the same card.customFields keys — see
+// TEAM_FIELD_KEYS). collectCustomFieldValues() reads [data-field] from
+// BOTH grids, so either one re-rendering after a lazy roster load still
+// collects the other grid's current values correctly.
+function renderTeamFieldsGrid(values) {
+  values = values || {};
+  const grid = document.getElementById('teamFieldsGrid');
+  if (!grid) return;
+  const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) !== -1);
+  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderTeamFieldsGrid(collectCustomFieldValues()); })).join('');
+  applyPermissionGating();
 }
 
 function collectCustomFieldValues() {
   const values = {};
-  document.querySelectorAll('#customFieldsGrid [data-field]').forEach(el => {
+  document.querySelectorAll('#customFieldsGrid [data-field], #teamFieldsGrid [data-field]').forEach(el => {
     if (el.type === 'checkbox') {
       if (!values[el.dataset.field]) values[el.dataset.field] = [];
       if (el.checked) values[el.dataset.field].push(el.value);
@@ -10851,48 +10908,25 @@ function renderJobCustomFieldsGrid(values) {
   values = values || {};
   const grid = document.getElementById('jmCustomFieldsGrid');
   if (!grid) return;
-  grid.innerHTML = CUSTOM_FIELD_DEFS.map(def => {
-    const val = values[def.key] || '';
-    if (def.type === 'select') {
-      const opts = (fieldOptions[def.key] || []);
-      const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
-        '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
-      ).join('');
-      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
-    }
-    if (def.type === 'user-select') {
-      // See the matching branch in renderCustomFieldsGrid() above — real
-      // account roster single-select (PM/Foreman).
-      if (!cachedUserRoster) {
-        ensureUserRosterLoaded().then(function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); });
-        return '<div class="cf-field"><label>' + def.label + '</label><select disabled><option>Loading…</option></select></div>';
-      }
-      const optionsHtml = '<option value="">Select...</option>' + getLeadRoster(val).map(function(u) {
-        return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
-      }).join('');
-      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
-    }
-    if (def.type === 'multiselect') {
-      // See the matching branch in renderCustomFieldsGrid() above — real
-      // account roster, not free text.
-      const selected = Array.isArray(val) ? val : [];
-      if (!cachedUserRoster) {
-        ensureUserRosterLoaded().then(function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); });
-        return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
-      }
-      const optionsHtml = cachedUserRoster.length
-        ? cachedUserRoster.map(u => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>').join('')
-        : '<span class="cf-multiselect-empty">No team accounts yet</span>';
-      return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect">' + optionsHtml + '</div></div>';
-    }
-    return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
-  }).join('');
+  const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) === -1);
+  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); })).join('');
   applyPermissionGating(); // rebuilt on every job-form open, outside renderAll()'s own sweep
+}
+
+// See renderTeamFieldsGrid() above for why pm/foreman/members are split
+// out here.
+function renderJobTeamFieldsGrid(values) {
+  values = values || {};
+  const grid = document.getElementById('jmTeamFieldsGrid');
+  if (!grid) return;
+  const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) !== -1);
+  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderJobTeamFieldsGrid(collectJobCustomFieldValues()); })).join('');
+  applyPermissionGating();
 }
 
 function collectJobCustomFieldValues() {
   const values = {};
-  document.querySelectorAll('#jmCustomFieldsGrid [data-field]').forEach(el => {
+  document.querySelectorAll('#jmCustomFieldsGrid [data-field], #jmTeamFieldsGrid [data-field]').forEach(el => {
     if (el.type === 'checkbox') {
       if (!values[el.dataset.field]) values[el.dataset.field] = [];
       if (el.checked) values[el.dataset.field].push(el.value);
@@ -11182,7 +11216,9 @@ function closeManageFields() {
   // newly added/removed checklist assignee shows up in an open item's
   // dropdown immediately instead of only after reopening.
   if (document.getElementById('customFieldsGrid')) renderCustomFieldsGrid(collectCustomFieldValues());
+  if (document.getElementById('teamFieldsGrid')) renderTeamFieldsGrid(collectCustomFieldValues());
   if (document.getElementById('jmCustomFieldsGrid')) renderJobCustomFieldsGrid(collectJobCustomFieldValues());
+  if (document.getElementById('jmTeamFieldsGrid')) renderJobTeamFieldsGrid(collectJobCustomFieldValues());
   if (document.getElementById('checklistItems')) renderChecklist();
   if (document.getElementById('jmChecklistItems')) renderJobChecklist();
 }
@@ -11647,6 +11683,7 @@ function openEditCard(id) {
   updateColorSwatch();
   toggleColorPanel(false);
   renderCustomFieldsGrid(card.customFields || {});
+  renderTeamFieldsGrid(card.customFields || {});
   renderChecklistStageSelect();
   renderChecklistVisibilitySelect();
   renderChecklist();
@@ -11738,6 +11775,10 @@ function initCardFormAutosaveListeners() {
   const grid = document.getElementById('customFieldsGrid');
   grid.addEventListener('input', function(e) { if (e.target.dataset.field) scheduleCardAutosave(); });
   grid.addEventListener('change', function(e) { if (e.target.dataset.field) scheduleCardAutosave(); });
+
+  const teamGrid = document.getElementById('teamFieldsGrid');
+  teamGrid.addEventListener('input', function(e) { if (e.target.dataset.field) scheduleCardAutosave(); });
+  teamGrid.addEventListener('change', function(e) { if (e.target.dataset.field) scheduleCardAutosave(); });
 
   document.getElementById('cardModal').addEventListener('focusout', flushCardAutosave);
 }
