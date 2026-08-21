@@ -4358,6 +4358,10 @@ function getOtherFixedProjectId(projectId) {
 // data (tasks/phases) tagged so every render seam can treat it as a
 // normal-but-read-only row.
 function getLinkedReferenceJobs() {
+  // Admin/Project Admin only — a stale "on" flag from before a tier
+  // downgrade (see toggleJobLinkEnabledUI()) shouldn't keep leaking a
+  // linked job in here.
+  if (!hasMinTier('projectAdmin')) return [];
   return jobs.reduce(function(acc, job) {
     if (!job.link || !isLinkEnabledLocally(job.id)) return acc;
     const otherProj = projects[job.link.projectId];
@@ -8471,7 +8475,7 @@ function renderJobLinkSection(job) {
     const projLabel = otherProj ? otherProj.name : '';
     body.innerHTML = '<div class="job-link-active-row">' +
       '<span class="job-link-name" title="' + escapeHtml(label + (projLabel ? ' (' + projLabel + ')' : '')) + '">🔗 ' + escapeHtml(label) + (projLabel ? ' <span style="opacity:0.65;">(' + escapeHtml(projLabel) + ')</span>' : '') + '</span>' +
-      '<span class="board-col-gantt-switch' + (isLinkEnabledLocally(job.id) ? ' on' : '') + '" onclick="toggleJobLinkEnabledUI()" title="Show on the other project\'s Gantt & Calendar (just for you — this doesn\'t change what anyone else sees)"><span class="knob"></span></span>' +
+      '<span class="board-col-gantt-switch' + (isLinkEnabledLocally(job.id) ? ' on' : '') + '" data-min-tier="projectAdmin" onclick="toggleJobLinkEnabledUI()" title="Show on the other project\'s Gantt & Calendar (just for you — this doesn\'t change what anyone else sees)"><span class="knob"></span></span>' +
       '<button type="button" class="btn btn-secondary" data-min-tier="projectAdmin" style="padding:4px 10px;font-size:11px;" onclick="unlinkJobUI()">Unlink</button>' +
       '</div>';
     applyPermissionGating();
@@ -8526,6 +8530,11 @@ function confirmJobLinkUI(otherProjectId) {
 }
 
 function toggleJobLinkEnabledUI() {
+  // Defense-in-depth matching the switch's own data-min-tier hide above —
+  // per the user, showing a linked job on your own Gantt/Calendar is
+  // Admin/Project Admin only (creating the link itself was already
+  // projectAdmin-gated — see confirmJobLinkUI()).
+  if (!hasMinTier('projectAdmin')) return;
   const found = editingJobId && findJob(editingJobId);
   if (!found || !found.job.link) return;
   const newState = !isLinkEnabledLocally(found.job.id);
