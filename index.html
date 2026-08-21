@@ -6288,7 +6288,8 @@ function renderGantt() {
         getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
           const subPhaseName = subUnit.isDefault ? null : subUnit.name;
           const subKey = getSubUnitKey(job, phase.id, subUnit.id);
-          if (collapsedSubPhaseIds.has(subKey)) {
+          const subCollapsed = collapsedSubPhaseIds.has(subKey);
+          if (subCollapsed) {
             const seg = buildSegment(subUnit);
             if (seg) rows.push(buildSubPhaseRow(job, phase, seg));
           } else {
@@ -6306,8 +6307,13 @@ function renderGantt() {
           // project, not this one's boardCards — nothing to fetch here.
           // Sub-phases never have their own card either, so the due marker
           // only ever shows on the FIRST sub-unit's row — real or synthetic
-          // default — never duplicated across every sub-phase.
-          if (!job.isLinkedReference && subIdx === 0) {
+          // default — never duplicated across every sub-phase. A COLLAPSED
+          // first sub-unit already carries its own due marker inline (see
+          // the isJobSpan branch in the draw loop below, which attaches the
+          // flag straight to the end of that sub-unit's own condensed bar)
+          // — pushing a second, separate due-marker row here on top of that
+          // would just duplicate it as an extra dropped-down line.
+          if (!job.isLinkedReference && subIdx === 0 && !subCollapsed) {
             const dueTask = getJobDueMarkerTask(job, phase.id);
             if (dueTask) rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName, collapsible: collapsible });
           }
