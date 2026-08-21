@@ -3422,6 +3422,10 @@ function syncGanttViewModeButtons() {
 }
 
 function setGanttViewMode(mode) {
+  // Defense-in-depth to match the button's own hide (see
+  // applyPermissionGating()) — belt-and-suspenders in case this ever gets
+  // triggered some other way than clicking the (already-hidden) tab.
+  if (mode === 'leads' && !hasMinTier('projectAdmin')) return;
   ganttViewMode = mode;
   localStorage.setItem('gantt_view_mode_v1', mode);
   syncGanttViewModeButtons();
@@ -4195,6 +4199,16 @@ function applyPermissionGating() {
   // wrong regardless of tier).
   const addJobBtn = document.querySelector('.job-rail-add-btn');
   if (addJobBtn) addJobBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
+  // Gantt "Jobs" tab (condensed one-bar-per-job view, colored by lead) —
+  // Project Admin and up only. Full-hide, not just disable, same reasoning
+  // as the other tab/nav-style buttons above — a greyed-out tab in an
+  // otherwise-normal-looking strip reads as broken. See the matching
+  // guard in setGanttViewMode() for what happens if a user already has
+  // 'leads' left over in their own browser's localStorage from before a
+  // tier downgrade — they can still get back via the always-visible "All
+  // Jobs" tab.
+  const ganttViewLeadsBtn = document.getElementById('ganttViewLeads');
+  if (ganttViewLeadsBtn) ganttViewLeadsBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
   ['deleteBtn', 'duplicateJobBtn'].forEach(function(id) {
     const el = document.getElementById(id);
     if (el && !hasMinTier('projectAdmin')) el.style.display = 'none';
