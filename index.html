@@ -3779,6 +3779,15 @@ let userRosterLoadError = null;
 // newIsLead). If a job's already-stored value belongs to an account that
 // isn't (or is no longer) a Lead, keep it in the list anyway so the
 // dropdown doesn't silently blank out an existing pick.
+// pm/foreman ('user-select' fields) store a USERNAME, not a display name —
+// resolve it for display purposes (board card face, etc.). Falls back to
+// the raw username if the roster hasn't loaded yet or the account is gone,
+// same defensive fallback getLeadRoster() uses.
+function displayNameForUsername(username) {
+  const match = (cachedUserRoster || []).find(function(u) { return u.username === username; });
+  return match ? match.displayName : username;
+}
+
 function getLeadRoster(currentValueUsername) {
   const roster = cachedUserRoster || [];
   const leads = roster.filter(function(u) { return u.isLead; });
@@ -10257,6 +10266,15 @@ function renderBoard() {
   // renderAll()'s call (harmless — this is a cheap, idempotent DOM sweep)
   // but is what actually closes the gap for every other call site.
   applyPermissionGating();
+
+  // PM/Foreman lines on card faces resolve a username to a display name
+  // via displayNameForUsername() — if the roster hasn't loaded yet, that
+  // falls back to showing the raw username. Kick off the (cached-after-
+  // first-success) load here and re-render once it resolves so those
+  // lines correct themselves rather than staying wrong for the session.
+  if (!cachedUserRoster) {
+    ensureUserRosterLoaded().then(function() { renderBoard(); });
+  }
 }
 
 function buildCardEl(card) {
@@ -10281,17 +10299,20 @@ function buildCardEl(card) {
     badges.push('<span class="board-card-due' + (isOverdue ? ' overdue' : '') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + dueLabel + '</span>');
   }
 
+  // Plain "Label: value" text rows (Trello-style) instead of icon
+  // pills/badges — driven straight off CUSTOM_FIELD_DEFS so a field's
+  // label here always matches its label in the Team/Custom Fields forms.
+  // 'members' is skipped (would be a long name list, not a fit for a
+  // single line on the card face).
   const cf = card.customFields || {};
-  const cfBadges = [];
-  if (cf.pm) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" fill="#3949ab"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" fill="#3949ab"/></svg> ' + escapeHtml(cf.pm) + '</span>');
-  if (cf.foreman) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M17 3a5 5 0 00-6.6 6l-7 7 2.6 2.6 7-7A5 5 0 0017 3z" fill="#78909c"/></svg> ' + escapeHtml(cf.foreman) + '</span>');
-  if (cf.jobType) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#7e57c2"/><circle cx="8" cy="8" r="1.6" fill="#fff"/></svg> ' + escapeHtml(cf.jobType) + '</span>');
-  if (cf.timeframe) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + escapeHtml(cf.timeframe) + '</span>');
-  if (cf.incentivePeriod) cfBadges.push('<span class="cf-pill"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><text x="12" y="16.3" font-size="11" font-weight="700" fill="#fff" text-anchor="middle" font-family="Arial,sans-serif">$</text></svg> ' + escapeHtml(cf.incentivePeriod) + '</span>');
-
-  const metaLines = [];
-  if (cf.poNumber) metaLines.push('<div class="board-card-meta-line"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> ' + escapeHtml(cf.poNumber) + '</div>');
-  if (cf.location) metaLines.push('<div class="board-card-meta-line"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg> ' + escapeHtml(cf.location) + '</div>');
+  const cfLines = [];
+  CUSTOM_FIELD_DEFS.forEach(function(def) {
+    if (def.key === 'members') return;
+    let val = cf[def.key];
+    if (!val) return;
+    if (def.type === 'user-select') val = displayNameForUsername(val);
+    cfLines.push('<div class="board-card-meta-line">' + escapeHtml(def.label) + ': ' + escapeHtml(val) + '</div>');
+  });
 
   // Current stage's checklist only — a pure read (no lazy-seed/write here,
   // this renders on every board paint and could race a remote sync if it
@@ -10329,8 +10350,7 @@ function buildCardEl(card) {
   el.innerHTML = overrideBadge +
     '<div class="board-card-title">' + escapeHtml(card.title) + '</div>' +
     (card.description ? '<div class="board-card-desc">' + escapeHtml(card.description) + '</div>' : '') +
-    (metaLines.length ? '<div class="board-card-meta">' + metaLines.join('') + '</div>' : '') +
-    (cfBadges.length ? '<div class="board-card-badges">' + cfBadges.join('') + '</div>' : '') +
+    (cfLines.length ? '<div class="board-card-meta">' + cfLines.join('') + '</div>' : '') +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;position:relative;">' +
       (badges.length ? '<div class="board-card-badges">' + badges.join('') + '</div>' : '<div></div>') +
       '<div style="position:relative;">' +
