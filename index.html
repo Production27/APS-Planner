@@ -1848,9 +1848,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
              .left-panel's border-right/box-shadow cut through). -->
         <div class="gantt-top-row">
           <div class="gantt-view-toggle-row">
-            <button class="gantt-view-mode-btn active" id="ganttViewTasks" data-mode="tasks" onclick="setGanttViewMode('tasks')" title="One row per task (current behavior)">Tasks</button>
-            <button class="gantt-view-mode-btn" id="ganttViewJobs" data-mode="jobs" onclick="setGanttViewMode('jobs')" title="One row per job, tasks condensed into a single bar">Jobs</button>
-            <button class="gantt-view-mode-btn" id="ganttViewLeads" data-mode="leads" onclick="setGanttViewMode('leads')" title="Same as Jobs, colored by assigned lead/foreman">Leads</button>
+            <button class="gantt-view-mode-btn active" id="ganttViewTasks" data-mode="tasks" onclick="setGanttViewMode('tasks')" title="One row per task/phase/sub-phase, per-job collapse (current behavior)">Tasks</button>
+            <button class="gantt-view-mode-btn" id="ganttViewLeads" data-mode="leads" onclick="setGanttViewMode('leads')" title="One row per job, tasks condensed into a single bar, colored by assigned lead/foreman">Leads</button>
           </div>
           <div class="gantt-toolbar" id="ganttToolbar">
             <div style="position:relative;">
@@ -3355,12 +3354,18 @@ let deleteTargetJobId = null;
 let showArchived = false;
 
 // ===== GANTT VIEW MODE =====
-// 'tasks' (default, one row per task — unchanged behavior), 'jobs' (one
-// row per job, tasks condensed into a single bar spanning the job's
-// earliest start to latest finish), 'leads' (same condensed bars as
-// 'jobs', colored by the job's assigned lead/foreman instead of the
-// job's own color). See buildCondensedJobRows() in renderGantt().
+// 'tasks' (default — one row per task, with its own per-phase/per-sub-phase
+// collapse, see tasksExpandedPhaseIds/tasksExpandedSubPhaseIds above),
+// 'leads' (one row per job, tasks condensed into a single bar spanning the
+// job's earliest start to latest finish, colored by the job's assigned
+// lead/foreman). See buildCondensedJobRows() in renderGantt(). A plain
+// 'jobs' condensed-by-color mode used to exist as a third option here —
+// removed once Tasks view's own per-job/phase/sub-phase collapse made it
+// redundant; a stale 'jobs' value already in a returning user's
+// localStorage falls back to 'tasks' rather than landing on a mode with no
+// button to reach it anymore.
 let ganttViewMode = localStorage.getItem('gantt_view_mode_v1') || 'tasks';
+if (ganttViewMode === 'jobs') ganttViewMode = 'tasks';
 
 // Foreman/lead lives on the job's linked card's custom fields (see
 // CUSTOM_FIELD_DEFS), not on the job itself — cards carry the same
@@ -3389,7 +3394,7 @@ function syncGanttViewModeButtons() {
   });
   const colHeader = document.getElementById('ganttTaskColHeader');
   if (colHeader) {
-    colHeader.textContent = ganttViewMode === 'jobs' ? 'Jobs' : ganttViewMode === 'leads' ? 'Leads' : 'Task';
+    colHeader.textContent = ganttViewMode === 'leads' ? 'Leads' : 'Task';
   }
 }
 
