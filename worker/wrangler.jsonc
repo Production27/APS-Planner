@@ -1,0 +1,45 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "aps-planner-staging",
+  "main": "aps-do-worker.js",
+  "account_id": "db3e99d72e71b2d451e20061e3ff3625",
+  "compatibility_date": "2026-08-01",
+
+  // Matches the currently deployed script exactly (confirmed via the
+  // Cloudflare API's /workers/scripts/aps-planner-staging/settings and
+  // /workers/durable_objects/namespaces before this file was written —
+  // see worker/README.md for the manual-paste deploy history this is
+  // adopting). Do not add a `vars` block without also setting
+  // `keep_vars: true` first — wrangler treats this file as the source of
+  // truth and will delete any dashboard-set vars not listed here.
+  "keep_vars": true,
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "APS_ROOM", "class_name": "ApsRoom" }
+    ]
+  },
+  // Declarative adoption of the ALREADY-EXISTING ApsRoom namespace
+  // (created via the dashboard, not wrangler) — mutually exclusive with
+  // `migrations`. storage must be "sqlite" to match what's actually
+  // provisioned (confirmed via the API: use_sqlite: true) — this field
+  // is immutable once a namespace exists, so getting it wrong fails
+  // deploy validation rather than silently doing the wrong thing.
+  "exports": {
+    "ApsRoom": { "type": "durable-object", "state": "created", "storage": "sqlite" }
+  },
+
+  "r2_buckets": [
+    { "binding": "BACKUP_BUCKET", "bucket_name": "aps-planner-backups" }
+  ],
+  "kv_namespaces": [
+    { "binding": "USERS_KV", "id": "1bfbded278d54b2ea1789fe4d8cceb2f" }
+  ]
+
+  // ROOM_TOKEN_SECRET and TEAM_PASSWORD are Worker secrets (set via
+  // `wrangler secret put` or the dashboard's "Encrypt" toggle) — they are
+  // NOT declared here on purpose. Secrets live outside this config file's
+  // source-of-truth model and survive a `wrangler deploy` automatically;
+  // there is no field in wrangler.jsonc that would let us "declare but
+  // not set" one, so the correct move is to just leave them out.
+}
