@@ -4557,6 +4557,11 @@ function hideFreshLoadOverlay() {
 function init() {
   loadProjects();
   enforceFixedProjectSet();
+  // Catches a stray empty "Untitled Project" already sitting in this
+  // browser's own local data (from before a fresh snapshot even arrives) —
+  // see pruneStrayEmptyProjects(). Safe to call this early: sendRoomMessage()
+  // queues the removal and replays it once the socket actually connects.
+  pruneStrayEmptyProjects();
   if (freshLocalSeed) showFreshLoadOverlay();
   loadLinkEnabledPref();
   loadDarkModePref();
@@ -12563,6 +12568,11 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
     listChanged = true;
   });
 
+  // See pruneStrayEmptyProjects() — catches a stray empty "Untitled
+  // Project" as soon as it syncs down, before it has a chance to "pop up"
+  // in the project switcher at all.
+  pruneStrayEmptyProjects();
+
   saveProjects();
 
   if (isFirstSnapshot) {
@@ -12651,6 +12661,32 @@ function pushProjectToShared(projectId, headerOverride) {
 // removeProjectFromShared('some-stray-project-id').
 function removeProjectFromShared(projectId) {
   sendRoomMessage({ type: 'removeProject', projectId: projectId });
+}
+
+// A rare sync race (see the comment above enforceFixedProjectSet()'s
+// caller — a stray empty "Untitled Project" reached production once
+// already) can leave a genuinely empty, still-default-named "Untitled
+// Project" sitting in the shared room. This app is fixed to exactly two
+// projects and has no user-facing way to delete one (see deleteProject()'s
+// no-op), so instead of leaving it to keep syncing down to every client
+// forever, prune it automatically on every snapshot: remove it locally AND
+// tell the shared room to drop it too (removeProjectFromShared()) so it
+// doesn't just reappear on the next one. Deliberately narrow — only ever
+// touches a project that's BOTH named exactly the untouched default AND
+// has no real data on it, and never the one currently being viewed, so a
+// legitimately (if oddly) named or populated project is never at risk.
+function pruneStrayEmptyProjects() {
+  Object.keys(projects).forEach(function(id) {
+    const p = projects[id];
+    if (!p || p.name !== 'Untitled Project' || id === activeProjectId) return;
+    const isEmpty = (!p.jobs || !p.jobs.length) && (!p.boardCards || !p.boardCards.length) && (!p.calendarEvents || !p.calendarEvents.length);
+    if (!isEmpty) return;
+    console.warn('Pruning a stray empty "Untitled Project" (id ' + id + ')');
+    delete projects[id];
+    saveProjects();
+    removeProjectFromShared(id);
+    updateProjectToggle();
+  });
 }
 
 // Explicit, targeted deletes for one job/card/calendar event — the only
