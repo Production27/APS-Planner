@@ -10829,12 +10829,10 @@ function collectJobCustomFieldValues() {
   return values;
 }
 
-// Builds the <option>s for the stage <select> above the list, and for the
-// per-item assignee <select> — BOARD_COLUMNS for the former,
-// fieldOptions.checklistAssignee (the roster managed from inside Manage
-// Custom Fields — see renderManageFieldsBody()) for the latter.
-// Stages a stage's whole checklist is private away from this viewer just
-// don't appear here at all — see isChecklistStageVisibleToMe().
+// Builds the <option>s for the stage <select> above the list, from
+// BOARD_COLUMNS. Stages a stage's whole checklist is private away from
+// this viewer just don't appear here at all — see
+// isChecklistStageVisibleToMe().
 function renderJobChecklistStageSelect() {
   const sel = document.getElementById('jmChecklistStageSelect');
   if (!sel) return;
@@ -10936,11 +10934,17 @@ function renderJobChecklist() {
   // render or count — getChecklistForStage() itself has to keep returning
   // them (unfiltered) so id-based lookups below still find them.
   const items = visibleChecklistItems(jmDraftChecklists, jmActiveChecklistColumnId);
-  const assignees = fieldOptions.checklistAssignee || [];
+  // See renderChecklist() (the Board card modal's twin) — per-item
+  // assignee is a real account (cachedUserRoster) now, not the old
+  // free-text fieldOptions.checklistAssignee pool.
+  const roster = cachedUserRoster || [];
   container.innerHTML = items.map(function(item) {
-    const options = '<option value="">Unassigned</option>' + assignees.map(function(a) {
-      return '<option value="' + escapeHtml(a) + '"' + (item.assignee === a ? ' selected' : '') + '>' + escapeHtml(a) + '</option>';
-    }).join('');
+    const hasCurrentInRoster = !item.assignee || roster.some(function(u) { return u.username === item.assignee; });
+    const options = '<option value="">Unassigned</option>' +
+      roster.map(function(u) {
+        return '<option value="' + escapeHtml(u.username) + '"' + (item.assignee === u.username ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+      }).join('') +
+      (hasCurrentInRoster ? '' : '<option value="' + escapeHtml(item.assignee) + '" selected>' + escapeHtml(item.assignee) + '</option>');
     // item.id is quoted — template-sourced items reuse the template's own
     // genId() STRING id (see getChecklistForStage()), and an unquoted
     // hyphenated string here would be broken JS in the onchange/onclick
@@ -10960,6 +10964,11 @@ function renderJobChecklist() {
   document.getElementById('jmChecklistProgressFill').style.width = pct + '%';
   document.getElementById('jmChecklistProgressPct').textContent = pct + '%';
   applyPermissionGating(); // rebuilt on every checklist edit, outside renderAll()'s own sweep
+  if (!cachedUserRoster) {
+    ensureUserRosterLoaded().then(function() {
+      if (document.getElementById('jmChecklistItems')) renderJobChecklist();
+    });
+  }
 }
 
 function addJobChecklistItem() {
@@ -11121,8 +11130,8 @@ function closeManageFields() {
   saveFieldOptions();
   // Both the card modal and Job Manager can have this open behind it —
   // refresh whichever grid(s)/checklist(s) actually exist right now, so a
-  // newly added/removed checklist assignee shows up in an open item's
-  // dropdown immediately instead of only after reopening.
+  // newly added/removed option (Job Type, Timeframe, etc.) shows up in an
+  // open field's dropdown immediately instead of only after reopening.
   if (document.getElementById('customFieldsGrid')) renderCustomFieldsGrid(collectCustomFieldValues());
   if (document.getElementById('teamFieldsGrid')) renderTeamFieldsGrid(collectCustomFieldValues());
   if (document.getElementById('jmCustomFieldsGrid')) renderJobCustomFieldsGrid(collectJobCustomFieldValues());
@@ -11136,14 +11145,12 @@ function renderManageFieldsBody() {
   // 'multiselect' (Members) is deliberately excluded — it's backed by the
   // real account roster (see renderCustomFieldsGrid()), not a free-text
   // fieldOptions pool, so there's nothing here to add/remove; who's
-  // addable is managed via Manage Users instead.
+  // addable is managed via Manage Users instead. Checklist item assignees
+  // (the .ci-assignee dropdown in renderChecklist()/renderJobChecklist())
+  // used to be a free-text pool managed here too, but now use the same
+  // real account roster — nothing to manage here for that either.
   const selectDefs = CUSTOM_FIELD_DEFS.filter(d => d.type === 'select');
   const groups = selectDefs.map(def => buildManageFieldGroup(def.key, def.label));
-  // Checklist item assignees — not a job-form field like the groups above
-  // (see CUSTOM_FIELD_DEFS), just a shared roster checklist items can be
-  // assigned to (see the .ci-assignee dropdown in renderChecklist()/
-  // renderJobChecklist()). Reuses the exact same option-list editor.
-  groups.push(buildManageFieldGroup('checklistAssignee', 'Checklist Assignees'));
   container.innerHTML = groups.join('');
 }
 
@@ -11334,11 +11341,20 @@ function renderChecklist() {
   // or count — getChecklistForStage() itself has to keep returning them
   // (unfiltered) so id-based lookups below still find them.
   const items = visibleChecklistItems(draftChecklists, activeChecklistColumnId);
-  const assignees = fieldOptions.checklistAssignee || [];
+  // Per-item assignee is a real account now (cachedUserRoster), not the
+  // old free-text fieldOptions.checklistAssignee pool — same reasoning as
+  // PM/Foreman's switch. item.assignee stores a username; renders
+  // immediately with whatever roster is cached (possibly empty), then
+  // re-renders once it resolves, same idiom as every other roster-backed
+  // picker in this app.
+  const roster = cachedUserRoster || [];
   container.innerHTML = items.map(function(item) {
-    const options = '<option value="">Unassigned</option>' + assignees.map(function(a) {
-      return '<option value="' + escapeHtml(a) + '"' + (item.assignee === a ? ' selected' : '') + '>' + escapeHtml(a) + '</option>';
-    }).join('');
+    const hasCurrentInRoster = !item.assignee || roster.some(function(u) { return u.username === item.assignee; });
+    const options = '<option value="">Unassigned</option>' +
+      roster.map(function(u) {
+        return '<option value="' + escapeHtml(u.username) + '"' + (item.assignee === u.username ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+      }).join('') +
+      (hasCurrentInRoster ? '' : '<option value="' + escapeHtml(item.assignee) + '" selected>' + escapeHtml(item.assignee) + '</option>');
     // item.id is quoted — template-sourced items reuse the template's own
     // genId() STRING id (see getChecklistForStage()), and an unquoted
     // hyphenated string here would be broken JS in the onchange/onclick
@@ -11358,6 +11374,11 @@ function renderChecklist() {
   document.getElementById('checklistProgressFill').style.width = pct + '%';
   document.getElementById('checklistProgressPct').textContent = pct + '%';
   applyPermissionGating(); // rebuilt on every checklist edit, outside renderAll()'s own sweep
+  if (!cachedUserRoster) {
+    ensureUserRosterLoaded().then(function() {
+      if (document.getElementById('checklistItems')) renderChecklist();
+    });
+  }
 }
 
 function addChecklistItem() {
