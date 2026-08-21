@@ -71,17 +71,34 @@
     outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
   }
   .header-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
-  /* Admin-only "View as a member" picker — see setViewAs(). Styled to sit
-     on the header's own colored gradient background, matching the
-     translucent-white treatment other header controls (e.g.
-     .settings-dots-btn) already use there. */
-  .view-as-select {
+  /* Admin-only "View as a member" picker — see setViewAs(). A custom
+     button+dropdown (like .settings-menu-wrap right next to it), not a
+     native <select> — a native select's closed-state background/text
+     can't be reliably restyled cross-browser (confirmed broken: showed up
+     as an unreadable solid block), so this reuses the exact same
+     known-working pattern .settings-dropdown already uses. */
+  .view-as-wrap { position: relative; }
+  .view-as-toggle-btn {
     background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.35); color: #fff;
-    font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 6px; cursor: pointer;
-    max-width: 150px; outline: none; transition: background 0.15s;
+    font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 6px; cursor: pointer;
+    display: flex; align-items: center; white-space: nowrap; max-width: 140px; overflow: hidden;
+    text-overflow: ellipsis; transition: background 0.15s;
   }
-  .view-as-select:hover { background: rgba(255,255,255,0.22); }
-  .view-as-select option { color: #000; }
+  .view-as-toggle-btn:hover { background: rgba(255,255,255,0.22); }
+  .view-as-toggle-btn.active { background: rgba(255,255,255,0.3); }
+  .view-as-dropdown {
+    position: absolute; top: calc(100% + 8px); left: 0; background: white; color: var(--text);
+    border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 190px; max-height: 320px;
+    overflow-y: auto; padding: 6px; display: none; z-index: 200;
+  }
+  .view-as-dropdown.show { display: block; }
+  .view-as-dropdown-item {
+    padding: 9px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 600;
+    color: var(--text); cursor: pointer; transition: background 0.15s;
+  }
+  .view-as-dropdown-item:hover { background: #eef1fa; color: var(--primary); }
+  .view-as-dropdown-item.active { background: rgba(57,73,171,0.1); color: var(--primary); }
+  .view-as-dropdown-empty { padding: 9px 12px; font-size: 11.5px; color: #999; }
   /* ===== PRESENCE AVATARS ===== */
   .presence-avatars { display: flex; align-items: center; }
   .presence-avatar {
@@ -1510,6 +1527,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode ::-webkit-scrollbar-thumb { background: #404656 !important; }
 
   body.dark-mode .settings-dropdown,
+  body.dark-mode .view-as-dropdown,
   body.dark-mode .date-popover,
   body.dark-mode .job-card,
   body.dark-mode .board-card,
@@ -1632,6 +1650,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .color-toggle-row:hover { background: rgba(255,255,255,0.05); }
 
   body.dark-mode .settings-dropdown-item:hover { background: rgba(57,73,171,0.2); }
+  body.dark-mode .view-as-dropdown-item:hover { background: rgba(57,73,171,0.2); }
   body.dark-mode .project-toggle-btn { border-color: rgba(255,255,255,0.35); }
   body.dark-mode .project-toggle-btn:hover { border-color: rgba(255,255,255,0.6); }
   body.dark-mode .settings-dropdown-divider { background: var(--border); }
@@ -1705,7 +1724,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
          Manager, Board, Calendar, Gantt) exactly as a specific Member
          would see it, without changing what that member — or anyone
          else — actually sees. -->
-    <select class="view-as-select" id="viewAsSelect" onchange="setViewAs(this.value)" title="View the whole app as a specific member (Admin only)"></select>
+    <div class="view-as-wrap" id="viewAsWrap">
+      <button class="view-as-toggle-btn" id="viewAsToggleBtn" onclick="toggleViewAsDropdown(event)" title="View the whole app as a specific member (Admin only)">
+        <svg viewBox="0 0 24 24" width="13" height="13" style="vertical-align:-2px;margin-right:4px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="3.5" fill="currentColor" opacity="0.85"/><path d="M4.5 19c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.85"/></svg><span id="viewAsToggleLabel">View as</span>
+      </button>
+      <div class="view-as-dropdown" id="viewAsDropdown"></div>
+    </div>
     <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
     <button class="activity-toggle-btn" id="activityToggleBtn" onclick="toggleActivitySidebar()" title="Activity Log"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button>
     <div class="settings-menu-wrap">
@@ -3694,21 +3718,58 @@ let viewAsUsername = null;
 function setViewAs(username) {
   if (currentUserRole !== 'admin') return;
   viewAsUsername = username || null;
+  closeViewAsDropdown();
   renderAll();
 }
-function renderViewAsSelect() {
-  const sel = document.getElementById('viewAsSelect');
-  if (!sel || currentUserRole !== 'admin') return;
+function toggleViewAsDropdown(event) {
+  event.stopPropagation();
+  if (currentUserRole !== 'admin') return;
+  const dd = document.getElementById('viewAsDropdown');
+  if (!dd) return;
+  const isOpen = dd.classList.contains('show');
+  closeAllDropdowns();
+  if (!isOpen) {
+    dd.classList.add('show');
+    renderViewAsDropdown();
+  }
+}
+function closeViewAsDropdown() {
+  const dd = document.getElementById('viewAsDropdown');
+  if (dd) dd.classList.remove('show');
+}
+function renderViewAsDropdown() {
+  const dd = document.getElementById('viewAsDropdown');
+  if (!dd) return;
   if (!cachedUserRoster) {
-    sel.innerHTML = '<option value="">Loading…</option>';
-    ensureUserRosterLoaded().then(renderViewAsSelect);
+    dd.innerHTML = '<div class="view-as-dropdown-empty">Loading…</div>';
+    ensureUserRosterLoaded().then(function() {
+      if (dd.classList.contains('show')) renderViewAsDropdown();
+    });
     return;
   }
-  sel.innerHTML = '<option value="">My view</option>' +
-    cachedUserRoster.map(function(u) {
-      return '<option value="' + escapeHtml(u.username) + '"' + (u.username === viewAsUsername ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
-    }).join('');
-  sel.value = viewAsUsername || '';
+  let html = '<div class="view-as-dropdown-item' + (!viewAsUsername ? ' active' : '') + '" onclick="setViewAs(\'\')">My view</div>';
+  html += cachedUserRoster.length
+    ? cachedUserRoster.map(function(u) {
+        return '<div class="view-as-dropdown-item' + (u.username === viewAsUsername ? ' active' : '') + '" onclick="setViewAs(\'' + u.username.replace(/'/g, "\\'") + '\')">' + escapeHtml(u.displayName) + '</div>';
+      }).join('')
+    : '<div class="view-as-dropdown-empty">No team accounts yet</div>';
+  dd.innerHTML = html;
+}
+// Just the toggle button's own label/active state — the dropdown's list
+// itself is only ever (re)built on open (see renderViewAsDropdown()), not
+// on every renderAll(), since it's invisible the rest of the time anyway.
+function renderViewAsSelect() {
+  const label = document.getElementById('viewAsToggleLabel');
+  const btn = document.getElementById('viewAsToggleBtn');
+  if (!label || !btn || currentUserRole !== 'admin') return;
+  if (!viewAsUsername) {
+    label.textContent = 'View as';
+    btn.classList.remove('active');
+    return;
+  }
+  const match = (cachedUserRoster || []).find(function(u) { return u.username === viewAsUsername; });
+  label.textContent = match ? match.displayName : 'View as';
+  btn.classList.add('active');
 }
 
 const CUSTOM_FIELD_DEFS = [
@@ -4165,8 +4226,8 @@ function applyPermissionGating() {
   // setViewAs()). Full-hide like the other nav/feature-level controls
   // above, not just disabled — an inert dropdown sitting in the header
   // would just read as broken to everyone else.
-  const viewAsSelectEl = document.getElementById('viewAsSelect');
-  if (viewAsSelectEl) viewAsSelectEl.style.display = currentUserRole === 'admin' ? '' : 'none';
+  const viewAsWrapEl = document.getElementById('viewAsWrap');
+  if (viewAsWrapEl) viewAsWrapEl.style.display = currentUserRole === 'admin' ? '' : 'none';
   // Job add/delete/duplicate, and the Archived Jobs list's own delete
   // button, get the same full-hide treatment — a greyed-out Delete/
   // Duplicate button sitting right in the job form reads as "still there"
@@ -4220,6 +4281,7 @@ function closeAllDropdowns() {
   closeSettingsMenu();
   closeAllColSettings();
   closeAllCardColorPickers();
+  closeViewAsDropdown();
 }
 
 // Override old save functions to use project layer
@@ -4508,6 +4570,9 @@ document.addEventListener('mousedown', function() {
 document.addEventListener('click', function(e) {
   const wrap = document.querySelector('.settings-menu-wrap');
   if (wrap && !wrap.contains(e.target)) closeSettingsMenu();
+
+  // Close the "View as member" dropdown
+  if (!e.target.closest('.view-as-wrap')) closeViewAsDropdown();
 
   // Close column settings dropdowns
   if (!e.target.closest('.board-col-settings-wrap')) closeAllColSettings();
