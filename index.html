@@ -71,6 +71,17 @@
     outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
   }
   .header-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  /* Admin-only "View as a member" picker — see setViewAs(). Styled to sit
+     on the header's own colored gradient background, matching the
+     translucent-white treatment other header controls (e.g.
+     .settings-dots-btn) already use there. */
+  .view-as-select {
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.35); color: #fff;
+    font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    max-width: 150px; outline: none; transition: background 0.15s;
+  }
+  .view-as-select:hover { background: rgba(255,255,255,0.22); }
+  .view-as-select option { color: #000; }
   /* ===== PRESENCE AVATARS ===== */
   .presence-avatars { display: flex; align-items: center; }
   .presence-avatar {
@@ -283,19 +294,10 @@
     width: 300px; min-width: 300px; background: var(--card); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 6px rgba(0,0,0,0.04);
   }
-  .gantt-view-toggle-row {
-    display: flex; align-items: center; gap: 8px; width: 300px; min-width: 300px;
-    box-sizing: border-box; padding: 0 8px;
-  }
-  /* Admin/Project Admin only (see the data-min-tier on this row and
-     setGanttViewAs()) — lets them preview the Gantt exactly as a specific
-     Member would see it, without changing anything for that member. */
-  .gantt-view-as-label { font-size: 11px; font-weight: 700; color: var(--text-light); white-space: nowrap; }
-  .gantt-view-as-select {
-    flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
-    font-size: 12px; font-family: inherit; background: var(--card); color: var(--text); outline: none;
-  }
-  .gantt-view-as-select:focus { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.1); }
+  /* Now just an empty alignment spacer — see the comment on it in the
+     markup — the view-mode tabs and later the "View as" picker that used
+     to live here are both gone. */
+  .gantt-view-toggle-row { width: 300px; min-width: 300px; box-sizing: border-box; }
   .left-header {
     display: flex; background: #f8f9fa; border-bottom: 2px solid #dee2e6;
     font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
@@ -1699,6 +1701,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   </div>
   <div class="header-actions">
     <div class="presence-avatars" id="presenceAvatars"></div>
+    <!-- Admin only (see setViewAs()) — previews the whole app (Job
+         Manager, Board, Calendar, Gantt) exactly as a specific Member
+         would see it, without changing what that member — or anyone
+         else — actually sees. -->
+    <select class="view-as-select" id="viewAsSelect" onchange="setViewAs(this.value)" title="View the whole app as a specific member (Admin only)"></select>
     <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
     <button class="activity-toggle-btn" id="activityToggleBtn" onclick="toggleActivitySidebar()" title="Activity Log"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button>
     <div class="settings-menu-wrap">
@@ -1809,10 +1816,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
              living at the top of its own panel (which left a seam where
              .left-panel's border-right/box-shadow cut through). -->
         <div class="gantt-top-row">
-          <div class="gantt-view-toggle-row" data-min-tier="projectAdmin">
-            <label class="gantt-view-as-label" for="ganttViewAsSelect">View as</label>
-            <select class="gantt-view-as-select" id="ganttViewAsSelect" onchange="setGanttViewAs(this.value)"></select>
-          </div>
+          <!-- Empty spacer — matches .left-panel's width below so the
+               toolbar lines up with the timeline instead of the timeline
+               grid's own start. Used to hold the view-mode tabs, then the
+               "View as" picker; both are gone now (the picker moved to the
+               app header — see setViewAs() — since it now applies
+               everywhere, not just the Gantt). -->
+          <div class="gantt-view-toggle-row"></div>
           <div class="gantt-toolbar" id="ganttToolbar">
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
             <button class="archive-toggle-btn" id="archiveToggleBtn" onclick="toggleShowArchived()" title="Show archived jobs"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg></button>
@@ -3410,8 +3420,8 @@ function syncGanttJobFocusBanner() {
   // The focused job could vanish out from under the filter (deleted, no
   // longer a Member — see isJobVisibleToMe() — a project switch already
   // cleared ganttFocusedJobId — see switchProject() — or it's not in the
-  // member currently being previewed — see getGanttVisibleJobs()).
-  const job = ganttFocusedJobId ? getGanttVisibleJobs().find(function(j) { return j.id === ganttFocusedJobId; }) : null;
+  // member currently being previewed — see viewAsUsername).
+  const job = ganttFocusedJobId ? getVisibleJobs().find(function(j) { return j.id === ganttFocusedJobId; }) : null;
   el.style.display = 'flex';
   el.innerHTML = job
     ? 'Showing only <b>' + escapeHtml(job.name) + '</b> <button type="button" onclick="clearGanttJobFocus()">Show all</button>'
@@ -3625,11 +3635,22 @@ function isChecklistStageVisibleToMe(assigneesMap, columnId) {
 // (hasMinTier('projectAdmin') — unlike isChecklistStageVisibleToMe()'s
 // literal 'admin'-only bypass, since a Project Admin already has full
 // content access within their project).
+//
+// viewAsUsername (see setViewAs()) overrides all of that: an Admin-only
+// "view the whole app as a specific member" simulation. When set, every
+// job's visibility is decided purely by whether that member is in its
+// Members list — bypassing the hasMinTier('projectAdmin') shortcut below
+// entirely, since the whole point is to see exactly what the selected
+// account would see, not the admin's own unrestricted view. It's a
+// read-only preview: this only ever affects what's rendered on the
+// simulating admin's own screen, never what's stored or synced, so nothing
+// changes for the member being previewed or anyone else.
 function isJobVisibleToMe(job) {
   if (!job) return false;
-  if (hasMinTier('projectAdmin')) return true;
   const card = getPrimaryPhaseCard(job);
   const members = (card && card.customFields && card.customFields.members) || [];
+  if (viewAsUsername) return members.indexOf(viewAsUsername) !== -1;
+  if (hasMinTier('projectAdmin')) return true;
   return members.indexOf(getStoredUsername()) !== -1;
 }
 function getVisibleJobs() {
@@ -3664,45 +3685,30 @@ async function ensureUserRosterLoaded() {
   return cachedUserRoster || [];
 }
 
-// ===== GANTT: VIEW AS A MEMBER (Admin/Project Admin only) =====
-// Lets an Admin/Project Admin preview the Gantt exactly as a specific
-// Member would see it (see isJobVisibleToMe()'s Members check), without
-// changing what that member — or anyone else — actually sees; it's a
-// read-only client-side simulation, layered on top of (not replacing) the
-// viewer's own normal getVisibleJobs() result. Session-only, like
-// ganttFocusedJobId — not persisted, and cleared on project switch (see
-// switchProject()).
-let ganttViewAsUsername = null;
-function setGanttViewAs(username) {
-  if (!hasMinTier('projectAdmin')) return;
-  ganttViewAsUsername = username || null;
-  renderGantt();
+// ===== VIEW AS A MEMBER (Admin only — not even Project Admin) =====
+// Lets an Admin preview the ENTIRE app — Job Manager, Board, Calendar,
+// Gantt — exactly as a specific Member would see it (see
+// isJobVisibleToMe() above). Session-only, like ganttFocusedJobId — not
+// persisted, and cleared on project switch (see switchProject()).
+let viewAsUsername = null;
+function setViewAs(username) {
+  if (currentUserRole !== 'admin') return;
+  viewAsUsername = username || null;
+  renderAll();
 }
-// Only the Gantt's own row-building/date-range/legend functions call this
-// (instead of getVisibleJobs() directly) — Job Manager, Board, and Calendar
-// are deliberately untouched by this feature, always showing the real
-// viewer's own jobs.
-function getGanttVisibleJobs() {
-  if (!ganttViewAsUsername || !hasMinTier('projectAdmin')) return getVisibleJobs();
-  return jobs.filter(function(job) {
-    const card = getPrimaryPhaseCard(job);
-    const members = (card && card.customFields && card.customFields.members) || [];
-    return members.indexOf(ganttViewAsUsername) !== -1;
-  });
-}
-function renderGanttViewAsSelect() {
-  const sel = document.getElementById('ganttViewAsSelect');
-  if (!sel || !hasMinTier('projectAdmin')) return;
+function renderViewAsSelect() {
+  const sel = document.getElementById('viewAsSelect');
+  if (!sel || currentUserRole !== 'admin') return;
   if (!cachedUserRoster) {
     sel.innerHTML = '<option value="">Loading…</option>';
-    ensureUserRosterLoaded().then(renderGanttViewAsSelect);
+    ensureUserRosterLoaded().then(renderViewAsSelect);
     return;
   }
   sel.innerHTML = '<option value="">My view</option>' +
     cachedUserRoster.map(function(u) {
-      return '<option value="' + escapeHtml(u.username) + '"' + (u.username === ganttViewAsUsername ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+      return '<option value="' + escapeHtml(u.username) + '"' + (u.username === viewAsUsername ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
     }).join('');
-  sel.value = ganttViewAsUsername || '';
+  sel.value = viewAsUsername || '';
 }
 
 const CUSTOM_FIELD_DEFS = [
@@ -3865,9 +3871,9 @@ function switchProject(projectId) {
   closeCalendarEventModal();
   // The old project's job id means nothing in the new one — see
   // ganttFocusedJobId/buildVisibleTaskRows(). Same reasoning for the
-  // "view as member" preview — see ganttViewAsUsername/getGanttVisibleJobs().
+  // "view as member" preview — see viewAsUsername/isJobVisibleToMe().
   ganttFocusedJobId = null;
-  ganttViewAsUsername = null;
+  viewAsUsername = null;
   activeProjectId = projectId;
   saveProjects();
   loadActiveProjectData();
@@ -4119,6 +4125,7 @@ function updateProjectToggle() {
 }
 
 function renderAll() {
+  renderViewAsSelect();
   renderGantt();
   renderJobList();
   updateJobCount();
@@ -4154,6 +4161,12 @@ function applyPermissionGating() {
   // updateProjectToggle()'s bespoke hide-vs-disable choice for its own button.
   const activityBtn = document.getElementById('activityToggleBtn');
   if (activityBtn) activityBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
+  // "View as a member" picker — Admin only, not even Project Admin (see
+  // setViewAs()). Full-hide like the other nav/feature-level controls
+  // above, not just disabled — an inert dropdown sitting in the header
+  // would just read as broken to everyone else.
+  const viewAsSelectEl = document.getElementById('viewAsSelect');
+  if (viewAsSelectEl) viewAsSelectEl.style.display = currentUserRole === 'admin' ? '' : 'none';
   // Job add/delete/duplicate, and the Archived Jobs list's own delete
   // button, get the same full-hide treatment — a greyed-out Delete/
   // Duplicate button sitting right in the job form reads as "still there"
@@ -4931,7 +4944,7 @@ function computeDateRange() {
     BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
   );
   let datedTasks = [];
-  getGanttVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
+  getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
     getJobPhases(job).forEach(function(phase) {
       getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
         (subUnit.tasks || []).forEach(function(task) {
@@ -6124,7 +6137,6 @@ function deleteCalendarEventFromModal() {
 
 function renderGantt() {
   syncGanttJobFocusBanner();
-  renderGanttViewAsSelect();
   // Row order across the WHOLE board: earliest start date first, regardless
   // of which job a task belongs to. Ties broken by job order then task's
   // stored order so identical start dates stay stable/predictable.
@@ -6218,7 +6230,7 @@ function renderGantt() {
   // other phase/sub-phase.
   function buildVisibleTaskRows() {
     const rows = [];
-    getGanttVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
+    getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
       if (!showArchived && job.archived) return;
       // See ganttFocusedJobId/toggleGanttJobFocus() — isolates the chart to
       // one job's rows when set, Tasks view only.
@@ -7527,7 +7539,7 @@ function buildLegend() {
   const legend = document.getElementById('legend');
   let html;
   const jobColors = {};
-  getGanttVisibleJobs().forEach(job => {
+  getVisibleJobs().forEach(job => {
     if (!showArchived && job.archived) return;
     jobColors[job.name] = job.color;
   });
@@ -7543,7 +7555,7 @@ function showDatePopover(e, date) {
   const popover = document.getElementById('datePopover');
   const dateStr = date.toISOString().split('T')[0];
   const dayJobs = [];
-  getGanttVisibleJobs().forEach(job => {
+  getVisibleJobs().forEach(job => {
     if (!showArchived && job.archived) return;
     (job.tasks || []).forEach(task => {
       const s = new Date(task.start + 'T00:00:00');
