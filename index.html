@@ -1039,6 +1039,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .cf-field label { display: block; font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
   .cf-field select, .cf-field input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: inherit; background: white; outline: none; }
   .cf-field select:focus, .cf-field input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.1); }
+  /* Members — a 'multiselect' custom field (see CUSTOM_FIELD_DEFS), rendered
+     as checkboxes instead of a dropdown since more than one can be set.
+     Spans both columns of .custom-fields-grid so the list has room to wrap. */
+  .cf-field-wide { grid-column: 1 / -1; }
+  .cf-multiselect { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: white; }
+  .cf-multiselect-option { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; color: var(--text); cursor: pointer; }
+  .cf-multiselect-option input { width: auto; margin: 0; }
+  .cf-multiselect-empty { font-size: 11px; color: #999; padding: 2px 0; }
 
   /* Checklist */
   /* Which board-column stage's checklist is showing — see
@@ -1640,6 +1648,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .form-group select,
   body.dark-mode .cf-field select,
   body.dark-mode .cf-field input,
+  body.dark-mode .cf-multiselect,
   body.dark-mode .checklist-add-row input,
   body.dark-mode .manage-field-add-row input,
   body.dark-mode .search-box {
@@ -3755,7 +3764,14 @@ const CUSTOM_FIELD_DEFS = [
   { key: 'location', label: 'Location', type: 'text' },
   { key: 'jobType', label: 'Job Type', type: 'select' },
   { key: 'timeframe', label: 'Timeframe', type: 'select' },
-  { key: 'incentivePeriod', label: 'Incentive Period', type: 'select' }
+  { key: 'incentivePeriod', label: 'Incentive Period', type: 'select' },
+  // Unlike every field above (one value each), a job can have any number of
+  // Members — rendered as a checkbox list instead of a dropdown, and stored
+  // as an array (see renderCustomFieldsGrid()/collectCustomFieldValues()).
+  // Its option pool (the roster of people who CAN be added) is still
+  // managed the same way as a 'select' field's dropdown choices — see
+  // renderManageFieldsBody()'s type filter.
+  { key: 'members', label: 'Members', type: 'multiselect' }
 ];
 let fieldOptions = {};
 
@@ -10742,6 +10758,14 @@ function renderCustomFieldsGrid(values) {
       ).join('');
       return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
     }
+    if (def.type === 'multiselect') {
+      const opts = (fieldOptions[def.key] || []);
+      const selected = Array.isArray(val) ? val : [];
+      const optionsHtml = opts.length
+        ? opts.map(o => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(o) + '" data-min-tier="editor"' + (selected.indexOf(o) !== -1 ? ' checked' : '') + '> ' + escapeHtml(o) + '</label>').join('')
+        : '<span class="cf-multiselect-empty">No ' + def.label.toLowerCase() + ' added yet — click Edit above</span>';
+      return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect">' + optionsHtml + '</div></div>';
+    }
     return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
   }).join('');
   applyPermissionGating(); // rebuilt on every card-modal open, outside renderAll()'s own sweep
@@ -10750,7 +10774,12 @@ function renderCustomFieldsGrid(values) {
 function collectCustomFieldValues() {
   const values = {};
   document.querySelectorAll('#customFieldsGrid [data-field]').forEach(el => {
-    values[el.dataset.field] = el.value.trim();
+    if (el.type === 'checkbox') {
+      if (!values[el.dataset.field]) values[el.dataset.field] = [];
+      if (el.checked) values[el.dataset.field].push(el.value);
+    } else {
+      values[el.dataset.field] = el.value.trim();
+    }
   });
   return values;
 }
@@ -10772,6 +10801,14 @@ function renderJobCustomFieldsGrid(values) {
       ).join('');
       return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
     }
+    if (def.type === 'multiselect') {
+      const opts = (fieldOptions[def.key] || []);
+      const selected = Array.isArray(val) ? val : [];
+      const optionsHtml = opts.length
+        ? opts.map(o => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(o) + '" data-min-tier="editor"' + (selected.indexOf(o) !== -1 ? ' checked' : '') + '> ' + escapeHtml(o) + '</label>').join('')
+        : '<span class="cf-multiselect-empty">No ' + def.label.toLowerCase() + ' added yet — click Edit above</span>';
+      return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect">' + optionsHtml + '</div></div>';
+    }
     return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
   }).join('');
   applyPermissionGating(); // rebuilt on every job-form open, outside renderAll()'s own sweep
@@ -10780,7 +10817,12 @@ function renderJobCustomFieldsGrid(values) {
 function collectJobCustomFieldValues() {
   const values = {};
   document.querySelectorAll('#jmCustomFieldsGrid [data-field]').forEach(el => {
-    values[el.dataset.field] = el.value.trim();
+    if (el.type === 'checkbox') {
+      if (!values[el.dataset.field]) values[el.dataset.field] = [];
+      if (el.checked) values[el.dataset.field].push(el.value);
+    } else {
+      values[el.dataset.field] = el.value.trim();
+    }
   });
   return values;
 }
@@ -11071,8 +11113,11 @@ function closeManageFields() {
 
 function renderManageFieldsBody() {
   const container = document.getElementById('manageFieldsBody');
-  const selectDefs = CUSTOM_FIELD_DEFS.filter(d => d.type === 'select');
-  const groups = selectDefs.map(def => buildManageFieldGroup(def.key, def.label));
+  // 'multiselect' (Members) reuses the exact same option-pool editor as a
+  // 'select' field's dropdown choices — only how a job's VALUE is stored
+  // differs (one string vs. an array — see renderCustomFieldsGrid()).
+  const optionDefs = CUSTOM_FIELD_DEFS.filter(d => d.type === 'select' || d.type === 'multiselect');
+  const groups = optionDefs.map(def => buildManageFieldGroup(def.key, def.label));
   // Checklist item assignees — not a job-form field like the groups above
   // (see CUSTOM_FIELD_DEFS), just a shared roster checklist items can be
   // assigned to (see the .ci-assignee dropdown in renderChecklist()/
