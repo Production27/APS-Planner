@@ -3414,34 +3414,38 @@ function togglePhaseCollapse(phaseId) {
   renderGantt();
 }
 
-// ===== TASKS VIEW: PER-SUB-PHASE COLLAPSE =====
-// Lets one individual sub-phase (or an unsplit phase's own default "sub-
-// phase" — see getPhaseSubUnits()) condense its tasks into a single
-// job-span bar, entirely independent of every other sub-phase and phase —
-// clicking one sub-phase's toggle never touches any other sub-phase's or
-// phase's state. Combined with collapsedPhaseIds above (which folds a
-// phase's already-condensed sub-phase bars into one phase-wide bar, also
-// independent per phase), Tasks view gets the same three granularities
-// Jobs/Leads view has — individual tasks, one bar per sub-phase, one bar
-// per phase — but chosen separately for every phase/sub-phase instead of
-// all-or-nothing for a whole job. Only consulted when ganttViewMode ===
-// 'tasks'; Jobs/Leads view always condenses everything regardless (see
-// buildCondensedRowsForJob()). Purely a local view preference, like
-// ganttViewMode/collapsedPhaseIds themselves — not synced to other users.
+// ===== TASKS VIEW: DEFAULT-COLLAPSED PHASES/SUB-PHASES =====
+// Every phase and sub-phase in Tasks view starts CONDENSED (one bar,
+// same as collapsedPhaseIds above condenses a phase in Jobs/Leads view)
+// instead of showing individual tasks — these two sets track the OPPOSITE
+// of collapsedPhaseIds/the old collapsedSubPhaseIds: which ones a given
+// user has explicitly EXPANDED back open, so that choice survives a
+// reload/re-render. Deliberately separate from collapsedPhaseIds (which
+// Jobs/Leads view still uses, unaffected, with its own default of NOT
+// folded) — a phase/sub-phase's Tasks-view state and its Jobs/Leads-view
+// state are independent by design, same as they already were before this
+// change. Purely a local view preference, like ganttViewMode itself — not
+// synced to other users.
 //
-// Keyed by a job+phase+sub-unit composite (getSubUnitKey()) rather than
-// just the sub-unit's own id, because both an unphased job's synthetic
-// default phase AND an unsplit phase's synthetic default sub-unit share
-// id:null (see getJobPhases()/getPhaseSubUnits()) — without the job/phase
-// prefix, collapsing one flat job's default bar would collide with every
-// other flat job's.
-let collapsedSubPhaseIds = new Set(JSON.parse(localStorage.getItem('gantt_collapsed_subphases_v1') || '[]'));
+// Sub-phases are keyed by a job+phase+sub-unit composite (getSubUnitKey())
+// rather than just the sub-unit's own id, because both an unphased job's
+// synthetic default phase AND an unsplit phase's synthetic default
+// sub-unit share id:null (see getJobPhases()/getPhaseSubUnits()) —
+// without the job/phase prefix, expanding one flat job's default bar
+// would collide with every other flat job's.
+let tasksExpandedPhaseIds = new Set(JSON.parse(localStorage.getItem('gantt_tasks_expanded_phases_v1') || '[]'));
+let tasksExpandedSubPhaseIds = new Set(JSON.parse(localStorage.getItem('gantt_tasks_expanded_subphases_v1') || '[]'));
 function getSubUnitKey(job, phaseId, subPhaseId) {
   return job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
 }
-function toggleSubPhaseCollapse(key) {
-  if (collapsedSubPhaseIds.has(key)) collapsedSubPhaseIds.delete(key); else collapsedSubPhaseIds.add(key);
-  localStorage.setItem('gantt_collapsed_subphases_v1', JSON.stringify(Array.from(collapsedSubPhaseIds)));
+function toggleTasksPhaseExpanded(phaseId) {
+  if (tasksExpandedPhaseIds.has(phaseId)) tasksExpandedPhaseIds.delete(phaseId); else tasksExpandedPhaseIds.add(phaseId);
+  localStorage.setItem('gantt_tasks_expanded_phases_v1', JSON.stringify(Array.from(tasksExpandedPhaseIds)));
+  renderGantt();
+}
+function toggleTasksSubPhaseExpanded(key) {
+  if (tasksExpandedSubPhaseIds.has(key)) tasksExpandedSubPhaseIds.delete(key); else tasksExpandedSubPhaseIds.add(key);
+  localStorage.setItem('gantt_tasks_expanded_subphases_v1', JSON.stringify(Array.from(tasksExpandedSubPhaseIds)));
   renderGantt();
 }
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
@@ -3449,7 +3453,10 @@ function toggleSubPhaseCollapse(key) {
 // Returns an array of ready-to-append elements (0-2 of them). `excludeSubTag`
 // is set for a row that already represents a WHOLE folded phase (no single
 // sub-unit context to toggle). Colored the same as the job's own tag/pill —
-// all three (job/phase/sub-phase) read as one family at a glance.
+// all three (job/phase/sub-phase) read as one family at a glance. Only ever
+// called from Tasks-view render paths, so it reads tasksExpandedPhaseIds/
+// tasksExpandedSubPhaseIds (default-collapsed) rather than collapsedPhaseIds
+// (Jobs/Leads view's own, default-expanded set).
 function buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, phaseFoldable, excludeSubTag) {
   const tags = [];
   const bg = job.color || '#999';
@@ -3464,15 +3471,15 @@ function buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, ph
     return t;
   }
   if (phaseFoldable && phaseName) {
-    tags.push(makeTag(collapsedPhaseIds.has(phaseId), phaseName,
+    tags.push(makeTag(!tasksExpandedPhaseIds.has(phaseId), phaseName,
       'Click to expand sub-phases', 'Click to collapse sub-phases into one bar',
-      function() { togglePhaseCollapse(phaseId); }));
+      function() { toggleTasksPhaseExpanded(phaseId); }));
   }
   if (!excludeSubTag) {
     const subKey = getSubUnitKey(job, phaseId, subPhaseId);
-    tags.push(makeTag(collapsedSubPhaseIds.has(subKey), subPhaseName || phaseName || '',
+    tags.push(makeTag(!tasksExpandedSubPhaseIds.has(subKey), subPhaseName || phaseName || '',
       'Click to expand into individual tasks', 'Click to collapse into a single bar',
-      function() { toggleSubPhaseCollapse(subKey); }));
+      function() { toggleTasksSubPhaseExpanded(subKey); }));
   }
   return tags;
 }
@@ -6226,8 +6233,8 @@ function renderGantt() {
   }
   // One row for a SINGLE sub-unit — its own tasks folded into a single
   // span. Used both for every sub-unit of an un-folded phase in Jobs/Leads
-  // view, and for one individually-collapsed sub-phase in Tasks view (see
-  // collapsedSubPhaseIds).
+  // view, and for a still-collapsed (i.e. not yet individually expanded)
+  // sub-phase in Tasks view (see tasksExpandedSubPhaseIds).
   function buildSubPhaseRow(job, phase, seg, leadName) {
     const namePart = (phase.isDefault ? '' : ' — ' + phase.name) + (seg.subPhaseName ? ' — ' + seg.subPhaseName : '');
     const pseudoTask = {
@@ -6269,10 +6276,11 @@ function renderGantt() {
     return rows;
   }
 
-  // Tasks view: individual task rows by default, but a phase folded via
-  // collapsedPhaseIds or a sub-phase folded via collapsedSubPhaseIds
-  // condenses independently of every other phase/sub-phase — see the
-  // "TASKS VIEW: PER-SUB-PHASE COLLAPSE" section above toggleSubPhaseCollapse().
+  // Tasks view: every phase/sub-phase starts CONDENSED by default —
+  // explicitly expanding one (see tasksExpandedPhaseIds/
+  // tasksExpandedSubPhaseIds above toggleTasksPhaseExpanded()/
+  // toggleTasksSubPhaseExpanded()) peels it open independently of every
+  // other phase/sub-phase.
   function buildVisibleTaskRows() {
     const rows = [];
     jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
@@ -6280,7 +6288,7 @@ function renderGantt() {
       getJobPhases(job).forEach(function(phase) {
         const phaseName = phase.isDefault ? null : phase.name;
         const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
-        if (collapsible && collapsedPhaseIds.has(phase.id)) {
+        if (collapsible && !tasksExpandedPhaseIds.has(phase.id)) {
           const segments = getPhaseSegments(phase);
           if (segments.length) rows.push(buildPhaseCollapsedRow(job, phase, segments));
           return;
@@ -6288,7 +6296,7 @@ function renderGantt() {
         getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
           const subPhaseName = subUnit.isDefault ? null : subUnit.name;
           const subKey = getSubUnitKey(job, phase.id, subUnit.id);
-          const subCollapsed = collapsedSubPhaseIds.has(subKey);
+          const subCollapsed = !tasksExpandedSubPhaseIds.has(subKey);
           if (subCollapsed) {
             const seg = buildSegment(subUnit);
             if (seg) rows.push(buildSubPhaseRow(job, phase, seg));
@@ -6327,11 +6335,11 @@ function renderGantt() {
   }
 
   // 'jobs'/'leads' view: every job fully condensed via
-  // buildCondensedRowsForJob() — never consults collapsedSubPhaseIds, which
-  // is a Tasks-view-only preference (see buildVisibleTaskRows()). An
-  // unphased job just has its one synthetic default phase (see
-  // getJobPhases()), so this is still exactly one row per job for the
-  // common case.
+  // buildCondensedRowsForJob() — never consults tasksExpandedPhaseIds/
+  // tasksExpandedSubPhaseIds, which are Tasks-view-only preferences (see
+  // buildVisibleTaskRows()). An unphased job just has its one synthetic
+  // default phase (see getJobPhases()), so this is still exactly one row
+  // per job for the common case.
   function buildCondensedJobRows() {
     const rows = [];
     jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
@@ -6491,10 +6499,11 @@ function renderGantt() {
         // job's own color so all three read as one family at a glance.
         jobPill = '<span class="task-row-jobname" style="background:' + jobColor + ';">' + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
         // Only offered when the phase actually has 2+ real sub-phases —
-        // folds/unfolds just THIS phase (collapsedPhaseIds), same
-        // mechanism Jobs/Leads view already uses.
+        // folds/unfolds just THIS phase (tasksExpandedPhaseIds), same
+        // condensed-bar mechanism Jobs/Leads view uses, just with its own
+        // independent (default-collapsed) state.
         if (entry.collapsible && phaseName) {
-          const phaseFolded = collapsedPhaseIds.has(phaseId);
+          const phaseFolded = !tasksExpandedPhaseIds.has(phaseId);
           phasePillHtml = ' <span class="task-row-phasename collapsible" title="' + (phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') + '" style="background:' + jobColor + ';">' + (phaseFolded ? '▸ ' : '▾ ') + escapeHtml(phaseName) + '</span>';
         }
         // Not shown on a whole-phase-collapsed row (task.isJobSpan with
@@ -6503,7 +6512,7 @@ function renderGantt() {
         // left to fold.
         if (!(task.isJobSpan && entry.collapsedSegments)) {
           const subKey = getSubUnitKey(job, phaseId, subPhaseId);
-          const subFolded = collapsedSubPhaseIds.has(subKey);
+          const subFolded = !tasksExpandedSubPhaseIds.has(subKey);
           const subLabel = subPhaseName || (entry.collapsible ? '' : phaseName) || '';
           subPillHtml = ' <span class="task-row-subphasename collapsible" title="' + (subFolded ? 'Click to expand into individual tasks' : 'Click to collapse into a single bar') + (subLabel ? ' — ' + escapeHtml(subLabel) : '') + '" style="background:' + jobColor + ';">' + (subFolded ? '▸' : '▾') + (subLabel ? ' ' + escapeHtml(subLabel) : '') + '</span>';
         }
@@ -6522,11 +6531,11 @@ function renderGantt() {
       if (isTasksMode) {
         if (phasePillHtml) {
           const phaseEl = row.querySelector('.task-row-phasename');
-          if (phaseEl) phaseEl.addEventListener('click', function(e) { e.stopPropagation(); togglePhaseCollapse(phaseId); });
+          if (phaseEl) phaseEl.addEventListener('click', function(e) { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); });
         }
         if (subPillHtml) {
           const subEl = row.querySelector('.task-row-subphasename');
-          if (subEl) subEl.addEventListener('click', function(e) { e.stopPropagation(); toggleSubPhaseCollapse(getSubUnitKey(job, phaseId, subPhaseId)); });
+          if (subEl) subEl.addEventListener('click', function(e) { e.stopPropagation(); toggleTasksSubPhaseExpanded(getSubUnitKey(job, phaseId, subPhaseId)); });
         }
       } else if (entry.collapsible) {
         const pillEl = row.querySelector('.task-row-jobname');
