@@ -3821,8 +3821,13 @@ function renderViewAsSelect() {
 }
 
 const CUSTOM_FIELD_DEFS = [
-  { key: 'pm', label: 'Project Manager', type: 'select' },
-  { key: 'foreman', label: 'Project Lead/Foreman', type: 'select' },
+  // Real-account single-select, same source as Members (cachedUserRoster)
+  // just one value instead of an array — see renderCustomFieldsGrid()'s
+  // 'user-select' branch. Existing free-text values (from before this
+  // change) won't match any option here and will just show blank until
+  // re-picked from the real list.
+  { key: 'pm', label: 'Project Manager', type: 'user-select' },
+  { key: 'foreman', label: 'Project Lead/Foreman', type: 'user-select' },
   { key: 'poNumber', label: 'Job / P.O. Number', type: 'text' },
   { key: 'location', label: 'Location', type: 'text' },
   { key: 'jobType', label: 'Job Type', type: 'select' },
@@ -10757,6 +10762,22 @@ function renderCustomFieldsGrid(values) {
       ).join('');
       return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
     }
+    if (def.type === 'user-select') {
+      // Real-account single-select (PM/Foreman) — same roster source as
+      // Members' multiselect just below, one value instead of an array.
+      // Plain native <select>, safe here (unlike the app header's "View
+      // as" picker, which had to move off a native select — this one sits
+      // on a normal white modal background, not a colored gradient, so it
+      // doesn't hit that cross-browser closed-state styling issue).
+      if (!cachedUserRoster) {
+        ensureUserRosterLoaded().then(function() { renderCustomFieldsGrid(collectCustomFieldValues()); });
+        return '<div class="cf-field"><label>' + def.label + '</label><select disabled><option>Loading…</option></select></div>';
+      }
+      const optionsHtml = '<option value="">Select...</option>' + cachedUserRoster.map(function(u) {
+        return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+      }).join('');
+      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+    }
     if (def.type === 'multiselect') {
       // Backed by the REAL account roster (same one the "Visible to"
       // checklist-stage picker uses — see ensureUserRosterLoaded()), not a
@@ -10808,6 +10829,18 @@ function renderJobCustomFieldsGrid(values) {
       const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
         '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
       ).join('');
+      return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+    }
+    if (def.type === 'user-select') {
+      // See the matching branch in renderCustomFieldsGrid() above — real
+      // account roster single-select (PM/Foreman).
+      if (!cachedUserRoster) {
+        ensureUserRosterLoaded().then(function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); });
+        return '<div class="cf-field"><label>' + def.label + '</label><select disabled><option>Loading…</option></select></div>';
+      }
+      const optionsHtml = '<option value="">Select...</option>' + cachedUserRoster.map(function(u) {
+        return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+      }).join('');
       return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
     }
     if (def.type === 'multiselect') {
