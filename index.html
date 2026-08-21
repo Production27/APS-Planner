@@ -1047,6 +1047,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .cf-multiselect-option { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; color: var(--text); cursor: pointer; }
   .cf-multiselect-option input { width: auto; margin: 0; }
   .cf-multiselect-empty { font-size: 11px; color: #999; padding: 2px 0; }
+  .cf-multiselect-loading { font-size: 11px; color: #999; font-style: italic; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; }
 
   /* Checklist */
   /* Which board-column stage's checklist is showing — see
@@ -3526,9 +3527,10 @@ function syncGanttJobFocusBanner() {
     el.innerHTML = '';
     return;
   }
-  // The focused job could vanish out from under the filter (deleted, or a
-  // project switch already cleared ganttFocusedJobId — see switchProject()).
-  const job = ganttFocusedJobId ? jobs.find(function(j) { return j.id === ganttFocusedJobId; }) : null;
+  // The focused job could vanish out from under the filter (deleted, no
+  // longer a Member — see isJobVisibleToMe() — or a project switch already
+  // cleared ganttFocusedJobId — see switchProject()).
+  const job = ganttFocusedJobId ? getVisibleJobs().find(function(j) { return j.id === ganttFocusedJobId; }) : null;
   el.style.display = 'flex';
   el.innerHTML = job
     ? 'Showing only <b>' + escapeHtml(job.name) + '</b> <button type="button" onclick="clearGanttJobFocus()">Show all</button>'
@@ -3727,6 +3729,30 @@ function isChecklistStageVisibleToMe(assigneesMap, columnId) {
   if (!assignedTo) return true;
   if (currentUserRole === 'admin') return true;
   return assignedTo === getStoredUsername();
+}
+
+// ===== JOB VISIBILITY BY MEMBERSHIP =====
+// Below Project Admin only sees jobs they're a Member of (see
+// CUSTOM_FIELD_DEFS' 'members' field — a real-account multi-select stored
+// on the job's primary card, same convention every other custom field
+// already follows). Deliberately the OPPOSITE default of
+// isChecklistStageVisibleToMe() just above: an EMPTY Members list hides the
+// job from everyone below Project Admin, rather than being visible to all —
+// a deliberate choice for this feature specifically. Display-only
+// client-side filter, not real access control, same trust model as the
+// rest of this app. Project Admin and Admin both bypass it entirely
+// (hasMinTier('projectAdmin') — unlike isChecklistStageVisibleToMe()'s
+// literal 'admin'-only bypass, since a Project Admin already has full
+// content access within their project).
+function isJobVisibleToMe(job) {
+  if (!job) return false;
+  if (hasMinTier('projectAdmin')) return true;
+  const card = getPrimaryPhaseCard(job);
+  const members = (card && card.customFields && card.customFields.members) || [];
+  return members.indexOf(getStoredUsername()) !== -1;
+}
+function getVisibleJobs() {
+  return jobs.filter(isJobVisibleToMe);
 }
 
 // Real user accounts (username/displayName only, no passwords/roles) for
@@ -5071,7 +5097,7 @@ function computeDateRange() {
     BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
   );
   let datedTasks = [];
-  jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
+  getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
     getJobPhases(job).forEach(function(phase) {
       getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
         (subUnit.tasks || []).forEach(function(task) {
@@ -5271,7 +5297,7 @@ function renderMonthCalendar() {
   // Build flat list from jobs→tasks, plus standalone calendar-only events
   // (never part of a job — see flattenCalendarEventsForRange) laid out in
   // the exact same lane-packing pass below.
-  const flatRows = flattenJobs(jobs, showArchived);
+  const flatRows = flattenJobs(getVisibleJobs(), showArchived);
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
@@ -5396,7 +5422,7 @@ function renderWeekCalendar() {
   // except calendar events that have a time set, which render in the
   // separate hourly grid below (built further down) instead of up here in
   // the all-day-style row.
-  const flatRows = flattenJobs(jobs, showArchived);
+  const flatRows = flattenJobs(getVisibleJobs(), showArchived);
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
@@ -6023,7 +6049,7 @@ function calendarOpenJob(jobId, taskId, phaseId) {
 function getScheduledItemsForDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const items = [];
-  flattenJobs(jobs, showArchived).forEach(function(row) {
+  flattenJobs(getVisibleJobs(), showArchived).forEach(function(row) {
     if (!row.task.start || !row.task.finish) return;
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
@@ -6397,7 +6423,7 @@ function renderGantt() {
   // other phase/sub-phase.
   function buildVisibleTaskRows() {
     const rows = [];
-    jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
+    getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
       if (!showArchived && job.archived) return;
       // See ganttFocusedJobId/toggleGanttJobFocus() — isolates the chart to
       // one job's rows when set, Tasks view only.
@@ -6459,7 +6485,7 @@ function renderGantt() {
   // per job for the common case.
   function buildCondensedJobRows() {
     const rows = [];
-    jobs.concat(getLinkedReferenceJobs()).forEach(function(job) {
+    getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
       if (!showArchived && job.archived) return;
       rows.push.apply(rows, buildCondensedRowsForJob(job));
     });
@@ -7762,7 +7788,7 @@ function buildLegend() {
     // mapping instead of the usual per-job one, or the colors are just
     // arbitrary.
     const leadColors = {};
-    jobs.forEach(job => {
+    getVisibleJobs().forEach(job => {
       if (!showArchived && job.archived) return;
       const name = getJobLeadName(job);
       leadColors[name] = colorForLead(name);
@@ -7773,7 +7799,7 @@ function buildLegend() {
     });
   } else {
     const jobColors = {};
-    jobs.forEach(job => {
+    getVisibleJobs().forEach(job => {
       if (!showArchived && job.archived) return;
       jobColors[job.name] = job.color;
     });
@@ -7790,7 +7816,7 @@ function showDatePopover(e, date) {
   const popover = document.getElementById('datePopover');
   const dateStr = date.toISOString().split('T')[0];
   const dayJobs = [];
-  jobs.forEach(job => {
+  getVisibleJobs().forEach(job => {
     if (!showArchived && job.archived) return;
     (job.tasks || []).forEach(task => {
       const s = new Date(task.start + 'T00:00:00');
@@ -7936,7 +7962,7 @@ function renderJobList() {
   // before reading card.column below so the board tag is never stale.
   syncCardColumns();
 
-  jobs.forEach((job) => {
+  getVisibleJobs().forEach((job) => {
     if (!showArchived && job.archived) return;
     if (search && !job.name.toLowerCase().includes(search)) return;
 
@@ -8010,9 +8036,10 @@ function renderJobList() {
 
 function filterJobList() { renderJobList(); }
 function updateJobCount() {
-  const visible = jobs.filter(j => showArchived || !j.archived).length;
-  const archived = jobs.filter(j => j.archived).length;
-  document.getElementById('jobCount').textContent = visible + (archived > 0 ? ' / ' + jobs.length : '');
+  const myJobs = getVisibleJobs();
+  const visible = myJobs.filter(j => showArchived || !j.archived).length;
+  const archived = myJobs.filter(j => j.archived).length;
+  document.getElementById('jobCount').textContent = visible + (archived > 0 ? ' / ' + myJobs.length : '');
 }
 
 // ===== TASK LIST EDITOR (Chunk 1: read-only rendering) =====
@@ -8783,6 +8810,14 @@ function editJob(jobId, phaseId, subPhaseId) {
   if (editingJobId !== jobId) flushAutoSaveJobForm();
   const found = findJob(jobId);
   if (!found) return;
+  // Defense-in-depth to match every list-render's own filter (see
+  // isJobVisibleToMe()/getVisibleJobs()) — closes the gap for any entry
+  // point that resolves straight to a jobId without going through one of
+  // those filtered lists (e.g. a stale reference, or calling this
+  // directly). Also covers calendarOpenJob() (forwards here) and
+  // jumpToLinkedJobReference() (switches project, then calls this against
+  // the newly-active project's own data).
+  if (!isJobVisibleToMe(found.job)) return;
   const job = found.job;
 
   editingJobId = jobId;
@@ -9303,7 +9338,7 @@ function refreshArchivedJobsListIfOpen() {
 function renderArchivedJobsList() {
   const listEl = document.getElementById('archivedJobsList');
   if (!listEl) return;
-  const archivedJobs = jobs.filter(function(j) { return j.archived; });
+  const archivedJobs = getVisibleJobs().filter(function(j) { return j.archived; });
   if (!archivedJobs.length) {
     listEl.innerHTML = '<div style="padding:14px; color:var(--text-secondary);">No archived jobs.</div>';
     return;
@@ -10059,6 +10094,18 @@ function isCardFromArchivedJob(card) {
   return !!(found && found.job.archived);
 }
 
+// See isJobVisibleToMe() — same job-membership filter, resolved from a
+// board card back to its owning job. A card with no jobId, or one that
+// doesn't resolve to a real job, fails OPEN (stays visible) rather than
+// silently vanishing from the board — same reasoning as
+// isCardFromArchivedJob()'s own early return for that case.
+function isCardVisibleToMe(card) {
+  if (!card.jobId) return true;
+  const found = findJob(card.jobId);
+  if (!found) return true;
+  return isJobVisibleToMe(found.job);
+}
+
 // ===== BOARD: RENDER =====
 function renderBoard() {
   // Column placement is date-derived (or manually overridden) — resolve it
@@ -10119,7 +10166,7 @@ function renderBoard() {
 
   BOARD_COLUMNS.forEach(col => {
     const body = document.getElementById('col-body-' + col.id);
-    boardCards.filter(c => c.column === col.id && !isCardFromArchivedJob(c)).forEach(card => body.appendChild(buildCardEl(card)));
+    boardCards.filter(c => c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).forEach(card => body.appendChild(buildCardEl(card)));
     body.addEventListener('dragover', handleColumnDragOver);
     body.addEventListener('dragleave', handleColumnDragLeave);
     body.addEventListener('drop', handleColumnDrop);
@@ -10176,7 +10223,7 @@ function renderBoard() {
     colEl.addEventListener('drop', handleColumnReorderDrop);
   });
 
-  document.getElementById('boardCount').textContent = boardCards.filter(c => !isCardFromArchivedJob(c)).length;
+  document.getElementById('boardCount').textContent = boardCards.filter(c => !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).length;
 
   // renderBoard() rebuilds the column headers (incl. the ⋮ settings menu,
   // data-min-tier="projectAdmin") from scratch via wrapper.innerHTML on
@@ -10759,11 +10806,21 @@ function renderCustomFieldsGrid(values) {
       return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
     }
     if (def.type === 'multiselect') {
-      const opts = (fieldOptions[def.key] || []);
+      // Backed by the REAL account roster (same one the "Visible to"
+      // checklist-stage picker uses — see ensureUserRosterLoaded()), not a
+      // free-text fieldOptions pool like a 'select' field — a Member has
+      // to be a real, matchable account for isJobVisibleToMe() to work.
+      // Checkbox value = username (what gets stored/matched), label =
+      // displayName. Lazy-loaded once per session; re-renders this same
+      // grid once it resolves.
       const selected = Array.isArray(val) ? val : [];
-      const optionsHtml = opts.length
-        ? opts.map(o => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(o) + '" data-min-tier="editor"' + (selected.indexOf(o) !== -1 ? ' checked' : '') + '> ' + escapeHtml(o) + '</label>').join('')
-        : '<span class="cf-multiselect-empty">No ' + def.label.toLowerCase() + ' added yet — click Edit above</span>';
+      if (!cachedUserRoster) {
+        ensureUserRosterLoaded().then(function() { renderCustomFieldsGrid(collectCustomFieldValues()); });
+        return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
+      }
+      const optionsHtml = cachedUserRoster.length
+        ? cachedUserRoster.map(u => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>').join('')
+        : '<span class="cf-multiselect-empty">No team accounts yet</span>';
       return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect">' + optionsHtml + '</div></div>';
     }
     return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
@@ -10802,11 +10859,16 @@ function renderJobCustomFieldsGrid(values) {
       return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
     }
     if (def.type === 'multiselect') {
-      const opts = (fieldOptions[def.key] || []);
+      // See the matching branch in renderCustomFieldsGrid() above — real
+      // account roster, not free text.
       const selected = Array.isArray(val) ? val : [];
-      const optionsHtml = opts.length
-        ? opts.map(o => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(o) + '" data-min-tier="editor"' + (selected.indexOf(o) !== -1 ? ' checked' : '') + '> ' + escapeHtml(o) + '</label>').join('')
-        : '<span class="cf-multiselect-empty">No ' + def.label.toLowerCase() + ' added yet — click Edit above</span>';
+      if (!cachedUserRoster) {
+        ensureUserRosterLoaded().then(function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); });
+        return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
+      }
+      const optionsHtml = cachedUserRoster.length
+        ? cachedUserRoster.map(u => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>').join('')
+        : '<span class="cf-multiselect-empty">No team accounts yet</span>';
       return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect">' + optionsHtml + '</div></div>';
     }
     return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
@@ -11113,11 +11175,12 @@ function closeManageFields() {
 
 function renderManageFieldsBody() {
   const container = document.getElementById('manageFieldsBody');
-  // 'multiselect' (Members) reuses the exact same option-pool editor as a
-  // 'select' field's dropdown choices — only how a job's VALUE is stored
-  // differs (one string vs. an array — see renderCustomFieldsGrid()).
-  const optionDefs = CUSTOM_FIELD_DEFS.filter(d => d.type === 'select' || d.type === 'multiselect');
-  const groups = optionDefs.map(def => buildManageFieldGroup(def.key, def.label));
+  // 'multiselect' (Members) is deliberately excluded — it's backed by the
+  // real account roster (see renderCustomFieldsGrid()), not a free-text
+  // fieldOptions pool, so there's nothing here to add/remove; who's
+  // addable is managed via Manage Users instead.
+  const selectDefs = CUSTOM_FIELD_DEFS.filter(d => d.type === 'select');
+  const groups = selectDefs.map(def => buildManageFieldGroup(def.key, def.label));
   // Checklist item assignees — not a job-form field like the groups above
   // (see CUSTOM_FIELD_DEFS), just a shared roster checklist items can be
   // assigned to (see the .ci-assignee dropdown in renderChecklist()/
@@ -11536,6 +11599,11 @@ function openEditCard(id) {
   if (editingCardId != null && editingCardId !== id) flushCardAutosave();
   const card = boardCards.find(c => String(c.id) === String(id));
   if (!card) return;
+  // Defense-in-depth matching renderBoard()'s own isCardVisibleToMe()
+  // filter — this function resolves a card straight by id with no job
+  // lookup otherwise, so a stale reference or direct call would bypass
+  // the board's render-time hide entirely without this.
+  if (!isCardVisibleToMe(card)) return;
   editingCardId = card.id;
   setCardTitleHint(false);
   ensureCardChecklists(card);
