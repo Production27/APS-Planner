@@ -4821,11 +4821,23 @@ function handleHeaderBgUpload(e) {
   }
   const reader = new FileReader();
   reader.onload = function(evt) {
-    localStorage.setItem('gantt_header_bg_photo_v1', evt.target.result);
+    // See the matching comment in handleBoardBgUpload() — localStorage.setItem
+    // can throw (QuotaExceededError) even under the 4MB file check above,
+    // and left unguarded that used to fail completely silently.
+    try {
+      localStorage.setItem('gantt_header_bg_photo_v1', evt.target.result);
+    } catch (err) {
+      console.error('Failed to save header background photo:', err);
+      showToast('Could not save that image — try a smaller/more compressed file', 'error');
+      return;
+    }
     updateHeaderBgPreview(evt.target.result);
     applyHeaderVisual();
     logActivity('changed header background photo');
     showToast('Header background updated', 'success');
+  };
+  reader.onerror = function() {
+    showToast('Could not read that file', 'error');
   };
   reader.readAsDataURL(file);
   e.target.value = '';
@@ -4875,11 +4887,28 @@ function handleBoardBgUpload(e) {
   }
   const reader = new FileReader();
   reader.onload = function(evt) {
-    localStorage.setItem('gantt_board_bg_photo_v1', evt.target.result);
+    // localStorage.setItem can throw (QuotaExceededError) even for a file
+    // under the 4MB check above — base64 inflates it ~33%, and the
+    // per-origin quota (typically 5-10MB total, shared with everything
+    // else this app already stores there) can still be blown past. Left
+    // unguarded, that exception used to abort silently right here — no
+    // toast, no preview update, no error — so picking a file that
+    // happened to be borderline-too-big just looked like nothing
+    // happened at all.
+    try {
+      localStorage.setItem('gantt_board_bg_photo_v1', evt.target.result);
+    } catch (err) {
+      console.error('Failed to save board background photo:', err);
+      showToast('Could not save that image — try a smaller/more compressed file', 'error');
+      return;
+    }
     updateBoardBgPreview(evt.target.result);
     applyBoardBgVisual();
     logActivity('changed board background photo');
     showToast('Board background updated', 'success');
+  };
+  reader.onerror = function() {
+    showToast('Could not read that file', 'error');
   };
   reader.readAsDataURL(file);
   e.target.value = '';
