@@ -1815,8 +1815,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
              .left-panel's border-right/box-shadow cut through). -->
         <div class="gantt-top-row">
           <div class="gantt-view-toggle-row">
-            <button class="gantt-view-mode-btn active" id="ganttViewTasks" data-mode="tasks" onclick="setGanttViewMode('tasks')" title="One row per task/phase/sub-phase, per-job collapse (current behavior)">All Jobs</button>
-            <button class="gantt-view-mode-btn" id="ganttViewLeads" data-mode="leads" onclick="setGanttViewMode('leads')" title="One row per job, tasks condensed into a single bar, colored by assigned lead/foreman">Jobs</button>
+            <button class="gantt-view-mode-btn active" title="One row per task/phase/sub-phase, with per-job/phase/sub-phase collapse">All Jobs</button>
           </div>
           <div class="gantt-toolbar" id="ganttToolbar">
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
@@ -3318,71 +3317,24 @@ let deleteTargetJobId = null;
 let showArchived = false;
 
 // ===== GANTT VIEW MODE =====
-// 'tasks' (default — one row per task, with its own per-phase/per-sub-phase
-// collapse, see tasksExpandedPhaseIds/tasksExpandedSubPhaseIds above),
-// 'leads' (one row per job, tasks condensed into a single bar spanning the
-// job's earliest start to latest finish, colored by the job's assigned
-// lead/foreman). See buildCondensedJobRows() in renderGantt(). A plain
-// 'jobs' condensed-by-color mode used to exist as a third option here —
-// removed once Tasks view's own per-job/phase/sub-phase collapse made it
-// redundant; a stale 'jobs' value already in a returning user's
-// localStorage falls back to 'tasks' rather than landing on a mode with no
-// button to reach it anymore.
-let ganttViewMode = localStorage.getItem('gantt_view_mode_v1') || 'tasks';
-if (ganttViewMode === 'jobs') ganttViewMode = 'tasks';
-
-// Foreman/lead lives on the job's linked card's custom fields (see
-// CUSTOM_FIELD_DEFS), not on the job itself — cards carry the same
-// pm/foreman/etc. values shown in the Board's quick-edit popup.
-function getJobLeadName(job) {
-  const card = getPrimaryPhaseCard(job);
-  const name = card && card.customFields && card.customFields.foreman;
-  return (name && name.trim()) || 'Unassigned';
-}
-
-// Hash-based so the same lead name always lands on the same color across
-// renders/sessions without needing to store a persistent mapping anywhere.
-const LEAD_COLOR_PALETTE = ['#3949ab', '#e53935', '#43a047', '#f0ad4e', '#8e24aa', '#00897b', '#d81b60', '#546e7a', '#fb8c00', '#5d4037', '#00acc1', '#7cb342'];
-function colorForLead(name) {
-  if (!name) return '#999';
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return LEAD_COLOR_PALETTE[hash % LEAD_COLOR_PALETTE.length];
-}
-
-function syncGanttViewModeButtons() {
-  // Look (size/weight/background) is entirely driven by the .active class
-  // in the stylesheet — this just decides which button has it.
-  document.querySelectorAll('.gantt-view-mode-btn').forEach(function(b) {
-    b.classList.toggle('active', b.dataset.mode === ganttViewMode);
-  });
-  const colHeader = document.getElementById('ganttTaskColHeader');
-  if (colHeader) {
-    colHeader.textContent = ganttViewMode === 'leads' ? 'Leads' : 'Task';
-  }
-  syncGanttJobFocusBanner();
-}
-
-function setGanttViewMode(mode) {
-  // Defense-in-depth to match the button's own hide (see
-  // applyPermissionGating()) — belt-and-suspenders in case this ever gets
-  // triggered some other way than clicking the (already-hidden) tab.
-  if (mode === 'tasks' && !hasMinTier('projectAdmin')) return;
-  ganttViewMode = mode;
-  localStorage.setItem('gantt_view_mode_v1', mode);
-  syncGanttViewModeButtons();
-  renderGantt();
-}
+// One row per task, with its own per-job/per-phase/per-sub-phase collapse
+// (see tasksExpandedPhaseIds/tasksExpandedSubPhaseIds above) — the only
+// mode. A "Jobs" (condensed, one-bar-per-job) and "Leads" (same, colored by
+// assigned lead/foreman) mode used to exist alongside this one; both were
+// removed once this view's own collapse made them fully redundant. Kept as
+// a named constant (rather than deleting every `ganttViewMode === 'tasks'`
+// check that referenced it) so this stays a small, low-risk change instead
+// of touching every one of those checks throughout renderGantt().
+const ganttViewMode = 'tasks';
 
 // ===== CONDENSED VIEW: PER-PHASE SUB-PHASE COLLAPSE =====
-// A phase split into sub-phases normally gets one bar per sub-phase in
-// Jobs/Leads view. Collapsing that phase folds its sub-phase bars back
-// into one phase-wide bar with one solid segment per sub-phase, all in the
-// job's own color (sub-phases are told apart by boundary ticks + name
-// labels/tooltips, not by distinct colors — per-task-type coloring doesn't
-// generalize once the same task types repeat across sub-phases). See
-// buildCondensedJobRows()/the isJobSpan collapsed branch in renderGantt().
-// Purely a local view preference, like ganttViewMode itself — not synced
+// A phase split into sub-phases normally gets one bar per sub-phase.
+// Collapsing that phase folds its sub-phase bars back into one phase-wide
+// bar with one solid segment per sub-phase, all in the job's own color
+// (sub-phases are told apart by boundary ticks + name labels/tooltips, not
+// by distinct colors — per-task-type coloring doesn't generalize once the
+// same task types repeat across sub-phases). See the isJobSpan collapsed
+// branch in renderGantt(). Purely a local view preference, like ganttViewMode itself — not synced
 // to other users. Keyed by phase id (globally unique) rather than job id,
 // since a job's OTHER phases stay exactly as they are regardless of one
 // phase's collapse state.
@@ -4172,24 +4124,6 @@ function applyPermissionGating() {
   // wrong regardless of tier).
   const addJobBtn = document.querySelector('.job-rail-add-btn');
   if (addJobBtn) addJobBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
-  // Gantt "All Jobs" tab (full task-level view) — Project Admin and up
-  // only; everyone else is limited to the condensed "Jobs" tab. Full-hide,
-  // not just disable, same reasoning as the other tab/nav-style buttons
-  // above — a greyed-out tab in an otherwise-normal-looking strip reads as
-  // broken. 'tasks' is also this app's account-wide DEFAULT mode, so a
-  // restricted account landing here for the first time (nothing in their
-  // own browser's localStorage yet) needs actively bumped over to 'leads'
-  // rather than just having the tab hidden out from under an
-  // already-active mode — see the correction right below, and the
-  // matching guard in setGanttViewMode().
-  const ganttViewTasksBtn = document.getElementById('ganttViewTasks');
-  if (ganttViewTasksBtn) ganttViewTasksBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
-  if (!hasMinTier('projectAdmin') && ganttViewMode === 'tasks') {
-    ganttViewMode = 'leads';
-    localStorage.setItem('gantt_view_mode_v1', 'leads');
-    syncGanttViewModeButtons();
-    if (document.getElementById('timelineBody')) renderGantt();
-  }
   ['deleteBtn', 'duplicateJobBtn'].forEach(function(id) {
     const el = document.getElementById(id);
     if (el && !hasMinTier('projectAdmin')) el.style.display = 'none';
@@ -6149,7 +6083,7 @@ function deleteCalendarEventFromModal() {
 }
 
 function renderGantt() {
-  syncGanttViewModeButtons();
+  syncGanttJobFocusBanner();
   // Row order across the WHOLE board: earliest start date first, regardless
   // of which job a task belongs to. Ties broken by job order then task's
   // stored order so identical start dates stay stable/predictable.
@@ -6198,7 +6132,7 @@ function renderGantt() {
   // into a single span, with one solid segment per sub-unit drawn inside it
   // (see the isJobSpan collapsed branch below). Only offered when the phase
   // is actually split into 2+ real sub-phases (see collapsedPhaseIds).
-  function buildPhaseCollapsedRow(job, phase, segments, leadName) {
+  function buildPhaseCollapsedRow(job, phase, segments) {
     let overallStart = null, overallFinish = null;
     segments.forEach(function(seg) {
       if (!overallStart || seg.start < overallStart) overallStart = seg.start;
@@ -6211,10 +6145,9 @@ function renderGantt() {
       start: overallStart.toISOString().split('T')[0],
       finish: overallFinish.toISOString().split('T')[0],
       notes: '',
-      color: leadName ? colorForLead(leadName) : job.color,
+      color: job.color,
       order: 0,
-      isJobSpan: true,
-      leadName: leadName || null
+      isJobSpan: true
     };
     return { job: job, task: pseudoTask, phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name, subPhaseId: null, subPhaseName: null, collapsible: true, collapsedSegments: segments };
   }
@@ -6222,7 +6155,7 @@ function renderGantt() {
   // span. Used both for every sub-unit of an un-folded phase in Jobs/Leads
   // view, and for a still-collapsed (i.e. not yet individually expanded)
   // sub-phase in Tasks view (see tasksExpandedSubPhaseIds).
-  function buildSubPhaseRow(job, phase, seg, leadName) {
+  function buildSubPhaseRow(job, phase, seg) {
     const namePart = (phase.isDefault ? '' : ' — ' + phase.name) + (seg.subPhaseName ? ' — ' + seg.subPhaseName : '');
     const pseudoTask = {
       id: 'jobspan|' + job.id + '|' + (phase.id || '') + '|' + (seg.subPhaseId || ''),
@@ -6230,39 +6163,13 @@ function renderGantt() {
       start: seg.start.toISOString().split('T')[0],
       finish: seg.finish.toISOString().split('T')[0],
       notes: '',
-      color: leadName ? colorForLead(leadName) : job.color,
+      color: job.color,
       order: 0,
-      isJobSpan: true,
-      leadName: leadName || null
+      isJobSpan: true
     };
     const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
     return { job: job, task: pseudoTask, phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name, subPhaseId: seg.subPhaseId, subPhaseName: seg.subPhaseName, collapsible: collapsible };
   }
-  // Jobs/Leads view: every phase condensed — one row per phase (folded via
-  // collapsedPhaseIds) or one row per sub-unit otherwise. A phase (or
-  // unphased job) with no dated tasks at all has nothing to span, so it's
-  // left out the same way an individual undated task has no bar in 'tasks'
-  // view.
-  function buildCondensedRowsForJob(job) {
-    const rows = [];
-    // getJobLeadName() reads the job's own card (Foreman custom field),
-    // which for a linked reference job lives in the OTHER project's
-    // boardCards, not this one's — falls back to "Unassigned" rather
-    // than crashing; acceptable for a read-only cross-project preview.
-    const leadName = ganttViewMode === 'leads' && !job.isLinkedReference ? getJobLeadName(job) : null;
-    getJobPhases(job).forEach(function(phase) {
-      const segments = getPhaseSegments(phase);
-      if (!segments.length) return;
-      const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
-      if (collapsible && collapsedPhaseIds.has(phase.id)) {
-        rows.push(buildPhaseCollapsedRow(job, phase, segments, leadName));
-      } else {
-        segments.forEach(function(seg) { rows.push(buildSubPhaseRow(job, phase, seg, leadName)); });
-      }
-    });
-    return rows;
-  }
-
   // Tasks view: every phase/sub-phase starts CONDENSED by default —
   // explicitly expanding one (see tasksExpandedPhaseIds/
   // tasksExpandedSubPhaseIds above toggleTasksPhaseExpanded()/
@@ -6324,23 +6231,6 @@ function renderGantt() {
     return rows;
   }
 
-  // 'jobs'/'leads' view: every job fully condensed via
-  // buildCondensedRowsForJob() — never consults tasksExpandedPhaseIds/
-  // tasksExpandedSubPhaseIds, which are Tasks-view-only preferences (see
-  // buildVisibleTaskRows()). An unphased job just has its one synthetic
-  // default phase (see getJobPhases()), so this is still exactly one row
-  // per job for the common case.
-  function buildCondensedJobRows() {
-    const rows = [];
-    getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
-      if (!showArchived && job.archived) return;
-      rows.push.apply(rows, buildCondensedRowsForJob(job));
-    });
-    rows.sort(function(a, b) {
-      return byStartDate(a.task, b.task) || ((a.job.order || 0) - (b.job.order || 0));
-    });
-    return rows;
-  }
   computeDateRange();
   const totalDays = getDaysDiff(startDate, endDate) + 1;
   const containerW = document.getElementById('timelineBody').clientWidth;
@@ -6421,7 +6311,7 @@ function renderGantt() {
 
   let visibleRowIdx = 0;
   const jobBarMap = {};
-  const visibleRows = ganttViewMode === 'tasks' ? buildVisibleTaskRows() : buildCondensedJobRows();
+  const visibleRows = buildVisibleTaskRows();
 
   // .timeline-grid's own CSS only guarantees min-height:100% of its
   // scroll container — every child in here (row backgrounds aside) is
@@ -6478,8 +6368,8 @@ function renderGantt() {
       // instead of this plain-text label, to avoid saying the same thing
       // twice.
       const mainLabel = task.isJobSpan
-        ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : (!isTasksMode && phaseLabel ? linkGlyph + escapeHtml(phaseLabel) : (linkGlyph ? linkGlyph.trim() : '')))
-        : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + (!isTasksMode && phaseLabel ? ' (' + escapeHtml(phaseLabel) + ')' : '');
+        ? (linkGlyph ? linkGlyph.trim() : '')
+        : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name);
       let jobPill, phasePillHtml = '', subPillHtml = '';
       if (isTasksMode) {
         const jobColor = job.color || '#999';
@@ -6811,7 +6701,7 @@ function renderGantt() {
       // segment from another) has nothing to offer; the plain outline+
       // label from the isJobSpan branch above is enough.
       if (task.isJobSpan && !job.isLinkedReference) {
-        // A collapsed row (see collapsedPhaseIds/buildCondensedJobRows)
+        // A collapsed row (see collapsedPhaseIds/buildPhaseCollapsedRow)
         // still belongs to one specific phase — phaseId stays the row's
         // real phase either way — it just has no single sub-unit to read
         // tasks from (it spans every sub-phase of that phase). Build one
@@ -7293,10 +7183,11 @@ function onTickResizeEnd(e) {
 }
 
 // --- Bar body: drag to move the whole task (both dates shift together) ---
-// isJobSpan: dragging a condensed 'jobs'/'leads' bar moves every dated task
-// in the job together (see onBarMoveEnd) rather than one real task, so
+// isJobSpan: dragging a condensed phase/sub-phase bar moves every dated
+// task in it together (see onBarMoveEnd) rather than one real task, so
 // `task` here is a synthetic start/finish spanning all of them, recomputed
-// fresh from the job's current tasks (same rule as buildCondensedJobRows()).
+// fresh from the job's current tasks (same rule as buildPhaseCollapsedRow()/
+// buildSubPhaseRow()).
 function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId, subPhaseId) {
   let task;
   if (isJobSpan) {
@@ -7594,32 +7485,15 @@ function fitToView() {
 function buildLegend() {
   const legend = document.getElementById('legend');
   let html;
-  if (ganttViewMode === 'leads') {
-    // Bar color means something different in this view (who's leading the
-    // job, not which job it is) — the legend needs to explain that
-    // mapping instead of the usual per-job one, or the colors are just
-    // arbitrary.
-    const leadColors = {};
-    getVisibleJobs().forEach(job => {
-      if (!showArchived && job.archived) return;
-      const name = getJobLeadName(job);
-      leadColors[name] = colorForLead(name);
-    });
-    html = '<div class="legend-float-title">Leads</div>';
-    Object.entries(leadColors).sort().forEach(([name, color]) => {
-      html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + escapeHtml(name) + '</div></div>';
-    });
-  } else {
-    const jobColors = {};
-    getVisibleJobs().forEach(job => {
-      if (!showArchived && job.archived) return;
-      jobColors[job.name] = job.color;
-    });
-    html = '<div class="legend-float-title">Jobs</div>';
-    Object.entries(jobColors).sort().forEach(([name, color]) => {
-      html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + escapeHtml(name) + '</div></div>';
-    });
-  }
+  const jobColors = {};
+  getVisibleJobs().forEach(job => {
+    if (!showArchived && job.archived) return;
+    jobColors[job.name] = job.color;
+  });
+  html = '<div class="legend-float-title">Jobs</div>';
+  Object.entries(jobColors).sort().forEach(([name, color]) => {
+    html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + escapeHtml(name) + '</div></div>';
+  });
   legend.innerHTML = html;
 }
 
@@ -7669,13 +7543,10 @@ function showTooltip(e, job, task) {
   const f = new Date(task.finish + 'T00:00:00');
   const dur = getDaysDiff(s, f) + 1;
   let html = '<div class="tt-title">' + escapeHtml(job.name) + '</div>';
-  // A job-span bar (see buildCondensedJobRows()) IS the job, condensed —
-  // task.name is just job.name again there, so a "Task:" row repeating
-  // the title right above it would be redundant. Show the lead instead,
-  // if this is the 'leads' view.
-  if (task.isJobSpan) {
-    if (task.leadName) html += '<div class="tt-row"><span class="tt-label">Lead:</span><span class="tt-value">' + escapeHtml(task.leadName) + '</span></div>';
-  } else {
+  // A job-span bar (see buildPhaseCollapsedRow()/buildSubPhaseRow()) IS the
+  // job/phase, condensed — task.name is just that name again there, so a
+  // "Task:" row repeating the title right above it would be redundant.
+  if (!task.isJobSpan) {
     html += '<div class="tt-row"><span class="tt-label">Task:</span><span class="tt-value">' + escapeHtml(task.name) + '</span></div>';
   }
   html += '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' + s.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
