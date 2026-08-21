@@ -1087,6 +1087,31 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .cf-multiselect-empty { font-size: 11px; color: #999; padding: 2px 0; }
   .cf-multiselect-loading { font-size: 11px; color: #999; font-style: italic; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; }
 
+  /* Collapses a cf-multiselect checkbox list (Members custom field,
+     calendar event "Visible to") behind a toggle button + panel instead
+     of listing every account inline — see toggleMsDropdown()/msSetAll()
+     in the script below. */
+  .ms-dropdown { position: relative; }
+  .ms-dropdown-toggle {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: white; color: var(--text); font-size: 12px; font-family: inherit;
+    font-weight: 500; cursor: pointer; text-align: left;
+  }
+  .ms-dropdown-toggle:hover { border-color: var(--primary-light); }
+  .ms-dropdown-arrow { color: var(--text-light); flex-shrink: 0; transition: transform 0.15s; }
+  .ms-dropdown.open .ms-dropdown-arrow { transform: rotate(180deg); }
+  .ms-dropdown-panel {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+    background: white; border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow-hover); padding: 8px; max-height: 220px; overflow-y: auto;
+  }
+  .ms-dropdown.open .ms-dropdown-panel { display: block; }
+  .ms-dropdown-actions { display: flex; gap: 12px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .ms-dropdown-actions button { background: none; border: none; color: var(--primary-light); font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; }
+  .ms-dropdown-actions button:hover { text-decoration: underline; }
+  .ms-dropdown-panel .cf-multiselect { border: none; padding: 0; background: none; }
+
   /* Checklist */
   /* Which board-column stage's checklist is showing — see
      getChecklistForStage()/setActiveChecklistStage(). Sits in the section
@@ -1600,6 +1625,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .cf-field select,
   body.dark-mode .cf-field input,
   body.dark-mode .cf-multiselect,
+  body.dark-mode .ms-dropdown-toggle,
+  body.dark-mode .ms-dropdown-panel,
   body.dark-mode .checklist-add-row input,
   body.dark-mode .manage-field-add-row input,
   body.dark-mode .search-box {
@@ -2234,7 +2261,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     </div>
     <div class="form-group" id="ce_visibility_members_group" style="display:none;">
       <label>Visible to</label>
-      <div class="cf-multiselect" id="ce_visibility_members_list"></div>
+      <div class="ms-dropdown" id="ceVisibilityMsDropdown">
+        <button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown('ceVisibilityMsDropdown')"><span>Select members...</span><span class="ms-dropdown-arrow">▾</span></button>
+        <div class="ms-dropdown-panel">
+          <div class="ms-dropdown-actions" id="ce_visibility_members_actions" style="display:none;">
+            <button type="button" onclick="msSetAll('ce_visibility_members_list', true)">Select All</button>
+            <button type="button" onclick="msSetAll('ce_visibility_members_list', false)">Unselect All</button>
+          </div>
+          <div class="cf-multiselect" id="ce_visibility_members_list"></div>
+        </div>
+      </div>
     </div>
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-secondary" id="ceDeleteBtn" data-min-tier="editor" onclick="deleteCalendarEventFromModal()" style="display:none; color:var(--danger);" title="Deletes the whole series, not just one occurrence"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
@@ -4321,7 +4357,51 @@ function closeAllDropdowns() {
   closeSettingsMenu();
   closeAllColSettings();
   closeViewAsDropdown();
+  closeAllMsDropdowns();
 }
+
+// ===== MEMBER MULTI-SELECT DROPDOWN =====
+// Collapses a cf-multiselect checkbox list (Members custom field, calendar
+// event "Visible to") behind a toggle button instead of listing every
+// account inline. Generic over any .ms-dropdown wrapper — see
+// renderFieldDefHtml()'s 'multiselect' branch and
+// toggleCalendarEventVisibilityFields() for the two current callers.
+function toggleMsDropdown(id, forceOpen) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const open = forceOpen != null ? forceOpen : !el.classList.contains('open');
+  closeAllMsDropdowns();
+  el.classList.toggle('open', open);
+}
+function closeAllMsDropdowns() {
+  document.querySelectorAll('.ms-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+}
+// Dispatches a real 'change' event per checkbox (rather than just setting
+// .checked) so each grid's own delegated autosave listener still fires —
+// same reason the rest of this app avoids setting .checked silently.
+function msSetAll(optionsId, checked) {
+  document.querySelectorAll('#' + optionsId + ' input[type="checkbox"]').forEach(function(cb) {
+    if (cb.checked !== checked) {
+      cb.checked = checked;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+}
+function msDropdownLabelText(count) {
+  return count ? (count + ' member' + (count === 1 ? '' : 's') + ' selected') : 'Select members...';
+}
+// Keeps every open dropdown's toggle-button label in sync with its
+// checkboxes — one delegated listener instead of attaching/detaching one
+// per render (these panels get rebuilt often: roster load, Manage Fields
+// close, every job-form/card-modal open).
+document.addEventListener('change', function(e) {
+  if (e.target.type !== 'checkbox') return;
+  const dropdown = e.target.closest('.ms-dropdown');
+  if (!dropdown) return;
+  const labelEl = dropdown.querySelector('.ms-dropdown-toggle span:first-child');
+  if (!labelEl) return;
+  labelEl.textContent = msDropdownLabelText(dropdown.querySelectorAll('input[type="checkbox"]:checked').length);
+});
 
 // Override old save functions to use project layer
 function saveJobs() {
@@ -4619,6 +4699,10 @@ document.addEventListener('click', function(e) {
 
   // Close column settings dropdowns
   if (!e.target.closest('.board-col-settings-wrap')) closeAllColSettings();
+
+  // Close member multi-select dropdowns (Members custom field, calendar
+  // event "Visible to")
+  if (!e.target.closest('.ms-dropdown')) closeAllMsDropdowns();
 
   // Close the job drawer on a click outside it — but not for a click that
   // opened/switched it in the first place (a Gantt bar or Calendar entry
@@ -6091,17 +6175,20 @@ function toggleRepeatUntilField() {
 }
 
 // Shows/rebuilds the Members checkbox list (see the Members custom field's
-// identical cf-multiselect pattern) only when Visibility is set to
-// 'members' — same lazy-roster-load-then-rerender idiom as
-// renderCustomFieldsGrid(). `preSelected` carries the event's own
-// evt.visibleMembers forward across a re-render (e.g. once the roster
-// finishes loading) so an in-progress selection isn't lost.
+// identical cf-multiselect pattern, collapsed the same way behind
+// toggleMsDropdown()/msSetAll()) only when Visibility is set to 'members'
+// — same lazy-roster-load-then-rerender idiom as renderCustomFieldsGrid().
+// `preSelected` carries the event's own evt.visibleMembers forward across
+// a re-render (e.g. once the roster finishes loading) so an in-progress
+// selection isn't lost.
 function toggleCalendarEventVisibilityFields(preSelected) {
   const visibility = document.getElementById('ce_visibility').value;
   const group = document.getElementById('ce_visibility_members_group');
   group.style.display = (visibility === 'members') ? 'block' : 'none';
   if (visibility !== 'members') return;
   const list = document.getElementById('ce_visibility_members_list');
+  const actions = document.getElementById('ce_visibility_members_actions');
+  const dropdownLabel = document.querySelector('#ceVisibilityMsDropdown .ms-dropdown-toggle span:first-child');
   const selected = preSelected || collectCalendarEventVisibilityMembers();
   if (!cachedUserRoster) {
     list.innerHTML = '<span class="cf-multiselect-loading">Loading team roster…</span>';
@@ -6113,6 +6200,8 @@ function toggleCalendarEventVisibilityFields(preSelected) {
         return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>';
       }).join('')
     : '<span class="cf-multiselect-empty">No team accounts yet</span>';
+  if (actions) actions.style.display = cachedUserRoster.length ? 'flex' : 'none';
+  if (dropdownLabel) dropdownLabel.textContent = msDropdownLabelText(selected.length);
 }
 function collectCalendarEventVisibilityMembers() {
   return Array.from(document.querySelectorAll('#ce_visibility_members_list input:checked')).map(function(el) { return el.value; });
@@ -10576,7 +10665,7 @@ function reconnectCard(cardId, event) {
 // once the user-select/multiselect branches need to lazy-load
 // cachedUserRoster and re-render themselves; each caller passes its own
 // "re-render me with my current values" closure.
-function renderFieldDefHtml(def, val, onNeedsRoster) {
+function renderFieldDefHtml(def, val, onNeedsRoster, idPrefix) {
   if (def.type === 'select') {
     const opts = (fieldOptions[def.key] || []);
     const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
@@ -10608,16 +10697,30 @@ function renderFieldDefHtml(def, val, onNeedsRoster) {
     // to be a real, matchable account for isJobVisibleToMe() to work.
     // Checkbox value = username (what gets stored/matched), label =
     // displayName. Lazy-loaded once per session; re-renders this same
-    // grid once it resolves.
+    // grid once it resolves. Collapsed behind a toggle button + Select
+    // All/Unselect All (see toggleMsDropdown()/msSetAll()) instead of
+    // listing every account inline — dropdownId needs to be unique per
+    // grid (card modal's teamFieldsGrid vs Job Manager's jmTeamFieldsGrid
+    // can both be in the DOM/rendered independently), hence idPrefix.
     const selected = Array.isArray(val) ? val : [];
     if (!cachedUserRoster) {
       ensureUserRosterLoaded().then(onNeedsRoster);
       return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
     }
+    const dropdownId = (idPrefix || '') + 'MsDropdown_' + def.key;
+    const optionsId = dropdownId + '_options';
     const optionsHtml = cachedUserRoster.length
       ? cachedUserRoster.map(u => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>').join('')
       : '<span class="cf-multiselect-empty">No team accounts yet</span>';
-    return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect">' + optionsHtml + '</div></div>';
+    return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label>' +
+      '<div class="ms-dropdown" id="' + dropdownId + '">' +
+        '<button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown(\'' + dropdownId + '\')"><span>' + msDropdownLabelText(selected.length) + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
+        '<div class="ms-dropdown-panel">' +
+          (cachedUserRoster.length ? '<div class="ms-dropdown-actions"><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', true)">Select All</button><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', false)">Unselect All</button></div>' : '') +
+          '<div class="cf-multiselect" id="' + optionsId + '">' + optionsHtml + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }
   return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
 }
@@ -10626,7 +10729,7 @@ function renderCustomFieldsGrid(values) {
   values = values || {};
   const grid = document.getElementById('customFieldsGrid');
   const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) === -1);
-  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderCustomFieldsGrid(collectCustomFieldValues()); })).join('');
+  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderCustomFieldsGrid(collectCustomFieldValues()); }, '')).join('');
   applyPermissionGating(); // rebuilt on every card-modal open, outside renderAll()'s own sweep
 }
 
@@ -10641,7 +10744,7 @@ function renderTeamFieldsGrid(values) {
   const grid = document.getElementById('teamFieldsGrid');
   if (!grid) return;
   const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) !== -1);
-  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderTeamFieldsGrid(collectCustomFieldValues()); })).join('');
+  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderTeamFieldsGrid(collectCustomFieldValues()); }, '')).join('');
   applyPermissionGating();
 }
 
@@ -10667,7 +10770,7 @@ function renderJobCustomFieldsGrid(values) {
   const grid = document.getElementById('jmCustomFieldsGrid');
   if (!grid) return;
   const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) === -1);
-  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); })).join('');
+  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); }, 'jm')).join('');
   applyPermissionGating(); // rebuilt on every job-form open, outside renderAll()'s own sweep
 }
 
@@ -10678,7 +10781,7 @@ function renderJobTeamFieldsGrid(values) {
   const grid = document.getElementById('jmTeamFieldsGrid');
   if (!grid) return;
   const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) !== -1);
-  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderJobTeamFieldsGrid(collectJobCustomFieldValues()); })).join('');
+  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderJobTeamFieldsGrid(collectJobCustomFieldValues()); }, 'jm')).join('');
   applyPermissionGating();
 }
 
@@ -11594,6 +11697,7 @@ document.addEventListener('keydown', function(e) {
     closeSettingsMenu();
     if (document.getElementById('manageFieldsModal').classList.contains('show')) closeManageFields();
     if (document.getElementById('themeModal').classList.contains('show')) closeThemeModal();
+    closeAllMsDropdowns();
     hideDatePopover();
     if (document.getElementById('jobForm').style.display !== 'none') cancelEdit();
   }
