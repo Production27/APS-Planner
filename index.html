@@ -324,8 +324,6 @@
   .task-row .col-jobs .task-row-jobname.collapsible { cursor: pointer; }
   .task-row .col-jobs .task-row-jobname.collapsible:hover { filter: brightness(1.15); }
   body.dark-mode .task-row .col-jobs .task-row-jobname { color: #fff; }
-  .task-row .col-jobs .job-collapse-toggle { display: inline-block; cursor: pointer; opacity: 0.6; margin-left: 6px; }
-  .task-row .col-jobs .job-collapse-toggle:hover { opacity: 1; }
   .task-row .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); margin-left: 6px; display: inline-block; }
 
   .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
@@ -6407,31 +6405,32 @@ function renderGantt() {
       const mainLabel = task.isJobSpan
         ? (ganttViewMode === 'leads' ? escapeHtml(task.leadName || 'Unassigned') : (phaseLabel ? linkGlyph + escapeHtml(phaseLabel) : (linkGlyph ? linkGlyph.trim() : '')))
         : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name) + (phaseLabel ? ' (' + escapeHtml(phaseLabel) + ')' : '');
-      // A phase split into 2+ sub-phases gets a collapse toggle on its
-      // name pill (see collapsedPhaseIds/togglePhaseCollapse) — the
-      // chevron shows current state, click folds/unfolds just that phase's
-      // sub-phase bars without also triggering the row's own click-to-edit.
-      const collapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? '▸ ' : '▾ ') : '';
-      const collapseTitle = entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') : '';
-      const jobPill = '<span class="task-row-jobname' + (entry.collapsible ? ' collapsible' : '') + '"' + (collapseTitle ? ' title="' + collapseTitle + '"' : '') + ' style="background:' + (job.color || '#999') + ';">' + collapseGlyph + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
-      // Per-job collapse toggle (Tasks view only — see collapsedJobIds/
-      // toggleJobCollapse()): folds THIS job's tasks into the same condensed
-      // job-span bar(s) Jobs/Leads view uses, independently of every other
-      // job. Kept as its own element (not merged into collapseGlyph above)
-      // so its click zone never overlaps the unrelated per-phase fold toggle.
-      const jobToggleGlyph = ganttViewMode === 'tasks' ? (collapsedJobIds.has(job.id) ? '▸' : '▾') : '';
-      const jobToggleTitle = collapsedJobIds.has(job.id) ? 'Click to expand this job into individual tasks' : 'Click to collapse this job into a single bar';
-      const jobToggleHtml = jobToggleGlyph ? '<span class="job-collapse-toggle" title="' + jobToggleTitle + '">' + jobToggleGlyph + '</span> ' : '';
+      // The job-name pill doubles as a collapse toggle. In Tasks view it
+      // always controls the per-job collapse (see collapsedJobIds/
+      // toggleJobCollapse()) — folding THIS job's tasks into the same
+      // condensed job-span bar(s) Jobs/Leads view uses, independently of
+      // every other job. In Jobs/Leads view (where every job is already
+      // condensed) it instead controls the finer per-phase fold, same as
+      // before this feature existed, when the phase has 2+ sub-phases (see
+      // collapsedPhaseIds/togglePhaseCollapse).
+      const isTasksModeJobToggle = ganttViewMode === 'tasks';
+      const pillClickable = isTasksModeJobToggle || entry.collapsible;
+      const collapseGlyph = isTasksModeJobToggle
+        ? (collapsedJobIds.has(job.id) ? '▸ ' : '▾ ')
+        : (entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? '▸ ' : '▾ ') : '');
+      const collapseTitle = isTasksModeJobToggle
+        ? (collapsedJobIds.has(job.id) ? 'Click to expand this job into individual tasks' : 'Click to collapse this job into a single bar')
+        : (entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') : '');
+      const jobPill = '<span class="task-row-jobname' + (pillClickable ? ' collapsible' : '') + '"' + (collapseTitle ? ' title="' + collapseTitle + '"' : '') + ' style="background:' + (job.color || '#999') + ';">' + collapseGlyph + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
       row.title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
-      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobToggleHtml + jobPill + noteDot + '</div>';
+      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobPill + noteDot + '</div>';
       row.addEventListener('click', () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); });
-      if (entry.collapsible) {
+      if (pillClickable) {
         const pillEl = row.querySelector('.task-row-jobname');
-        if (pillEl) pillEl.addEventListener('click', function(e) { e.stopPropagation(); togglePhaseCollapse(phaseId); });
-      }
-      if (jobToggleGlyph) {
-        const jobToggleEl = row.querySelector('.job-collapse-toggle');
-        if (jobToggleEl) jobToggleEl.addEventListener('click', function(e) { e.stopPropagation(); toggleJobCollapse(job.id); });
+        if (pillEl) pillEl.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (isTasksModeJobToggle) toggleJobCollapse(job.id); else togglePhaseCollapse(phaseId);
+        });
       }
       leftBody.appendChild(row);
       visibleRowIdx++;
@@ -6652,12 +6651,23 @@ function renderGantt() {
         bar.textContent = task.isDueMarker ? '🚩' : '';
         if (duration !== 1) {
           const jobTag = document.createElement('span');
-          jobTag.className = 'task-bar-job-tag';
+          // Tasks view: this job-name tag doubles as the same collapse
+          // toggle as the left-panel pill (see collapsedJobIds/
+          // toggleJobCollapse()) — this branch only ever draws for a job
+          // that ISN'T currently collapsed (a collapsed job's tasks fold
+          // into the isJobSpan branch above instead), so the glyph is
+          // always the "click to collapse" chevron here.
+          const isTasksModeJobToggle = ganttViewMode === 'tasks';
+          jobTag.className = 'task-bar-job-tag' + (isTasksModeJobToggle ? ' collapsible' : '');
           // Not softened — see the comment on the other task-bar-job-tag
           // background assignments above for why (hardcoded white text).
           jobTag.style.background = job.color;
-          jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
-          jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+          jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + (isTasksModeJobToggle ? '▾ ' : '') + job.name + (phaseLabel ? ' — ' + phaseLabel : '');
+          jobTag.title = (isTasksModeJobToggle ? 'Click to collapse this job into a single bar — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+          if (isTasksModeJobToggle) {
+            jobTag.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+            jobTag.addEventListener('click', function(e) { e.stopPropagation(); toggleJobCollapse(job.id); });
+          }
           bar.appendChild(jobTag);
         }
       }
