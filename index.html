@@ -2274,22 +2274,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <label>Due Date</label>
         <input type="date" id="c_due">
       </div>
-      <div class="form-group">
-        <div class="color-toggle-row" onclick="toggleColorPanel()">
-          <label>Label Color</label>
-          <div class="color-toggle-swatch-wrap">
-            <span class="color-toggle-swatch" id="colorToggleSwatch" style="background:#3949ab;"></span>
-            <span class="color-toggle-arrow" id="colorToggleArrow">▾</span>
-          </div>
-        </div>
-        <div class="color-picker-panel" id="colorPickerPanel">
-          <div class="color-picker-wrapper">
-            <input type="color" id="c_color" value="#3949ab" oninput="updateColorSwatch()">
-            <div class="color-presets" id="cardColorPresets"></div>
-          </div>
-        </div>
-      </div>
-
       <!-- TEAM: Project Manager / Lead-Foreman / Members — pulled out of
            Custom Fields into their own section since they're real-account
            team assignments, not free-text job details. See
@@ -3141,13 +3125,12 @@ function ensureJobHasCards(job) {
       }
       const card = linked[0];
       card.title = job.name + (phase.isDefault ? '' : ' — ' + phase.name);
-      // Bug found in review: this previously read `job.color || card.color`,
-      // which is always truthy for job.color — so every save/load silently
-      // reverted any custom card color back to the job's bar color, making
-      // the card modal's own color picker effectively non-functional. Keep
-      // whatever color the card already has; only fall back to the job's
-      // color for a card that doesn't have one yet.
-      card.color = card.color || job.color || '#3949ab';
+      // Cards have no independent color anymore — the card modal's own
+      // color picker was removed since it silently fought with this sync
+      // (see git history). job.color is the single source of truth now,
+      // re-applied on every load so changing a job's color updates its
+      // card(s) immediately instead of only at creation time.
+      card.color = job.color || '#3949ab';
       if (!card.jobId) card.jobId = job.id;
       if ((card.phaseId || null) !== pid) card.phaseId = pid;
     }
@@ -4592,7 +4575,6 @@ function init() {
   autoArchiveJobs();
   renderAll();
   setupScrollSync();
-  buildCardColorPresets();
   buildCalendarEventColorPresets();
   initJobFormAutosaveListeners();
   initCardFormAutosaveListeners();
@@ -10656,37 +10638,6 @@ function reconnectCard(cardId, event) {
 }
 
 // ===== BOARD: CARD MODAL =====
-function buildCardColorPresets() {
-  const container = document.getElementById('cardColorPresets');
-  container.innerHTML = '';
-  COLOR_PRESETS.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'color-preset';
-    div.style.background = c;
-    div.dataset.color = c;
-    div.onclick = () => {
-      document.getElementById('c_color').value = c;
-      container.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
-      div.classList.add('selected');
-      updateColorSwatch();
-      scheduleCardAutosave();
-    };
-    container.appendChild(div);
-  });
-}
-
-function updateColorSwatch() {
-  document.getElementById('colorToggleSwatch').style.background = document.getElementById('c_color').value;
-}
-
-function toggleColorPanel(forceOpen) {
-  const panel = document.getElementById('colorPickerPanel');
-  const arrow = document.getElementById('colorToggleArrow');
-  const open = forceOpen != null ? forceOpen : !panel.classList.contains('open');
-  panel.classList.toggle('open', open);
-  arrow.classList.toggle('open', open);
-}
-
 // ----- Custom fields -----
 // One shared per-field renderer for both grids (Team + Custom Fields) and
 // both surfaces (card modal + Job Manager) — `onNeedsRoster` is called
@@ -11551,12 +11502,6 @@ function openEditCard(id) {
   document.getElementById('c_title').value = card.title;
   document.getElementById('c_description').value = card.description || '';
   document.getElementById('c_due').value = card.due || '';
-  document.getElementById('c_color').value = card.color || '#3949ab';
-  document.querySelectorAll('#cardColorPresets .color-preset').forEach(p => {
-    p.classList.toggle('selected', p.dataset.color === card.color);
-  });
-  updateColorSwatch();
-  toggleColorPanel(false);
   renderCustomFieldsGrid(card.customFields || {});
   renderTeamFieldsGrid(card.customFields || {});
   renderChecklistStageSelect();
@@ -11614,7 +11559,6 @@ function autoSaveCardForm() {
   const cardData = {
     description: document.getElementById('c_description').value.trim(),
     due: document.getElementById('c_due').value,
-    color: document.getElementById('c_color').value,
     customFields: collectCustomFieldValues(),
     checklists: draftChecklists,
     checklistAssignees: draftChecklistAssignees,
@@ -11645,7 +11589,6 @@ function initCardFormAutosaveListeners() {
   });
   document.getElementById('c_description').addEventListener('input', scheduleCardAutosave);
   document.getElementById('c_due').addEventListener('change', scheduleCardAutosave);
-  document.getElementById('c_color').addEventListener('input', scheduleCardAutosave);
 
   const grid = document.getElementById('customFieldsGrid');
   grid.addEventListener('input', function(e) { if (e.target.dataset.field) scheduleCardAutosave(); });
