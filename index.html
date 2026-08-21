@@ -1135,7 +1135,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      look for the <select> so it doesn't need its own theming. */
   .checklist-visibility-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .checklist-visibility-row label { font-size: 11px; color: var(--text-light); flex-shrink: 0; }
-  .checklist-visibility-row select { flex: 1; min-width: 0; }
+  .checklist-visibility-row select,
+  .checklist-visibility-row .ms-dropdown { flex: 1; min-width: 0; }
   .checklist-private-notice { font-size: 12px; color: var(--text-light); padding: 10px 0; font-style: italic; }
   /* Permission gating — see applyPermissionGating(). Elements tagged
      data-min-tier get this toggled on when the current account's tier is
@@ -1994,9 +1995,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="mobile-field-body">
               <div class="checklist-visibility-row">
                 <label>Visible to</label>
-                <select class="checklist-stage-select" id="jmChecklistVisibilitySelect" onchange="setJobChecklistStageAssignee(this.value)"></select>
+                <div class="ms-dropdown" id="jmChecklistVisibilityMsDropdown" data-ms-empty-label="Everyone">
+                  <button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown('jmChecklistVisibilityMsDropdown')"><span>Everyone</span><span class="ms-dropdown-arrow">▾</span></button>
+                  <div class="ms-dropdown-panel">
+                    <div class="ms-dropdown-actions" id="jmChecklistVisibilityMsActions" style="display:none;">
+                      <button type="button" onclick="msSetAll('jmChecklistVisibilityMsOptions', true)">Select All</button>
+                      <button type="button" onclick="msSetAll('jmChecklistVisibilityMsOptions', false)">Unselect All</button>
+                    </div>
+                    <div class="cf-multiselect" id="jmChecklistVisibilityMsOptions"></div>
+                  </div>
+                </div>
               </div>
-              <div id="jmChecklistPrivateNotice" class="checklist-private-notice" style="display:none;">This stage's checklist is private to another team member.</div>
+              <div id="jmChecklistPrivateNotice" class="checklist-private-notice" style="display:none;">This stage's checklist is private to specific team members.</div>
               <div id="jmChecklistBody">
                 <div class="checklist-progress-row">
                   <div class="checklist-progress-bar"><div class="checklist-progress-fill" id="jmChecklistProgressFill" style="width:0%;"></div></div>
@@ -2324,9 +2334,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         </div>
         <div class="checklist-visibility-row">
           <label>Visible to</label>
-          <select class="checklist-stage-select" id="checklistVisibilitySelect" onchange="setChecklistStageAssignee(this.value)"></select>
+          <div class="ms-dropdown" id="checklistVisibilityMsDropdown" data-ms-empty-label="Everyone">
+            <button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown('checklistVisibilityMsDropdown')"><span>Everyone</span><span class="ms-dropdown-arrow">▾</span></button>
+            <div class="ms-dropdown-panel">
+              <div class="ms-dropdown-actions" id="checklistVisibilityMsActions" style="display:none;">
+                <button type="button" onclick="msSetAll('checklistVisibilityMsOptions', true)">Select All</button>
+                <button type="button" onclick="msSetAll('checklistVisibilityMsOptions', false)">Unselect All</button>
+              </div>
+              <div class="cf-multiselect" id="checklistVisibilityMsOptions"></div>
+            </div>
+          </div>
         </div>
-        <div id="checklistPrivateNotice" class="checklist-private-notice" style="display:none;">This stage's checklist is private to another team member.</div>
+        <div id="checklistPrivateNotice" class="checklist-private-notice" style="display:none;">This stage's checklist is private to specific team members.</div>
         <div id="checklistBody">
         <div class="checklist-progress-row">
           <div class="checklist-progress-bar"><div class="checklist-progress-fill" id="checklistProgressFill" style="width:0%;"></div></div>
@@ -3648,20 +3667,27 @@ function visibleChecklistItems(checklists, columnId) {
 
 // ===== CHECKLIST STAGE VISIBILITY (whole-checklist-per-stage assignment) =====
 // A board-column stage's whole checklist can optionally be restricted to
-// one real user account (see setChecklistStageAssignee()/
+// one or more real user accounts (see setChecklistStageAssignee()/
 // setJobChecklistStageAssignee()) — everyone else, except admins, doesn't
 // see that stage in the Checklist stage picker at all. This mirrors
 // card.checklists' shape: card.checklistAssignees is a plain
-// { [columnId]: username } map; an absent/empty entry means "everyone can
-// see it" (unchanged from before this existed). This is a display-only
+// { [columnId]: username[] } map; an absent/empty array means "everyone
+// can see it" (unchanged from before this existed — was originally a
+// single username string, now an array so a stage can be shared by more
+// than one person; normalizeChecklistAssignees() below coerces any
+// still-stored legacy single-string values). This is a display-only
 // filter, not real access control — the Durable Object still syncs the
 // full card to every connected client, same trust model as the rest of
 // this app (e.g. currentUserRole is likewise "UI convenience only").
+function normalizeChecklistAssignees(assignedTo) {
+  if (Array.isArray(assignedTo)) return assignedTo;
+  return assignedTo ? [assignedTo] : [];
+}
 function isChecklistStageVisibleToMe(assigneesMap, columnId) {
-  const assignedTo = (assigneesMap || {})[columnId];
-  if (!assignedTo) return true;
+  const assignedTo = normalizeChecklistAssignees((assigneesMap || {})[columnId]);
+  if (!assignedTo.length) return true;
   if (currentUserRole === 'admin') return true;
-  return assignedTo === getStoredUsername();
+  return assignedTo.indexOf(getStoredUsername()) !== -1;
 }
 
 // ===== JOB VISIBILITY BY MEMBERSHIP =====
@@ -4387,8 +4413,12 @@ function msSetAll(optionsId, checked) {
     }
   });
 }
-function msDropdownLabelText(count) {
-  return count ? (count + ' member' + (count === 1 ? '' : 's') + ' selected') : 'Select members...';
+// emptyText overrides the zero-selected wording — the checklist "Visible
+// to" dropdown uses "Everyone" (unrestricted, its actual default meaning)
+// instead of the generic "Select members..." placeholder.
+function msDropdownLabelText(count, emptyText) {
+  if (!count) return emptyText || 'Select members...';
+  return count + ' member' + (count === 1 ? '' : 's') + ' selected';
 }
 // Keeps every open dropdown's toggle-button label in sync with its
 // checkboxes — one delegated listener instead of attaching/detaching one
@@ -4400,7 +4430,8 @@ document.addEventListener('change', function(e) {
   if (!dropdown) return;
   const labelEl = dropdown.querySelector('.ms-dropdown-toggle span:first-child');
   if (!labelEl) return;
-  labelEl.textContent = msDropdownLabelText(dropdown.querySelectorAll('input[type="checkbox"]:checked').length);
+  const count = dropdown.querySelectorAll('input[type="checkbox"]:checked').length;
+  labelEl.textContent = msDropdownLabelText(count, dropdown.dataset.msEmptyLabel);
 });
 
 // Override old save functions to use project layer
@@ -10835,42 +10866,58 @@ function canAssignChecklistStages() {
 }
 
 function renderJobChecklistVisibilitySelect() {
-  const sel = document.getElementById('jmChecklistVisibilitySelect');
-  if (!sel) return;
-  const current = (jmDraftChecklistAssignees || {})[jmActiveChecklistColumnId] || '';
+  const dropdown = document.getElementById('jmChecklistVisibilityMsDropdown');
+  if (!dropdown) return;
+  const current = normalizeChecklistAssignees((jmDraftChecklistAssignees || {})[jmActiveChecklistColumnId]);
   const roster = cachedUserRoster || [];
-  const hasCurrentInRoster = !current || roster.some(function(u) { return u.username === current; });
+  const isAdmin = canAssignChecklistStages();
+
+  const labelEl = dropdown.querySelector('.ms-dropdown-toggle span:first-child');
+  if (labelEl) labelEl.textContent = msDropdownLabelText(current.length, 'Everyone');
+  const toggleBtn = dropdown.querySelector('.ms-dropdown-toggle');
+  if (toggleBtn) toggleBtn.title = isAdmin ? '' : 'Only admins can change who a checklist stage is visible to';
+
+  const actionsEl = document.getElementById('jmChecklistVisibilityMsActions');
+  if (actionsEl) actionsEl.style.display = (isAdmin && roster.length) ? 'flex' : 'none';
+
   // Distinguish "genuinely zero accounts exist yet" from "still loading"/
   // "failed to load" — all three used to render identically as just
   // "Everyone" with no explanation, making a real failure indistinguishable
   // from an empty team roster.
-  let hintOption = '';
+  let hint = '';
   if (cachedUserRoster && roster.length === 0) {
-    hintOption = '<option value="" disabled>No team accounts yet — add one in Manage Users</option>';
+    hint = '<span class="cf-multiselect-empty">No team accounts yet — add one in Manage Users</span>';
   } else if (userRosterLoadError) {
-    hintOption = '<option value="" disabled>Couldn\'t load teammates (' + escapeHtml(userRosterLoadError) + ')</option>';
+    hint = '<span class="cf-multiselect-empty">Couldn\'t load teammates (' + escapeHtml(userRosterLoadError) + ')</span>';
   } else if (!cachedUserRoster) {
-    hintOption = '<option value="" disabled>Loading teammates…</option>';
+    hint = '<span class="cf-multiselect-loading">Loading teammates…</span>';
   }
-  sel.innerHTML = '<option value="">Everyone</option>' + hintOption +
-    roster.map(function(u) {
-      return '<option value="' + escapeHtml(u.username) + '"' + (u.username === current ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
-    }).join('') +
-    (hasCurrentInRoster ? '' : '<option value="' + escapeHtml(current) + '" selected>' + escapeHtml(current) + '</option>');
-  const isAdmin = canAssignChecklistStages();
-  sel.disabled = !isAdmin;
-  sel.title = isAdmin ? '' : 'Only admins can change who a checklist stage is visible to';
+  const orphaned = current.filter(function(u) { return !roster.some(function(r) { return r.username === u; }); });
+  const optionsEl = document.getElementById('jmChecklistVisibilityMsOptions');
+  if (optionsEl) {
+    optionsEl.innerHTML = hint || (
+      roster.map(function(u) {
+        return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '" data-min-tier="projectAdmin"' + (current.indexOf(u.username) !== -1 ? ' checked' : '') + ' onchange="setJobChecklistStageAssignee(this.value, this.checked)"> ' + escapeHtml(u.displayName) + '</label>';
+      }).join('') +
+      orphaned.map(function(u) {
+        return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u) + '" data-min-tier="projectAdmin" checked onchange="setJobChecklistStageAssignee(this.value, this.checked)"> ' + escapeHtml(u) + '</label>';
+      }).join('')
+    );
+  }
+  applyPermissionGating();
   if (!cachedUserRoster) {
     ensureUserRosterLoaded().then(function() {
-      if (document.getElementById('jmChecklistVisibilitySelect')) renderJobChecklistVisibilitySelect();
+      if (document.getElementById('jmChecklistVisibilityMsDropdown')) renderJobChecklistVisibilitySelect();
     });
   }
 }
 
-function setJobChecklistStageAssignee(username) {
+function setJobChecklistStageAssignee(username, checked) {
   if (!canAssignChecklistStages()) { showToast('Only admins can change checklist visibility', 'error'); renderJobChecklistVisibilitySelect(); return; }
   jmDraftChecklistAssignees = jmDraftChecklistAssignees || {};
-  if (username) jmDraftChecklistAssignees[jmActiveChecklistColumnId] = username;
+  let list = normalizeChecklistAssignees(jmDraftChecklistAssignees[jmActiveChecklistColumnId]);
+  list = checked ? (list.indexOf(username) === -1 ? list.concat([username]) : list) : list.filter(function(u) { return u !== username; });
+  if (list.length) jmDraftChecklistAssignees[jmActiveChecklistColumnId] = list;
   else delete jmDraftChecklistAssignees[jmActiveChecklistColumnId];
   flushAutoSaveJobForm();
 }
@@ -11210,47 +11257,66 @@ function setActiveChecklistStage(colId) {
   flushCardAutosave(); // persists a freshly-seeded default list right away, same as any other checklist edit
 }
 
-// The "Visible to" picker for the currently active stage — "Everyone"
-// (the default, i.e. no restriction) plus one option per real user
-// account, fetched async from ensureUserRosterLoaded() and cached. Renders
-// immediately with whatever's cached (possibly just "Everyone" plus the
-// raw stored username if the roster hasn't loaded yet), then re-renders
-// once the roster resolves so the picker shows real display names.
+// The "Visible to" picker for the currently active stage — a member
+// multi-select dropdown (same pattern as the Members custom field, see
+// renderFieldDefHtml()'s 'multiselect' branch) so a stage can be shared by
+// more than one person. Empty selection = "Everyone" (the default, i.e.
+// no restriction) — see isChecklistStageVisibleToMe(). Renders immediately
+// with whatever's cached, then re-renders once the roster resolves so the
+// picker shows real display names.
 function renderChecklistVisibilitySelect() {
-  const sel = document.getElementById('checklistVisibilitySelect');
-  if (!sel) return;
-  const current = (draftChecklistAssignees || {})[activeChecklistColumnId] || '';
+  const dropdown = document.getElementById('checklistVisibilityMsDropdown');
+  if (!dropdown) return;
+  const current = normalizeChecklistAssignees((draftChecklistAssignees || {})[activeChecklistColumnId]);
   const roster = cachedUserRoster || [];
-  const hasCurrentInRoster = !current || roster.some(function(u) { return u.username === current; });
+  const isAdmin = canAssignChecklistStages();
+
+  const labelEl = dropdown.querySelector('.ms-dropdown-toggle span:first-child');
+  if (labelEl) labelEl.textContent = msDropdownLabelText(current.length, 'Everyone');
+  const toggleBtn = dropdown.querySelector('.ms-dropdown-toggle');
+  if (toggleBtn) toggleBtn.title = isAdmin ? '' : 'Only admins can change who a checklist stage is visible to';
+
+  const actionsEl = document.getElementById('checklistVisibilityMsActions');
+  if (actionsEl) actionsEl.style.display = (isAdmin && roster.length) ? 'flex' : 'none';
+
   // See renderJobChecklistVisibilitySelect() for why this distinguishes
   // "genuinely zero accounts" from "still loading" from "failed to load".
-  let hintOption = '';
+  let hint = '';
   if (cachedUserRoster && roster.length === 0) {
-    hintOption = '<option value="" disabled>No team accounts yet — add one in Manage Users</option>';
+    hint = '<span class="cf-multiselect-empty">No team accounts yet — add one in Manage Users</span>';
   } else if (userRosterLoadError) {
-    hintOption = '<option value="" disabled>Couldn\'t load teammates (' + escapeHtml(userRosterLoadError) + ')</option>';
+    hint = '<span class="cf-multiselect-empty">Couldn\'t load teammates (' + escapeHtml(userRosterLoadError) + ')</span>';
   } else if (!cachedUserRoster) {
-    hintOption = '<option value="" disabled>Loading teammates…</option>';
+    hint = '<span class="cf-multiselect-loading">Loading teammates…</span>';
   }
-  sel.innerHTML = '<option value="">Everyone</option>' + hintOption +
-    roster.map(function(u) {
-      return '<option value="' + escapeHtml(u.username) + '"' + (u.username === current ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
-    }).join('') +
-    (hasCurrentInRoster ? '' : '<option value="' + escapeHtml(current) + '" selected>' + escapeHtml(current) + '</option>');
-  const isAdmin = canAssignChecklistStages();
-  sel.disabled = !isAdmin;
-  sel.title = isAdmin ? '' : 'Only admins can change who a checklist stage is visible to';
+  // An assignee no longer in the roster (account removed) still gets a
+  // checked-but-orphaned checkbox rather than silently vanishing from view.
+  const orphaned = current.filter(function(u) { return !roster.some(function(r) { return r.username === u; }); });
+  const optionsEl = document.getElementById('checklistVisibilityMsOptions');
+  if (optionsEl) {
+    optionsEl.innerHTML = hint || (
+      roster.map(function(u) {
+        return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '" data-min-tier="projectAdmin"' + (current.indexOf(u.username) !== -1 ? ' checked' : '') + ' onchange="setChecklistStageAssignee(this.value, this.checked)"> ' + escapeHtml(u.displayName) + '</label>';
+      }).join('') +
+      orphaned.map(function(u) {
+        return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u) + '" data-min-tier="projectAdmin" checked onchange="setChecklistStageAssignee(this.value, this.checked)"> ' + escapeHtml(u) + '</label>';
+      }).join('')
+    );
+  }
+  applyPermissionGating();
   if (!cachedUserRoster) {
     ensureUserRosterLoaded().then(function() {
-      if (document.getElementById('checklistVisibilitySelect')) renderChecklistVisibilitySelect();
+      if (document.getElementById('checklistVisibilityMsDropdown')) renderChecklistVisibilitySelect();
     });
   }
 }
 
-function setChecklistStageAssignee(username) {
+function setChecklistStageAssignee(username, checked) {
   if (!canAssignChecklistStages()) { showToast('Only admins can change checklist visibility', 'error'); renderChecklistVisibilitySelect(); return; }
   draftChecklistAssignees = draftChecklistAssignees || {};
-  if (username) draftChecklistAssignees[activeChecklistColumnId] = username;
+  let list = normalizeChecklistAssignees(draftChecklistAssignees[activeChecklistColumnId]);
+  list = checked ? (list.indexOf(username) === -1 ? list.concat([username]) : list) : list.filter(function(u) { return u !== username; });
+  if (list.length) draftChecklistAssignees[activeChecklistColumnId] = list;
   else delete draftChecklistAssignees[activeChecklistColumnId];
   flushCardAutosave();
 }
