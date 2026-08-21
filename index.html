@@ -503,6 +503,10 @@
      bar underneath from being dragged everywhere else on the wrap. */
   .task-bar-job-tag.collapsible { pointer-events: auto; cursor: pointer; }
   .task-bar-job-tag.collapsible:hover { filter: brightness(1.15); }
+  /* See ganttFocusedJobId/toggleGanttJobFocus() — on-bar twin of the
+     left-panel pill's .focused ring. */
+  .task-bar-job-tag.focused { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15), 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
+  body.dark-mode .task-bar-job-tag.focused { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15), 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
   /* Outline around the whole condensed span in the job's own color — the
      topmost overlay on the row (above the name pill's z-index 70) so it
      frames everything else instead of being painted over by it. */
@@ -6718,20 +6722,25 @@ function renderGantt() {
         // there — matches the left-panel pill split (see renderGantt()'s
         // sidebar loop above).
         const isTasksMode = ganttViewMode === 'tasks';
+        const isFocusedJob = isTasksMode && ganttFocusedJobId === job.id;
         const jobTag = document.createElement('span');
-        jobTag.className = 'task-bar-job-tag' + (!isTasksMode && entry.collapsible ? ' collapsible' : '');
+        jobTag.className = 'task-bar-job-tag' + (isTasksMode || entry.collapsible ? ' collapsible' : '') + (isFocusedJob ? ' focused' : '');
         // Not softened — see the comment on the other task-bar-job-tag
         // background assignment above for why (hardcoded white text).
         jobTag.style.background = job.color || '#999';
         const barCollapseGlyph = !isTasksMode && entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? '▸ ' : '▾ ') : '';
         jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + barCollapseGlyph + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : '');
-        jobTag.title = (!isTasksMode && entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? 'Click to expand sub-phases — ' : 'Click to collapse sub-phases into one bar — ') : '') +
+        jobTag.title = (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : (entry.collapsible ? (collapsedPhaseIds.has(phaseId) ? 'Click to expand sub-phases — ' : 'Click to collapse sub-phases into one bar — ') : '')) +
           job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
-        // The on-bar name tag gets a collapse toggle same as the left-panel
-        // pill (see the .collapsible CSS above for the pointer-events
-        // opt-in) — stopPropagation so it toggles instead of also starting a
+        // The on-bar name tag gets the same click-to-focus (Tasks view) or
+        // collapse toggle (Jobs/Leads view) as the left-panel pill (see the
+        // .collapsible CSS above for the pointer-events opt-in) —
+        // stopPropagation so it toggles instead of also starting a
         // whole-bar drag or falling through to editJob.
-        if (!isTasksMode && entry.collapsible) {
+        if (isTasksMode) {
+          jobTag.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+          jobTag.addEventListener('click', function(e) { e.stopPropagation(); toggleGanttJobFocus(job.id); });
+        } else if (entry.collapsible) {
           jobTag.addEventListener('mousedown', function(e) { e.stopPropagation(); });
           jobTag.addEventListener('click', function(e) { e.stopPropagation(); togglePhaseCollapse(phaseId); });
         }
@@ -6838,15 +6847,21 @@ function renderGantt() {
         if (duration !== 1) {
           const jobTag = document.createElement('span');
           const isTasksMode = ganttViewMode === 'tasks';
-          // A pure label here (like Jobs/Leads mode's own job tag) — Tasks
+          const isFocusedJob = isTasksMode && ganttFocusedJobId === job.id;
+          // Tasks view: clicking it isolates the Gantt to just this job
+          // (see ganttFocusedJobId/toggleGanttJobFocus()) — Jobs/Leads
           // view's phase/sub-phase fold toggles are separate tags appended
           // below instead, matching the left-panel pill split.
-          jobTag.className = 'task-bar-job-tag';
+          jobTag.className = 'task-bar-job-tag' + (isTasksMode ? ' collapsible' : '') + (isFocusedJob ? ' focused' : '');
           // Not softened — see the comment on the other task-bar-job-tag
           // background assignments above for why (hardcoded white text).
           jobTag.style.background = job.color;
           jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : '');
-          jobTag.title = job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+          jobTag.title = (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+          if (isTasksMode) {
+            jobTag.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+            jobTag.addEventListener('click', function(e) { e.stopPropagation(); toggleGanttJobFocus(job.id); });
+          }
           bar.appendChild(jobTag);
           if (isTasksMode) {
             buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, entry.collapsible, false).forEach(function(t) { bar.appendChild(t); });
