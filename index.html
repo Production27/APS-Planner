@@ -257,7 +257,7 @@
   .calendar-days { position: relative; align-content: start; }
   .cal-bars-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
   .cal-event-bar {
-    position: absolute; font-size: 10.5px; color: #fff; padding: 2px 6px; box-sizing: border-box;
+    position: absolute; font-size: 11px; color: #fff; padding: 2px 6px; box-sizing: border-box;
     cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 13px;
     pointer-events: auto; box-shadow: 0 1px 2px rgba(0,0,0,0.15);
   }
@@ -277,22 +277,10 @@
     content: ''; position: absolute; right: 1px; top: 50%; width: 5px; height: 5px; border-top: 2px solid rgba(255,255,255,0.85);
     border-right: 2px solid rgba(255,255,255,0.85); transform: translateY(-50%) rotate(45deg);
   }
-  .cal-bar-collapse-toggle {
-    display: inline-block; cursor: pointer; font-size: 9px; margin-right: 3px;
-    padding: 0 2px; border-radius: 3px; vertical-align: middle;
-    /* An expanded (non-span) bar still has its drag handles underneath
-       (.cal-bar-drag-left/-body/-right, z-index 2-3) — without its own
-       higher stacking, this plain inline span would lose the hit-test to
-       whichever absolutely-positioned drag handle happens to sit at the
-       same spot, so a click meant for the chevron would start a drag/
-       resize instead of toggling. */
-    position: relative; z-index: 5;
-  }
-  .cal-bar-collapse-toggle:hover { background: rgba(255,255,255,0.28); }
   /* Per-task colored blocks painted inside a collapsed span bar (see
-     buildCalBarHtml's innerSegmentsHtml) — each keeps its own task color
-     with a thin job-color ring around it, sitting behind the bar's own
-     text/chevron (.cal-bar-content, stacked above via z-index). */
+     buildCalBarHtml's innerSegmentsHtml) — each keeps its own task color,
+     sitting behind the bar's own text (.cal-bar-content, stacked above
+     via z-index). */
   .cal-bar-segment { position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none; }
   .cal-bar-content { position: relative; z-index: 2; }
   body.dark-mode .cal-day { background: #1e2130; }
@@ -2949,6 +2937,11 @@ const CALENDAR_JOB_SPAN_TASK_PREFIX = 'calspan|';
 function isCalendarJobSpanTaskId(taskId) {
   return typeof taskId === 'string' && taskId.indexOf(CALENDAR_JOB_SPAN_TASK_PREFIX) === 0;
 }
+// Always condenses a sub-phase's tasks into one overlapping span bar —
+// unlike the Gantt's own Tasks view, the Calendar never offers expanding
+// back out to individual task bars (deliberately no chevron/toggle here,
+// per the user's own call: a busy calendar reads better with everything
+// merged than with a control to pull it back apart).
 function buildCalendarJobRows(jobsArr, includeArchived) {
   const hiddenOrders = getHiddenTaskOrders();
   const rows = [];
@@ -2959,27 +2952,17 @@ function buildCalendarJobRows(jobsArr, includeArchived) {
       const phaseName = phase.isDefault ? null : phase.name;
       getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
         const subPhaseName = subUnit.isDefault ? null : subUnit.name;
-        const collapseKey = getSubUnitKey(job, phase.id, subUnit.id);
-        if (!tasksExpandedSubPhaseIds.has(collapseKey)) {
-          const spanInfo = buildSubUnitSpanSegments(job, subUnit, hiddenOrders);
-          if (spanInfo) {
-            const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
-            const pseudoTask = {
-              id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || ''),
-              name: job.name + namePart,
-              start: spanInfo.start.toISOString().split('T')[0], finish: spanInfo.finish.toISOString().split('T')[0],
-              notes: '', color: job.color, order: 0, isJobSpan: true,
-              segments: spanInfo.segments, segTotalDays: spanInfo.totalDays
-            };
-            rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName, collapseKey: collapseKey });
-          }
-        } else {
-          (subUnit.tasks || []).forEach(function(task) {
-            if (hiddenOrders.has(task.order)) return;
-            if (!task.start || !task.finish) return;
-            if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
-            rows.push({ job: job, task: task, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName, collapseKey: collapseKey });
-          });
+        const spanInfo = buildSubUnitSpanSegments(job, subUnit, hiddenOrders);
+        if (spanInfo) {
+          const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+          const pseudoTask = {
+            id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || ''),
+            name: job.name + namePart,
+            start: spanInfo.start.toISOString().split('T')[0], finish: spanInfo.finish.toISOString().split('T')[0],
+            notes: '', color: job.color, order: 0, isJobSpan: true,
+            segments: spanInfo.segments, segTotalDays: spanInfo.totalDays
+          };
+          rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
         }
         // Same "first sub-unit only" placement as flattenJobs() — see its
         // own comment on this.
@@ -3742,10 +3725,6 @@ function toggleTasksSubPhaseExpanded(key) {
   if (tasksExpandedSubPhaseIds.has(key)) tasksExpandedSubPhaseIds.delete(key); else tasksExpandedSubPhaseIds.add(key);
   localStorage.setItem('gantt_tasks_expanded_subphases_v1', JSON.stringify(Array.from(tasksExpandedSubPhaseIds)));
   renderGantt();
-  // Same state also drives Calendar's job-span collapse (see
-  // buildCalendarJobRows()) — refresh whichever calendar view is current
-  // so a toggle from either view's UI stays in sync with the other.
-  if (typeof renderCalendar === 'function') renderCalendar();
 }
 // Gantt toolbar's Expand All/Collapse All — bulk versions of
 // toggleTasksPhaseExpanded()/toggleTasksSubPhaseExpanded() above, over
@@ -5479,25 +5458,6 @@ function buildCalBarHtml(seg, left, top, width) {
 
   const phaseLabel = seg.subPhaseName ? (seg.subPhaseName + (seg.phaseName ? ' (' + seg.phaseName + ')' : '')) : seg.phaseName;
 
-  // Collapse/expand chevron — same tasksExpandedSubPhaseIds Set the
-  // Gantt's Tasks view reads/writes (toggleTasksSubPhaseExpanded()), so
-  // toggling here keeps both views in sync. Shown on every job-task bar
-  // (collapsed span OR an individually-expanded task), not just spans —
-  // matches the Gantt's own sub-phase pill, which stays visible in both
-  // states so there's always a way back. Not offered for a calendar-only
-  // event (isCalEvt) — those were never part of a job's sub-phase
-  // structure to begin with.
-  let collapseGlyphHtml = '';
-  if (!isCalEvt && !isDue && seg.collapseKey) {
-    const isExpanded = tasksExpandedSubPhaseIds.has(seg.collapseKey);
-    // onmousedown (not just onclick) stops propagation — handleCalBarMouseDown
-    // is bound to mousedown, which fires before click, so stopping only the
-    // click would still let it start a drag-tracking sequence first (same
-    // reason the Gantt's own phase/sub-phase pills do the same — see
-    // renderGantt()'s jobTag mousedown listener).
-    collapseGlyphHtml = '<span class="cal-bar-collapse-toggle" onmousedown="event.stopPropagation();" onclick="event.stopPropagation(); toggleTasksSubPhaseExpanded(\'' + seg.collapseKey + '\');" title="' + (isExpanded ? 'Collapse into a single bar' : 'Expand into individual tasks') + '">' + (isExpanded ? '▾' : '▸') + '</span>';
-  }
-
   let content;
   if (isDue) {
     content = '🚩';
@@ -5510,7 +5470,7 @@ function buildCalBarHtml(seg, left, top, width) {
     // buildCalendarJobRows()) — the usual job-name tag alongside it would
     // just repeat that.
     const tagLabel = isCalEvt ? formatTimeLabel(task.time) : (isJobSpan ? '' : linkGlyph + job.name + (phaseLabel ? ' — ' + phaseLabel : ''));
-    content = collapseGlyphHtml + (isJobSpan ? linkGlyph : '') + escapeHtml(task.name) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '');
+    content = (isJobSpan ? linkGlyph : '') + escapeHtml(task.name) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '');
   }
 
   // Inside a collapsed span, paint each real task's own date range as its
@@ -5696,9 +5656,9 @@ function calendarToday() {
   renderCalendar();
 }
 
-const CAL_BAR_H = 16;
+const CAL_BAR_H = 20;
 let calDragState = null;
-const CAL_BAR_GAP = 2;
+const CAL_BAR_GAP = 3;
 const CAL_DAYNUM_H = 20;
 
 function renderCalendar() {
@@ -5763,14 +5723,14 @@ function renderMonthCalendar() {
   // Build flat list from jobs→tasks, plus standalone calendar-only events
   // (never part of a job — see flattenCalendarEventsForRange) laid out in
   // the exact same lane-packing pass below. buildCalendarJobRows() (not
-  // flattenJobs()) so a job's sub-units start condensed into one
-  // overlapping bar each, expandable via the chevron built into
-  // buildCalBarHtml() — see its own comment for the full rationale.
+  // flattenJobs()) so a job's sub-units always render as one condensed,
+  // overlapping bar each instead of one row per task — see its own
+  // comment for the full rationale.
   const flatRows = buildCalendarJobRows(getVisibleJobs(), showArchived);
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
-    return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName, collapseKey: row.collapseKey };
+    return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName };
   });
   flattenCalendarEventsForRange(cellDates[0], cellDates[cellDates.length - 1]).forEach(function(row, i) {
     allJobs.push({ flatIdx: 'ce-' + i, job: row.job, task: row.task, start: row.start, finish: row.finish });
@@ -5788,7 +5748,7 @@ function renderMonthCalendar() {
         const clampedStart = j.start < rowStart ? rowStart : j.start;
         const clampedFinish = j.finish > rowEnd ? rowEnd : j.finish;
         return {
-          flatIdx: j.flatIdx, job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName, subPhaseId: j.subPhaseId, subPhaseName: j.subPhaseName, collapseKey: j.collapseKey,
+          flatIdx: j.flatIdx, job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName, subPhaseId: j.subPhaseId, subPhaseName: j.subPhaseName,
           colStart: Math.round((clampedStart - rowStart) / 86400000),
           colEnd: Math.round((clampedFinish - rowStart) / 86400000),
           isTrueStart: j.start.getTime() === clampedStart.getTime(),
@@ -5900,7 +5860,7 @@ function renderWeekCalendar() {
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
-    return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName, collapseKey: row.collapseKey };
+    return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName };
   });
   const timedCalRows = [];
   flattenCalendarEventsForRange(weekStart, weekEnd).forEach(function(row, i) {
@@ -5932,7 +5892,7 @@ function renderWeekCalendar() {
       const clampedStart = j.start < weekStart ? weekStart : j.start;
       const clampedFinish = j.finish > weekEnd ? weekEnd : j.finish;
       return {
-        flatIdx: j.flatIdx, job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName, subPhaseId: j.subPhaseId, subPhaseName: j.subPhaseName, collapseKey: j.collapseKey,
+        flatIdx: j.flatIdx, job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName, subPhaseId: j.subPhaseId, subPhaseName: j.subPhaseName,
         colStart: Math.round((clampedStart - weekStart) / 86400000),
         colEnd: Math.round((clampedFinish - weekStart) / 86400000),
         isTrueStart: j.start.getTime() === clampedStart.getTime(),
