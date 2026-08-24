@@ -656,7 +656,11 @@
      row's background/border rather than carrying its own — see the
      comment on .gantt-top-row. justify-content pushes the buttons to the
      right edge of the remaining space. */
-  .gantt-toolbar { display: flex; gap: 4px; align-items: center; justify-content: flex-end; flex: 1; box-sizing: border-box; padding: 0 8px; }
+  /* overflow-x:auto is the safety net for narrow screens now that none of
+     these buttons shrink below their own content width (see
+     .gantt-toolbar-text-btn) — scrollable rather than clipped/unreachable
+     if Expand All/Collapse All plus every icon button don't all fit. */
+  .gantt-toolbar { display: flex; gap: 4px; align-items: center; justify-content: flex-end; flex: 1; box-sizing: border-box; padding: 0 8px; overflow-x: auto; }
   .gantt-toolbar button {
     background: transparent; border: 1px solid var(--border); color: var(--text-light);
     width: 26px; height: 26px; padding: 0; border-radius: 6px; cursor: pointer;
@@ -1812,18 +1816,38 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .legend-text { color: var(--text-light); }
   body.dark-mode .modal-box p { color: var(--text-light); }
 
-  /* ===== ARCHIVE ===== */
-  .archive-toggle-btn {
+  /* Wider text-label sibling to .gantt-toolbar button's fixed 26px icon
+     squares — same height/hover language, auto width for a real label
+     (Expand All/Collapse All — see expandAllGantt()/collapseAllGantt()).
+     Formerly .archive-toggle-btn (the "Show archived jobs" toggle this
+     replaced); renamed since it's no longer archive-specific.
+     ".gantt-toolbar button.gantt-toolbar-text-btn" (not just the bare
+     class) deliberately matches .gantt-toolbar button's own specificity
+     (one class + one element each) — a bare-class selector would have
+     LOST that tie (fewer selectors = lower specificity) on the
+     properties both rules set (e.g. padding), even though this rule
+     comes later in the file. width:auto below is the other half of the
+     same fix: .gantt-toolbar button's width:26px isn't a competing
+     value here, it's the ONLY rule that sets width at all unless this
+     one explicitly overrides it too — outranking it on padding alone
+     still leaves the button's outer box locked to 26px, silently
+     crushing whatever padding/content is inside that box. Neither of
+     these showed up on the old icon-only archive button this replaced,
+     since a 15px SVG icon fits fine even forced into a 26px square. */
+  .gantt-toolbar button.gantt-toolbar-text-btn {
     background: transparent; border: 1px solid var(--border); color: var(--text-light);
-    padding: 0 10px; height: 26px; border-radius: 6px; cursor: pointer;
+    width: auto; padding: 0 10px; height: 26px; border-radius: 6px; cursor: pointer;
     font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;
     transition: all 0.15s;
+    /* .gantt-toolbar is a flex row with no explicit flex-basis on its
+       children, so under-width it'd otherwise shrink this button below
+       its own text's natural width, wrapping "Expand All" onto two
+       lines instead of just letting the toolbar run tight/scroll. */
+    white-space: nowrap; flex-shrink: 0;
   }
-  .archive-toggle-btn:hover { background: #eef1fa; color: var(--primary); border-color: var(--primary-light); }
-  .archive-toggle-btn.active { background: rgba(57,73,171,0.12); color: var(--primary); border-color: var(--primary-light); }
-  body.dark-mode .archive-toggle-btn { border-color: var(--border); color: var(--text-light); }
-  body.dark-mode .archive-toggle-btn:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
-  body.dark-mode .archive-toggle-btn.active { background: rgba(57,73,171,0.25); color: #cfd4e0; border-color: var(--primary-light); }
+  .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: #eef1fa; color: var(--primary); border-color: var(--primary-light); }
+  body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn { border-color: var(--border); color: var(--text-light); }
+  body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
   .job-card.archived { opacity: 0.55; }
   .task-row.archived { opacity: 0.55; }
   .job-card.finished { opacity: 0.65; }
@@ -2001,7 +2025,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="gantt-view-toggle-row"></div>
           <div class="gantt-toolbar" id="ganttToolbar">
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
-            <button class="archive-toggle-btn" id="archiveToggleBtn" onclick="toggleShowArchived()" title="Show archived jobs"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg></button>
+            <button class="gantt-toolbar-text-btn" onclick="expandAllGantt()" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
+            <button class="gantt-toolbar-text-btn" onclick="collapseAllGantt()" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
             <button onclick="zoomIn()" title="Zoom in">+</button>
             <button onclick="zoomOut()" title="Zoom out">−</button>
             <button onclick="resetZoom()" title="Reset zoom">⟲</button>
@@ -3574,6 +3599,35 @@ function toggleTasksSubPhaseExpanded(key) {
   localStorage.setItem('gantt_tasks_expanded_subphases_v1', JSON.stringify(Array.from(tasksExpandedSubPhaseIds)));
   renderGantt();
 }
+// Gantt toolbar's Expand All/Collapse All — bulk versions of
+// toggleTasksPhaseExpanded()/toggleTasksSubPhaseExpanded() above, over
+// every phase/sub-phase of every job currently in view (same job set
+// buildVisibleTaskRows() itself renders — visible-to-me jobs plus
+// cross-project linked references). Harmless to add ids for a
+// non-collapsible/synthetic phase or sub-phase along the way (e.g. an
+// unphased job's default wrapper) — those are never read back since
+// nothing renders a fold toggle for them in the first place.
+function expandAllGantt() {
+  getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
+    getJobPhases(job).forEach(function(phase) {
+      const phaseId = phase.id || null;
+      tasksExpandedPhaseIds.add(phaseId);
+      getPhaseSubUnits(phase).forEach(function(sub) {
+        tasksExpandedSubPhaseIds.add(getSubUnitKey(job, phaseId, sub.id || null));
+      });
+    });
+  });
+  localStorage.setItem('gantt_tasks_expanded_phases_v1', JSON.stringify(Array.from(tasksExpandedPhaseIds)));
+  localStorage.setItem('gantt_tasks_expanded_subphases_v1', JSON.stringify(Array.from(tasksExpandedSubPhaseIds)));
+  renderGantt();
+}
+function collapseAllGantt() {
+  tasksExpandedPhaseIds.clear();
+  tasksExpandedSubPhaseIds.clear();
+  localStorage.setItem('gantt_tasks_expanded_phases_v1', '[]');
+  localStorage.setItem('gantt_tasks_expanded_subphases_v1', '[]');
+  renderGantt();
+}
 
 // ===== TASKS VIEW: FOCUS ON ONE JOB =====
 // Clicking a job's name pill isolates the Gantt to just that job — every
@@ -4650,14 +4704,13 @@ function autoArchiveJobs() {
   }
 }
 
-function toggleShowArchived() {
-  showArchived = !showArchived;
-  const btn = document.getElementById('archiveToggleBtn');
-  if (btn) btn.classList.toggle('active', showArchived);
-  renderGantt();
-  renderJobList();
-  renderCalendar();
-}
+// The Gantt toolbar's "show archived" toggle was removed — showArchived
+// stays permanently false now (its original default), so every existing
+// `showArchived ||`/`!showArchived &&` check across Gantt/Job List/
+// Calendar keeps working unchanged, just always evaluating as if it was
+// never turned on. Archived jobs are still reachable via the separate
+// Archived Jobs modal (Settings menu) for browsing/restoring — this only
+// removed the "show them inline, mixed into the normal views" toggle.
 
 /* Old flat-task archive/restore removed — hierarchical versions used instead */
 
