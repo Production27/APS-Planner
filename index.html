@@ -1571,19 +1571,58 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   }
 
   /* Landscape phones specifically (max-height, not max-width, is what
-     identifies this — see the breakpoint comment above) get a shorter
-     header and tab row on top of the general mobile rules above, since
-     the whole point of landscape is width to spare and height to
-     conserve — the opposite trade-off from portrait. Chosen over moving
-     these into a left-side column: the header's title/settings/View-as/
-     project-switch controls are all built assuming a horizontal bar, so
-     reflowing that into a narrow vertical sidebar would touch a lot of
-     shared UI for comparatively little payoff. */
+     identifies this — see the breakpoint comment above): header + tab
+     row move into a slim column down the LEFT edge instead of stacking
+     across the top, so nearly the full height goes to Job/Board/
+     Calendar/Gantt content — the opposite trade-off from portrait, where
+     width is scarce and height isn't. Grid on <body> (not flex) so
+     header/tabs/shell can be placed into a 2-column-by-2-row layout
+     without adding wrapper elements — .new-version-banner and
+     #freshLoadOverlay are both position:fixed, so they're unaffected.
+     The header itself switches to a narrow vertical stack (title, then
+     just the settings ⋮ menu — see below) since its normal horizontal
+     layout has nowhere near enough width here. */
   @media (max-height: 480px) and (orientation: landscape) {
-    .app-header { height: 40px; padding: 5px 14px; }
+    body {
+      display: grid; grid-template-columns: 130px 1fr; grid-template-rows: auto 1fr;
+      grid-template-areas: "header shell" "tabs shell";
+    }
+    .app-header {
+      grid-area: header; height: auto; flex-direction: column; align-items: flex-start;
+      justify-content: flex-start; gap: 6px; padding: 8px 10px;
+    }
+    .app-header .header-text { width: 100%; min-width: 0; }
+    .app-header h1 { font-size: 12px; min-width: 0; max-width: 100%; }
     .app-header .subtitle { display: none; }
-    .app-header h1 { font-size: 13px; min-width: 0; }
-    .mobile-view-btn { padding: 5px 8px; font-size: 12px; }
+    .app-header .header-actions { width: 100%; justify-content: flex-start; }
+    /* Presence/View as/project-switch/activity-log aren't gone, just not
+       worth the room in this specific squeeze — everything else useful
+       (Backups, Manage Users, Header Color, Import/Export, Dark Mode,
+       Change Password, Archived Jobs) already lives in the ⋮ menu this
+       leaves in place, and the hidden controls are one rotate back to
+       portrait away. */
+    .app-header .presence-avatars,
+    .app-header .view-as-wrap,
+    .app-header .project-toggle-btn,
+    .app-header .activity-toggle-btn { display: none; }
+    /* .settings-dropdown normally hangs right:0 off its trigger, extending
+       leftward — fine when that trigger sits near a wide header's right
+       edge, but here it's pinned near the LEFT edge of the whole screen,
+       so extending left instead runs the panel off-screen. Flipped to
+       open rightward, into the open content area. */
+    .settings-dropdown { right: auto; left: 0; }
+
+    .mobile-view-switcher {
+      grid-area: tabs; display: flex; flex-direction: column; width: 130px;
+      border-bottom: none; border-right: 1px solid var(--border);
+    }
+    .mobile-view-btn {
+      text-align: left; border-bottom: none; border-left: 3px solid transparent;
+      padding: 8px 10px;
+    }
+    .mobile-view-btn.active { border-left-color: var(--primary); border-bottom-color: transparent; }
+
+    .app-shell { grid-area: shell; height: 100%; min-height: 0; }
   }
 
   /* ===== DARK MODE ===== */
