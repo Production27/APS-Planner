@@ -282,6 +282,12 @@
     padding: 0 2px; border-radius: 3px; vertical-align: middle;
   }
   .cal-bar-collapse-toggle:hover { background: rgba(255,255,255,0.28); }
+  /* Per-task colored blocks painted inside a collapsed span bar (see
+     buildCalBarHtml's innerSegmentsHtml) — each keeps its own task color
+     with a thin job-color ring around it, sitting behind the bar's own
+     text/chevron (.cal-bar-content, stacked above via z-index). */
+  .cal-bar-segment { position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none; }
+  .cal-bar-content { position: relative; z-index: 2; }
   body.dark-mode .cal-day { background: #1e2130; }
   body.dark-mode .cal-day.cal-outside { background: #16182380; }
 
@@ -2879,19 +2885,52 @@ function getHiddenTaskOrders() {
   BOARD_COLUMNS.forEach(function(c, i) { if (c.hideFromSchedule) hidden.add(i); });
   return hidden;
 }
-function buildSubUnitSpan(subUnit, hiddenOrders) {
-  let minStart = null, maxFinish = null;
-  (subUnit.tasks || []).forEach(function(task) {
-    if (hiddenOrders.has(task.order)) return;
-    if (!task.start || !task.finish) return;
-    const s = new Date(task.start + 'T00:00:00');
-    const f = new Date(task.finish + 'T00:00:00');
-    if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
-    if (!minStart || s < minStart) minStart = s;
-    if (!maxFinish || f > maxFinish) maxFinish = f;
+// Day-bucketed segments for a collapsed sub-phase bar, mirroring the
+// Gantt Tasks view's own collapsed-sub-phase rendering (renderGantt()'s
+// job-span drawing pass, the non-collapsedSegments branch that reads a
+// real sub-unit's own tasks) — each maximal run of days covered by the
+// same set of tasks becomes one segment, so sequential tasks read as
+// adjoining blocks that each keep their own task color, and overlapping
+// tasks blend into one striped segment, rather than flattening the whole
+// bar into a single solid job-colored fill.
+function buildSubUnitSpanSegments(job, subUnit, hiddenOrders) {
+  const dated = (subUnit.tasks || []).filter(function(task) {
+    if (hiddenOrders.has(task.order)) return false;
+    if (!task.start || !task.finish) return false;
+    const s = new Date(task.start + 'T00:00:00'), f = new Date(task.finish + 'T00:00:00');
+    return !isNaN(s.getTime()) && !isNaN(f.getTime());
+  }).map(function(task) {
+    return { task: task, start: new Date(task.start + 'T00:00:00'), finish: new Date(task.finish + 'T00:00:00') };
   });
-  if (!minStart || !maxFinish) return null;
-  return { start: minStart.toISOString().split('T')[0], finish: maxFinish.toISOString().split('T')[0] };
+  if (!dated.length) return null;
+  let minStart = dated[0].start, maxFinish = dated[0].finish;
+  dated.forEach(function(dt) {
+    if (dt.start < minStart) minStart = dt.start;
+    if (dt.finish > maxFinish) maxFinish = dt.finish;
+  });
+  const totalDays = getDaysDiff(minStart, maxFinish) + 1;
+  const dayTasks = [];
+  for (let i = 0; i < totalDays; i++) dayTasks.push([]);
+  dated.forEach(function(dt) {
+    const sIdx = getDaysDiff(minStart, dt.start), eIdx = getDaysDiff(minStart, dt.finish);
+    for (let d = Math.max(0, sIdx); d <= Math.min(totalDays - 1, eIdx); d++) dayTasks[d].push(dt.task);
+  });
+  const segments = [];
+  let di = 0;
+  while (di < totalDays) {
+    const covering = dayTasks[di];
+    const key = covering.map(function(t) { return t.id; }).sort().join('|');
+    let dj = di;
+    while (dj + 1 < totalDays && dayTasks[dj + 1].map(function(t) { return t.id; }).sort().join('|') === key) dj++;
+    if (covering.length > 0) {
+      segments.push({
+        startOffset: di, endOffset: dj,
+        colors: Array.from(new Set(covering.map(function(t) { return t.color || job.color || '#3949ab'; })))
+      });
+    }
+    di = dj + 1;
+  }
+  return { start: minStart, finish: maxFinish, totalDays: totalDays, segments: segments };
 }
 const CALENDAR_JOB_SPAN_TASK_PREFIX = 'calspan|';
 function isCalendarJobSpanTaskId(taskId) {
@@ -2909,13 +2948,15 @@ function buildCalendarJobRows(jobsArr, includeArchived) {
         const subPhaseName = subUnit.isDefault ? null : subUnit.name;
         const collapseKey = getSubUnitKey(job, phase.id, subUnit.id);
         if (!tasksExpandedSubPhaseIds.has(collapseKey)) {
-          const span = buildSubUnitSpan(subUnit, hiddenOrders);
-          if (span) {
+          const spanInfo = buildSubUnitSpanSegments(job, subUnit, hiddenOrders);
+          if (spanInfo) {
             const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
             const pseudoTask = {
               id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || ''),
-              name: job.name + namePart, start: span.start, finish: span.finish,
-              notes: '', color: job.color, order: 0, isJobSpan: true
+              name: job.name + namePart,
+              start: spanInfo.start.toISOString().split('T')[0], finish: spanInfo.finish.toISOString().split('T')[0],
+              notes: '', color: job.color, order: 0, isJobSpan: true,
+              segments: spanInfo.segments, segTotalDays: spanInfo.totalDays
             };
             rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName, collapseKey: collapseKey });
           }
@@ -5443,9 +5484,43 @@ function buildCalBarHtml(seg, left, top, width) {
     content = collapseGlyphHtml + (isJobSpan ? linkGlyph : '') + escapeHtml(task.name) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '');
   }
 
+  // Inside a collapsed span, paint each real task's own date range as its
+  // own colored block (task.segments, from buildSubUnitSpanSegments()) —
+  // same "keep each task's own color" behavior as the Gantt's collapsed
+  // sub-phase row, instead of flattening the whole bar to one solid
+  // job-colored fill. Position is in the bar's content-box coordinate
+  // space (left/right padding insets these slightly from the bar's true
+  // edges — harmless, since the bar's own full-bleed background already
+  // covers any day the span has no task scheduled). seg.spanWindowOffset
+  // (set by renderMonthCalendar/renderWeekCalendar) accounts for a span
+  // bar that's only a clamped slice of a multi-week task range.
+  let innerSegmentsHtml = '';
+  if (isJobSpan && task.segments && task.segments.length) {
+    const windowOffset = seg.spanWindowOffset || 0;
+    const windowDays = Math.max(1, (seg.colEnd - seg.colStart) + 1);
+    const padX = 6; // matches .cal-event-bar's padding: 2px 6px
+    const perDayPx = Math.max(0, width - padX * 2) / windowDays;
+    const jobOutline = job.color || '#3949ab';
+    task.segments.forEach(function(s) {
+      const clipStart = Math.max(0, s.startOffset - windowOffset);
+      const clipEnd = Math.min(windowDays - 1, s.endOffset - windowOffset);
+      if (clipEnd < clipStart) return;
+      const segLeft = clipStart * perDayPx;
+      const segWidth = (clipEnd - clipStart + 1) * perDayPx;
+      const bg = s.colors.length > 1
+        ? 'repeating-linear-gradient(45deg, ' + s.colors.map(function(c, idx) { return c + ' ' + (idx * 6) + 'px, ' + c + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')'
+        : s.colors[0];
+      // No title attribute here — pointer-events:none (see .cal-bar-segment)
+      // means it could never actually show on hover; the outer bar's own
+      // title covers the whole span already.
+      innerSegmentsHtml += '<div class="cal-bar-segment" style="left:' + segLeft + 'px; width:' + segWidth + 'px; background:' + bg + '; box-shadow: inset 0 0 0 1.5px ' + jobOutline + ';"></div>';
+    });
+  }
+  if (innerSegmentsHtml) content = '<span class="cal-bar-content">' + content + '</span>';
+
   return '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; ' + styleExtra + '" title="' +
     escapeHtml(task.name) + (isCalEvt || isJobSpan ? '' : ' — ' + escapeHtml(job.name) + (seg.phaseName ? ' — ' + escapeHtml(seg.phaseName) : '') + (seg.subPhaseName ? ' — ' + escapeHtml(seg.subPhaseName) : '')) + (job.isLinkedReference ? ' (linked, read-only — click to open in ' + escapeHtml(job.linkedFromProjectName || 'its project') + ')' : '') + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-phase-id="' + (seg.phaseId || '') + '" data-cal-sub-phase-id="' + (seg.subPhaseId || '') + '" data-cal-linked="' + (job.isLinkedReference ? '1' : '') + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '" data-cal-task-start="' + (task.start || '') + '" data-cal-task-finish="' + (task.finish || '') + '">' +
-    dragHandles + content + '</div>';
+    dragHandles + innerSegmentsHtml + content + '</div>';
 }
 
 function computeDateRange() {
@@ -5670,6 +5745,11 @@ function renderMonthCalendar() {
           colEnd: Math.round((clampedFinish - rowStart) / 86400000),
           isTrueStart: j.start.getTime() === clampedStart.getTime(),
           isTrueEnd: j.finish.getTime() === clampedFinish.getTime(),
+          // Days from the collapsed span's own true start to THIS row's
+          // clamped display window — buildCalBarHtml needs it to slice
+          // task.segments (computed once, offset from the full span) down
+          // to just what's visible in this particular week row.
+          spanWindowOffset: Math.round((clampedStart - j.start) / 86400000),
           lane: 0
         };
       })
@@ -5809,6 +5889,11 @@ function renderWeekCalendar() {
         colEnd: Math.round((clampedFinish - weekStart) / 86400000),
         isTrueStart: j.start.getTime() === clampedStart.getTime(),
         isTrueEnd: j.finish.getTime() === clampedFinish.getTime(),
+        // See the identical field in renderMonthCalendar() — how far this
+        // week's clamped display window starts into the collapsed span's
+        // own full range, so buildCalBarHtml can slice task.segments down
+        // to just what's visible here.
+        spanWindowOffset: Math.round((clampedStart - j.start) / 86400000),
         lane: 0
       };
     })
