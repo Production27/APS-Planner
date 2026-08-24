@@ -5435,16 +5435,23 @@ function buildCalBarHtml(seg, left, top, width) {
   if (isTaskFinished(job, task)) classes.push('finished');
 
   const barColor = task.color || job.color || '#3949ab';
-  // A collapsed span's own tasks very often all share the job's color
-  // already (a task's color defaults to its board column's, and board
-  // columns rarely get a custom color of their own — see
-  // normalizeTasksToColumns()) — so a same-color outline would be
-  // invisible exactly when it's needed most. Darkening it guarantees
-  // contrast against the fill regardless of whether the tasks inside
-  // happen to be job-colored or not.
-  const jobOutlineColor = darkenColor(job.color || barColor, 0.35);
+  // Same treatment as every Gantt task bar, span or not (see renderGantt(),
+  // "Left at full saturation (unsoftened) so it still reads as a crisp
+  // edge against the softened fill"): a softened/pastel fill in the
+  // task's own color, plus a full-saturation job-color border drawn on
+  // top. The border is deliberately NOT softened/darkened — a same-color
+  // border would be invisible against a same-color fill, but a raw
+  // saturated border against an always-lighter softened fill is
+  // guaranteed to contrast, by construction, regardless of which color
+  // the task/job happen to be. Applied to both a regular task bar and a
+  // collapsed span so toggling between them (see the chevron) doesn't
+  // also change the bar's basic look. Due markers and standalone
+  // calendar-only events keep their own distinct look instead — neither
+  // has a "job" identity this border would be showing.
+  const showJobBorder = !isDue && !isCalEvt;
   const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') :
-    ('background:' + barColor + ';' + (isJobSpan ? ' box-shadow: inset 0 0 0 1.5px ' + jobOutlineColor + ';' : ''));
+    ('background:' + (showJobBorder ? softenColor(barColor) : barColor) + ';' +
+     (showJobBorder ? ' border: 2px solid ' + (job.color || '#3949ab') + ';' + (job.isLinkedReference ? ' border-style: dashed;' : '') : ''));
 
   // Read-only: no drag handles for a linked reference (its real data
   // lives in, and can only be edited from, its home project) or a
@@ -5494,21 +5501,26 @@ function buildCalBarHtml(seg, left, top, width) {
   }
 
   // Inside a collapsed span, paint each real task's own date range as its
-  // own colored block (task.segments, from buildSubUnitSpanSegments()) —
-  // same "keep each task's own color" behavior as the Gantt's collapsed
-  // sub-phase row, instead of flattening the whole bar to one solid
-  // job-colored fill. Position is in the bar's content-box coordinate
-  // space (left/right padding insets these slightly from the bar's true
-  // edges — harmless, since the bar's own full-bleed background already
-  // covers any day the span has no task scheduled). seg.spanWindowOffset
-  // (set by renderMonthCalendar/renderWeekCalendar) accounts for a span
-  // bar that's only a clamped slice of a multi-week task range.
+  // own softened-color block (task.segments, from
+  // buildSubUnitSpanSegments()) — same per-task coloring the Gantt's own
+  // collapsed sub-phase row uses (softenColor(task.color || job.color) —
+  // see renderGantt()'s isCollapsedRow "solid" segments). No border on the
+  // segments themselves, same as Gantt: only the whole bar gets the
+  // job-color outline (showJobBorder above); a scheduling gap between
+  // tasks just lets that same softened bar background show through, since
+  // gaps don't get their own segment. Positioned relative to the bar's own
+  // padding box (a position:absolute child's containing block, per spec —
+  // padding doesn't shift it, but the 2px border does), so only the
+  // border needs subtracting here, not the padding.
+  // seg.spanWindowOffset (set by renderMonthCalendar/renderWeekCalendar)
+  // accounts for a span bar that's only a clamped slice of a multi-week
+  // task range.
   let innerSegmentsHtml = '';
   if (isJobSpan && task.segments && task.segments.length) {
     const windowOffset = seg.spanWindowOffset || 0;
     const windowDays = Math.max(1, (seg.colEnd - seg.colStart) + 1);
-    const padX = 6; // matches .cal-event-bar's padding: 2px 6px
-    const perDayPx = Math.max(0, width - padX * 2) / windowDays;
+    const borderW = 2; // matches the bar's own border: 2px, see showJobBorder above
+    const perDayPx = Math.max(0, width - borderW * 2) / windowDays;
     task.segments.forEach(function(s) {
       const clipStart = Math.max(0, s.startOffset - windowOffset);
       const clipEnd = Math.min(windowDays - 1, s.endOffset - windowOffset);
@@ -5516,12 +5528,12 @@ function buildCalBarHtml(seg, left, top, width) {
       const segLeft = clipStart * perDayPx;
       const segWidth = (clipEnd - clipStart + 1) * perDayPx;
       const bg = s.colors.length > 1
-        ? 'repeating-linear-gradient(45deg, ' + s.colors.map(function(c, idx) { return c + ' ' + (idx * 6) + 'px, ' + c + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')'
-        : s.colors[0];
+        ? 'repeating-linear-gradient(45deg, ' + s.colors.map(function(c, idx) { const sc = softenColor(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')'
+        : softenColor(s.colors[0]);
       // No title attribute here — pointer-events:none (see .cal-bar-segment)
       // means it could never actually show on hover; the outer bar's own
       // title covers the whole span already.
-      innerSegmentsHtml += '<div class="cal-bar-segment" style="left:' + segLeft + 'px; width:' + segWidth + 'px; background:' + bg + '; box-shadow: inset 0 0 0 1.5px ' + jobOutlineColor + ';"></div>';
+      innerSegmentsHtml += '<div class="cal-bar-segment" style="left:' + segLeft + 'px; width:' + segWidth + 'px; background:' + bg + ';"></div>';
     });
   }
   if (innerSegmentsHtml) content = '<span class="cal-bar-content">' + content + '</span>';
