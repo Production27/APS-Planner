@@ -1125,7 +1125,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .checklist-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
   .checklist-item .ci-text { flex: 1; font-size: 13px; color: var(--text); }
   .checklist-item.done .ci-text { text-decoration: line-through; color: #aaa; }
-  .checklist-item .ci-assignee { font-size: 11px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); color: var(--text-light); font-family: inherit; flex-shrink: 0; max-width: 110px; }
+  /* Now an .ms-dropdown (see the shared multi-select dropdown styles
+     above), not a <select> — item.assignee can hold more than one
+     person. Compact toggle to fit inline in the item row; the panel
+     itself is wider (anchored to the toggle's right edge) so the
+     checkbox list has room. */
+  .checklist-item .ci-assignee { flex-shrink: 0; max-width: 110px; }
+  .checklist-item .ci-assignee .ms-dropdown-toggle { font-size: 11px; padding: 3px 6px; gap: 4px; color: var(--text-light); }
+  .checklist-item .ci-assignee .ms-dropdown-toggle span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .checklist-item .ci-assignee .ms-dropdown-panel { width: 200px; left: auto; right: 0; }
   .checklist-item .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 15px; padding: 2px 6px; flex-shrink: 0; }
   .checklist-item .ci-delete:hover { color: var(--danger); }
   .checklist-add-row { display: flex; gap: 8px; margin-top: 8px; }
@@ -10934,17 +10942,21 @@ function renderJobChecklist() {
   // render or count — getChecklistForStage() itself has to keep returning
   // them (unfiltered) so id-based lookups below still find them.
   const items = visibleChecklistItems(jmDraftChecklists, jmActiveChecklistColumnId);
-  // See renderChecklist() (the Board card modal's twin) — per-item
-  // assignee is a real account (cachedUserRoster) now, not the old
-  // free-text fieldOptions.checklistAssignee pool.
+  // See renderChecklist() (the Board card modal's twin) for the rationale
+  // — per-item assignee is an array of real accounts now, same "jm"-
+  // prefixed id scheme to avoid colliding with the card modal's own copy
+  // of the same item's dropdown when both are open at once.
   const roster = cachedUserRoster || [];
   container.innerHTML = items.map(function(item) {
-    const hasCurrentInRoster = !item.assignee || roster.some(function(u) { return u.username === item.assignee; });
-    const options = '<option value="">Unassigned</option>' +
-      roster.map(function(u) {
-        return '<option value="' + escapeHtml(u.username) + '"' + (item.assignee === u.username ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
-      }).join('') +
-      (hasCurrentInRoster ? '' : '<option value="' + escapeHtml(item.assignee) + '" selected>' + escapeHtml(item.assignee) + '</option>');
+    const current = normalizeChecklistAssignees(item.assignee);
+    const dropdownId = 'jmCiAssignMsDropdown_' + item.id;
+    const optionsId = dropdownId + '_options';
+    const orphaned = current.filter(function(u) { return !roster.some(function(r) { return r.username === u; }); });
+    const optionsHtml = roster.map(function(u) {
+      return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (current.indexOf(u.username) !== -1 ? ' checked' : '') + ' onchange="setJobChecklistItemAssignee(\'' + item.id + '\', this.value, this.checked)"> ' + escapeHtml(u.displayName) + '</label>';
+    }).join('') + orphaned.map(function(u) {
+      return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u) + '" data-min-tier="editor" checked onchange="setJobChecklistItemAssignee(\'' + item.id + '\', this.value, this.checked)"> ' + escapeHtml(u) + '</label>';
+    }).join('');
     // item.id is quoted — template-sourced items reuse the template's own
     // genId() STRING id (see getChecklistForStage()), and an unquoted
     // hyphenated string here would be broken JS in the onchange/onclick
@@ -10953,7 +10965,13 @@ function renderJobChecklist() {
     return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
       '<input type="checkbox" data-min-tier="commenter" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(\'' + item.id + '\')">' +
       '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-      '<select class="ci-assignee" data-min-tier="editor" onchange="setJobChecklistItemAssignee(\'' + item.id + '\', this.value)">' + options + '</select>' +
+      '<div class="ms-dropdown ci-assignee" id="' + dropdownId + '" data-ms-empty-label="Unassigned">' +
+        '<button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown(\'' + dropdownId + '\')"><span>' + msDropdownLabelText(current.length, 'Unassigned') + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
+        '<div class="ms-dropdown-panel">' +
+          (roster.length ? '<div class="ms-dropdown-actions"><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', true)">Select All</button><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', false)">Unselect All</button></div>' : '') +
+          '<div class="cf-multiselect" id="' + optionsId + '">' + (optionsHtml || '<span class="cf-multiselect-empty">No team accounts yet</span>') + '</div>' +
+        '</div>' +
+      '</div>' +
       '<button class="ci-delete" data-min-tier="editor" onclick="deleteJobChecklistItem(\'' + item.id + '\')">×</button>' +
       '</div>';
   }).join('');
@@ -10992,9 +11010,12 @@ function toggleJobChecklistItem(id) {
   flushAutoSaveJobForm();
 }
 
-function setJobChecklistItemAssignee(id, assignee) {
+function setJobChecklistItemAssignee(id, username, checked) {
   const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return String(i.id) === id; });
-  if (item) item.assignee = assignee;
+  if (!item) return;
+  let list = normalizeChecklistAssignees(item.assignee);
+  list = checked ? (list.indexOf(username) === -1 ? list.concat([username]) : list) : list.filter(function(u) { return u !== username; });
+  item.assignee = list;
   flushAutoSaveJobForm();
 }
 
@@ -11343,18 +11364,28 @@ function renderChecklist() {
   const items = visibleChecklistItems(draftChecklists, activeChecklistColumnId);
   // Per-item assignee is a real account now (cachedUserRoster), not the
   // old free-text fieldOptions.checklistAssignee pool — same reasoning as
-  // PM/Foreman's switch. item.assignee stores a username; renders
+  // PM/Foreman's switch. item.assignee stores an ARRAY of usernames (an
+  // item can be assigned to more than one person) — normalizeChecklistAssignees()
+  // coerces any still-stored legacy single-string value. Same member
+  // multi-select dropdown as the stage-level "Visible to" picker, just
+  // one per item instead of one per stage, hence the id prefix keyed by
+  // item.id (both this modal and Job Manager can have the same item's
+  // checklist open at once — see closeManageFields()'s comment — so a
+  // bare, un-prefixed id would collide between the two). Renders
   // immediately with whatever roster is cached (possibly empty), then
   // re-renders once it resolves, same idiom as every other roster-backed
   // picker in this app.
   const roster = cachedUserRoster || [];
   container.innerHTML = items.map(function(item) {
-    const hasCurrentInRoster = !item.assignee || roster.some(function(u) { return u.username === item.assignee; });
-    const options = '<option value="">Unassigned</option>' +
-      roster.map(function(u) {
-        return '<option value="' + escapeHtml(u.username) + '"' + (item.assignee === u.username ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
-      }).join('') +
-      (hasCurrentInRoster ? '' : '<option value="' + escapeHtml(item.assignee) + '" selected>' + escapeHtml(item.assignee) + '</option>');
+    const current = normalizeChecklistAssignees(item.assignee);
+    const dropdownId = 'ciAssignMsDropdown_' + item.id;
+    const optionsId = dropdownId + '_options';
+    const orphaned = current.filter(function(u) { return !roster.some(function(r) { return r.username === u; }); });
+    const optionsHtml = roster.map(function(u) {
+      return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (current.indexOf(u.username) !== -1 ? ' checked' : '') + ' onchange="setChecklistItemAssignee(\'' + item.id + '\', this.value, this.checked)"> ' + escapeHtml(u.displayName) + '</label>';
+    }).join('') + orphaned.map(function(u) {
+      return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u) + '" data-min-tier="editor" checked onchange="setChecklistItemAssignee(\'' + item.id + '\', this.value, this.checked)"> ' + escapeHtml(u) + '</label>';
+    }).join('');
     // item.id is quoted — template-sourced items reuse the template's own
     // genId() STRING id (see getChecklistForStage()), and an unquoted
     // hyphenated string here would be broken JS in the onchange/onclick
@@ -11363,7 +11394,13 @@ function renderChecklist() {
     return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
       '<input type="checkbox" data-min-tier="commenter" ' + (item.done ? 'checked' : '') + ' onchange="toggleChecklistItem(\'' + item.id + '\')">' +
       '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-      '<select class="ci-assignee" data-min-tier="editor" onchange="setChecklistItemAssignee(\'' + item.id + '\', this.value)">' + options + '</select>' +
+      '<div class="ms-dropdown ci-assignee" id="' + dropdownId + '" data-ms-empty-label="Unassigned">' +
+        '<button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown(\'' + dropdownId + '\')"><span>' + msDropdownLabelText(current.length, 'Unassigned') + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
+        '<div class="ms-dropdown-panel">' +
+          (roster.length ? '<div class="ms-dropdown-actions"><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', true)">Select All</button><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', false)">Unselect All</button></div>' : '') +
+          '<div class="cf-multiselect" id="' + optionsId + '">' + (optionsHtml || '<span class="cf-multiselect-empty">No team accounts yet</span>') + '</div>' +
+        '</div>' +
+      '</div>' +
       '<button class="ci-delete" data-min-tier="editor" onclick="deleteChecklistItem(\'' + item.id + '\')">×</button>' +
       '</div>';
   }).join('');
@@ -11402,9 +11439,12 @@ function toggleChecklistItem(id) {
   flushCardAutosave();
 }
 
-function setChecklistItemAssignee(id, assignee) {
+function setChecklistItemAssignee(id, username, checked) {
   const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return String(i.id) === id; });
-  if (item) item.assignee = assignee;
+  if (!item) return;
+  let list = normalizeChecklistAssignees(item.assignee);
+  list = checked ? (list.indexOf(username) === -1 ? list.concat([username]) : list) : list.filter(function(u) { return u !== username; });
+  item.assignee = list;
   flushCardAutosave();
 }
 
