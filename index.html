@@ -1637,6 +1637,36 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       width: calc(100vh - 48px); min-width: calc(100vh - 48px);
       width: calc(100dvh - 48px); min-width: calc(100dvh - 48px);
     }
+
+    /* The job drawer (#formArea) is position:fixed with top:60px from the
+       general mobile rule above — that offset exists to clear the old
+       full-width top header, which no longer sits above the content here
+       (it's a left column instead — see body's grid-template-areas).
+       top:0 alone would still leave the drawer sliding in from behind
+       that column (left:0), just partly hidden under it since the
+       header keeps its higher z-index — left:130px starts the drawer
+       after the header/tabs column instead, with the width caps
+       adjusted to subtract that same 130px so it doesn't then overshoot
+       the right edge of the screen. */
+    .manager-form-area { top: 0; left: 130px; width: min(888px, calc(100vw - 130px)); }
+    .manager-form-area.comments-collapsed { width: min(592px, calc(100vw - 130px)); }
+
+    /* Comments panel restored to sitting beside the form (the base/
+       desktop layout) instead of the @media(max-width:1440px) block's
+       "stack it above the form" treatment — that breakpoint is about
+       narrow desktop WINDOWS, where width is the scarce resource; a
+       landscape phone is short, not narrow, and already has the width
+       to spare for the side-by-side layout. These, plus
+       .manager-form-area.comments-collapsed's width just above, restore
+       this file's own base (non-1440px) rule values, which the earlier
+       @media(max-width:1440px) block would otherwise still be winning
+       against since a landscape phone is well under 1440px wide too. */
+    .job-edit-row { flex-direction: row; max-width: 824px; }
+    .job-comments-panel { width: 340px; max-width: none; flex: 0 0 340px; max-height: none; order: 0; }
+    .job-comments-panel.collapsed { width: 44px; max-width: none; flex: 0 0 44px; padding: 18px 0; align-items: center; cursor: pointer; }
+    .job-comments-panel.collapsed h4,
+    .job-comments-panel.collapsed .mobile-field-body { display: none; }
+    .job-comments-panel.collapsed .job-comments-tab { display: flex; }
   }
 
   /* ===== DARK MODE ===== */
