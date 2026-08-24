@@ -1403,7 +1403,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      desktop-oriented layout that needs its own dedicated mobile treatment
      rather than just shrinking, so for now there's no way to reach them
      from a phone at all. Revisit that in a later pass. */
-  @media (max-width: 480px) {
+  /* Width OR height ≤480px — a phone rotated to landscape keeps its
+     short dimension (~360-430px) as height instead of width, so a
+     width-only query would drop back to the cramped desktop layout the
+     instant the phone turns sideways. Same threshold as the portrait
+     case, just checked on whichever axis is currently the narrow one. */
+  @media (max-width: 480px), (max-height: 480px) {
     .app-header { padding: 10px 14px; }
     /* The title/subtitle's desktop min-width (200px/300px) is what was
        pushing header-actions (project switch/activity log/settings) off
@@ -5962,7 +5967,7 @@ function handleCalBarMouseUp(e) {
   bar.classList.remove('cal-dragging', 'cal-resizing');
   hideTooltip();
 
-  const isMobile = window.matchMedia('(max-width: 480px)').matches;
+  const isMobile = window.matchMedia('(max-width: 480px), (max-height: 480px)').matches;
 
   // A real swipe (see handleCalSwipeEnd) already ran on this same gesture's
   // touchend, which always fires before the mousedown/mouseup pair that
