@@ -5441,8 +5441,16 @@ function buildCalBarHtml(seg, left, top, width) {
   // calendar-only events keep their own distinct look instead — neither
   // has a "job" identity this border would be showing.
   const showJobBorder = !isDue && !isCalEvt;
+  const fillColor = showJobBorder ? softenColor(barColor) : barColor;
+  // Softening the fill (see showJobBorder above) means it's often light
+  // enough that the bar's own hardcoded white text (see .cal-event-bar)
+  // reads as barely-there — same isDarkColor()/darkenColor() pairing the
+  // board-column header title already uses for the same reason: keep
+  // white text on a genuinely dark fill, otherwise fall back to a heavily
+  // darkened shade of the fill's own color rather than plain black.
+  const textColor = isDarkColor(fillColor) ? '#fff' : darkenColor(fillColor, 0.6);
   const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') :
-    ('background:' + (showJobBorder ? softenColor(barColor) : barColor) + ';' +
+    ('background:' + fillColor + '; color: ' + textColor + ';' +
      (showJobBorder ? ' border: 2px solid ' + (job.color || '#3949ab') + ';' + (job.isLinkedReference ? ' border-style: dashed;' : '') : ''));
 
   // Read-only: no drag handles for a linked reference (its real data
