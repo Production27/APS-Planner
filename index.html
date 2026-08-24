@@ -2925,6 +2925,12 @@ function buildSubUnitSpanSegments(job, subUnit, hiddenOrders) {
     if (covering.length > 0) {
       segments.push({
         startOffset: di, endOffset: dj,
+        // taskCount is the real "is this an overlap" signal — colors is
+        // deduped, so two overlapping tasks that both happen to be
+        // job-colored (the common case — see normalizeTasksToColumns())
+        // would otherwise collapse to a single color and look identical
+        // to a plain one-task segment, silently losing the overlap.
+        taskCount: covering.length,
         colors: Array.from(new Set(covering.map(function(t) { return t.color || job.color || '#3949ab'; })))
       });
     }
@@ -5527,9 +5533,24 @@ function buildCalBarHtml(seg, left, top, width) {
       if (clipEnd < clipStart) return;
       const segLeft = clipStart * perDayPx;
       const segWidth = (clipEnd - clipStart + 1) * perDayPx;
-      const bg = s.colors.length > 1
-        ? 'repeating-linear-gradient(45deg, ' + s.colors.map(function(c, idx) { const sc = softenColor(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')'
-        : softenColor(s.colors[0]);
+      // Same two-path hatch as Gantt's own collapsed-row overlap segments
+      // (renderGantt()'s "job-span-task-hatch" branch): if the covering
+      // tasks are genuinely different colors, stripe those; if two-or-more
+      // tasks overlap but happen to share one color (very common — see
+      // taskCount's comment in buildSubUnitSpanSegments()), stripe that
+      // color against a darkened shade of itself instead, so the overlap
+      // still reads as a hatch instead of silently looking like a single
+      // plain segment.
+      let bg;
+      if (s.taskCount <= 1) {
+        bg = softenColor(s.colors[0]);
+      } else if (s.colors.length > 1) {
+        bg = 'repeating-linear-gradient(45deg, ' + s.colors.map(function(c, idx) { const sc = softenColor(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
+      } else {
+        const base = softenColor(s.colors[0]);
+        const dark = darkenColor(base, 0.28);
+        bg = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
+      }
       // No title attribute here — pointer-events:none (see .cal-bar-segment)
       // means it could never actually show on hover; the outer bar's own
       // title covers the whole span already.
