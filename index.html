@@ -81,24 +81,26 @@
   .view-as-toggle-btn {
     background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.35); color: #fff;
     font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 6px; cursor: pointer;
-    display: flex; align-items: center; white-space: nowrap; max-width: 140px; overflow: hidden;
+    display: flex; align-items: center; white-space: nowrap; max-width: 190px; overflow: hidden;
     text-overflow: ellipsis; transition: background 0.15s;
   }
   .view-as-toggle-btn:hover { background: rgba(255,255,255,0.22); }
   .view-as-toggle-btn.active { background: rgba(255,255,255,0.3); }
   .view-as-dropdown {
     position: absolute; top: calc(100% + 8px); left: 0; background: white; color: var(--text);
-    border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 190px; max-height: 320px;
+    border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 230px; max-height: 320px;
     overflow-y: auto; padding: 6px; display: none; z-index: 200;
   }
   .view-as-dropdown.show { display: block; }
   .view-as-dropdown-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 9px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 600;
     color: var(--text); cursor: pointer; transition: background 0.15s;
   }
   .view-as-dropdown-item:hover { background: #eef1fa; color: var(--primary); }
   .view-as-dropdown-item.active { background: rgba(57,73,171,0.1); color: var(--primary); }
   .view-as-dropdown-empty { padding: 9px 12px; font-size: 11.5px; color: #999; }
+  .view-as-dropdown-tier { font-size: 10px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; }
   /* ===== PRESENCE AVATARS ===== */
   .presence-avatars { display: flex; align-items: center; }
   .presence-avatar {
@@ -3694,8 +3696,13 @@ function normalizeChecklistAssignees(assignedTo) {
 function isChecklistStageVisibleToMe(assigneesMap, columnId) {
   const assignedTo = normalizeChecklistAssignees((assigneesMap || {})[columnId]);
   if (!assignedTo.length) return true;
-  if (currentUserRole === 'admin') return true;
-  return assignedTo.indexOf(getStoredUsername()) !== -1;
+  // While previewing (viewAsUsername set), the bypass reflects the
+  // SIMULATED account's own role, not the real admin's — see hasMinTier()
+  // and the "View as" section below for the fuller rationale.
+  const effectiveRole = viewAsUsername ? viewAsRole : currentUserRole;
+  if (effectiveRole === 'admin') return true;
+  const asUsername = viewAsUsername || getStoredUsername();
+  return assignedTo.indexOf(asUsername) !== -1;
 }
 
 // ===== JOB VISIBILITY BY MEMBERSHIP =====
@@ -3713,21 +3720,24 @@ function isChecklistStageVisibleToMe(assigneesMap, columnId) {
 // content access within their project).
 //
 // viewAsUsername (see setViewAs()) overrides all of that: an Admin-only
-// "view the whole app as a specific member" simulation. When set, every
-// job's visibility is decided purely by whether that member is in its
-// Members list — bypassing the hasMinTier('projectAdmin') shortcut below
-// entirely, since the whole point is to see exactly what the selected
-// account would see, not the admin's own unrestricted view. It's a
-// read-only preview: this only ever affects what's rendered on the
-// simulating admin's own screen, never what's stored or synced, so nothing
-// changes for the member being previewed or anyone else.
+// "view the whole app as a specific member" simulation. hasMinTier()
+// itself already goes by the simulated account's role while previewing
+// (see its own comment), so the projectAdmin+ bypass just below is
+// automatically correct either way — a simulated Project Admin/Admin
+// still sees every job, exactly like the real thing would, rather than
+// being wrongly restricted to just their own Members-list jobs. Below
+// that tier, membership is checked against whichever username is
+// actually relevant (the simulated one, or the real caller's own). It's
+// a read-only preview: this only ever affects what's rendered on the
+// simulating admin's own screen, never what's stored or synced, so
+// nothing changes for the member being previewed or anyone else.
 function isJobVisibleToMe(job) {
   if (!job) return false;
   const card = getPrimaryPhaseCard(job);
   const members = (card && card.customFields && card.customFields.members) || [];
-  if (viewAsUsername) return members.indexOf(viewAsUsername) !== -1;
   if (hasMinTier('projectAdmin')) return true;
-  return members.indexOf(getStoredUsername()) !== -1;
+  const asUsername = viewAsUsername || getStoredUsername();
+  return members.indexOf(asUsername) !== -1;
 }
 function getVisibleJobs() {
   return jobs.filter(isJobVisibleToMe);
@@ -3748,8 +3758,11 @@ function isCalendarEventVisibleToMe(evt) {
   if (!evt) return false;
   const visibility = evt.visibility || 'all';
   if (visibility === 'all') return true;
-  const asUsername = viewAsUsername || (hasMinTier('projectAdmin') ? null : getStoredUsername());
-  if (!asUsername) return true; // Project Admin/Admin, not previewing — bypass
+  // hasMinTier() already reflects the simulated account's role while
+  // previewing (see its own comment) — a simulated Project Admin/Admin
+  // bypasses here too, same as isJobVisibleToMe().
+  if (hasMinTier('projectAdmin')) return true;
+  const asUsername = viewAsUsername || getStoredUsername();
   if (visibility === 'private') return evt.createdBy === asUsername;
   if (visibility === 'members') return (evt.visibleMembers || []).indexOf(asUsername) !== -1;
   return true;
@@ -3809,14 +3822,54 @@ async function ensureUserRosterLoaded() {
 
 // ===== VIEW AS A MEMBER (Admin only — not even Project Admin) =====
 // Lets an Admin preview the ENTIRE app — Job Manager, Board, Calendar,
-// Gantt — exactly as a specific Member would see it (see
-// isJobVisibleToMe() above). Session-only, like ganttFocusedJobId — not
-// persisted, and cleared on project switch (see switchProject()).
+// Gantt — exactly as a specific Member would see it: both their DATA
+// visibility (see isJobVisibleToMe()/isCalendarEventVisibleToMe()/
+// isChecklistStageVisibleToMe() above) and their actual PERMISSION TIER
+// (see hasMinTier() below, which checks viewAsRole instead of
+// currentUserRole whenever viewAsUsername is set) — so the whole UI
+// gates itself exactly the way it would for that account, buttons and
+// all. The View As control itself is the one deliberate exception: every
+// check that guards it (setViewAs/toggleViewAsDropdown/renderViewAsSelect
+// above, and #viewAsWrap's visibility in applyPermissionGating()) tests
+// currentUserRole directly rather than going through hasMinTier(), so the
+// admin can always change or exit the simulation regardless of how
+// restrictive the tier being previewed is. Session-only, like
+// ganttFocusedJobId — not persisted, and cleared on project switch (see
+// switchProject()).
 let viewAsUsername = null;
+let viewAsRole = null;
+
+// Admin-only roster WITH role — the public roster (cachedUserRoster, via
+// /users/roster) deliberately strips role for privacy (see its own
+// comment), but View As is itself Admin-gated, so it's safe to use the
+// richer /users/list endpoint (same one Manage Users uses) here
+// specifically to know which tier to simulate. Cached the same
+// stays-null-until-a-fetch-succeeds way as cachedUserRoster.
+let cachedAdminUserRoster = null;
+async function ensureAdminUserRosterLoaded() {
+  if (cachedAdminUserRoster) return cachedAdminUserRoster;
+  try {
+    const data = await postUsersEndpoint('users/list');
+    cachedAdminUserRoster = data.users || [];
+  } catch (e) {
+    // Leave it null — next call retries instead of caching a failure.
+  }
+  return cachedAdminUserRoster || [];
+}
+
 function setViewAs(username) {
   if (currentUserRole !== 'admin') return;
   viewAsUsername = username || null;
+  viewAsRole = null;
   closeViewAsDropdown();
+  if (viewAsUsername) {
+    ensureAdminUserRosterLoaded().then(function(list) {
+      if (viewAsUsername !== username) return; // superseded by a newer pick while this was in flight
+      const match = list.find(function(u) { return u.username === username; });
+      viewAsRole = match ? match.role : null;
+      renderAll();
+    });
+  }
   renderAll();
 }
 function toggleViewAsDropdown(event) {
@@ -3838,17 +3891,18 @@ function closeViewAsDropdown() {
 function renderViewAsDropdown() {
   const dd = document.getElementById('viewAsDropdown');
   if (!dd) return;
-  if (!cachedUserRoster) {
+  if (!cachedAdminUserRoster) {
     dd.innerHTML = '<div class="view-as-dropdown-empty">Loading…</div>';
-    ensureUserRosterLoaded().then(function() {
+    ensureAdminUserRosterLoaded().then(function() {
       if (dd.classList.contains('show')) renderViewAsDropdown();
     });
     return;
   }
   let html = '<div class="view-as-dropdown-item' + (!viewAsUsername ? ' active' : '') + '" onclick="setViewAs(\'\')">My view</div>';
-  html += cachedUserRoster.length
-    ? cachedUserRoster.map(function(u) {
-        return '<div class="view-as-dropdown-item' + (u.username === viewAsUsername ? ' active' : '') + '" onclick="setViewAs(\'' + u.username.replace(/'/g, "\\'") + '\')">' + escapeHtml(u.displayName) + '</div>';
+  html += cachedAdminUserRoster.length
+    ? cachedAdminUserRoster.map(function(u) {
+        const tierLabel = TIER_LABELS[u.role] || u.role;
+        return '<div class="view-as-dropdown-item' + (u.username === viewAsUsername ? ' active' : '') + '" onclick="setViewAs(\'' + u.username.replace(/'/g, "\\'") + '\')">' + escapeHtml(u.displayName) + ' <span class="view-as-dropdown-tier">' + escapeHtml(tierLabel) + '</span></div>';
       }).join('')
     : '<div class="view-as-dropdown-empty">No team accounts yet</div>';
   dd.innerHTML = html;
@@ -3862,11 +3916,15 @@ function renderViewAsSelect() {
   if (!label || !btn || currentUserRole !== 'admin') return;
   if (!viewAsUsername) {
     label.textContent = 'View as';
+    btn.title = 'View the whole app as a specific member (Admin only)';
     btn.classList.remove('active');
     return;
   }
-  const match = (cachedUserRoster || []).find(function(u) { return u.username === viewAsUsername; });
-  label.textContent = match ? match.displayName : 'View as';
+  const match = (cachedAdminUserRoster || []).find(function(u) { return u.username === viewAsUsername; });
+  const tierLabel = viewAsRole ? (TIER_LABELS[viewAsRole] || viewAsRole) : '…';
+  const fullLabel = (match ? match.displayName : viewAsUsername) + ' (' + tierLabel + ')';
+  label.textContent = fullLabel;
+  btn.title = 'Previewing as ' + fullLabel + ' — click to change';
   btn.classList.add('active');
 }
 
@@ -4045,6 +4103,7 @@ function switchProject(projectId) {
   // "view as member" preview — see viewAsUsername/isJobVisibleToMe().
   ganttFocusedJobId = null;
   viewAsUsername = null;
+  viewAsRole = null;
   activeProjectId = projectId;
   saveProjects();
   loadActiveProjectData();
@@ -11930,8 +11989,18 @@ let roleConfirmed = false;
 // every permission check in this file should go through, so the ordering
 // only needs to be correct in exactly one place.
 const PERMISSION_TIERS = ['viewer', 'commenter', 'editor', 'projectAdmin', 'admin'];
+// While "View as" is active (see viewAsUsername/viewAsRole above), every
+// hasMinTier() check throughout the app — which is nearly all of them,
+// including the data-min-tier sweep in applyPermissionGating() — reflects
+// the SIMULATED account's own tier instead of the real admin's. The View
+// As control itself is the deliberate exception: it's guarded by literal
+// currentUserRole === 'admin' checks (setViewAs/toggleViewAsDropdown/
+// renderViewAsSelect, and #viewAsWrap's own visibility below), which
+// don't go through hasMinTier() at all, so it stays usable no matter how
+// restrictive the tier being previewed is.
 function hasMinTier(tier) {
-  const mine = PERMISSION_TIERS.indexOf(currentUserRole);
+  const effectiveRole = viewAsUsername ? viewAsRole : currentUserRole;
+  const mine = PERMISSION_TIERS.indexOf(effectiveRole);
   const need = PERMISSION_TIERS.indexOf(tier);
   if (mine === -1 || need === -1) return false;
   return mine >= need;
