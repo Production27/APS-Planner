@@ -5435,7 +5435,16 @@ function buildCalBarHtml(seg, left, top, width) {
   if (isTaskFinished(job, task)) classes.push('finished');
 
   const barColor = task.color || job.color || '#3949ab';
-  const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') : ('background:' + barColor + ';');
+  // A collapsed span's own tasks very often all share the job's color
+  // already (a task's color defaults to its board column's, and board
+  // columns rarely get a custom color of their own — see
+  // normalizeTasksToColumns()) — so a same-color outline would be
+  // invisible exactly when it's needed most. Darkening it guarantees
+  // contrast against the fill regardless of whether the tasks inside
+  // happen to be job-colored or not.
+  const jobOutlineColor = darkenColor(job.color || barColor, 0.35);
+  const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') :
+    ('background:' + barColor + ';' + (isJobSpan ? ' box-shadow: inset 0 0 0 1.5px ' + jobOutlineColor + ';' : ''));
 
   // Read-only: no drag handles for a linked reference (its real data
   // lives in, and can only be edited from, its home project) or a
@@ -5500,7 +5509,6 @@ function buildCalBarHtml(seg, left, top, width) {
     const windowDays = Math.max(1, (seg.colEnd - seg.colStart) + 1);
     const padX = 6; // matches .cal-event-bar's padding: 2px 6px
     const perDayPx = Math.max(0, width - padX * 2) / windowDays;
-    const jobOutline = job.color || '#3949ab';
     task.segments.forEach(function(s) {
       const clipStart = Math.max(0, s.startOffset - windowOffset);
       const clipEnd = Math.min(windowDays - 1, s.endOffset - windowOffset);
@@ -5513,7 +5521,7 @@ function buildCalBarHtml(seg, left, top, width) {
       // No title attribute here — pointer-events:none (see .cal-bar-segment)
       // means it could never actually show on hover; the outer bar's own
       // title covers the whole span already.
-      innerSegmentsHtml += '<div class="cal-bar-segment" style="left:' + segLeft + 'px; width:' + segWidth + 'px; background:' + bg + '; box-shadow: inset 0 0 0 1.5px ' + jobOutline + ';"></div>';
+      innerSegmentsHtml += '<div class="cal-bar-segment" style="left:' + segLeft + 'px; width:' + segWidth + 'px; background:' + bg + '; box-shadow: inset 0 0 0 1.5px ' + jobOutlineColor + ';"></div>';
     });
   }
   if (innerSegmentsHtml) content = '<span class="cal-bar-content">' + content + '</span>';
