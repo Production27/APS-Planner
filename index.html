@@ -221,8 +221,30 @@
 
   /* ===== CALENDAR TAB ===== */
   .calendar-wrapper { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
-  .calendar-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-shrink: 0; }
-  .calendar-toolbar h3 { flex: 1; text-align: center; font-size: 16px; color: var(--text); }
+  .calendar-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-shrink: 0; }
+  .calendar-toolbar h3 { flex: 1; text-align: center; font-size: 15px; color: var(--text); }
+  /* Slightly smaller than the app's default .btn (padding:10px 22px) —
+     the request was specifically to make this bar a little shorter, and
+     the default button size was what set its height. */
+  .calendar-toolbar .btn { padding: 7px 14px; font-size: 12px; }
+  /* Google-Calendar-style paired prev/next — one small pill split into
+     two icon buttons sitting flush against each other, replacing the
+     separate "‹ Prev"/"Next ›" text buttons. */
+  .cal-nav-group {
+    display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    background: linear-gradient(180deg, #ffffff 0%, #f4f5f8 100%);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .cal-nav-btn {
+    border: none; background: transparent; cursor: pointer; padding: 6px 10px;
+    font-size: 15px; line-height: 1; color: var(--text); font-weight: 700;
+  }
+  .cal-nav-btn:first-child { border-right: 1px solid var(--border); }
+  .cal-nav-btn:hover { background: rgba(0,0,0,0.05); }
+  .cal-nav-btn:active { background: rgba(0,0,0,0.1); }
+  body.dark-mode .cal-nav-group { background: linear-gradient(180deg, var(--card) 0%, #1c1f28 100%); }
+  body.dark-mode .cal-nav-btn:hover { background: rgba(255,255,255,0.06); }
+  body.dark-mode .cal-nav-btn:active { background: rgba(255,255,255,0.1); }
   .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
   /* Plain shared-border grid (Google-Calendar-style) instead of gapped
      rounded cards — cells butt up against each other on a single border
@@ -1547,13 +1569,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     body[data-calendar-mode="week"] #weekHourSection { display: none; }
     .calendar-wrapper { padding: 8px; }
     /* Today wraps onto its own row below the month/year label instead of
-       fighting for one cramped row. Prev/Next are hidden entirely —
-       swiping the grid (see handleCalSwipeEnd()) is the mobile way to
-       change months, so they'd just be redundant. */
+       fighting for one cramped row. The prev/next nav group is hidden
+       entirely — swiping the grid (see handleCalSwipeEnd()) is the mobile
+       way to change months, so it'd just be redundant. */
     .calendar-toolbar { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
     .calendar-toolbar h3 { flex: 1 1 100%; order: -1; font-size: 15px; margin-bottom: 2px; }
     .calendar-toolbar button { padding: 6px 10px; font-size: 12px; }
-    .cal-prev-next-btn { display: none; }
+    .cal-nav-group { display: none; }
     .calendar-grid { gap: 3px; }
     .cal-day { min-height: 62px; padding: 3px; }
     .cal-day-num { font-size: 10px; margin-bottom: 2px; }
@@ -1989,13 +2011,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="calendar-wrapper">
         <div class="calendar-toolbar">
           <!-- Only shown in day mode (see renderCalendar()) — not a
-               .cal-prev-next-btn since it must stay reachable on mobile,
-               where Prev/Next themselves are hidden in favor of swipe. -->
+               .cal-nav-group since it must stay reachable on mobile, where
+               the nav group itself is hidden in favor of swipe. -->
           <button class="btn btn-secondary" id="calBackBtn" onclick="calendarExitDayView()" style="display:none;">‹ Month</button>
-          <button class="btn btn-secondary cal-prev-next-btn" onclick="calendarPrev()">‹ Prev</button>
+          <button class="btn btn-secondary" onclick="calendarToday()">Today</button>
+          <div class="cal-nav-group">
+            <button class="cal-nav-btn" onclick="calendarPrev()" title="Previous" aria-label="Previous">‹</button>
+            <button class="cal-nav-btn" onclick="calendarNext()" title="Next" aria-label="Next">›</button>
+          </div>
           <h3 id="calendarLabel"></h3>
-          <button class="btn btn-secondary cal-prev-next-btn" onclick="calendarNext()">Next ›</button>
-          <button class="btn btn-secondary" onclick="calendarToday()" style="margin-left:8px;">Today</button>
           <!-- Day mode only (see renderCalendar()) — the day agenda has no
                empty-cell-to-click affordance for adding an event the way
                month/week's grid cells do. -->
@@ -6139,6 +6163,13 @@ function initCalendarDragHandlers() {
     el.addEventListener('touchstart', handleCalSwipeStart, { passive: true });
     el.addEventListener('touchmove', handleCalSwipeMove, { passive: true });
     el.addEventListener('touchend', handleCalSwipeEnd, { passive: true });
+    // Desktop equivalent of the touch swipe above — trackpad two-finger
+    // horizontal scroll pages the calendar, same gesture as swiping on a
+    // phone. { passive: false } since handleCalWheel calls preventDefault
+    // on a horizontal gesture (otherwise a trackpad swipe can also
+    // trigger the browser's own back/forward navigation).
+    el.removeEventListener('wheel', handleCalWheel);
+    el.addEventListener('wheel', handleCalWheel, { passive: false });
   });
 }
 
@@ -6261,6 +6292,68 @@ function handleCalSwipeEnd(e) {
     });
   };
   daysEl.addEventListener('transitionend', finishSwipe);
+}
+
+// Same slide-out/slide-in feel as the touch swipe above, but starting
+// fresh from rest instead of continuing a live drag position — this is
+// triggered by a discrete trackpad/wheel gesture (handleCalWheel below),
+// not a finger the user is actively tracking on screen.
+function animateCalendarWheelChange(goNext) {
+  const targets = calSwipeTargets();
+  if (!targets.length) { if (goNext) calendarNext(); else calendarPrev(); return; }
+  const daysEl = targets[0];
+  const width = daysEl.getBoundingClientRect().width || window.innerWidth;
+  const outX = goNext ? -width : width;
+  targets.forEach(function(el) {
+    el.style.transition = 'transform 0.18s ease';
+    el.style.transform = 'translateX(' + outX + 'px)';
+  });
+  const finish = function() {
+    daysEl.removeEventListener('transitionend', finish);
+    if (goNext) calendarNext(); else calendarPrev();
+    const freshTargets = calSwipeTargets();
+    const freshDaysEl = freshTargets[0];
+    if (!freshDaysEl) return;
+    freshTargets.forEach(function(el) {
+      el.style.transition = 'none';
+      el.style.transform = 'translateX(' + (-outX) + 'px)';
+    });
+    void freshDaysEl.offsetHeight; // force layout so the jump above lands before the transition re-enables
+    freshTargets.forEach(function(el) {
+      el.style.transition = 'transform 0.18s ease';
+      el.style.transform = 'translateX(0)';
+    });
+  };
+  daysEl.addEventListener('transitionend', finish);
+}
+
+// Desktop equivalent of the mobile touch-swipe (handleCalSwipeStart/Move/
+// End above) — trackpad two-finger horizontal scroll (or a mouse wheel
+// already reporting deltaX, e.g. shift+wheel) pages the calendar
+// forward/back. Wheel events fire many times per physical gesture, so
+// this accumulates deltaX and only acts once past a threshold, then
+// ignores further deltas for a short cooldown so one continued swipe
+// doesn't flip through several pages at once.
+let calWheelAccum = 0;
+let calWheelCooldown = false;
+let calWheelIdleTimer = null;
+const CAL_WHEEL_THRESHOLD = 50;
+function handleCalWheel(e) {
+  // Only take over a clearly-horizontal gesture — leave a normal
+  // vertical scroll/zoom wheel alone entirely (it still needs to reach
+  // the hourly grid's own vertical scroll in week/day mode).
+  if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+  e.preventDefault();
+  if (calWheelCooldown) return;
+  calWheelAccum += e.deltaX;
+  clearTimeout(calWheelIdleTimer);
+  calWheelIdleTimer = setTimeout(function() { calWheelAccum = 0; }, 200);
+  if (Math.abs(calWheelAccum) < CAL_WHEEL_THRESHOLD) return;
+  const goNext = calWheelAccum > 0;
+  calWheelAccum = 0;
+  calWheelCooldown = true;
+  setTimeout(function() { calWheelCooldown = false; }, 450);
+  animateCalendarWheelChange(goNext);
 }
 
 function handleCalBarMouseDown(e) {
