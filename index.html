@@ -393,7 +393,7 @@
 
   /* ===== TIMELINE HEADER (scrolls with body) ===== */
   .timeline-header-wrap {
-    height: 68px; background: #f8f9fa; border-bottom: 2px solid #dee2e6;
+    height: 58px; background: #f8f9fa; border-bottom: 2px solid #dee2e6;
     overflow: hidden;
     flex-shrink: 0; position: relative;
   }
@@ -408,10 +408,10 @@
        scrollLeft short of matching the body once the gap grew large
        enough — worse the farther right you scrolled. transform has no
        ceiling of its own to clamp against, so it can't happen anymore. */
-    height: 68px; position: relative; overflow: visible;
+    height: 58px; position: relative; overflow: visible;
   }
   .timeline-header .week-header {
-    position: absolute; top: 0; height: 34px;
+    position: absolute; top: 0; height: 24px;
     border-right: 1px solid #e0e0e0; display: flex;
     align-items: center; justify-content: center;
     font-size: 10px; font-weight: 700; color: var(--primary-light);
@@ -421,7 +421,7 @@
   }
   .timeline-header .week-header:hover { background: #e8eaf6; }
   .timeline-header .day-header {
-    position: absolute; top: 34px; height: 34px;
+    position: absolute; top: 24px; height: 34px;
     border-right: 1px solid #e9ecef; display: flex;
     flex-direction: column; align-items: center; justify-content: center;
     font-size: 10px; color: #666; background: #f8f9fa;
