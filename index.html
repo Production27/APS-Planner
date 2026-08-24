@@ -277,12 +277,6 @@
     content: ''; position: absolute; right: 1px; top: 50%; width: 5px; height: 5px; border-top: 2px solid rgba(255,255,255,0.85);
     border-right: 2px solid rgba(255,255,255,0.85); transform: translateY(-50%) rotate(45deg);
   }
-  /* Per-task colored blocks painted inside a collapsed span bar (see
-     buildCalBarHtml's innerSegmentsHtml) — each keeps its own task color,
-     sitting behind the bar's own text (.cal-bar-content, stacked above
-     via z-index). */
-  .cal-bar-segment { position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none; }
-  .cal-bar-content { position: relative; z-index: 2; }
   body.dark-mode .cal-day { background: #1e2130; }
   body.dark-mode .cal-day.cal-outside { background: #16182380; }
 
@@ -2880,14 +2874,17 @@ function getHiddenTaskOrders() {
   BOARD_COLUMNS.forEach(function(c, i) { if (c.hideFromSchedule) hidden.add(i); });
   return hidden;
 }
-// Day-bucketed segments for a collapsed sub-phase bar, mirroring the
-// Gantt Tasks view's own collapsed-sub-phase rendering (renderGantt()'s
-// job-span drawing pass, the non-collapsedSegments branch that reads a
-// real sub-unit's own tasks) — each maximal run of days covered by the
-// same set of tasks becomes one segment, so sequential tasks read as
-// adjoining blocks that each keep their own task color, and overlapping
-// tasks blend into one striped segment, rather than flattening the whole
-// bar into a single solid job-colored fill.
+// Day-bucketed segments for a collapsed sub-phase — mirrors the Gantt
+// Tasks view's own collapsed-sub-phase day-sweep (renderGantt()'s
+// job-span drawing pass), except each maximal run of days covered by the
+// same set of tasks becomes its OWN independent bar on the Calendar
+// (buildCalendarJobRows pushes one row per segment) rather than a
+// sub-piece of one continuous span — a real scheduling gap between two
+// of a sub-phase's tasks means no bar at all over those days, instead of
+// the Gantt's own "one continuous bar the whole way through, gaps just
+// unpainted" look. Per the user's own call: the Calendar should NOT
+// visually connect two tasks across days neither of them is actually
+// scheduled on.
 function buildSubUnitSpanSegments(job, subUnit, hiddenOrders) {
   const dated = (subUnit.tasks || []).filter(function(task) {
     if (hiddenOrders.has(task.order)) return false;
@@ -2897,7 +2894,7 @@ function buildSubUnitSpanSegments(job, subUnit, hiddenOrders) {
   }).map(function(task) {
     return { task: task, start: new Date(task.start + 'T00:00:00'), finish: new Date(task.finish + 'T00:00:00') };
   });
-  if (!dated.length) return null;
+  if (!dated.length) return [];
   let minStart = dated[0].start, maxFinish = dated[0].finish;
   dated.forEach(function(dt) {
     if (dt.start < minStart) minStart = dt.start;
@@ -2918,8 +2915,10 @@ function buildSubUnitSpanSegments(job, subUnit, hiddenOrders) {
     let dj = di;
     while (dj + 1 < totalDays && dayTasks[dj + 1].map(function(t) { return t.id; }).sort().join('|') === key) dj++;
     if (covering.length > 0) {
+      const segStart = new Date(minStart); segStart.setDate(segStart.getDate() + di);
+      const segFinish = new Date(minStart); segFinish.setDate(segFinish.getDate() + dj);
       segments.push({
-        startOffset: di, endOffset: dj,
+        start: segStart, finish: segFinish,
         // taskCount is the real "is this an overlap" signal — colors is
         // deduped, so two overlapping tasks that both happen to be
         // job-colored (the common case — see normalizeTasksToColumns())
@@ -2931,17 +2930,19 @@ function buildSubUnitSpanSegments(job, subUnit, hiddenOrders) {
     }
     di = dj + 1;
   }
-  return { start: minStart, finish: maxFinish, totalDays: totalDays, segments: segments };
+  return segments;
 }
 const CALENDAR_JOB_SPAN_TASK_PREFIX = 'calspan|';
 function isCalendarJobSpanTaskId(taskId) {
   return typeof taskId === 'string' && taskId.indexOf(CALENDAR_JOB_SPAN_TASK_PREFIX) === 0;
 }
-// Always condenses a sub-phase's tasks into one overlapping span bar —
-// unlike the Gantt's own Tasks view, the Calendar never offers expanding
-// back out to individual task bars (deliberately no chevron/toggle here,
-// per the user's own call: a busy calendar reads better with everything
-// merged than with a control to pull it back apart).
+// Condenses a sub-phase's tasks into one bar per contiguous scheduled
+// stretch (buildSubUnitSpanSegments) — unlike the Gantt's own Tasks
+// view, the Calendar never offers expanding back out to individual task
+// bars (deliberately no chevron/toggle here), and unlike the Gantt's own
+// collapsed-row look, a real scheduling gap between two of a sub-phase's
+// tasks gets no bar at all instead of one continuous bar painted
+// straight through it.
 function buildCalendarJobRows(jobsArr, includeArchived) {
   const hiddenOrders = getHiddenTaskOrders();
   const rows = [];
@@ -2952,18 +2953,18 @@ function buildCalendarJobRows(jobsArr, includeArchived) {
       const phaseName = phase.isDefault ? null : phase.name;
       getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
         const subPhaseName = subUnit.isDefault ? null : subUnit.name;
-        const spanInfo = buildSubUnitSpanSegments(job, subUnit, hiddenOrders);
-        if (spanInfo) {
-          const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+        const segments = buildSubUnitSpanSegments(job, subUnit, hiddenOrders);
+        const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+        segments.forEach(function(seg, segIdx) {
           const pseudoTask = {
-            id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || ''),
+            id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || '') + '|' + segIdx,
             name: job.name + namePart,
-            start: spanInfo.start.toISOString().split('T')[0], finish: spanInfo.finish.toISOString().split('T')[0],
-            notes: '', color: job.color, order: 0, isJobSpan: true,
-            segments: spanInfo.segments, segTotalDays: spanInfo.totalDays
+            start: seg.start.toISOString().split('T')[0], finish: seg.finish.toISOString().split('T')[0],
+            notes: '', color: seg.taskCount === 1 ? seg.colors[0] : job.color, order: 0, isJobSpan: true,
+            segColors: seg.colors, segTaskCount: seg.taskCount
           };
           rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
-        }
+        });
         // Same "first sub-unit only" placement as flattenJobs() — see its
         // own comment on this.
         if (!job.isLinkedReference && subIdx === 0) {
@@ -5436,19 +5437,42 @@ function buildCalBarHtml(seg, left, top, width) {
   // saturated border against an always-lighter softened fill is
   // guaranteed to contrast, by construction, regardless of which color
   // the task/job happen to be. Applied to both a regular task bar and a
-  // collapsed span so toggling between them (see the chevron) doesn't
-  // also change the bar's basic look. Due markers and standalone
-  // calendar-only events keep their own distinct look instead — neither
-  // has a "job" identity this border would be showing.
+  // collapsed span so both look like the same family of bar. Due markers
+  // and standalone calendar-only events keep their own distinct look
+  // instead — neither has a "job" identity this border would be showing.
   const showJobBorder = !isDue && !isCalEvt;
-  const fillColor = showJobBorder ? softenColor(barColor) : barColor;
+  // A collapsed-span bar representing 2+ overlapping tasks (see
+  // buildSubUnitSpanSegments' taskCount) has no single color of its own
+  // to fill with — stripe it instead, same two-path hatch as Gantt's own
+  // collapsed-row overlap segments (renderGantt()'s "job-span-task-hatch"
+  // branch): genuinely different task colors get striped as-is; tasks
+  // that overlap but happen to share one color (very common — see
+  // taskCount's own comment) stripe that color against a darkened shade
+  // of itself instead, so the overlap still reads as a hatch instead of
+  // silently looking like a single plain task.
+  let fillColor;
+  if (isJobSpan && task.segTaskCount > 1) {
+    if (task.segColors.length > 1) {
+      fillColor = 'repeating-linear-gradient(45deg, ' + task.segColors.map(function(c, idx) { const sc = softenColor(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
+    } else {
+      const base = softenColor(task.segColors[0]);
+      const dark = darkenColor(base, 0.28);
+      fillColor = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
+    }
+  } else {
+    fillColor = showJobBorder ? softenColor(barColor) : barColor;
+  }
   // Softening the fill (see showJobBorder above) means it's often light
   // enough that the bar's own hardcoded white text (see .cal-event-bar)
   // reads as barely-there — same isDarkColor()/darkenColor() pairing the
   // board-column header title already uses for the same reason: keep
   // white text on a genuinely dark fill, otherwise fall back to a heavily
-  // darkened shade of the fill's own color rather than plain black.
-  const textColor = isDarkColor(fillColor) ? '#fff' : darkenColor(fillColor, 0.6);
+  // darkened shade of the fill's own color rather than plain black. Tests
+  // against a plain softened color even for a hatch fill (softenColor's
+  // own output, ignoring the stripe) — close enough to representative for
+  // picking readable text, and isDarkColor() can't evaluate a gradient.
+  const contrastColor = (isJobSpan && task.segColors && task.segColors.length) ? softenColor(task.segColors[0]) : (showJobBorder ? softenColor(barColor) : barColor);
+  const textColor = isDarkColor(contrastColor) ? '#fff' : darkenColor(contrastColor, 0.6);
   const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') :
     ('background:' + fillColor + '; color: ' + textColor + ';' +
      (showJobBorder ? ' border: 2px solid ' + (job.color || '#3949ab') + ';' + (job.isLinkedReference ? ' border-style: dashed;' : '') : ''));
@@ -5481,62 +5505,9 @@ function buildCalBarHtml(seg, left, top, width) {
     content = (isJobSpan ? linkGlyph : '') + escapeHtml(task.name) + (tagLabel ? ' <span class="cal-jobname-tag" style="background:' + (job.color || '#3949ab') + ';">' + escapeHtml(tagLabel) + '</span>' : '');
   }
 
-  // Inside a collapsed span, paint each real task's own date range as its
-  // own softened-color block (task.segments, from
-  // buildSubUnitSpanSegments()) — same per-task coloring the Gantt's own
-  // collapsed sub-phase row uses (softenColor(task.color || job.color) —
-  // see renderGantt()'s isCollapsedRow "solid" segments). No border on the
-  // segments themselves, same as Gantt: only the whole bar gets the
-  // job-color outline (showJobBorder above); a scheduling gap between
-  // tasks just lets that same softened bar background show through, since
-  // gaps don't get their own segment. Positioned relative to the bar's own
-  // padding box (a position:absolute child's containing block, per spec —
-  // padding doesn't shift it, but the 2px border does), so only the
-  // border needs subtracting here, not the padding.
-  // seg.spanWindowOffset (set by renderMonthCalendar/renderWeekCalendar)
-  // accounts for a span bar that's only a clamped slice of a multi-week
-  // task range.
-  let innerSegmentsHtml = '';
-  if (isJobSpan && task.segments && task.segments.length) {
-    const windowOffset = seg.spanWindowOffset || 0;
-    const windowDays = Math.max(1, (seg.colEnd - seg.colStart) + 1);
-    const borderW = 2; // matches the bar's own border: 2px, see showJobBorder above
-    const perDayPx = Math.max(0, width - borderW * 2) / windowDays;
-    task.segments.forEach(function(s) {
-      const clipStart = Math.max(0, s.startOffset - windowOffset);
-      const clipEnd = Math.min(windowDays - 1, s.endOffset - windowOffset);
-      if (clipEnd < clipStart) return;
-      const segLeft = clipStart * perDayPx;
-      const segWidth = (clipEnd - clipStart + 1) * perDayPx;
-      // Same two-path hatch as Gantt's own collapsed-row overlap segments
-      // (renderGantt()'s "job-span-task-hatch" branch): if the covering
-      // tasks are genuinely different colors, stripe those; if two-or-more
-      // tasks overlap but happen to share one color (very common — see
-      // taskCount's comment in buildSubUnitSpanSegments()), stripe that
-      // color against a darkened shade of itself instead, so the overlap
-      // still reads as a hatch instead of silently looking like a single
-      // plain segment.
-      let bg;
-      if (s.taskCount <= 1) {
-        bg = softenColor(s.colors[0]);
-      } else if (s.colors.length > 1) {
-        bg = 'repeating-linear-gradient(45deg, ' + s.colors.map(function(c, idx) { const sc = softenColor(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
-      } else {
-        const base = softenColor(s.colors[0]);
-        const dark = darkenColor(base, 0.28);
-        bg = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
-      }
-      // No title attribute here — pointer-events:none (see .cal-bar-segment)
-      // means it could never actually show on hover; the outer bar's own
-      // title covers the whole span already.
-      innerSegmentsHtml += '<div class="cal-bar-segment" style="left:' + segLeft + 'px; width:' + segWidth + 'px; background:' + bg + ';"></div>';
-    });
-  }
-  if (innerSegmentsHtml) content = '<span class="cal-bar-content">' + content + '</span>';
-
   return '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; ' + styleExtra + '" title="' +
     escapeHtml(task.name) + (isCalEvt || isJobSpan ? '' : ' — ' + escapeHtml(job.name) + (seg.phaseName ? ' — ' + escapeHtml(seg.phaseName) : '') + (seg.subPhaseName ? ' — ' + escapeHtml(seg.subPhaseName) : '')) + (job.isLinkedReference ? ' (linked, read-only — click to open in ' + escapeHtml(job.linkedFromProjectName || 'its project') + ')' : '') + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-phase-id="' + (seg.phaseId || '') + '" data-cal-sub-phase-id="' + (seg.subPhaseId || '') + '" data-cal-linked="' + (job.isLinkedReference ? '1' : '') + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '" data-cal-task-start="' + (task.start || '') + '" data-cal-task-finish="' + (task.finish || '') + '">' +
-    dragHandles + innerSegmentsHtml + content + '</div>';
+    dragHandles + content + '</div>';
 }
 
 function computeDateRange() {
@@ -5761,11 +5732,6 @@ function renderMonthCalendar() {
           colEnd: Math.round((clampedFinish - rowStart) / 86400000),
           isTrueStart: j.start.getTime() === clampedStart.getTime(),
           isTrueEnd: j.finish.getTime() === clampedFinish.getTime(),
-          // Days from the collapsed span's own true start to THIS row's
-          // clamped display window — buildCalBarHtml needs it to slice
-          // task.segments (computed once, offset from the full span) down
-          // to just what's visible in this particular week row.
-          spanWindowOffset: Math.round((clampedStart - j.start) / 86400000),
           lane: 0
         };
       })
@@ -5905,11 +5871,6 @@ function renderWeekCalendar() {
         colEnd: Math.round((clampedFinish - weekStart) / 86400000),
         isTrueStart: j.start.getTime() === clampedStart.getTime(),
         isTrueEnd: j.finish.getTime() === clampedFinish.getTime(),
-        // See the identical field in renderMonthCalendar() — how far this
-        // week's clamped display window starts into the collapsed span's
-        // own full range, so buildCalBarHtml can slice task.segments down
-        // to just what's visible here.
-        spanWindowOffset: Math.round((clampedStart - j.start) / 86400000),
         lane: 0
       };
     })
