@@ -280,6 +280,13 @@
   .cal-bar-collapse-toggle {
     display: inline-block; cursor: pointer; font-size: 9px; margin-right: 3px;
     padding: 0 2px; border-radius: 3px; vertical-align: middle;
+    /* An expanded (non-span) bar still has its drag handles underneath
+       (.cal-bar-drag-left/-body/-right, z-index 2-3) — without its own
+       higher stacking, this plain inline span would lose the hit-test to
+       whichever absolutely-positioned drag handle happens to sit at the
+       same spot, so a click meant for the chevron would start a drag/
+       resize instead of toggling. */
+    position: relative; z-index: 5;
   }
   .cal-bar-collapse-toggle:hover { background: rgba(255,255,255,0.28); }
   /* Per-task colored blocks painted inside a collapsed span bar (see
