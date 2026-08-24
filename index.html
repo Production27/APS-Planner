@@ -1623,6 +1623,20 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .mobile-view-btn.active { border-left-color: var(--primary); border-bottom-color: transparent; }
 
     .app-shell { grid-area: shell; height: 100%; min-height: 0; }
+
+    /* Board columns stay the same physical width they were in portrait,
+       rather than the portrait rule's calc(100vw - 48px) stretching each
+       one out to fill the now-much-wider landscape viewport. 100vh here
+       is a stand-in for "100vw back in portrait" — a phone's short
+       dimension (its portrait width) is also its landscape height, so
+       this tracks the actual device rather than guessing a fixed px
+       value that'd be wrong on a different phone. Also means more than
+       one column can now peek in side by side instead of one column
+       stretched edge to edge. */
+    .board-column, .board-add-column {
+      width: calc(100vh - 48px); min-width: calc(100vh - 48px);
+      width: calc(100dvh - 48px); min-width: calc(100dvh - 48px);
+    }
   }
 
   /* ===== DARK MODE ===== */
