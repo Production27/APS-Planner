@@ -1138,6 +1138,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .checklist-item .ci-assignee .ms-dropdown-panel { width: 200px; left: auto; right: 0; }
   .checklist-item .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 15px; padding: 2px 6px; flex-shrink: 0; }
   .checklist-item .ci-delete:hover { color: var(--danger); }
+  /* Sub-items — no assignee control of their own, they just stay
+     assigned to whoever's on the parent item (see the .ci-assignee
+     dropdown above). Indented under the parent, roughly aligned past
+     its checkbox, same visual language as .job-comment-replies. */
+  .checklist-subitems { margin: 2px 0 6px 26px; padding-left: 12px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+  .checklist-subitem { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .checklist-subitem input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+  .checklist-subitem .ci-text { flex: 1; font-size: 12px; color: var(--text); }
+  .checklist-subitem.done .ci-text { text-decoration: line-through; color: #aaa; }
+  .checklist-subitem .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 13px; padding: 2px 5px; flex-shrink: 0; }
+  .checklist-subitem .ci-delete:hover { color: var(--danger); }
+  .checklist-subitem-add-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+  .checklist-subitem-add-row input { flex: 1; min-width: 0; font-size: 12px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); color: var(--text); font-family: inherit; }
   .checklist-add-row { display: flex; gap: 8px; margin-top: 8px; }
   .checklist-add-row input { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
   /* Whole-stage "Visible to" restriction — see setChecklistStageAssignee()/
@@ -1639,6 +1652,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .ms-dropdown-toggle,
   body.dark-mode .ms-dropdown-panel,
   body.dark-mode .checklist-add-row input,
+  body.dark-mode .checklist-subitem-add-row input,
   body.dark-mode .manage-field-add-row input,
   body.dark-mode .search-box {
     background: #20232c; color: var(--text);
@@ -9453,11 +9467,16 @@ function duplicateJob(jobId, event) {
       // template changes. Only genuinely custom items get a fresh id.
       const col = BOARD_COLUMNS.find(function(c) { return c.id === colId; });
       const templateIds = ((col && col.defaultChecklist) || []).map(function(d) { return d.id; });
+      // Deep-cloned (not Object.assign's shallow copy) — an item's
+      // assignee/subItems are arrays, and a shallow copy would leave the
+      // duplicate sharing those same array references with the original,
+      // so toggling a sub-item or reassigning on one would silently
+      // mutate the other too.
       newCard.checklists[colId] = originalCard.checklists[colId].map(function(i) {
-        return Object.assign({}, i, { id: templateIds.indexOf(i.id) !== -1 ? i.id : genId() });
+        return Object.assign(JSON.parse(JSON.stringify(i)), { id: templateIds.indexOf(i.id) !== -1 ? i.id : genId() });
       });
     });
-    newCard.checklistAssignees = Object.assign({}, originalCard.checklistAssignees || {});
+    newCard.checklistAssignees = JSON.parse(JSON.stringify(originalCard.checklistAssignees || {}));
     newCard.attachments = (originalCard.attachments || []).map(function(a) { return Object.assign({}, a, { id: genId() }); });
   });
 
@@ -10328,10 +10347,13 @@ function buildCardEl(card) {
   // A stage assigned to someone else (see setChecklistStageAssignee()) is
   // private — no badge leaking its progress to viewers who can't open it.
   if (!isChecklistStageVisibleToMe(card.checklistAssignees, card.column)) checklist = [];
-  if (checklist.length) {
-    const doneCount = checklist.filter(i => i.done).length;
-    const allDone = doneCount === checklist.length;
-    badges.push('<span class="mini-badge' + (allDone ? ' checklist-complete' : '') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + doneCount + '/' + checklist.length + '</span>');
+  // Sub-items count toward this badge too — see renderChecklist()'s
+  // matching progress-bar treatment.
+  const allDoneFlags = checklist.reduce((acc, i) => acc.concat([i.done], (i.subItems || []).map(s => s.done)), []);
+  if (allDoneFlags.length) {
+    const doneCount = allDoneFlags.filter(Boolean).length;
+    const allDone = doneCount === allDoneFlags.length;
+    badges.push('<span class="mini-badge' + (allDone ? ' checklist-complete' : '') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + doneCount + '/' + allDoneFlags.length + '</span>');
   }
 
   const attachments = card.attachments || [];
@@ -11021,6 +11043,16 @@ function renderJobChecklist() {
     // hyphenated string here would be broken JS in the onchange/onclick
     // attribute (e.g. toggleJobChecklistItem(c821aed9-8a6b-...) parses as
     // subtraction, not a function call) — silently doing nothing on click.
+    const subItems = item.subItems || [];
+    // Sub-items have no assignee of their own — see the matching comment
+    // in renderChecklist() (the Board card modal's twin).
+    const subItemsHtml = subItems.length ? '<div class="checklist-subitems">' + subItems.map(function(sub) {
+      return '<div class="checklist-subitem' + (sub.done ? ' done' : '') + '">' +
+        '<input type="checkbox" data-min-tier="commenter" ' + (sub.done ? 'checked' : '') + ' onchange="toggleJobChecklistSubItem(\'' + item.id + '\', \'' + sub.id + '\')">' +
+        '<span class="ci-text">' + escapeHtml(sub.text) + '</span>' +
+        '<button class="ci-delete" data-min-tier="editor" onclick="deleteJobChecklistSubItem(\'' + item.id + '\', \'' + sub.id + '\')">×</button>' +
+        '</div>';
+    }).join('') + '</div>' : '';
     return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
       '<input type="checkbox" data-min-tier="commenter" ' + (item.done ? 'checked' : '') + ' onchange="toggleJobChecklistItem(\'' + item.id + '\')">' +
       '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
@@ -11032,11 +11064,16 @@ function renderJobChecklist() {
         '</div>' +
       '</div>' +
       '<button class="ci-delete" data-min-tier="editor" onclick="deleteJobChecklistItem(\'' + item.id + '\')">×</button>' +
+      '</div>' +
+      subItemsHtml +
+      '<div class="checklist-subitem-add-row">' +
+        '<input type="text" id="jmCiSubNew_' + item.id + '" data-min-tier="editor" placeholder="Add sub-item..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addJobChecklistSubItem(\'' + item.id + '\');}">' +
       '</div>';
   }).join('');
 
-  const total = items.length;
-  const done = items.filter(function(i) { return i.done; }).length;
+  const allDoneFlags = items.reduce(function(acc, i) { return acc.concat([i.done], (i.subItems || []).map(function(s) { return s.done; })); }, []);
+  const total = allDoneFlags.length;
+  const done = allDoneFlags.filter(Boolean).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
   document.getElementById('jmChecklistProgressFill').style.width = pct + '%';
   document.getElementById('jmChecklistProgressPct').textContent = pct + '%';
@@ -11054,6 +11091,35 @@ function addJobChecklistItem() {
   if (!text) return;
   getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).push({ id: Date.now(), text, done: false, assignee: '' });
   input.value = '';
+  renderJobChecklist();
+  flushAutoSaveJobForm();
+}
+
+function addJobChecklistSubItem(parentId) {
+  const input = document.getElementById('jmCiSubNew_' + parentId);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return String(i.id) === parentId; });
+  if (!item) return;
+  if (!item.subItems) item.subItems = [];
+  item.subItems.push({ id: Date.now(), text: text, done: false });
+  renderJobChecklist();
+  flushAutoSaveJobForm();
+}
+
+function toggleJobChecklistSubItem(parentId, subId) {
+  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return String(i.id) === parentId; });
+  const sub = item && (item.subItems || []).find(function(s) { return String(s.id) === subId; });
+  if (sub) sub.done = !sub.done;
+  renderJobChecklist();
+  flushAutoSaveJobForm();
+}
+
+function deleteJobChecklistSubItem(parentId, subId) {
+  const item = getChecklistForStage(jmDraftChecklists, jmActiveChecklistColumnId).find(function(i) { return String(i.id) === parentId; });
+  if (!item) return;
+  item.subItems = (item.subItems || []).filter(function(s) { return String(s.id) !== subId; });
   renderJobChecklist();
   flushAutoSaveJobForm();
 }
@@ -11450,6 +11516,17 @@ function renderChecklist() {
     // hyphenated string here would be broken JS in the onchange/onclick
     // attribute (e.g. toggleChecklistItem(c821aed9-8a6b-...) parses as
     // subtraction, not a function call) — silently doing nothing on click.
+    const subItems = item.subItems || [];
+    // Sub-items have no assignee of their own — they stay assigned to
+    // whoever's on the parent (the .ci-assignee dropdown just above), so
+    // there's nothing to render/collect for them beyond checkbox/text/delete.
+    const subItemsHtml = subItems.length ? '<div class="checklist-subitems">' + subItems.map(function(sub) {
+      return '<div class="checklist-subitem' + (sub.done ? ' done' : '') + '">' +
+        '<input type="checkbox" data-min-tier="commenter" ' + (sub.done ? 'checked' : '') + ' onchange="toggleChecklistSubItem(\'' + item.id + '\', \'' + sub.id + '\')">' +
+        '<span class="ci-text">' + escapeHtml(sub.text) + '</span>' +
+        '<button class="ci-delete" data-min-tier="editor" onclick="deleteChecklistSubItem(\'' + item.id + '\', \'' + sub.id + '\')">×</button>' +
+        '</div>';
+    }).join('') + '</div>' : '';
     return '<div class="checklist-item' + (item.done ? ' done' : '') + '">' +
       '<input type="checkbox" data-min-tier="commenter" ' + (item.done ? 'checked' : '') + ' onchange="toggleChecklistItem(\'' + item.id + '\')">' +
       '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
@@ -11461,11 +11538,19 @@ function renderChecklist() {
         '</div>' +
       '</div>' +
       '<button class="ci-delete" data-min-tier="editor" onclick="deleteChecklistItem(\'' + item.id + '\')">×</button>' +
+      '</div>' +
+      subItemsHtml +
+      '<div class="checklist-subitem-add-row">' +
+        '<input type="text" id="ciSubNew_' + item.id + '" data-min-tier="editor" placeholder="Add sub-item..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addChecklistSubItem(\'' + item.id + '\');}">' +
       '</div>';
   }).join('');
 
-  const total = items.length;
-  const done = items.filter(function(i) { return i.done; }).length;
+  // Sub-items count toward the stage's overall progress alongside their
+  // parents — same "just another completable thing" treatment, not
+  // tracked separately.
+  const allDoneFlags = items.reduce(function(acc, i) { return acc.concat([i.done], (i.subItems || []).map(function(s) { return s.done; })); }, []);
+  const total = allDoneFlags.length;
+  const done = allDoneFlags.filter(Boolean).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
   document.getElementById('checklistProgressFill').style.width = pct + '%';
   document.getElementById('checklistProgressPct').textContent = pct + '%';
@@ -11483,6 +11568,35 @@ function addChecklistItem() {
   if (!text) return;
   getChecklistForStage(draftChecklists, activeChecklistColumnId).push({ id: Date.now(), text, done: false, assignee: '' });
   input.value = '';
+  renderChecklist();
+  flushCardAutosave();
+}
+
+function addChecklistSubItem(parentId) {
+  const input = document.getElementById('ciSubNew_' + parentId);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return String(i.id) === parentId; });
+  if (!item) return;
+  if (!item.subItems) item.subItems = [];
+  item.subItems.push({ id: Date.now(), text: text, done: false });
+  renderChecklist();
+  flushCardAutosave();
+}
+
+function toggleChecklistSubItem(parentId, subId) {
+  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return String(i.id) === parentId; });
+  const sub = item && (item.subItems || []).find(function(s) { return String(s.id) === subId; });
+  if (sub) sub.done = !sub.done;
+  renderChecklist();
+  flushCardAutosave();
+}
+
+function deleteChecklistSubItem(parentId, subId) {
+  const item = getChecklistForStage(draftChecklists, activeChecklistColumnId).find(function(i) { return String(i.id) === parentId; });
+  if (!item) return;
+  item.subItems = (item.subItems || []).filter(function(s) { return String(s.id) !== subId; });
   renderChecklist();
   flushCardAutosave();
 }
