@@ -1556,13 +1556,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .gantt-top-row { flex-wrap: wrap; height: auto; }
     .gantt-view-toggle-row { width: 100%; min-width: 0; }
     .gantt-toolbar { width: 100%; flex: 1 1 100%; }
-    .left-panel { width: 110px; min-width: 110px; }
-    /* Start/Finish would be truncated into uselessness at this width —
-       the task/job name (what actually identifies a row) gets the space
-       instead. Exact dates are still one tap away, via that row/bar's own
-       edit screen. */
-    .left-header .col-start, .left-header .col-finish,
-    .task-row .col-start, .task-row .col-finish { display: none; }
+    /* Collapsed entirely rather than just narrowed — .right-panel is
+       flex:1 (see its own rule), so it fills the freed width automatically,
+       no JS involved. Each bar still carries its own job-name tag directly
+       in the timeline (.task-bar-job-tag, see renderGantt()) — the left
+       panel was never the only place a bar's job was identified, so
+       hiding it doesn't leave bars anonymous. */
+    .left-panel { display: none; }
   }
 
   /* ===== DARK MODE ===== */
