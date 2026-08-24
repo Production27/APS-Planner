@@ -1570,6 +1570,22 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .left-panel { display: none; }
   }
 
+  /* Landscape phones specifically (max-height, not max-width, is what
+     identifies this — see the breakpoint comment above) get a shorter
+     header and tab row on top of the general mobile rules above, since
+     the whole point of landscape is width to spare and height to
+     conserve — the opposite trade-off from portrait. Chosen over moving
+     these into a left-side column: the header's title/settings/View-as/
+     project-switch controls are all built assuming a horizontal bar, so
+     reflowing that into a narrow vertical sidebar would touch a lot of
+     shared UI for comparatively little payoff. */
+  @media (max-height: 480px) and (orientation: landscape) {
+    .app-header { height: 40px; padding: 5px 14px; }
+    .app-header .subtitle { display: none; }
+    .app-header h1 { font-size: 13px; min-width: 0; }
+    .mobile-view-btn { padding: 5px 8px; font-size: 12px; }
+  }
+
   /* ===== DARK MODE ===== */
   body.dark-mode {
     --bg: #14161c; --card: #1c1f27; --border: #323744;
