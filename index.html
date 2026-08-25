@@ -118,18 +118,6 @@
   /* Mobile-only Jobs/Board toggle — see setMobileBoardView() and the
      @media (max-width:480px) rules that turn this into a visible tab bar. */
   .mobile-view-switcher { display: none; }
-  .project-toggle-btn {
-    width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
-    transition: all 0.15s; border: 2px solid var(--border);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15); flex-shrink: 0;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-  }
-  .project-toggle-btn:hover {
-    transform: scale(1.1); border-color: var(--primary-light);
-    box-shadow: 0 3px 10px rgba(0,0,0,0.25);
-  }
-  .project-toggle-btn:active { transform: scale(0.95); }
-
   .settings-menu-wrap { position: relative; }
   .settings-dots-btn {
     background: transparent; border: none; color: var(--text-light);
@@ -2081,6 +2069,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="settings-menu-wrap">
         <button class="settings-dots-btn" onclick="toggleSettingsMenu()" title="Settings">⋮</button>
         <div class="settings-dropdown" id="settingsDropdown">
+          <!-- Was its own standalone square icon button in the rail row —
+               see updateProjectToggle(), which now targets this list item
+               (id kept the same) instead of a <button>, writing the "next
+               project" name straight into #projectToggleLabel rather than
+               a background-gradient swatch + title tooltip. Visibility is
+               still bespoke JS (not data-min-tier): whether this shows
+               depends on whether the ACCOUNT is project-restricted, not
+               just its tier — see updateProjectToggle() itself. -->
+          <div class="settings-dropdown-item" id="projectToggleBtn" onclick="closeSettingsMenu(); toggleProject();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></div>
           <!-- Was its own standalone icon button in the rail row; folded in
                here instead — data-min-tier replaces applyPermissionGating()'s
                old bespoke full-hide-by-id logic for this element (removed),
@@ -2104,7 +2101,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         </div>
       </div>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
-      <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
       <div class="presence-avatars" id="presenceAvatars"></div>
     </div>
     <!-- View switcher — the active view shows full-size (icon + label),
@@ -4653,29 +4649,33 @@ function toggleProject() {
 }
 
 function updateProjectToggle() {
-  const btn = document.getElementById('projectToggleBtn');
-  if (!btn) return;
+  const item = document.getElementById('projectToggleBtn');
+  const label = document.getElementById('projectToggleLabel');
+  if (!item) return;
   // Fail closed until the real tier/project assignment is confirmed (see
   // roleConfirmed) — same reasoning as switchProject()'s own guard, applied
-  // to the button itself so it doesn't sit there clickable during the brief
+  // to the item itself so it doesn't sit there clickable during the brief
   // window right after a page load/refresh before that's known.
   // A restricted (non-admin, project-scoped) account has nothing to toggle
-  // to — hiding the button entirely reads more honestly than leaving a
+  // to — hiding the item entirely reads more honestly than leaving a
   // permanently-disabled control around, matching how this codebase already
   // hides irrelevant UI outright elsewhere (e.g. the mobile view switcher).
+  // Kept as bespoke JS rather than data-min-tier since this depends on the
+  // ACCOUNT's project assignment, not just its role tier.
   if (!roleConfirmed || (currentUserRole !== 'admin' && currentAssignedProjectId)) {
-    btn.style.display = 'none';
+    item.style.display = 'none';
     return;
   }
-  btn.style.display = '';
   const ids = Object.keys(projects);
-  if (ids.length < 2) return;
+  if (ids.length < 2) {
+    item.style.display = 'none';
+    return;
+  }
+  item.style.display = '';
   const currentIdx = ids.indexOf(activeProjectId);
   const nextIdx = (currentIdx + 1) % ids.length;
   const nextProject = projects[ids[nextIdx]];
-  const theme = (nextProject && nextProject.header && nextProject.header.theme) ? nextProject.header.theme : DEFAULT_THEME;
-  btn.style.background = 'linear-gradient(135deg, ' + theme.c1 + ' 0%, ' + theme.c2 + ' 100%)';
-  btn.title = 'Switch to ' + (nextProject ? nextProject.name : 'project');
+  if (label) label.textContent = 'Switch to ' + (nextProject ? nextProject.name : 'project');
 }
 
 function renderAll() {
