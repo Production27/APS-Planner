@@ -2083,10 +2083,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
                old bespoke full-hide-by-id logic for this element (removed),
                same generic mechanism every other item here already uses. -->
           <div class="settings-dropdown-item" id="activityToggleBtn" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); toggleActivitySidebar();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Activity Log</div>
-          <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); promptRenameProject(activeProjectId);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Header Title</div>
-          <div class="settings-dropdown-divider"></div>
-          <div class="settings-dropdown-item" onclick="closeSettingsMenu(); exportData();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-5-5m5 5l5-5" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="19" width="16" height="2.5" rx="1.25" fill="#28a745"/></svg> Export</div>
-          <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); document.getElementById('importFile').click();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 21V9m0 0l-5 5m5-5l5 5" stroke="#3949ab" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="4" y="2.5" width="16" height="2.5" rx="1.25" fill="#3949ab"/></svg> Import</div>
           <div class="settings-dropdown-divider"></div>
           <div class="settings-dropdown-item toggle-item" onclick="toggleDarkMode()">
             <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
@@ -2100,7 +2096,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openArchivedJobsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</div>
         </div>
       </div>
-      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
       <div class="presence-avatars" id="presenceAvatars"></div>
     </div>
     <!-- View switcher — the active view shows full-size (icon + label),
@@ -4469,23 +4464,6 @@ function duplicateProject(projectId) {
   showToast('Duplicating projects is disabled — this app is fixed to two projects.', 'info');
 }
 
-function renameProject(projectId, newName) {
-  if (!projects[projectId] || !newName.trim()) return;
-  const trimmed = newName.trim();
-  projects[projectId].name = trimmed;
-  // Keep the visible header text in sync with the name — see the matching
-  // comment in saveActiveProject(), which syncs the other direction
-  // (header edit -> name). Without this, renaming here would update the
-  // underlying name but leave the on-screen header showing the old text
-  // until something else happened to re-save it.
-  projects[projectId].header.title = trimmed;
-  if (projectId === activeProjectId) document.getElementById('headerTitle').textContent = trimmed;
-  saveProjects();
-
-  showToast('Project renamed', 'success');
-  pushProjectToShared(projectId);
-}
-
 function deleteProject(projectId) {
   showToast('Deleting projects is disabled — this app is fixed to two projects.', 'info');
 }
@@ -4503,10 +4481,13 @@ function deleteProject(projectId) {
 // two — it never renames an existing one. It used to also forcibly rename
 // "whichever project came first" back to FIXED_PROJECT_NAMES[0]/[1] every
 // single time it ran (this runs on every page load), which meant a rename
-// via the header text or renameProject() would silently revert on the next
-// reload. Project names are meant to be freely editable now — see
-// saveActiveProject() syncing p.name from the header text — so
-// FIXED_PROJECT_NAMES is only ever used as a starter name for a newly
+// would silently revert on the next reload. Nothing in the UI can rename a
+// project any more (the old "Edit Header Title" settings item and
+// renameProject() were removed — per-user request, project rename isn't
+// needed), but saveActiveProject() still syncs p.name from the (hidden)
+// header text on every save, so that path is harmless dead weight rather
+// than actively wrong — so FIXED_PROJECT_NAMES is only ever used as a
+// starter name for a newly
 // created project, never re-asserted onto an existing one.
 const FIXED_PROJECT_NAMES = ['ADVANCED PRECUT SYSTEMS', 'BLUDORN BUILDERS'];
 
@@ -4749,14 +4730,6 @@ function applyPermissionGating() {
 function promptNewProject() {
   const name = prompt('Enter project name:');
   if (name && name.trim()) createNewProject(name.trim());
-  closeAllDropdowns();
-}
-
-function promptRenameProject(projectId) {
-  const p = projects[projectId];
-  if (!p) return;
-  const name = prompt('Edit header title:', p.name);
-  if (name && name.trim()) renameProject(projectId, name.trim());
   closeAllDropdowns();
 }
 
@@ -10019,125 +9992,6 @@ function executeDelete() {
 function closeModal() {
   document.getElementById('deleteModal').classList.remove('show');
   deleteTargetJobId = null;
-}
-
-function exportData() {
-  const data = {
-    version: 3,
-    projects: projects,
-    activeProjectId: activeProjectId
-  };
-  const dataStr = JSON.stringify(data, null, 2);
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'aps_planner_projects.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Projects exported to JSON', 'success');
-}
-
-function importData(input) {
-  const file = input.files[0];
-  if (!file) return;
-  // Same reasoning as switchProject(): an open form holds IDs scoped to
-  // whatever's about to be replaced wholesale.
-  cancelEdit();
-  closeCardModal();
-  closeCalendarEventModal();
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const data = JSON.parse(e.target.result);
-      if ((data.version === 2 || data.version === 3) && data.projects) {
-        // Multi-project import (v2 flat tasks or v3 nested jobs)
-        projects = data.projects;
-        Object.values(projects).forEach(function(p) {
-          if (p.tasks && !p.jobs) {
-            p.jobs = [];
-            p.tasks.forEach(function(t) {
-              p.jobs.push({
-                id: genId(),
-                name: t.job || 'Untitled',
-                color: t.color || '#3949ab',
-                archived: t.archived || false,
-                notes: t.notes || '',
-                tasks: [{
-                  id: t.id || genId(),
-                  name: t.job || 'Task',
-                  start: t.start,
-                  finish: t.finish,
-                  notes: t.notes || '',
-                  order: 0
-                }]
-              });
-            });
-            delete p.tasks;
-          }
-          ensureJobAndTaskIds(p.jobs || []);
-        });
-        activeProjectId = data.activeProjectId && projects[data.activeProjectId] ? data.activeProjectId : Object.keys(projects)[0];
-        saveProjects();
-        loadActiveProjectData();
-        renderAll();
-        logActivity('imported projects');
-        showToast('Projects imported successfully', 'success');
-      } else if (data.header || Array.isArray(data.tasks) || Array.isArray(data.jobs) || Array.isArray(data)) {
-        // Legacy single-project import
-        const name = data.header && data.header.title ? data.header.title : 'Imported Project';
-        createNewProject(name);
-        const p = getActiveProject();
-        if (data.header) {
-          p.header.title = data.header.title || p.header.title;
-          p.header.subtitle = data.header.subtitle || '';
-          p.header.theme = data.header.theme || DEFAULT_THEME;
-          p.header.bgPhoto = data.header.bgPhoto || null;
-          p.header.boardBgPhoto = data.header.boardBgPhoto || null;
-        }
-        if (Array.isArray(data.jobs)) {
-          p.jobs = data.jobs;
-          ensureJobAndTaskIds(p.jobs);
-        } else {
-          const importedTasks = Array.isArray(data.tasks) ? data.tasks : (Array.isArray(data) ? data : []);
-          p.jobs = [];
-          importedTasks.forEach(function(t) {
-            p.jobs.push({
-              id: genId(),
-              name: t.job || 'Untitled',
-              color: t.color || '#3949ab',
-              archived: t.archived || false,
-              notes: t.notes || '',
-              tasks: [{
-                id: t.id || genId(),
-                name: t.job || 'Task',
-                start: t.start,
-                finish: t.finish,
-                notes: t.notes || '',
-                order: 0
-              }]
-            });
-          });
-        }
-        if (Array.isArray(data.boardColumns) && data.boardColumns.length) p.boardColumns = data.boardColumns;
-        if (Array.isArray(data.boardCards)) p.boardCards = data.boardCards;
-        if (Array.isArray(data.calendarEvents)) p.calendarEvents = data.calendarEvents;
-        saveProjects();
-        loadActiveProjectData();
-        renderAll();
-        logActivity('imported projects');
-        showToast('Project imported successfully', 'success');
-      } else {
-        showToast('Unrecognized file format', 'error');
-      }
-    } catch (err) {
-      showToast('Import failed: ' + err.message, 'error');
-    }
-  };
-  reader.readAsText(file);
-  input.value = '';
 }
 
 // ===== BACKUPS (shared room, via the Cloudflare Worker) =====
