@@ -733,8 +733,41 @@
      never fights either of those — see their own rules further down. */
   body[data-active-tab="home"] .manager-sidebar-header,
   body[data-active-tab="home"] .job-list { display: none; }
+  /* Both icon rows go from a horizontal row to a vertical column — a row
+     of 5 tabs (or 4 header icons) needs real width even collapsed to
+     icon-only, which is what actually capped how narrow the sidebar
+     could get; stacked, each row only needs to be as wide as ONE icon. */
+  body[data-active-tab="home"] .rail-header-icons,
+  body[data-active-tab="home"] .rail-tab-row {
+    flex-direction: column; align-items: stretch; flex-wrap: nowrap;
+  }
+  /* Icon-only, permanently — the label/badge reveal-on-active-or-hover
+     (see .rail-tab.active/:hover below) needs horizontal room a narrow
+     column doesn't have. Each button already carries its own title=""
+     tooltip for identification, same as any icon-rail sidebar (VS
+     Code's activity bar, Slack's app rail, etc). */
+  body[data-active-tab="home"] .rail-tab,
+  body[data-active-tab="home"] .rail-tab.active,
+  body[data-active-tab="home"] .rail-tab:hover {
+    flex: 0 0 34px;
+  }
+  body[data-active-tab="home"] .rail-tab-label,
+  body[data-active-tab="home"] .rail-tab .badge {
+    display: none;
+  }
+  /* Each tab's icon is a hardcoded hex fill, not currentColor (Home and
+     Gantt both happen to use the exact --primary-light indigo) — with
+     the label gone, an active/hovered icon that color would be
+     completely invisible against the active background of that exact
+     same color. Force every icon to solid white on active/hover instead
+     of relying on each one's own fill happening to contrast; robust
+     regardless of which hex a given tab's icon uses. */
+  body[data-active-tab="home"] .rail-tab.active svg,
+  body[data-active-tab="home"] .rail-tab:hover svg {
+    filter: brightness(0) invert(1);
+  }
   @media (min-width: 1101px) {
-    body[data-active-tab="home"] .manager-sidebar { width: 210px; min-width: 210px; }
+    body[data-active-tab="home"] .manager-sidebar { width: 64px; min-width: 64px; }
   }
   .manager-sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafafa; }
   .manager-sidebar-header h2 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
