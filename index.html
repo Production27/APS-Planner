@@ -1164,6 +1164,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .checklist-item .ci-assignee .ms-dropdown-panel { width: 200px; left: auto; right: 0; }
   .checklist-item .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 15px; padding: 2px 6px; flex-shrink: 0; }
   .checklist-item .ci-delete:hover { color: var(--danger); }
+  /* "Killer item" flag — see toggleMyChecklistItemRequired(). Only
+     required items are what the board-move confirm (moveCardToColumn's
+     confirmChecklistBeforeMove()) warns about once any exist on a stage,
+     so this is the control for narrowing that warning down to what
+     actually matters instead of every checklist line. */
+  .checklist-item .ci-required { background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px; padding: 2px 5px; flex-shrink: 0; line-height: 1; }
+  .checklist-item .ci-required.is-required { color: #e8a33d; }
+  .checklist-item.required { border-left: 3px solid #e8a33d; padding-left: 7px; }
+  .checklist-item.required .ci-text { font-weight: 600; }
+  .checklist-item.required.done { border-left-color: #e0c088; }
   /* Sub-items — no assignee control of their own, they just stay
      assigned to whoever's on the parent item (see the .ci-assignee
      dropdown above). Indented under the parent, roughly aligned past
@@ -11014,8 +11024,15 @@ function getOpenChecklistItemsForCard(card) {
   const checklist = stored.filter(function(i) { return !i.removed; }).concat(
     templ.filter(function(d) { return storedIds.indexOf(d.id) === -1; }).map(function(d) { return { id: d.id, text: d.text, done: false, assignee: '' }; })
   );
+  // Once any item on this stage has been flagged required (the "killer
+  // item" set — see toggleMyChecklistItemRequired()), only THOSE gate a
+  // move; a stage nobody's triaged yet still gates on everything so this
+  // never silently goes quiet just because required flags haven't been
+  // set up.
+  const hasRequired = checklist.some(function(i) { return i.required; });
+  const gating = hasRequired ? checklist.filter(function(i) { return i.required; }) : checklist;
   const open = [];
-  checklist.forEach(function(item) {
+  gating.forEach(function(item) {
     if (!item.done) open.push(item.text);
     (item.subItems || []).forEach(function(sub) {
       if (!sub.done) open.push(item.text + ' → ' + sub.text);
@@ -11767,8 +11784,9 @@ function renderMyChecklistList(rows, emptyMessage) {
       '<div class="checklist-subitem-add-row">' +
         '<input type="text" id="' + subAddInputId + '" data-min-tier="editor" placeholder="Add sub-item…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addMyChecklistSubItem(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + subAddInputId + '\');}">' +
       '</div>';
-    return '<div class="checklist-item my-checklist-item' + (item.done ? ' done' : '') + '">' +
+    return '<div class="checklist-item my-checklist-item' + (item.done ? ' done' : '') + (item.required ? ' required' : '') + '">' +
       '<input type="checkbox"' + (item.done ? ' checked' : '') + ' onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
+      '<button class="ci-required' + (item.required ? ' is-required' : '') + '" data-min-tier="editor" title="' + (item.required ? 'Required — click to unflag' : 'Mark as required') + '" onclick="toggleMyChecklistItemRequired(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' + (item.required ? '★' : '☆') + '</button>' +
       '<span class="ci-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
       '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(row.job.name) + '</span>' +
       '<span class="my-checklist-stage-tag">' + escapeHtml(row.columnLabel) + '</span>' +
@@ -11946,6 +11964,20 @@ function toggleMyChecklistItemDone(projectId, cardId, columnId, itemId) {
   const item = items.find(function(i) { return String(i.id) === String(itemId); });
   if (!item) return;
   item.done = !item.done;
+  persistMyChecklistChange(projectId);
+  renderMyChecklist();
+}
+
+// Flags/unflags an item as a "killer item" — see the .ci-required CSS and
+// confirmChecklistBeforeMove() (the board-move gate), which narrows its
+// warning to just required items once any exist on a stage.
+function toggleMyChecklistItemRequired(projectId, cardId, columnId, itemId) {
+  const resolved = resolveMyChecklistCard(projectId, cardId);
+  if (!resolved) return;
+  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
+  const item = items.find(function(i) { return String(i.id) === String(itemId); });
+  if (!item) return;
+  item.required = !item.required;
   persistMyChecklistChange(projectId);
   renderMyChecklist();
 }
