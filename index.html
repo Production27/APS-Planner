@@ -2037,6 +2037,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="my-checklist-add-bar">
           <select id="myChecklistAddJobSelect" data-min-tier="editor" onchange="onMyChecklistAddBarJobChange()"></select>
           <input type="text" id="myChecklistAddInput" data-min-tier="editor" placeholder="Add item…" onkeydown="if(event.key==='Enter'){event.preventDefault();addMyChecklistItemFromBar();}">
+          <button type="button" class="btn btn-primary" data-min-tier="editor" style="padding:6px 14px;font-size:13px;" onclick="addMyChecklistItemFromBar()">Add</button>
           <span id="myChecklistAddVisibility"></span>
         </div>
         <div id="myChecklistListBody"></div>
