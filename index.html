@@ -1249,8 +1249,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .my-checklist-empty { font-size: 13px; color: var(--text-light); padding: 8px 2px; }
 
   /* ===== HOME TAB ===== */
-  /* Personal dashboard — replaces My Checklist as the default landing
-     tab (see loadDefaultTabPref()). A greeting banner, a stat-tile row,
+  /* Personal dashboard — the default landing tab (see the static
+     "active" class on #tab-home/#panel-home; there's no per-user
+     preference for this, it's just always Home). A greeting banner,
+     a stat-tile row,
      then four widgets in a 2x2 grid; each piece is just an innerHTML
      target renderHomeDashboard() fills in — see the "HOME DASHBOARD" JS
      section for the data side. Palette reuses the app's own tokens
@@ -2082,19 +2084,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="settings-dropdown-item toggle-item" onclick="toggleDarkMode()">
             <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
             <span class="mini-toggle" id="darkModeToggle"></span>
-          </div>
-          <!-- Ungated (no data-min-tier) — every role picks their own start
-               tab, same as Dark Mode just above. See loadDefaultTabPref();
-               Home became the default tab this landed alongside it. -->
-          <div class="settings-dropdown-item toggle-item" onclick="event.stopPropagation();">
-            <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg> Default Tab</span>
-            <select id="defaultTabSelect" onchange="setDefaultTabPref(this.value)" style="font-size:12px;padding:3px 5px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);">
-              <option value="home">Home</option>
-              <option value="checklist">My Checklist</option>
-              <option value="calendar">Calendar</option>
-              <option value="gantt">Gantt</option>
-              <option value="board">Board</option>
-            </select>
           </div>
           <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openThemeModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Header Color</div>
           <div class="settings-dropdown-divider"></div>
@@ -5141,7 +5130,6 @@ function init() {
   buildColorPresets();
   autoArchiveJobs();
   renderAll();
-  loadDefaultTabPref();
   setupScrollSync();
   buildCalendarEventColorPresets();
   initJobFormAutosaveListeners();
@@ -5241,24 +5229,6 @@ function applyDarkMode(on) {
 
 function loadDarkModePref() {
   applyDarkMode(localStorage.getItem('gantt_dark_mode_v1') === '1');
-}
-
-// Which tab loads first — a per-browser preference (same localStorage-only
-// scope as dark mode, not synced through the account), since Home
-// became the default tab and not everyone wants to land there. Read at
-// init() time, after the static "active" class already marks Home —
-// this only overrides it if a DIFFERENT preference is stored.
-function loadDefaultTabPref() {
-  const pref = localStorage.getItem('gantt_default_tab_v1') || 'home';
-  const sel = document.getElementById('defaultTabSelect');
-  if (sel) sel.value = pref;
-  if (pref !== 'home') switchTab(pref);
-}
-
-function setDefaultTabPref(tab) {
-  localStorage.setItem('gantt_default_tab_v1', tab);
-  const tabBtn = document.getElementById('tab-' + tab);
-  showToast('Default tab set to ' + (tabBtn ? tabBtn.title : tab), 'success');
 }
 
 function toggleDarkMode() {
@@ -11782,8 +11752,8 @@ function removeFieldOption(key, val) {
 // Flat list of every checklist item assigned to the current account,
 // within the ACTIVE project only — same scope as every other tab
 // (Board/Calendar/Gantt); switching projects is what changes what shows
-// here. Replaces the Gantt as the default landing tab (see
-// loadDefaultTabPref()). A checklist buried in a card's edit modal is
+// here. No longer the default landing tab (Home is — see the "HOME
+// DASHBOARD" section). A checklist buried in a card's edit modal is
 // easy to forget exists; this surfaces "what's actually on you" the
 // moment the app opens.
 //
@@ -12414,8 +12384,9 @@ function renderActivityLogSidebar() {
 function renderActivityLog() { renderActivityLogSidebar(); }
 
 // ===== HOME DASHBOARD =====
-// Personal landing-tab dashboard (see loadDefaultTabPref()) — a greeting
-// banner, a stat-tile row, then four widgets summarizing the active
+// Personal landing-tab dashboard, always the default tab (no per-user
+// preference) — a greeting banner, a stat-tile row, then four widgets
+// summarizing the active
 // project: my open checklist items, overdue/due-soon jobs, a per-stage
 // board bar chart, and (Project Admin+ only) recent activity. Everything
 // here reads data other tabs already own; the only mutation reused is
