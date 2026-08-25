@@ -1225,30 +1225,84 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   /* ===== HOME TAB ===== */
   /* Personal dashboard — replaces My Checklist as the default landing
-     tab (see loadDefaultTabPref()). Four read-mostly widgets in a 2x2
-     grid, each just an innerHTML target renderHomeDashboard() fills in;
-     see the "HOME DASHBOARD" JS section for the data side. */
+     tab (see loadDefaultTabPref()). A greeting banner, a stat-tile row,
+     then four widgets in a 2x2 grid; each piece is just an innerHTML
+     target renderHomeDashboard() fills in — see the "HOME DASHBOARD" JS
+     section for the data side. Palette reuses the app's own tokens
+     throughout (--primary/--danger/--warning/--success etc.) rather than
+     inventing a new one, so it reads as part of this app, not a bolted-on
+     widget skin. */
   .home-wrapper { height: 100%; overflow-y: auto; padding: 20px 24px 32px; }
+  .home-greeting-banner {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: #fff; border-radius: var(--radius); padding: 18px 24px; margin-bottom: 16px; box-shadow: var(--shadow);
+  }
+  .home-greeting-text { font-size: 19px; font-weight: 700; }
+  .home-greeting-date { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+  .home-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 900px) { .home-stats { grid-template-columns: repeat(2, 1fr); } }
+  .home-stat-tile {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; text-align: center; box-shadow: var(--shadow);
+  }
+  .home-stat-value { font-size: 26px; font-weight: 800; line-height: 1.1; }
+  .home-stat-label { font-size: 11px; color: var(--text-light); font-weight: 700; margin-top: 4px; text-transform: uppercase; letter-spacing: .03em; }
   .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
   .home-widget {
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
     box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden;
+    transition: box-shadow .15s;
   }
+  .home-widget:hover { box-shadow: var(--shadow-hover); }
   .home-widget-header {
     font-size: 13px; font-weight: 700; color: var(--text); padding: 12px 14px;
-    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0;
   }
+  .home-widget-icon { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .home-widget-icon.tint-green { background: #e6f4ea; }
+  .home-widget-icon.tint-red { background: #fdecea; }
+  .home-widget-icon.tint-amber { background: #fef3e2; }
+  .home-widget-icon.tint-indigo { background: #e8eaf6; }
+  body.dark-mode .home-widget-icon.tint-green { background: rgba(40,167,69,0.2); }
+  body.dark-mode .home-widget-icon.tint-red { background: rgba(220,53,69,0.2); }
+  body.dark-mode .home-widget-icon.tint-amber { background: rgba(240,173,78,0.2); }
+  body.dark-mode .home-widget-icon.tint-indigo { background: rgba(57,73,171,0.2); }
   .home-widget-body { padding: 6px 14px 12px; max-height: 260px; overflow-y: auto; }
   .home-widget-empty { font-size: 13px; color: var(--text-light); padding: 8px 2px; }
-  .home-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .home-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
   .home-row:last-child { border-bottom: none; }
   .home-row .home-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
   .home-row .home-row-text:hover { color: var(--primary); text-decoration: underline; }
+  .home-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .home-overdue-row { border-left: 3px solid var(--warning); padding-left: 8px; margin-left: -8px; }
+  .home-overdue-row.overdue { border-left-color: var(--danger); }
   .home-more-link { display: block; font-size: 12px; color: var(--primary-light); cursor: pointer; padding: 6px 0 0; }
   .home-more-link:hover { text-decoration: underline; }
-  .home-stage-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; font-size: 13px; }
-  .home-stage-row .mini-badge { font-size: 11px; }
+  /* Stage summary — a real single-hue magnitude bar per stage (length =
+     count relative to the busiest stage), not a plain number list. Done
+     stages (complete/invoiced) render in --success instead of the
+     default --primary-light fill, same status-color convention
+     .mini-badge.checklist-complete already uses elsewhere in this file. */
+  .home-bar-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; cursor: pointer; font-size: 12px; }
+  .home-bar-label { width: 76px; flex-shrink: 0; color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-bar-track { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+  body.dark-mode .home-bar-track { background: rgba(255,255,255,0.08); }
+  .home-bar-fill { display: block; height: 100%; background: var(--primary-light); border-radius: 4px; min-width: 3px; transition: width .2s; }
+  .home-bar-fill.done { background: var(--success); }
+  .home-bar-count { width: 20px; text-align: right; color: var(--text-light); font-weight: 700; flex-shrink: 0; }
+  /* Activity — avatar-initial bubbles instead of the sidebar's plain
+     text rows; deliberately its own classes rather than reusing
+     .activity-log-item, since that class's layout (fixed-width
+     right-aligned timestamp beside the text) doesn't fit this
+     avatar-left / stacked-text layout. */
+  .home-activity-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .home-activity-row:last-child { border-bottom: none; }
+  .home-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .home-activity-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .home-activity-who { font-weight: 700; color: var(--text); font-size: 13px; }
+  .home-activity-what { color: var(--text-light); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-activity-time { font-size: 11px; color: var(--text-light); }
   /* Permission gating — see applyPermissionGating(). Elements tagged
      data-min-tier get this toggled on when the current account's tier is
      below what the element requires. */
@@ -2078,21 +2132,23 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <!-- HOME TAB -->
     <div class="tab-panel active" id="panel-home">
       <div class="home-wrapper">
+        <div class="home-greeting-banner" id="homeGreeting"></div>
+        <div class="home-stats" id="homeStats"></div>
         <div class="home-grid">
           <div class="home-widget">
-            <div class="home-widget-header"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> My Open Items</div>
+            <div class="home-widget-header"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> My Open Items</div>
             <div class="home-widget-body" id="homeChecklistBody"></div>
           </div>
           <div class="home-widget">
-            <div class="home-widget-header"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> Overdue &amp; Due Soon</div>
+            <div class="home-widget-header"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Overdue &amp; Due Soon</div>
             <div class="home-widget-body" id="homeOverdueBody"></div>
           </div>
           <div class="home-widget">
-            <div class="home-widget-header"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board Summary</div>
+            <div class="home-widget-header"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board Summary</div>
             <div class="home-widget-body" id="homeStageBody"></div>
           </div>
           <div class="home-widget" data-min-tier="projectAdmin">
-            <div class="home-widget-header"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Recent Activity</div>
+            <div class="home-widget-header"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></span> Recent Activity</div>
             <div class="home-widget-body" id="homeActivityBody"></div>
           </div>
         </div>
@@ -12352,13 +12408,13 @@ function renderActivityLogSidebar() {
 function renderActivityLog() { renderActivityLogSidebar(); }
 
 // ===== HOME DASHBOARD =====
-// Personal landing-tab dashboard (see loadDefaultTabPref()) — four
-// read-mostly widgets summarizing the active project: my open checklist
-// items, overdue/due-soon jobs, a per-stage board count, and (Project
-// Admin+ only) recent activity. Everything here reads data other tabs
-// already own; the only mutation reused is toggleMyChecklistItemDone()
-// itself, so checking an item off from Home behaves identically to doing
-// it from My Checklist.
+// Personal landing-tab dashboard (see loadDefaultTabPref()) — a greeting
+// banner, a stat-tile row, then four widgets summarizing the active
+// project: my open checklist items, overdue/due-soon jobs, a per-stage
+// board bar chart, and (Project Admin+ only) recent activity. Everything
+// here reads data other tabs already own; the only mutation reused is
+// toggleMyChecklistItemDone() itself, so checking an item off from Home
+// behaves identically to doing it from My Checklist.
 
 const HOME_DUE_SOON_DAYS = 7;
 
@@ -12438,6 +12494,53 @@ function buildHomeActivityRows() {
   return unique.slice(0, 8);
 }
 
+// Feeds the stat-tile row — takes the already-built checklist/overdue
+// rows rather than recomputing them, since renderHomeDashboard() needs
+// both anyway for their own widgets.
+function buildHomeStats(checklistRows, overdueRows) {
+  const overdueCount = overdueRows.filter(function(r) { return r.isOverdue; }).length;
+  const activeJobIds = {};
+  boardCards.forEach(function(card) {
+    if (!card.column || card.column === 'complete' || card.column === 'invoiced') return;
+    const found = findJob(card.jobId);
+    if (!found || found.job.archived) return;
+    if (!isJobVisibleToMe(found.job)) return;
+    activeJobIds[card.jobId] = true;
+  });
+  return {
+    openItems: checklistRows.length,
+    overdue: overdueCount,
+    dueSoon: overdueRows.length - overdueCount,
+    activeJobs: Object.keys(activeJobIds).length
+  };
+}
+
+function homeGreetingPhrase() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function renderHomeGreeting() {
+  const name = getStoredDisplayName() || 'there';
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  return '<div class="home-greeting-text">' + homeGreetingPhrase() + ', ' + escapeHtml(name) + '</div>' +
+    '<div class="home-greeting-date">' + dateStr + '</div>';
+}
+
+function renderHomeStatsWidget(stats) {
+  const tiles = [
+    { value: stats.openItems, label: 'Open Items', color: 'var(--primary-light)' },
+    { value: stats.overdue, label: 'Overdue', color: 'var(--danger)' },
+    { value: stats.dueSoon, label: 'Due Soon', color: 'var(--warning)' },
+    { value: stats.activeJobs, label: 'Active Jobs', color: 'var(--success)' }
+  ];
+  return tiles.map(function(t) {
+    return '<div class="home-stat-tile"><div class="home-stat-value" style="color:' + t.color + ';">' + t.value + '</div><div class="home-stat-label">' + t.label + '</div></div>';
+  }).join('');
+}
+
 function renderHomeChecklistWidget(rows) {
   if (!rows.length) return '<div class="home-widget-empty">Nothing assigned to you right now.</div>';
   const shown = rows.slice(0, 6);
@@ -12460,34 +12563,57 @@ function renderHomeOverdueWidget(rows) {
   if (!rows.length) return '<div class="home-widget-empty">No overdue or upcoming jobs.</div>';
   return rows.map(function(row) {
     const dueLabel = row.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return '<div class="home-row">' +
+    return '<div class="home-row home-overdue-row' + (row.isOverdue ? ' overdue' : '') + '">' +
+      '<span class="home-row-dot" style="background:' + (row.job.color || '#3949ab') + ';"></span>' +
       '<span class="home-row-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(row.label) + '</span>' +
       '<span class="board-card-due' + (row.isOverdue ? ' overdue' : '') + '">' + escapeHtml(dueLabel) + '</span>' +
     '</div>';
   }).join('');
 }
 
+// A real magnitude bar per stage (length = count relative to the busiest
+// stage) rather than a plain number list — see the .home-bar-* CSS.
 function renderHomeStageSummaryWidget(counts) {
   const total = counts.reduce(function(n, c) { return n + c.count; }, 0);
   if (!total) return '<div class="home-widget-empty">No cards on the board yet.</div>';
+  const max = Math.max.apply(null, counts.map(function(c) { return c.count; }).concat([1]));
   return counts.map(function(col) {
     const isDoneStage = col.id === 'complete' || col.id === 'invoiced';
-    return '<div class="home-stage-row" onclick="switchTab(\'board\')">' +
-      '<span>' + escapeHtml(col.label) + '</span>' +
-      '<span class="mini-badge' + (isDoneStage && col.count ? ' checklist-complete' : '') + '">' + col.count + '</span>' +
+    const pct = Math.round((col.count / max) * 100);
+    return '<div class="home-bar-row" onclick="switchTab(\'board\')">' +
+      '<span class="home-bar-label">' + escapeHtml(col.label) + '</span>' +
+      '<span class="home-bar-track"><span class="home-bar-fill' + (isDoneStage ? ' done' : '') + '" style="width:' + pct + '%;"></span></span>' +
+      '<span class="home-bar-count">' + col.count + '</span>' +
     '</div>';
   }).join('');
+}
+
+// Avatar-initial bubble color — a small fixed rotation (not the dataviz
+// categorical palette, which is for comparing measures; this is just a
+// per-person visual identity), hashed off the name so the same person
+// always lands on the same color across renders.
+function homeAvatarColor(name) {
+  const colors = ['#3949ab', '#e53935', '#28a745', '#f0ad4e', '#8e24aa', '#00897b'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return colors[hash % colors.length];
 }
 
 function renderHomeActivityWidget(rows) {
   if (!rows.length) return '<div class="home-widget-empty">No activity yet.</div>';
   return rows.map(function(item) {
     const when = getLogProp(item, 'when') || Date.now();
-    const who = escapeHtml(getLogProp(item, 'who') || 'Someone');
+    const whoRaw = getLogProp(item, 'who') || 'Someone';
+    const who = escapeHtml(whoRaw);
     const what = escapeHtml(getLogProp(item, 'what') || '');
-    return '<div class="activity-log-item">' +
-      '<div class="activity-log-time">' + timeAgo(when) + '</div>' +
-      '<div><span class="activity-log-who">' + who + '</span> <span class="activity-log-what">' + what + '</span></div>' +
+    const initial = escapeHtml(whoRaw.charAt(0).toUpperCase());
+    return '<div class="home-activity-row">' +
+      '<span class="home-avatar" style="background:' + homeAvatarColor(whoRaw) + ';">' + initial + '</span>' +
+      '<span class="home-activity-body">' +
+        '<span class="home-activity-who">' + who + '</span>' +
+        '<span class="home-activity-what">' + what + '</span>' +
+        '<span class="home-activity-time">' + timeAgo(when) + '</span>' +
+      '</span>' +
     '</div>';
   }).join('');
 }
@@ -12496,10 +12622,15 @@ function renderHomeDashboard() {
   const panel = document.getElementById('panel-home');
   if (!panel) return;
   const checklistRows = buildMyChecklistRows();
+  const overdueRows = buildHomeOverdueRows();
+  const greetingEl = document.getElementById('homeGreeting');
+  if (greetingEl) greetingEl.innerHTML = renderHomeGreeting();
+  const statsEl = document.getElementById('homeStats');
+  if (statsEl) statsEl.innerHTML = renderHomeStatsWidget(buildHomeStats(checklistRows, overdueRows));
   const checklistBody = document.getElementById('homeChecklistBody');
   if (checklistBody) checklistBody.innerHTML = renderHomeChecklistWidget(checklistRows);
   const overdueBody = document.getElementById('homeOverdueBody');
-  if (overdueBody) overdueBody.innerHTML = renderHomeOverdueWidget(buildHomeOverdueRows());
+  if (overdueBody) overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
   const stageBody = document.getElementById('homeStageBody');
   if (stageBody) stageBody.innerHTML = renderHomeStageSummaryWidget(buildHomeStageSummary());
   const activityBody = document.getElementById('homeActivityBody');
