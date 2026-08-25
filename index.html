@@ -5283,37 +5283,29 @@ function applyProjectBgVisual() {
   const staticBg = proj && STATIC_PROJECT_BG_BY_NAME[proj.name];
   const dark = document.body.classList.contains('dark-mode');
   const overlay = dark ? 'rgba(10,12,16,0.6)' : 'rgba(255,255,255,0.55)';
-  // Same size (cover) and same opacity (0.55/0.6) as Board's own — per
-  // explicit request, matched to Board's actual strength rather than
-  // toned down, so it can be judged at full strength instead of a
-  // pre-faded guess.
-  //
-  // Can't reuse Board's own plain-opacity-gradient technique to get
-  // there, though: the source image has a solid WHITE background (not
-  // transparent), and a flat-color overlay only fades it TOWARD that
-  // overlay's own color — in dark mode this left a visibly wrong pale
-  // gray box where the image's white background sat, no matter the
-  // opacity (confirmed by direct rendering — the same alpha that fades
-  // the wash enough to hide the box also crushes the logo's own color
-  // past recognition, so no single opacity fixes both at once). That's
-  // a real rendering bug, not a strength choice, so it's still fixed
-  // here even at full Board-matched strength: background-blend-mode:
-  // multiply, against a background-color matching the panel's own
-  // surface, makes the image's white background disappear into
-  // whatever's really behind it in EITHER theme (multiplying by white
-  // is a no-op), while its colored ink still tints at the same 0.55/0.6
-  // strength Board itself uses.
-  const bg = dark ? '#14161c' : '#f5f6fa';
-  const tint = dark ? 'rgba(20,22,28,0.6)' : 'rgba(245,246,250,0.55)';
+  // Board's own exact technique (flat opacity overlay, cover) — an
+  // earlier pass swapped this for background-blend-mode:multiply
+  // specifically to hide the source image's solid-white background
+  // showing as a pale box in dark mode, but per explicit follow-up
+  // feedback that dimmed it noticeably below Board's own actual
+  // brightness (multiply against a dark surface color darkens the
+  // logo's ink too, not just the white background around it — confirmed
+  // by rendering Board's real technique next to several multiply
+  // variants side by side, not just reasoned through). Reverted to
+  // Board's identical formula so these views match its brightness
+  // exactly, box included — Board shows that exact same box in its own
+  // dark mode today (confirmed directly), so this isn't a new problem,
+  // just Board's already-shipped look applied consistently everywhere.
+  const bgCss = staticBg ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + staticBg + '") center/cover no-repeat') : '';
   STATIC_BG_PANEL_IDS.forEach(function(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.style.backgroundColor = staticBg ? bg : '';
-    el.style.backgroundImage = staticBg ? ('linear-gradient(' + tint + ', ' + tint + '), url("' + staticBg + '")') : '';
-    el.style.backgroundPosition = staticBg ? 'center, center' : '';
-    el.style.backgroundSize = staticBg ? 'cover, cover' : '';
-    el.style.backgroundRepeat = staticBg ? 'no-repeat, no-repeat' : '';
-    el.style.backgroundBlendMode = staticBg ? 'normal, multiply' : '';
+    el.style.background = bgCss;
+    // background-blend-mode isn't part of the background shorthand
+    // above, so a stale value from before this reverted away from
+    // multiply-blend wouldn't otherwise get cleared on re-runs (project
+    // switch, dark mode toggle) within the same page load.
+    el.style.backgroundBlendMode = '';
   });
   // Board keeps its own richer logic (a legacy localStorage-uploaded
   // photo, from the old "Board Background" upload UI, as a fallback when
