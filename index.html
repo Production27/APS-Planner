@@ -1222,6 +1222,33 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .my-checklist-item .ci-text { cursor: pointer; }
   .my-checklist-item .ci-text:hover { color: var(--primary); text-decoration: underline; }
   .my-checklist-empty { font-size: 13px; color: var(--text-light); padding: 8px 2px; }
+
+  /* ===== HOME TAB ===== */
+  /* Personal dashboard — replaces My Checklist as the default landing
+     tab (see loadDefaultTabPref()). Four read-mostly widgets in a 2x2
+     grid, each just an innerHTML target renderHomeDashboard() fills in;
+     see the "HOME DASHBOARD" JS section for the data side. */
+  .home-wrapper { height: 100%; overflow-y: auto; padding: 20px 24px 32px; }
+  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
+  .home-widget {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden;
+  }
+  .home-widget-header {
+    font-size: 13px; font-weight: 700; color: var(--text); padding: 12px 14px;
+    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  .home-widget-body { padding: 6px 14px 12px; max-height: 260px; overflow-y: auto; }
+  .home-widget-empty { font-size: 13px; color: var(--text-light); padding: 8px 2px; }
+  .home-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .home-row:last-child { border-bottom: none; }
+  .home-row .home-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .home-row .home-row-text:hover { color: var(--primary); text-decoration: underline; }
+  .home-more-link { display: block; font-size: 12px; color: var(--primary-light); cursor: pointer; padding: 6px 0 0; }
+  .home-more-link:hover { text-decoration: underline; }
+  .home-stage-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+  .home-stage-row .mini-badge { font-size: 11px; }
   /* Permission gating — see applyPermissionGating(). Elements tagged
      data-min-tier get this toggled on when the current account's tier is
      below what the element requires. */
@@ -1978,10 +2005,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <span class="mini-toggle" id="darkModeToggle"></span>
         </div>
         <!-- Ungated (no data-min-tier) — every role picks their own start
-             tab, same as Dark Mode just above. See loadDefaultTabPref(). -->
+             tab, same as Dark Mode just above. See loadDefaultTabPref();
+             Home became the default tab this landed alongside it. -->
         <div class="settings-dropdown-item toggle-item" onclick="event.stopPropagation();">
-          <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Tab</span>
+          <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg> Default Tab</span>
           <select id="defaultTabSelect" onchange="setDefaultTabPref(this.value)" style="font-size:12px;padding:3px 5px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);">
+            <option value="home">Home</option>
             <option value="checklist">My Checklist</option>
             <option value="calendar">Calendar</option>
             <option value="gantt">Gantt</option>
@@ -2030,7 +2059,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
          .active via the same #tab-<name> ids/.rail-tab query it always
          used (renamed from .tab-btn), just relocated. -->
     <div class="rail-tab-row">
-      <button class="rail-tab active" onclick="switchTab('checklist')" id="tab-checklist" title="My Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">My Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
+      <button class="rail-tab active" onclick="switchTab('home')" id="tab-home" title="Home"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg><span class="rail-tab-label">Home</span> <span class="badge" id="homeCount">0</span></button>
+      <button class="rail-tab" onclick="switchTab('checklist')" id="tab-checklist" title="My Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">My Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
       <button class="rail-tab" onclick="switchTab('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
       <button class="rail-tab" onclick="switchTab('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
       <button class="rail-tab" onclick="switchTab('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
@@ -2045,8 +2075,31 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
 <div class="main-area" id="mainArea">
   <div class="panels-container" id="panelsContainer">
+    <!-- HOME TAB -->
+    <div class="tab-panel active" id="panel-home">
+      <div class="home-wrapper">
+        <div class="home-grid">
+          <div class="home-widget">
+            <div class="home-widget-header"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> My Open Items</div>
+            <div class="home-widget-body" id="homeChecklistBody"></div>
+          </div>
+          <div class="home-widget">
+            <div class="home-widget-header"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> Overdue &amp; Due Soon</div>
+            <div class="home-widget-body" id="homeOverdueBody"></div>
+          </div>
+          <div class="home-widget">
+            <div class="home-widget-header"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg> Board Summary</div>
+            <div class="home-widget-body" id="homeStageBody"></div>
+          </div>
+          <div class="home-widget" data-min-tier="projectAdmin">
+            <div class="home-widget-header"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Recent Activity</div>
+            <div class="home-widget-body" id="homeActivityBody"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- MY CHECKLIST TAB -->
-    <div class="tab-panel active" id="panel-checklist">
+    <div class="tab-panel" id="panel-checklist">
       <div class="my-checklist-wrapper">
         <div class="my-checklist-add-bar">
           <select id="myChecklistAddJobSelect" onchange="onMyChecklistContextChange()"></select>
@@ -4649,6 +4702,7 @@ function renderAll() {
   renderBoard();
   renderCalendar();
   renderMyChecklist();
+  renderHomeDashboard();
   updateProjectToggle();
   applyPermissionGating();
 }
@@ -5128,15 +5182,15 @@ function loadDarkModePref() {
 }
 
 // Which tab loads first — a per-browser preference (same localStorage-only
-// scope as dark mode, not synced through the account), since My Checklist
+// scope as dark mode, not synced through the account), since Home
 // became the default tab and not everyone wants to land there. Read at
-// init() time, after the static "active" class already marks My
-// Checklist — this only overrides it if a DIFFERENT preference is stored.
+// init() time, after the static "active" class already marks Home —
+// this only overrides it if a DIFFERENT preference is stored.
 function loadDefaultTabPref() {
-  const pref = localStorage.getItem('gantt_default_tab_v1') || 'checklist';
+  const pref = localStorage.getItem('gantt_default_tab_v1') || 'home';
   const sel = document.getElementById('defaultTabSelect');
   if (sel) sel.value = pref;
-  if (pref !== 'checklist') switchTab(pref);
+  if (pref !== 'home') switchTab(pref);
 }
 
 function setDefaultTabPref(tab) {
@@ -5320,7 +5374,8 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('panel-' + tab).classList.add('active');
-  if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
+  if (tab === 'home') { renderHomeDashboard(); }
+  else if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
   else if (tab === 'board') { renderBoard(); }
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
   else if (tab === 'checklist') { renderMyChecklist(); }
@@ -11947,6 +12002,7 @@ function renderMyChecklist() {
   renderMyChecklistFilterBar(isJobView, doneCount);
   renderMyChecklistToolbar();
   updateMyChecklistBadge(assignedRows.length);
+  updateHomeBadge(assignedRows.length);
   applyPermissionGating();
   if (!cachedUserRoster) {
     ensureUserRosterLoaded().then(function() {
@@ -12294,6 +12350,169 @@ function renderActivityLogSidebar() {
 
 // Alias for any legacy calls
 function renderActivityLog() { renderActivityLogSidebar(); }
+
+// ===== HOME DASHBOARD =====
+// Personal landing-tab dashboard (see loadDefaultTabPref()) — four
+// read-mostly widgets summarizing the active project: my open checklist
+// items, overdue/due-soon jobs, a per-stage board count, and (Project
+// Admin+ only) recent activity. Everything here reads data other tabs
+// already own; the only mutation reused is toggleMyChecklistItemDone()
+// itself, so checking an item off from Home behaves identically to doing
+// it from My Checklist.
+
+const HOME_DUE_SOON_DAYS = 7;
+
+// Same visibility/archived gate buildMyChecklistRows() uses, deliberately
+// WITHOUT its isChecklistStageVisibleToMe() check — that's a checklist-
+// privacy control, unrelated to a job's due date. Excludes cards already
+// in a terminal column, same columns buildCardEl()'s own overdue badge
+// excludes.
+function buildHomeOverdueRows() {
+  const todayMidnight = new Date(new Date().toDateString());
+  const dueSoonCutoff = new Date(todayMidnight.getTime() + HOME_DUE_SOON_DAYS * 86400000);
+  const rows = [];
+  boardCards.forEach(function(card) {
+    if (!card.column || !card.due) return;
+    if (card.column === 'complete' || card.column === 'invoiced') return;
+    const found = findJob(card.jobId);
+    if (!found || found.job.archived) return;
+    const job = found.job;
+    if (!isJobVisibleToMe(job)) return;
+    const dueDate = new Date(card.due + 'T00:00:00');
+    const isOverdue = dueDate < todayMidnight;
+    const isDueSoon = !isOverdue && dueDate <= dueSoonCutoff;
+    if (!isOverdue && !isDueSoon) return;
+    const phases = getJobPhases(job);
+    const phase = phases.find(function(p) { return (p.id || null) === (card.phaseId || null); });
+    const label = job.name + (phases.length > 1 && phase && !phase.isDefault ? ' — ' + phase.name : '');
+    rows.push({ job: job, card: card, label: label, dueDate: dueDate, isOverdue: isOverdue });
+  });
+  rows.sort(function(a, b) {
+    if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+    return a.dueDate - b.dueDate;
+  });
+  return rows;
+}
+
+// Counts visible boardCards per stage, mapped onto BOARD_COLUMNS in board
+// order so every stage shows (including zero-count ones) rather than only
+// stages that happen to have a card right now.
+function buildHomeStageSummary() {
+  const counts = {};
+  boardCards.forEach(function(card) {
+    if (!card.column) return;
+    const found = findJob(card.jobId);
+    if (!found || found.job.archived) return;
+    if (!isJobVisibleToMe(found.job)) return;
+    counts[card.column] = (counts[card.column] || 0) + 1;
+  });
+  return BOARD_COLUMNS.map(function(col) {
+    return { id: col.id, label: col.label, count: counts[col.id] || 0 };
+  });
+}
+
+// Same merge/dedupe renderActivityLogSidebar() does (local fallback +
+// synced project log, deduped by who|what|when, sorted newest-first) —
+// duplicated rather than shared, since that function also carries
+// sidebar-specific DOM/tier side effects that don't belong in a plain
+// data builder. Gated on hasMinTier('projectAdmin') INSIDE the builder
+// (not left to CSS alone) so a non-admin's DOM never has real entries to
+// inspect in the first place, matching the sidebar's own stricter
+// early-return-and-blank behavior rather than the lighter-weight
+// data-min-tier/.perm-hidden convention used elsewhere in this file.
+function buildHomeActivityRows() {
+  if (!hasMinTier('projectAdmin')) return [];
+  const p = getActiveProject();
+  const items = [];
+  localActivityLog.forEach(function(item) { items.push(item); });
+  if (p && Array.isArray(p.activityLog)) {
+    p.activityLog.forEach(function(item) { items.push(item); });
+  }
+  const seen = new Set();
+  const unique = [];
+  items.forEach(function(item) {
+    const key = (getLogProp(item, 'who') || '') + '|' + (getLogProp(item, 'what') || '') + '|' + (getLogProp(item, 'when') || 0);
+    if (!seen.has(key)) { seen.add(key); unique.push(item); }
+  });
+  unique.sort(function(a, b) { return (getLogProp(b, 'when') || 0) - (getLogProp(a, 'when') || 0); });
+  return unique.slice(0, 8);
+}
+
+function renderHomeChecklistWidget(rows) {
+  if (!rows.length) return '<div class="home-widget-empty">Nothing assigned to you right now.</div>';
+  const shown = rows.slice(0, 6);
+  const html = shown.map(function(row) {
+    const item = row.item;
+    return '<div class="home-row">' +
+      '<input type="checkbox" onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
+      '<span class="home-row-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
+      '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';">' + escapeHtml(row.job.name) + '</span>' +
+    '</div>';
+  }).join('');
+  const more = rows.length > shown.length ? '<div class="home-more-link" onclick="switchTab(\'checklist\')">+' + (rows.length - shown.length) + ' more — go to My Checklist</div>' : '';
+  return html + more;
+}
+
+// Row click reuses openMyChecklistItem() directly — despite the name,
+// that function is already generic (cross-project switch +
+// openEditCard()), nothing checklist-item-specific about it.
+function renderHomeOverdueWidget(rows) {
+  if (!rows.length) return '<div class="home-widget-empty">No overdue or upcoming jobs.</div>';
+  return rows.map(function(row) {
+    const dueLabel = row.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return '<div class="home-row">' +
+      '<span class="home-row-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(row.label) + '</span>' +
+      '<span class="board-card-due' + (row.isOverdue ? ' overdue' : '') + '">' + escapeHtml(dueLabel) + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function renderHomeStageSummaryWidget(counts) {
+  const total = counts.reduce(function(n, c) { return n + c.count; }, 0);
+  if (!total) return '<div class="home-widget-empty">No cards on the board yet.</div>';
+  return counts.map(function(col) {
+    const isDoneStage = col.id === 'complete' || col.id === 'invoiced';
+    return '<div class="home-stage-row" onclick="switchTab(\'board\')">' +
+      '<span>' + escapeHtml(col.label) + '</span>' +
+      '<span class="mini-badge' + (isDoneStage && col.count ? ' checklist-complete' : '') + '">' + col.count + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function renderHomeActivityWidget(rows) {
+  if (!rows.length) return '<div class="home-widget-empty">No activity yet.</div>';
+  return rows.map(function(item) {
+    const when = getLogProp(item, 'when') || Date.now();
+    const who = escapeHtml(getLogProp(item, 'who') || 'Someone');
+    const what = escapeHtml(getLogProp(item, 'what') || '');
+    return '<div class="activity-log-item">' +
+      '<div class="activity-log-time">' + timeAgo(when) + '</div>' +
+      '<div><span class="activity-log-who">' + who + '</span> <span class="activity-log-what">' + what + '</span></div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderHomeDashboard() {
+  const panel = document.getElementById('panel-home');
+  if (!panel) return;
+  const checklistRows = buildMyChecklistRows();
+  const checklistBody = document.getElementById('homeChecklistBody');
+  if (checklistBody) checklistBody.innerHTML = renderHomeChecklistWidget(checklistRows);
+  const overdueBody = document.getElementById('homeOverdueBody');
+  if (overdueBody) overdueBody.innerHTML = renderHomeOverdueWidget(buildHomeOverdueRows());
+  const stageBody = document.getElementById('homeStageBody');
+  if (stageBody) stageBody.innerHTML = renderHomeStageSummaryWidget(buildHomeStageSummary());
+  const activityBody = document.getElementById('homeActivityBody');
+  if (activityBody) activityBody.innerHTML = renderHomeActivityWidget(buildHomeActivityRows());
+  updateHomeBadge(checklistRows.length);
+  applyPermissionGating();
+}
+
+function updateHomeBadge(count) {
+  const badge = document.getElementById('homeCount');
+  if (!badge) return;
+  badge.textContent = typeof count === 'number' ? count : buildMyChecklistRows().length;
+}
 
 // ----- Open / save / delete card -----
 function openEditCard(id) {
@@ -13524,7 +13743,7 @@ function refreshActiveProjectFromShared() {
   // even though the underlying data merged in fine (loadActiveProjectData
   // already succeeded above; a page refresh would show it's actually there).
   const renders = [renderGantt, renderJobList, updateJobCount, renderBoard, renderCalendar,
-    refreshArchivedJobsListIfOpen];
+    renderHomeDashboard, refreshArchivedJobsListIfOpen];
   // CRITICAL: if a job is open in Job Manager, its form fields (task dates
   // in particular) are plain DOM state — they don't track the `jobs` array
   // automatically. autoSaveJobForm() reads those fields directly on every
