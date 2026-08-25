@@ -1291,18 +1291,20 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-bar-fill { display: block; height: 100%; background: var(--primary-light); border-radius: 4px; min-width: 3px; transition: width .2s; }
   .home-bar-fill.done { background: var(--success); }
   .home-bar-count { width: 20px; text-align: right; color: var(--text-light); font-weight: 700; flex-shrink: 0; }
-  /* Activity — avatar-initial bubbles instead of the sidebar's plain
-     text rows; deliberately its own classes rather than reusing
-     .activity-log-item, since that class's layout (fixed-width
-     right-aligned timestamp beside the text) doesn't fit this
-     avatar-left / stacked-text layout. */
-  .home-activity-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
-  .home-activity-row:last-child { border-bottom: none; }
-  .home-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0; }
-  .home-activity-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .home-activity-who { font-weight: 700; color: var(--text); font-size: 13px; }
-  .home-activity-what { color: var(--text-light); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .home-activity-time { font-size: 11px; color: var(--text-light); }
+  /* Today's Schedule — every Gantt task active today, each with its own
+     mini progress bar (reusing .home-bar-track/.home-bar-fill) showing
+     how far through its start->finish window today falls. */
+  .home-today-row { padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .home-today-row:last-child { border-bottom: none; }
+  .home-today-row-top { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+  .home-today-task { font-weight: 600; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-today-row:hover .home-today-task { color: var(--primary); }
+  .home-today-job { font-size: 11px; color: var(--text-light); flex-shrink: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* .home-bar-track normally sizes via flex:1 inside .home-bar-row's flex
+     context (Board Summary); here it sits directly under a plain block
+     row instead, so flex:1 has nothing to size against and the inline
+     <span> collapses to 0 width without an explicit display/width. */
+  .home-today-row .home-bar-track { display: block; width: 100%; height: 6px; }
   /* Permission gating — see applyPermissionGating(). Elements tagged
      data-min-tier get this toggled on when the current account's tier is
      below what the element requires. */
@@ -2147,9 +2149,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="home-widget-header"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board Summary</div>
             <div class="home-widget-body" id="homeStageBody"></div>
           </div>
-          <div class="home-widget" data-min-tier="projectAdmin">
-            <div class="home-widget-header"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></span> Recent Activity</div>
-            <div class="home-widget-body" id="homeActivityBody"></div>
+          <div class="home-widget">
+            <div class="home-widget-header"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Today's Schedule</div>
+            <div class="home-widget-body" id="homeTodayBody"></div>
           </div>
         </div>
       </div>
@@ -12467,31 +12469,38 @@ function buildHomeStageSummary() {
   });
 }
 
-// Same merge/dedupe renderActivityLogSidebar() does (local fallback +
-// synced project log, deduped by who|what|when, sorted newest-first) —
-// duplicated rather than shared, since that function also carries
-// sidebar-specific DOM/tier side effects that don't belong in a plain
-// data builder. Gated on hasMinTier('projectAdmin') INSIDE the builder
-// (not left to CSS alone) so a non-admin's DOM never has real entries to
-// inspect in the first place, matching the sidebar's own stricter
-// early-return-and-blank behavior rather than the lighter-weight
-// data-min-tier/.perm-hidden convention used elsewhere in this file.
-function buildHomeActivityRows() {
-  if (!hasMinTier('projectAdmin')) return [];
-  const p = getActiveProject();
-  const items = [];
-  localActivityLog.forEach(function(item) { items.push(item); });
-  if (p && Array.isArray(p.activityLog)) {
-    p.activityLog.forEach(function(item) { items.push(item); });
-  }
-  const seen = new Set();
-  const unique = [];
-  items.forEach(function(item) {
-    const key = (getLogProp(item, 'who') || '') + '|' + (getLogProp(item, 'what') || '') + '|' + (getLogProp(item, 'when') || 0);
-    if (!seen.has(key)) { seen.add(key); unique.push(item); }
+// Every Gantt task from a visible job whose date range includes today —
+// replaces the old admin-gated activity feed with something everyone can
+// see (Gantt itself carries no tier restriction, same as Board/Calendar)
+// and that's forward-looking ("what should be happening today") rather
+// than a log of what already happened. pct is how far today falls
+// through the task's start->finish window, for the mini progress bar.
+function buildHomeTodayScheduleRows() {
+  const todayMidnight = new Date(new Date().toDateString());
+  const rows = [];
+  jobs.forEach(function(job) {
+    if (job.archived) return;
+    if (!isJobVisibleToMe(job)) return;
+    const phases = getJobPhases(job);
+    phases.forEach(function(phase) {
+      (phase.tasks || []).forEach(function(task) {
+        if (!task.start || !task.finish) return;
+        const start = new Date(task.start + 'T00:00:00');
+        const finish = new Date(task.finish + 'T00:00:00');
+        if (isNaN(start.getTime()) || isNaN(finish.getTime())) return;
+        if (todayMidnight < start || todayMidnight > finish) return;
+        const totalMs = finish - start;
+        const pct = totalMs > 0 ? Math.round(((todayMidnight - start) / totalMs) * 100) : 100;
+        const label = job.name + (phases.length > 1 && !phase.isDefault ? ' — ' + phase.name : '');
+        rows.push({
+          job: job, phaseId: phase.id, taskName: task.name || 'Untitled task',
+          label: label, pct: Math.min(100, Math.max(0, pct))
+        });
+      });
+    });
   });
-  unique.sort(function(a, b) { return (getLogProp(b, 'when') || 0) - (getLogProp(a, 'when') || 0); });
-  return unique.slice(0, 8);
+  rows.sort(function(a, b) { return a.label.localeCompare(b.label); });
+  return rows;
 }
 
 // Feeds the stat-tile row — takes the already-built checklist/overdue
@@ -12588,32 +12597,19 @@ function renderHomeStageSummaryWidget(counts) {
   }).join('');
 }
 
-// Avatar-initial bubble color — a small fixed rotation (not the dataviz
-// categorical palette, which is for comparing measures; this is just a
-// per-person visual identity), hashed off the name so the same person
-// always lands on the same color across renders.
-function homeAvatarColor(name) {
-  const colors = ['#3949ab', '#e53935', '#28a745', '#f0ad4e', '#8e24aa', '#00897b'];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return colors[hash % colors.length];
-}
-
-function renderHomeActivityWidget(rows) {
-  if (!rows.length) return '<div class="home-widget-empty">No activity yet.</div>';
-  return rows.map(function(item) {
-    const when = getLogProp(item, 'when') || Date.now();
-    const whoRaw = getLogProp(item, 'who') || 'Someone';
-    const who = escapeHtml(whoRaw);
-    const what = escapeHtml(getLogProp(item, 'what') || '');
-    const initial = escapeHtml(whoRaw.charAt(0).toUpperCase());
-    return '<div class="home-activity-row">' +
-      '<span class="home-avatar" style="background:' + homeAvatarColor(whoRaw) + ';">' + initial + '</span>' +
-      '<span class="home-activity-body">' +
-        '<span class="home-activity-who">' + who + '</span>' +
-        '<span class="home-activity-what">' + what + '</span>' +
-        '<span class="home-activity-time">' + timeAgo(when) + '</span>' +
-      '</span>' +
+// Click reuses editJob() directly — the same handler Calendar's own job
+// clicks forward to, so this behaves exactly like clicking that task
+// anywhere else in the app.
+function renderHomeTodayScheduleWidget(rows) {
+  if (!rows.length) return '<div class="home-widget-empty">Nothing scheduled today.</div>';
+  return rows.map(function(row) {
+    return '<div class="home-today-row" onclick="editJob(\'' + row.job.id + '\'' + (row.phaseId ? ', \'' + row.phaseId + '\'' : '') + ')">' +
+      '<div class="home-today-row-top">' +
+        '<span class="home-row-dot" style="background:' + (row.job.color || '#3949ab') + ';"></span>' +
+        '<span class="home-today-task">' + escapeHtml(row.taskName) + '</span>' +
+        '<span class="home-today-job">' + escapeHtml(row.label) + '</span>' +
+      '</div>' +
+      '<span class="home-bar-track"><span class="home-bar-fill" style="width:' + row.pct + '%;"></span></span>' +
     '</div>';
   }).join('');
 }
@@ -12633,8 +12629,8 @@ function renderHomeDashboard() {
   if (overdueBody) overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
   const stageBody = document.getElementById('homeStageBody');
   if (stageBody) stageBody.innerHTML = renderHomeStageSummaryWidget(buildHomeStageSummary());
-  const activityBody = document.getElementById('homeActivityBody');
-  if (activityBody) activityBody.innerHTML = renderHomeActivityWidget(buildHomeActivityRows());
+  const todayBody = document.getElementById('homeTodayBody');
+  if (todayBody) todayBody.innerHTML = renderHomeTodayScheduleWidget(buildHomeTodayScheduleRows());
   updateHomeBadge(checklistRows.length);
   applyPermissionGating();
 }
