@@ -2063,20 +2063,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
          them by id (renderPresenceAvatars(), updateProjectToggle(),
          renderViewAsSelect(), applyPermissionGating(), etc.) keeps
          working with zero changes on the JS side. -->
+    <!-- Order is deliberately reversed from what it was — settings ⋮
+         first, presence avatars last — per explicit request. -->
     <div class="rail-header-icons">
-      <div class="presence-avatars" id="presenceAvatars"></div>
-      <!-- Admin only (see setViewAs()) — previews the whole app (Job
-           Manager, Board, Calendar, Gantt) exactly as a specific Member
-           would see it, without changing what that member — or anyone
-           else — actually sees. -->
-      <div class="view-as-wrap" id="viewAsWrap">
-        <button class="view-as-toggle-btn" id="viewAsToggleBtn" onclick="toggleViewAsDropdown(event)" title="View the whole app as a specific member (Admin only)">
-          <svg viewBox="0 0 24 24" width="13" height="13" style="vertical-align:-2px;margin-right:4px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="3.5" fill="currentColor" opacity="0.85"/><path d="M4.5 19c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.85"/></svg><span id="viewAsToggleLabel">View as</span>
-        </button>
-        <div class="view-as-dropdown" id="viewAsDropdown"></div>
-      </div>
-      <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
-      <button class="activity-toggle-btn" id="activityToggleBtn" onclick="toggleActivitySidebar()" title="Activity Log"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button>
       <div class="settings-menu-wrap">
         <button class="settings-dots-btn" onclick="toggleSettingsMenu()" title="Settings">⋮</button>
         <div class="settings-dropdown" id="settingsDropdown">
@@ -2111,6 +2100,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         </div>
       </div>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
+      <button class="activity-toggle-btn" id="activityToggleBtn" onclick="toggleActivitySidebar()" title="Activity Log"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button>
+      <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
+      <!-- Admin only (see setViewAs()) — previews the whole app (Job
+           Manager, Board, Calendar, Gantt) exactly as a specific Member
+           would see it, without changing what that member — or anyone
+           else — actually sees. -->
+      <div class="view-as-wrap" id="viewAsWrap">
+        <button class="view-as-toggle-btn" id="viewAsToggleBtn" onclick="toggleViewAsDropdown(event)" title="View the whole app as a specific member (Admin only)">
+          <svg viewBox="0 0 24 24" width="13" height="13" style="vertical-align:-2px;margin-right:4px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="3.5" fill="currentColor" opacity="0.85"/><path d="M4.5 19c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.85"/></svg><span id="viewAsToggleLabel">View as</span>
+        </button>
+        <div class="view-as-dropdown" id="viewAsDropdown"></div>
+      </div>
+      <div class="presence-avatars" id="presenceAvatars"></div>
     </div>
     <!-- View switcher — the active view shows full-size (icon + label),
          the other two collapse to icon-only and expand back to full-size
