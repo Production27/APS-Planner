@@ -1206,6 +1206,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .my-checklist-add-bar input[type="text"]:disabled, .my-checklist-add-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
   .my-checklist-add-bar select { flex: 0 1 220px; min-width: 0; }
   .my-checklist-add-bar input[type="text"] { flex: 1 1 200px; min-width: 0; }
+  .my-checklist-filter-bar { min-height: 22px; padding: 0 2px 8px; }
+  .my-checklist-hide-done-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-light); cursor: pointer; }
+  .my-checklist-hide-done-toggle input { cursor: pointer; }
   .my-checklist-job-bubble, .my-checklist-stage-tag {
     font-size: 10px; font-weight: 700; color: #fff; padding: 1px 7px; border-radius: 8px; cursor: pointer;
   }
@@ -2051,6 +2054,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <button type="button" id="myChecklistAddBtn" class="btn btn-primary" style="padding:6px 14px;font-size:13px;" onclick="addMyChecklistItemFromBar()">Add</button>
           <span id="myChecklistAddVisibility"></span>
         </div>
+        <div class="my-checklist-filter-bar" id="myChecklistFilterBar"></div>
         <div id="myChecklistListBody"></div>
       </div>
     </div>
@@ -11806,6 +11810,21 @@ function renderMyChecklistList(rows, emptyMessage) {
 // toggling/adding an item, doesn't bounce the picker back to the top.
 let myChecklistSelectedContext = '__assigned__';
 
+// Job-view mode (see above) shows every item, done or not — this defaults
+// that to hiding checked-off items so a long-finished stage doesn't bury
+// what's actually still open, matching the "confirm what's LEFT, not what
+// happened" DO-CONFIRM read the rest of the checklist follows. Toggled
+// via the "Show completed" control renderMyChecklistFilterBar() renders;
+// the assigned feed never has done items in it in the first place, so
+// this has no effect there. Resets to hidden on reload, same as
+// myChecklistSelectedContext above.
+let myChecklistHideDone = true;
+
+function toggleMyChecklistHideDone() {
+  myChecklistHideDone = !myChecklistHideDone;
+  renderMyChecklist();
+}
+
 // Every card the user could view/add to right now — same visibility/
 // stage-privacy gate the assigned feed itself uses. A job with more than
 // one phase gets its phase name appended, since two of its cards would
@@ -11851,6 +11870,17 @@ function renderMyChecklistToolbar() {
       ? myChecklistMsDropdownHtml('myChecklistAddVis', normalizeChecklistAssignees(current.card.checklistAssignees && current.card.checklistAssignees[current.card.column]), "setMyChecklistStageAssignee('" + activeProjectId + "', '" + current.card.id + "', '" + current.card.column + "'", 'projectAdmin', 'Everyone', 'my-checklist-visibility')
       : '';
   }
+}
+
+// Only shows up in job-view mode, and only once there's actually
+// something completed to hide/reveal — the assigned feed never has done
+// items, and a stage with nothing done yet has nothing for the toggle to
+// do.
+function renderMyChecklistFilterBar(isJobView, doneCount) {
+  const bar = document.getElementById('myChecklistFilterBar');
+  if (!bar) return;
+  if (!isJobView || !doneCount) { bar.innerHTML = ''; return; }
+  bar.innerHTML = '<label class="my-checklist-hide-done-toggle"><input type="checkbox"' + (myChecklistHideDone ? '' : ' checked') + ' onchange="toggleMyChecklistHideDone()"> Show completed (' + doneCount + ')</label>';
 }
 
 function onMyChecklistContextChange() {
@@ -11904,10 +11934,17 @@ function renderMyChecklist() {
   const panel = document.getElementById('panel-checklist');
   if (!panel) return;
   const assignedRows = buildMyChecklistRows();
-  const rows = myChecklistSelectedContext === '__assigned__' ? assignedRows : buildMyChecklistJobRows(myChecklistSelectedContext);
-  const emptyMessage = myChecklistSelectedContext === '__assigned__' ? 'Nothing assigned to you right now.' : 'This checklist is empty — add the first item below.';
+  const isJobView = myChecklistSelectedContext !== '__assigned__';
+  const jobRows = isJobView ? buildMyChecklistJobRows(myChecklistSelectedContext) : [];
+  const doneCount = jobRows.reduce(function(n, r) { return n + (r.item.done ? 1 : 0); }, 0);
+  const rows = !isJobView ? assignedRows : (myChecklistHideDone ? jobRows.filter(function(r) { return !r.item.done; }) : jobRows);
+  let emptyMessage;
+  if (!isJobView) emptyMessage = 'Nothing assigned to you right now.';
+  else if (!jobRows.length) emptyMessage = 'This checklist is empty — add the first item below.';
+  else if (!rows.length) emptyMessage = 'Everything on this stage is checked off.';
   const listBody = document.getElementById('myChecklistListBody');
   if (listBody) listBody.innerHTML = renderMyChecklistList(rows, emptyMessage);
+  renderMyChecklistFilterBar(isJobView, doneCount);
   renderMyChecklistToolbar();
   updateMyChecklistBadge(assignedRows.length);
   applyPermissionGating();
