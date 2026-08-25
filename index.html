@@ -10996,6 +10996,45 @@ function dropNeedsManualOverride(targetColumnId) {
   return !(targetCol && targetCol.hideFromSchedule);
 }
 
+// Open (not-done) checklist items on a card's CURRENT stage, respecting
+// per-stage visibility the same way buildCardEl()'s progress badge does —
+// feeds confirmChecklistBeforeMove() below, used by both drag-and-drop
+// (handleColumnDrop) and the mobile column <select> (moveCardToColumn) to
+// warn before a card leaves a stage with unfinished items still on it. A
+// checklist that's easy to ignore on a separate tab doesn't get used;
+// tying it to the actual moment the job moves on is what makes it a real
+// pause point instead of a suggestion.
+function getOpenChecklistItemsForCard(card) {
+  ensureCardChecklists(card);
+  if (!isChecklistStageVisibleToMe(card.checklistAssignees, card.column)) return [];
+  const stageCol = BOARD_COLUMNS.find(function(c) { return c.id === card.column; });
+  const templ = (stageCol && stageCol.defaultChecklist) || [];
+  const stored = (card.checklists && card.checklists[card.column]) || [];
+  const storedIds = stored.map(function(i) { return i.id; });
+  const checklist = stored.filter(function(i) { return !i.removed; }).concat(
+    templ.filter(function(d) { return storedIds.indexOf(d.id) === -1; }).map(function(d) { return { id: d.id, text: d.text, done: false, assignee: '' }; })
+  );
+  const open = [];
+  checklist.forEach(function(item) {
+    if (!item.done) open.push(item.text);
+    (item.subItems || []).forEach(function(sub) {
+      if (!sub.done) open.push(item.text + ' → ' + sub.text);
+    });
+  });
+  return open;
+}
+
+// Soft gate, not a hard block — a confirm dialog naming what's still open
+// so leaving a stage with unfinished items is a deliberate choice, not an
+// invisible default. Returns true (nothing to confirm, or user accepted).
+function confirmChecklistBeforeMove(card) {
+  const open = getOpenChecklistItemsForCard(card);
+  if (!open.length) return true;
+  const preview = open.slice(0, 5).map(function(t) { return '- ' + t; }).join('\n');
+  const more = open.length > 5 ? '\n...and ' + (open.length - 5) + ' more' : '';
+  return window.confirm('"' + card.title + '" still has ' + open.length + ' open checklist item' + (open.length === 1 ? '' : 's') + ' on this stage:\n\n' + preview + more + '\n\nMove it anyway?');
+}
+
 function handleColumnDrop(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -11011,6 +11050,7 @@ function handleColumnDrop(e) {
 
   const card = boardCards.find(function(c) { return String(c.id) === String(cardId); });
   if (!card) return;
+  if (!confirmChecklistBeforeMove(card)) return;
 
   card.column = targetColumnId;
   if (card.jobId) {
@@ -11042,6 +11082,7 @@ function handleColumnDrop(e) {
 function moveCardToColumn(cardId, targetColumnId) {
   const card = boardCards.find(function(c) { return String(c.id) === String(cardId); });
   if (!card || card.column === targetColumnId) return;
+  if (!confirmChecklistBeforeMove(card)) return;
   const targetCol = BOARD_COLUMNS.find(function(c) { return c.id === targetColumnId; });
   card.column = targetColumnId;
   if (card.jobId) {
