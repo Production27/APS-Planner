@@ -1208,8 +1208,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     background: var(--card); border: 1px solid var(--border); border-radius: 10px;
     padding: 12px 14px; margin-bottom: 10px;
   }
+  .my-checklist-group-header-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
   .my-checklist-group-header {
-    font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px;
+    font-size: 13px; font-weight: 700; color: var(--text);
     cursor: pointer; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   }
   .my-checklist-group-header:hover { color: var(--primary); }
@@ -1217,11 +1218,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     font-size: 10px; font-weight: 700; color: #fff; padding: 1px 7px; border-radius: 8px;
   }
   .my-checklist-stage-tag { background: var(--text-light); }
-  .my-checklist-item { cursor: pointer; border-radius: 6px; margin: 0 -6px; padding: 5px 6px; }
-  .my-checklist-item:hover { background: #eef1fa; }
-  body.dark-mode .my-checklist-item:hover { background: rgba(57,73,171,0.18); }
-  .my-checklist-assignee { font-size: 11px; color: var(--text-light); flex-shrink: 0; white-space: nowrap; }
-  .my-checklist-assignee.unassigned { font-style: italic; }
+  /* Stage-level "Visible to" picker, in the group header row — compact,
+     same treatment as the per-item .ci-assignee dropdown just below. */
+  .my-checklist-visibility { flex-shrink: 0; max-width: 150px; }
+  .my-checklist-visibility .ms-dropdown-toggle { font-size: 11px; padding: 4px 7px; gap: 4px; color: var(--text-light); }
+  .my-checklist-visibility .ms-dropdown-toggle span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .my-checklist-visibility .ms-dropdown-panel { width: 220px; left: auto; right: 0; }
+  .my-checklist-item .ci-text { cursor: pointer; }
+  .my-checklist-item .ci-text:hover { color: var(--primary); text-decoration: underline; }
+  .my-checklist-add-row { margin-top: 4px; }
   .my-checklist-empty { font-size: 13px; color: var(--text-light); padding: 8px 2px; }
   /* Whole-stage "Visible to" restriction — see setChecklistStageAssignee()/
      isChecklistStageVisibleToMe(). Reuses .checklist-stage-select's own
@@ -12205,7 +12210,7 @@ function groupMyChecklistRows(rows) {
   rows.forEach(function(row) {
     const key = row.projectId + '::' + row.card.id;
     if (!byKey[key]) {
-      byKey[key] = { projectId: row.projectId, projectName: row.projectName, job: row.job, card: row.card, columnLabel: row.columnLabel, rows: [] };
+      byKey[key] = { projectId: row.projectId, projectName: row.projectName, job: row.job, card: row.card, columnId: row.columnId, columnLabel: row.columnLabel, rows: [] };
       groups.push(byKey[key]);
     }
     byKey[key].rows.push(row);
@@ -12213,37 +12218,76 @@ function groupMyChecklistRows(rows) {
   return groups;
 }
 
-function myChecklistAssigneeTagHtml(assigneeRaw) {
-  const names = normalizeChecklistAssignees(assigneeRaw).map(displayNameForUsername);
-  if (!names.length) return '<span class="my-checklist-assignee unassigned">Unassigned</span>';
-  return '<span class="my-checklist-assignee">' + escapeHtml(names.join(', ')) + '</span>';
+// One .ms-dropdown multi-select block — shared by the per-item assignee
+// picker and the per-group "Visible to" picker below, both of which need
+// the exact roster/orphaned-account handling renderChecklist()'s own
+// .ci-assignee dropdown and renderChecklistVisibilitySelect() already
+// established (an assignee no longer in the roster still gets a
+// checked-but-orphaned checkbox instead of silently vanishing).
+// onchangePrefix is everything up to (not including) the trailing
+// ", this.value, this.checked)" of each checkbox's onchange call — lets
+// this one builder serve calls that need extra leading arguments
+// (project/card/column/item ids) baked in ahead of the username.
+function myChecklistMsDropdownHtml(idBase, current, onchangePrefix, minTier, emptyLabel, extraClass) {
+  const roster = cachedUserRoster || [];
+  const optionsId = idBase + '_options';
+  const orphaned = current.filter(function(u) { return !roster.some(function(r) { return r.username === u; }); });
+  const rosterHtml = roster.map(function(u) {
+    return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '" data-min-tier="' + minTier + '"' + (current.indexOf(u.username) !== -1 ? ' checked' : '') + ' onchange="' + onchangePrefix + ', this.value, this.checked)"> ' + escapeHtml(u.displayName) + '</label>';
+  }).join('');
+  const orphanedHtml = orphaned.map(function(u) {
+    return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u) + '" data-min-tier="' + minTier + '" checked onchange="' + onchangePrefix + ', this.value, this.checked)"> ' + escapeHtml(u) + '</label>';
+  }).join('');
+  let optionsInner;
+  if (!cachedUserRoster) optionsInner = '<span class="cf-multiselect-loading">Loading teammates…</span>';
+  else optionsInner = (rosterHtml + orphanedHtml) || '<span class="cf-multiselect-empty">No team accounts yet</span>';
+  return '<div class="ms-dropdown' + (extraClass ? ' ' + extraClass : '') + '" id="' + idBase + '">' +
+    '<button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown(\'' + idBase + '\')"><span>' + msDropdownLabelText(current.length, emptyLabel) + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
+    '<div class="ms-dropdown-panel">' +
+      (roster.length ? '<div class="ms-dropdown-actions"><button type="button" data-min-tier="' + minTier + '" onclick="msSetAll(\'' + optionsId + '\', true)">Select All</button><button type="button" data-min-tier="' + minTier + '" onclick="msSetAll(\'' + optionsId + '\', false)">Unselect All</button></div>' : '') +
+      '<div class="cf-multiselect" id="' + optionsId + '">' + optionsInner + '</div>' +
+    '</div>' +
+  '</div>';
 }
 
-// showAssignees: the "Visible to You" section shows who each item IS
-// assigned to (could be someone else, or no one) — the "Assigned to
-// You" section skips that tag entirely since it's implicitly you.
-function renderMyChecklistSection(rows, showAssignees) {
+// sectionPrefix ('a'/'v') keeps DOM ids unique when the same job/stage
+// renders as a group in BOTH sections (some of its items assigned to
+// you, some not — already possible before this, now also needs
+// distinct dropdown/input ids per section).
+function renderMyChecklistSection(rows, sectionPrefix) {
   if (!rows.length) return '<div class="my-checklist-empty">Nothing here.</div>';
   const multiProject = getAccessibleProjectIds().length > 1;
   return groupMyChecklistRows(rows).map(function(g) {
     const jobLabel = escapeHtml(g.job.name) + (multiProject ? ' <span class="my-checklist-project-tag" style="background:' + (g.job.color || '#3949ab') + ';">' + escapeHtml(g.projectName) + '</span>' : '');
     const itemsHtml = g.rows.map(function(row) {
       const item = row.item;
+      const assignDropdownId = 'myciAssign_' + sectionPrefix + '_' + row.card.id + '_' + item.id;
+      const assignPrefix = "setMyChecklistItemAssignee('" + row.projectId + "', '" + row.card.id + "', '" + row.columnId + "', '" + item.id + "'";
       const subHtml = row.subItems.length ? '<div class="checklist-subitems">' + row.subItems.map(function(sub) {
         return '<div class="checklist-subitem">' +
-          '<input type="checkbox" onclick="event.stopPropagation();" onchange="toggleMyChecklistSubItemDone(\'' + row.projectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + sub.id + '\')">' +
+          '<input type="checkbox" onchange="toggleMyChecklistSubItemDone(\'' + row.projectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + sub.id + '\')">' +
           '<span class="ci-text">' + escapeHtml(sub.text) + '</span>' +
           '</div>';
       }).join('') + '</div>' : '';
-      return '<div class="checklist-item my-checklist-item" onclick="openMyChecklistItem(\'' + row.projectId + '\', \'' + row.card.id + '\')">' +
-        '<input type="checkbox" onclick="event.stopPropagation();" onchange="toggleMyChecklistItemDone(\'' + row.projectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
-        '<span class="ci-text">' + escapeHtml(item.text) + '</span>' +
-        (showAssignees ? myChecklistAssigneeTagHtml(item.assignee) : '') +
+      return '<div class="checklist-item my-checklist-item">' +
+        '<input type="checkbox" onchange="toggleMyChecklistItemDone(\'' + row.projectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
+        '<span class="ci-text" onclick="openMyChecklistItem(\'' + row.projectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
+        myChecklistMsDropdownHtml(assignDropdownId, normalizeChecklistAssignees(item.assignee), assignPrefix, 'editor', 'Unassigned', 'ci-assignee') +
+        '<button class="ci-delete" data-min-tier="editor" onclick="deleteMyChecklistItem(\'' + row.projectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">×</button>' +
         '</div>' + subHtml;
     }).join('');
+    const visDropdownId = 'myciVis_' + sectionPrefix + '_' + g.card.id;
+    const visPrefix = "setMyChecklistStageAssignee('" + g.projectId + "', '" + g.card.id + "', '" + g.columnId + "'";
+    const addInputId = 'myciAdd_' + sectionPrefix + '_' + g.card.id;
     return '<div class="my-checklist-group">' +
-      '<div class="my-checklist-group-header" onclick="openMyChecklistItem(\'' + g.projectId + '\', \'' + g.card.id + '\')">' + jobLabel + ' <span class="my-checklist-stage-tag">' + escapeHtml(g.columnLabel) + '</span></div>' +
+      '<div class="my-checklist-group-header-row">' +
+        '<span class="my-checklist-group-header" onclick="openMyChecklistItem(\'' + g.projectId + '\', \'' + g.card.id + '\')">' + jobLabel + ' <span class="my-checklist-stage-tag">' + escapeHtml(g.columnLabel) + '</span></span>' +
+        myChecklistMsDropdownHtml(visDropdownId, normalizeChecklistAssignees(g.card.checklistAssignees && g.card.checklistAssignees[g.columnId]), visPrefix, 'projectAdmin', 'Everyone', 'my-checklist-visibility') +
+      '</div>' +
       itemsHtml +
+      '<div class="checklist-subitem-add-row my-checklist-add-row">' +
+        '<input type="text" id="' + addInputId + '" data-min-tier="editor" placeholder="Add item…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addMyChecklistItem(\'' + g.projectId + '\', \'' + g.card.id + '\', \'' + g.columnId + '\', \'' + addInputId + '\');}">' +
+      '</div>' +
       '</div>';
   }).join('');
 }
@@ -12254,11 +12298,17 @@ function renderMyChecklist() {
   const rows = buildMyChecklistRows();
   const assignedBody = document.getElementById('myChecklistAssignedBody');
   const visibleBody = document.getElementById('myChecklistVisibleBody');
-  if (assignedBody) assignedBody.innerHTML = rows.assigned.length ? renderMyChecklistSection(rows.assigned, false) : '<div class="my-checklist-empty">Nothing assigned to you right now.</div>';
-  if (visibleBody) visibleBody.innerHTML = renderMyChecklistSection(rows.visibleOnly, true);
+  if (assignedBody) assignedBody.innerHTML = rows.assigned.length ? renderMyChecklistSection(rows.assigned, 'a') : '<div class="my-checklist-empty">Nothing assigned to you right now.</div>';
+  if (visibleBody) visibleBody.innerHTML = renderMyChecklistSection(rows.visibleOnly, 'v');
   const visibleCount = document.getElementById('myChecklistVisibleCount');
   if (visibleCount) visibleCount.textContent = rows.visibleOnly.length;
   updateMyChecklistBadge(rows.assigned.length);
+  applyPermissionGating();
+  if (!cachedUserRoster) {
+    ensureUserRosterLoaded().then(function() {
+      if (document.getElementById('panel-checklist')) renderMyChecklist();
+    });
+  }
 }
 
 function updateMyChecklistBadge(count) {
@@ -12277,32 +12327,117 @@ function openMyChecklistItem(projectId, cardId) {
   openEditCard(cardId);
 }
 
-function toggleMyChecklistItemDone(projectId, cardId, columnId, itemId) {
+// Shared resolve step for every My Checklist mutation handler below —
+// projectId may not be the active project, so this always goes straight
+// to projects[projectId] rather than the (active-project-only) globals
+// findJob()/boardCards would read.
+function resolveMyChecklistCard(projectId, cardId) {
   const proj = projects[projectId];
-  if (!proj) return;
+  if (!proj) return null;
   const card = (proj.boardCards || []).find(function(c) { return String(c.id) === String(cardId); });
-  if (!card) return;
+  if (!card) return null;
   ensureCardChecklists(card);
-  const items = getChecklistForStageInProject(card.checklists, columnId, proj.boardColumns || DEFAULT_BOARD_COLUMNS);
+  return { proj: proj, card: card };
+}
+
+// Same dual-path linkJobs() already established: the active project's
+// data is the same object the rest of the app already reads/renders
+// from (loadActiveProjectData() assigns boardCards straight from
+// projects[activeProjectId].boardCards, no copy), so a plain saveJobs()
+// covers it; a non-active project has no such live rendering to keep in
+// sync, just its own localStorage + a manual push to the room.
+function persistMyChecklistChange(projectId) {
+  if (projectId === activeProjectId) { saveJobs(); } else { saveProjects(); pushProjectToShared(projectId); }
+}
+
+function toggleMyChecklistItemDone(projectId, cardId, columnId, itemId) {
+  const resolved = resolveMyChecklistCard(projectId, cardId);
+  if (!resolved) return;
+  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
   const item = items.find(function(i) { return String(i.id) === String(itemId); });
   if (!item) return;
   item.done = !item.done;
-  if (projectId === activeProjectId) { saveJobs(); } else { saveProjects(); pushProjectToShared(projectId); }
+  persistMyChecklistChange(projectId);
   renderMyChecklist();
 }
 
 function toggleMyChecklistSubItemDone(projectId, cardId, columnId, itemId, subId) {
-  const proj = projects[projectId];
-  if (!proj) return;
-  const card = (proj.boardCards || []).find(function(c) { return String(c.id) === String(cardId); });
-  if (!card) return;
-  ensureCardChecklists(card);
-  const items = getChecklistForStageInProject(card.checklists, columnId, proj.boardColumns || DEFAULT_BOARD_COLUMNS);
+  const resolved = resolveMyChecklistCard(projectId, cardId);
+  if (!resolved) return;
+  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
   const item = items.find(function(i) { return String(i.id) === String(itemId); });
   const sub = item && (item.subItems || []).find(function(s) { return String(s.id) === String(subId); });
   if (!sub) return;
   sub.done = !sub.done;
-  if (projectId === activeProjectId) { saveJobs(); } else { saveProjects(); pushProjectToShared(projectId); }
+  persistMyChecklistChange(projectId);
+  renderMyChecklist();
+}
+
+// Reads/clears the input by id itself (rather than taking the text as a
+// parameter) — same as addChecklistItem() — so a value containing quotes
+// never has to survive being embedded in an onkeydown attribute string.
+function addMyChecklistItem(projectId, cardId, columnId, inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const resolved = resolveMyChecklistCard(projectId, cardId);
+  if (!resolved) return;
+  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
+  items.push({ id: Date.now(), text: text, done: false, assignee: [] });
+  input.value = '';
+  persistMyChecklistChange(projectId);
+  renderMyChecklist();
+}
+
+// Same soft-delete-if-template-sourced rule as deleteChecklistItem() —
+// checked against THIS project's own boardColumns, not the global
+// BOARD_COLUMNS, so a template item from the non-active project is
+// identified correctly.
+function deleteMyChecklistItem(projectId, cardId, columnId, itemId) {
+  const resolved = resolveMyChecklistCard(projectId, cardId);
+  if (!resolved) return;
+  const boardCols = resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS;
+  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, boardCols);
+  const col = boardCols.find(function(c) { return c.id === columnId; });
+  const isFromTemplate = ((col && col.defaultChecklist) || []).some(function(d) { return String(d.id) === String(itemId); });
+  if (isFromTemplate) {
+    const item = items.find(function(i) { return String(i.id) === String(itemId); });
+    if (item) item.removed = true;
+  } else {
+    resolved.card.checklists[columnId] = items.filter(function(i) { return String(i.id) !== String(itemId); });
+  }
+  persistMyChecklistChange(projectId);
+  renderMyChecklist();
+}
+
+function setMyChecklistItemAssignee(projectId, cardId, columnId, itemId, username, checked) {
+  const resolved = resolveMyChecklistCard(projectId, cardId);
+  if (!resolved) return;
+  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
+  const item = items.find(function(i) { return String(i.id) === String(itemId); });
+  if (!item) return;
+  let list = normalizeChecklistAssignees(item.assignee);
+  list = checked ? (list.indexOf(username) === -1 ? list.concat([username]) : list) : list.filter(function(u) { return u !== username; });
+  item.assignee = list;
+  persistMyChecklistChange(projectId);
+  renderMyChecklist();
+}
+
+// Same canAssignChecklistStages() gate as setChecklistStageAssignee() —
+// defense-in-depth beyond the checkboxes' own data-min-tier="projectAdmin"
+// disable, since this is the more privileged (whole-stage) restriction.
+function setMyChecklistStageAssignee(projectId, cardId, columnId, username, checked) {
+  if (!canAssignChecklistStages()) { showToast('Only admins can change checklist visibility', 'error'); renderMyChecklist(); return; }
+  const resolved = resolveMyChecklistCard(projectId, cardId);
+  if (!resolved) return;
+  const card = resolved.card;
+  card.checklistAssignees = card.checklistAssignees || {};
+  let list = normalizeChecklistAssignees(card.checklistAssignees[columnId]);
+  list = checked ? (list.indexOf(username) === -1 ? list.concat([username]) : list) : list.filter(function(u) { return u !== username; });
+  if (list.length) card.checklistAssignees[columnId] = list;
+  else delete card.checklistAssignees[columnId];
+  persistMyChecklistChange(projectId);
   renderMyChecklist();
 }
 
