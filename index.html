@@ -4576,7 +4576,7 @@ function loadActiveProjectData() {
   if (p.header.boardBgPhoto) localStorage.setItem('gantt_board_bg_photo_v1', p.header.boardBgPhoto);
   else localStorage.removeItem('gantt_board_bg_photo_v1');
   applyHeaderVisual();
-  applyBoardBgVisual();
+  applyProjectBgVisual();
 
   // Section 6: link/adopt any cards that predate the jobId field, before
   // the schema-lock pass normalizes tasks and cards for every job below.
@@ -5114,7 +5114,7 @@ function applyDarkMode(on) {
   document.body.classList.toggle('dark-mode', on);
   const toggle = document.getElementById('darkModeToggle');
   if (toggle) toggle.classList.toggle('active', on);
-  applyBoardBgVisual();
+  applyProjectBgVisual();
 }
 
 function loadDarkModePref() {
@@ -5253,37 +5253,83 @@ function resetThemeDefault() {
 // The Settings > Board Background upload UI (openBoardBgModal/
 // handleBoardBgUpload/removeBoardBgPhoto/etc.) was removed — APS now uses
 // the static bundled image below, and Bludorn will get one the same way
-// later. applyBoardBgVisual() and gantt_board_bg_photo_v1 stay: whatever
+// later. applyProjectBgVisual() and gantt_board_bg_photo_v1 stay: whatever
 // Bludorn already had uploaded before the removal keeps displaying (see
 // the priority order below), it's just no longer changeable from the UI.
 
-// Static, bundled board background images — a normal image file shipped
-// alongside index.html (see /assets), not an upload stored in localStorage
-// or synced project data. Sidesteps the localStorage-quota/base64-inflation
-// problem and the Durable Object's single-key room-storage size limit
-// entirely (see handleBoardBgUpload()'s history) — the browser just
-// requests and caches it like any other website asset, full resolution,
-// no size cap. Keyed by FIXED_PROJECT_NAMES (the two permanent projects
-// this app already treats as fixed) so each can eventually get its own;
-// only ADVANCED PRECUT SYSTEMS has one for now.
-const STATIC_BOARD_BG_BY_PROJECT_NAME = {
+// Static, bundled per-project background images — a normal image file
+// shipped alongside index.html (see /assets), not an upload stored in
+// localStorage or synced project data. Sidesteps the localStorage-quota/
+// base64-inflation problem and the Durable Object's single-key
+// room-storage size limit entirely (see handleBoardBgUpload()'s history)
+// — the browser just requests and caches it like any other website asset,
+// full resolution, no size cap. Keyed by FIXED_PROJECT_NAMES (the two
+// permanent projects this app already treats as fixed) so each can
+// eventually get its own; only ADVANCED PRECUT SYSTEMS has one for now.
+// Originally Board-only (applyBoardBgVisual); extended to every other
+// view's own panel per explicit request — Bludorn stays background-free
+// on every view, same as it already was on Board alone.
+const STATIC_PROJECT_BG_BY_NAME = {
   'ADVANCED PRECUT SYSTEMS': 'assets/aps-board-bg.jpg'
 };
-function applyBoardBgVisual() {
-  const wrapper = document.getElementById('boardWrapper');
-  if (!wrapper) return;
+// Panels that get the plain static-image treatment — full-bleed on the
+// PANEL itself, not each view's own inner content wrapper, so it reads
+// consistently even where that wrapper doesn't span the full width (My
+// Checklist's is a centered max-width:760px column; a background set on
+// IT alone would leave the wider margins on either side untouched).
+const STATIC_BG_PANEL_IDS = ['panel-home', 'panel-checklist', 'panel-calendar', 'panel-gantt'];
+function applyProjectBgVisual() {
   const proj = getActiveProject();
-  // A static background is authoritative for its project — takes priority
-  // over any uploaded photo rather than being silently overridden by one,
-  // so there's no confusing "I uploaded a new one but nothing changed"
-  // trap for that project specifically.
-  const staticBg = proj && STATIC_BOARD_BG_BY_PROJECT_NAME[proj.name];
-  const photo = staticBg || localStorage.getItem('gantt_board_bg_photo_v1');
-  if (photo) {
-    const overlay = document.body.classList.contains('dark-mode') ? 'rgba(10,12,16,0.6)' : 'rgba(255,255,255,0.55)';
-    wrapper.style.background = 'linear-gradient(' + overlay + ', ' + overlay + '), url("' + photo + '") center/cover no-repeat';
-  } else {
-    wrapper.style.background = '';
+  const staticBg = proj && STATIC_PROJECT_BG_BY_NAME[proj.name];
+  const dark = document.body.classList.contains('dark-mode');
+  const overlay = dark ? 'rgba(10,12,16,0.6)' : 'rgba(255,255,255,0.55)';
+  // A fixed, modest watermark size instead of cover — Board's content
+  // mostly fills its own space (background only peeks through the gaps
+  // between columns), but these four views have far more open
+  // background showing at once, so a full-bleed cover fill at Board's
+  // own strength read as overwhelming wallpaper once spread across
+  // every view. Fixed px size also keeps the mark a consistent,
+  // un-cropped size regardless of how wide or tall a given panel is.
+  //
+  // Can't reuse Board's own plain-opacity-gradient technique here: the
+  // source image has a solid WHITE background (not transparent), and a
+  // flat-color overlay only fades it TOWARD that overlay's own color —
+  // in dark mode this left a visibly wrong pale gray square where the
+  // image's white background sat, no matter how high the opacity (confirmed
+  // by direct rendering — the same alpha that fades the wash enough to
+  // hide the box also crushes the logo's own color past recognition, so
+  // there's no single opacity that fixes both at once). background-blend-
+  // mode: multiply, against a background-color matching the panel's own
+  // surface, is the actual fix — multiplying by white is a no-op, so the
+  // image's white background disappears into whatever's really behind
+  // it in EITHER theme, while its colored ink still tints visibly. The
+  // extra tint gradient layer (also multiply) is purely for fading that
+  // ink down to watermark strength; confirmed by rendering both together
+  // before shipping, not just reasoned through.
+  const bg = dark ? '#14161c' : '#f5f6fa';
+  const tint = dark ? 'rgba(20,22,28,0.75)' : 'rgba(245,246,250,0.6)';
+  STATIC_BG_PANEL_IDS.forEach(function(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.backgroundColor = staticBg ? bg : '';
+    el.style.backgroundImage = staticBg ? ('linear-gradient(' + tint + ', ' + tint + '), url("' + staticBg + '")') : '';
+    el.style.backgroundPosition = staticBg ? 'center, center' : '';
+    el.style.backgroundSize = staticBg ? '340px 340px, 340px' : '';
+    el.style.backgroundRepeat = staticBg ? 'no-repeat, no-repeat' : '';
+    el.style.backgroundBlendMode = staticBg ? 'normal, multiply' : '';
+  });
+  // Board keeps its own richer logic (a legacy localStorage-uploaded
+  // photo, from the old "Board Background" upload UI, as a fallback when
+  // no static image is configured — see the comment above
+  // STATIC_PROJECT_BG_BY_NAME) rather than being folded into the loop
+  // above, since the other views never had that upload feature and
+  // shouldn't inherit a fallback that's specific to Board's own history.
+  const boardWrapper = document.getElementById('boardWrapper');
+  if (boardWrapper) {
+    const boardPhoto = staticBg || localStorage.getItem('gantt_board_bg_photo_v1');
+    boardWrapper.style.background = boardPhoto
+      ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + boardPhoto + '") center/cover no-repeat')
+      : '';
   }
 }
 
