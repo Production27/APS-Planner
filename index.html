@@ -1193,6 +1193,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
     background: var(--bg); color: var(--text);
   }
+  .my-checklist-add-bar input[type="text"]:disabled, .my-checklist-add-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
   .my-checklist-add-bar select { flex: 0 1 220px; min-width: 0; }
   .my-checklist-add-bar input[type="text"] { flex: 1 1 200px; min-width: 0; }
   .my-checklist-job-bubble, .my-checklist-stage-tag {
@@ -2035,9 +2036,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="tab-panel active" id="panel-checklist">
       <div class="my-checklist-wrapper">
         <div class="my-checklist-add-bar">
-          <select id="myChecklistAddJobSelect" data-min-tier="editor" onchange="onMyChecklistAddBarJobChange()"></select>
-          <input type="text" id="myChecklistAddInput" data-min-tier="editor" placeholder="Add item…" onkeydown="if(event.key==='Enter'){event.preventDefault();addMyChecklistItemFromBar();}">
-          <button type="button" class="btn btn-primary" data-min-tier="editor" style="padding:6px 14px;font-size:13px;" onclick="addMyChecklistItemFromBar()">Add</button>
+          <select id="myChecklistAddJobSelect" onchange="onMyChecklistContextChange()"></select>
+          <input type="text" id="myChecklistAddInput" placeholder="Add item…" onkeydown="if(event.key==='Enter'){event.preventDefault();addMyChecklistItemFromBar();}">
+          <button type="button" id="myChecklistAddBtn" class="btn btn-primary" style="padding:6px 14px;font-size:13px;" onclick="addMyChecklistItemFromBar()">Add</button>
           <span id="myChecklistAddVisibility"></span>
         </div>
         <div id="myChecklistListBody"></div>
@@ -11704,17 +11705,20 @@ function myChecklistMsDropdownHtml(idBase, current, onchangePrefix, minTier, emp
 
 // Flat list — one row per item, no per-job group wrapper. Sorted by job
 // name already (see buildMyChecklistRows()), so same-job items still land
-// near each other without needing an explicit box around them.
-function renderMyChecklistList(rows) {
-  if (!rows.length) return '<div class="my-checklist-empty">Nothing assigned to you right now.</div>';
+// near each other without needing an explicit box around them. Used for
+// both toolbar modes (see myChecklistSelectedContext) — job-view rows can
+// include done items/sub-items (the assigned feed never does), hence the
+// .done class + checked attributes below.
+function renderMyChecklistList(rows, emptyMessage) {
+  if (!rows.length) return '<div class="my-checklist-empty">' + (emptyMessage || 'Nothing here.') + '</div>';
   return rows.map(function(row) {
     const item = row.item;
     const assignDropdownId = 'myciAssign_' + row.card.id + '_' + item.id;
     const assignPrefix = "setMyChecklistItemAssignee('" + activeProjectId + "', '" + row.card.id + "', '" + row.columnId + "', '" + item.id + "'";
     const subAddInputId = 'myciSubNew_' + row.card.id + '_' + item.id;
     const subHtml = (row.subItems.length ? '<div class="checklist-subitems">' + row.subItems.map(function(sub) {
-      return '<div class="checklist-subitem">' +
-        '<input type="checkbox" onchange="toggleMyChecklistSubItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + sub.id + '\')">' +
+      return '<div class="checklist-subitem' + (sub.done ? ' done' : '') + '">' +
+        '<input type="checkbox"' + (sub.done ? ' checked' : '') + ' onchange="toggleMyChecklistSubItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + sub.id + '\')">' +
         '<span class="ci-text">' + escapeHtml(sub.text) + '</span>' +
         '<button class="ci-delete" data-min-tier="editor" onclick="deleteMyChecklistSubItem(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + sub.id + '\')">×</button>' +
         '</div>';
@@ -11722,8 +11726,8 @@ function renderMyChecklistList(rows) {
       '<div class="checklist-subitem-add-row">' +
         '<input type="text" id="' + subAddInputId + '" data-min-tier="editor" placeholder="Add sub-item…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addMyChecklistSubItem(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + subAddInputId + '\');}">' +
       '</div>';
-    return '<div class="checklist-item my-checklist-item">' +
-      '<input type="checkbox" onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
+    return '<div class="checklist-item my-checklist-item' + (item.done ? ' done' : '') + '">' +
+      '<input type="checkbox"' + (item.done ? ' checked' : '') + ' onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
       '<span class="ci-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
       '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(row.job.name) + '</span>' +
       '<span class="my-checklist-stage-tag">' + escapeHtml(row.columnLabel) + '</span>' +
@@ -11733,14 +11737,19 @@ function renderMyChecklistList(rows) {
   }).join('');
 }
 
-// Which card the add bar's job picker is currently pointed at — persists
-// across re-renders (e.g. right after adding an item) so adding several
-// items in a row to the same job doesn't reset the dropdown each time.
-let myChecklistAddBarCardId = null;
+// Which "context" the toolbar's job picker is pointed at. '__assigned__'
+// (default) is the flat, cross-job, assigned-to-you-and-still-open feed
+// from buildMyChecklistRows(). Any other value is a specific card id,
+// which switches the list to THAT job's full current-stage checklist —
+// every item visible to you, assigned to you or not, done or not — the
+// closest thing left to the old per-job checklist view now that editing
+// only happens here. Persists across re-renders so switching jobs, then
+// toggling/adding an item, doesn't bounce the picker back to the top.
+let myChecklistSelectedContext = '__assigned__';
 
-// Every card the user could add an item to right now — same visibility/
-// stage-privacy gate the list itself uses. A job with more than one
-// phase gets its phase name appended, since two of its cards would
+// Every card the user could view/add to right now — same visibility/
+// stage-privacy gate the assigned feed itself uses. A job with more than
+// one phase gets its phase name appended, since two of its cards would
 // otherwise show identical labels.
 function myChecklistAddableCards() {
   return boardCards.filter(function(card) {
@@ -11759,18 +11768,25 @@ function myChecklistAddableCards() {
   }).sort(function(a, b) { return a.label.localeCompare(b.label); });
 }
 
-function renderMyChecklistAddBar() {
+function renderMyChecklistToolbar() {
   const select = document.getElementById('myChecklistAddJobSelect');
+  const input = document.getElementById('myChecklistAddInput');
+  const addBtn = document.getElementById('myChecklistAddBtn');
   const visBody = document.getElementById('myChecklistAddVisibility');
   if (!select) return;
   const options = myChecklistAddableCards();
-  if (!options.some(function(o) { return o.card.id === myChecklistAddBarCardId; })) {
-    myChecklistAddBarCardId = options.length ? options[0].card.id : null;
+  if (myChecklistSelectedContext !== '__assigned__' && !options.some(function(o) { return o.card.id === myChecklistSelectedContext; })) {
+    myChecklistSelectedContext = '__assigned__';
   }
-  select.innerHTML = options.length
-    ? options.map(function(o) { return '<option value="' + o.card.id + '"' + (o.card.id === myChecklistAddBarCardId ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>'; }).join('')
-    : '<option value="">No jobs available</option>';
-  const current = options.find(function(o) { return o.card.id === myChecklistAddBarCardId; });
+  select.innerHTML = '<option value="__assigned__"' + (myChecklistSelectedContext === '__assigned__' ? ' selected' : '') + '>ASSIGNED TO ME</option>' +
+    options.map(function(o) { return '<option value="' + o.card.id + '"' + (o.card.id === myChecklistSelectedContext ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>'; }).join('');
+  const current = options.find(function(o) { return o.card.id === myChecklistSelectedContext; });
+  // Adding/reassigning only makes sense once a specific job is picked —
+  // there's no single stage to add to (or "Visible to" list to edit)
+  // while looking at the cross-job assigned feed.
+  const canAdd = !!current && hasMinTier('editor');
+  if (input) { input.disabled = !canAdd; input.placeholder = canAdd ? 'Add item…' : 'Select a job to add items'; }
+  if (addBtn) addBtn.disabled = !canAdd;
   if (visBody) {
     visBody.innerHTML = current
       ? myChecklistMsDropdownHtml('myChecklistAddVis', normalizeChecklistAssignees(current.card.checklistAssignees && current.card.checklistAssignees[current.card.column]), "setMyChecklistStageAssignee('" + activeProjectId + "', '" + current.card.id + "', '" + current.card.column + "'", 'projectAdmin', 'Everyone', 'my-checklist-visibility')
@@ -11778,41 +11794,63 @@ function renderMyChecklistAddBar() {
   }
 }
 
-function onMyChecklistAddBarJobChange() {
+function onMyChecklistContextChange() {
   const select = document.getElementById('myChecklistAddJobSelect');
-  myChecklistAddBarCardId = select ? select.value : null;
-  renderMyChecklistAddBar();
-  applyPermissionGating();
+  myChecklistSelectedContext = select ? select.value : '__assigned__';
+  renderMyChecklist();
 }
 
-// Every item added here is, by definition, going onto YOUR list — this is
-// the only place items get created in My Checklist now that "Also Visible
-// to You" is gone, so an unassigned add would just vanish from view the
-// instant it landed. addMyChecklistItem() itself stays generic (it's
-// shared with other future callers), so the self-assign happens here,
-// as a second write right after the add.
+// New items default to unassigned (same as addMyChecklistItem() itself,
+// and the old per-job modal's addChecklistItem()) — the assignee dropdown
+// is right there on the new row for picking who it's actually for, rather
+// than guessing it's always the person adding it.
 function addMyChecklistItemFromBar() {
-  const card = boardCards.find(function(c) { return String(c.id) === String(myChecklistAddBarCardId); });
+  if (myChecklistSelectedContext === '__assigned__') return;
+  const card = boardCards.find(function(c) { return String(c.id) === String(myChecklistSelectedContext); });
   if (!card) return;
   const input = document.getElementById('myChecklistAddInput');
   if (!input || !input.value.trim()) return;
   addMyChecklistItem(activeProjectId, card.id, card.column, 'myChecklistAddInput');
-  const items = (card.checklists && card.checklists[card.column]) || [];
-  const added = items[items.length - 1];
-  if (added) {
-    const myUsername = viewAsUsername || getStoredUsername();
-    setMyChecklistItemAssignee(activeProjectId, card.id, card.column, added.id, myUsername, true);
-  }
+}
+
+// All items (done or not) for one specific job's current-stage checklist —
+// the job-view mode buildMyChecklistRows() itself. Read-only merge of
+// stored+template items, matching buildMyChecklistRows()'s own non-
+// mutating approach: materializing a template item into real storage is
+// the mutation functions' job, not a side effect of merely viewing.
+function buildMyChecklistJobRows(cardId) {
+  const card = boardCards.find(function(c) { return String(c.id) === String(cardId); });
+  if (!card || !card.column) return [];
+  const found = findJob(card.jobId);
+  if (!found || found.job.archived) return [];
+  const job = found.job;
+  if (!isJobVisibleToMe(job)) return [];
+  ensureCardChecklists(card);
+  if (!isChecklistStageVisibleToMe(card.checklistAssignees, card.column)) return [];
+  const stageCol = BOARD_COLUMNS.find(function(c) { return c.id === card.column; });
+  const stageLabel = stageCol ? stageCol.label : card.column;
+  const templ = (stageCol && stageCol.defaultChecklist) || [];
+  const stored = (card.checklists && card.checklists[card.column]) || [];
+  const storedIds = stored.map(function(i) { return i.id; });
+  const items = stored.filter(function(i) { return !i.removed; }).concat(
+    templ.filter(function(d) { return storedIds.indexOf(d.id) === -1; })
+      .map(function(d) { return { id: d.id, text: d.text, done: false, assignee: [] }; })
+  );
+  return items.map(function(item) {
+    return { job: job, card: card, columnId: card.column, columnLabel: stageLabel, item: item, subItems: item.subItems || [] };
+  });
 }
 
 function renderMyChecklist() {
   const panel = document.getElementById('panel-checklist');
   if (!panel) return;
-  const rows = buildMyChecklistRows();
+  const assignedRows = buildMyChecklistRows();
+  const rows = myChecklistSelectedContext === '__assigned__' ? assignedRows : buildMyChecklistJobRows(myChecklistSelectedContext);
+  const emptyMessage = myChecklistSelectedContext === '__assigned__' ? 'Nothing assigned to you right now.' : 'This checklist is empty — add the first item below.';
   const listBody = document.getElementById('myChecklistListBody');
-  if (listBody) listBody.innerHTML = renderMyChecklistList(rows);
-  renderMyChecklistAddBar();
-  updateMyChecklistBadge(rows.length);
+  if (listBody) listBody.innerHTML = renderMyChecklistList(rows, emptyMessage);
+  renderMyChecklistToolbar();
+  updateMyChecklistBadge(assignedRows.length);
   applyPermissionGating();
   if (!cachedUserRoster) {
     ensureUserRosterLoaded().then(function() {
