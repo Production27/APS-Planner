@@ -88,40 +88,6 @@
     padding: 8px; border-bottom: 1px solid var(--border); background: #fafafa;
   }
   body.dark-mode .rail-header-icons { background: #1a1d25; border-bottom-color: var(--border); }
-  /* Admin-only "View as a member" picker — see setViewAs(). A custom
-     button+dropdown (like .settings-menu-wrap right next to it), not a
-     native <select> — a native select's closed-state background/text
-     can't be reliably restyled cross-browser (confirmed broken: showed up
-     as an unreadable solid block), so this reuses the exact same
-     known-working pattern .settings-dropdown already uses. Colors below
-     are for the light rail-sidebar background it now sits on (it used to
-     sit on the dark gradient header, hence white-on-transparent) — var()
-     based, so dark mode is handled automatically via body.dark-mode's own
-     --text/--border/--bg redefinitions, no separate override needed. */
-  .view-as-wrap { position: relative; }
-  .view-as-toggle-btn {
-    background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 6px; cursor: pointer;
-    display: flex; align-items: center; white-space: nowrap; max-width: 150px; overflow: hidden;
-    text-overflow: ellipsis; transition: background 0.15s;
-  }
-  .view-as-toggle-btn:hover { background: rgba(57,73,171,0.1); }
-  .view-as-toggle-btn.active { background: rgba(57,73,171,0.16); color: var(--primary); }
-  .view-as-dropdown {
-    position: absolute; top: calc(100% + 8px); left: 0; background: white; color: var(--text);
-    border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 230px; max-height: 320px;
-    overflow-y: auto; padding: 6px; display: none; z-index: 200;
-  }
-  .view-as-dropdown.show { display: block; }
-  .view-as-dropdown-item {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 9px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 600;
-    color: var(--text); cursor: pointer; transition: background 0.15s;
-  }
-  .view-as-dropdown-item:hover { background: #eef1fa; color: var(--primary); }
-  .view-as-dropdown-item.active { background: rgba(57,73,171,0.1); color: var(--primary); }
-  .view-as-dropdown-empty { padding: 9px 12px; font-size: 11.5px; color: #999; }
-  .view-as-dropdown-tier { font-size: 10px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; }
   /* ===== PRESENCE AVATARS ===== */
   .presence-avatars { display: flex; align-items: center; }
   .presence-avatar {
@@ -1826,7 +1792,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode ::-webkit-scrollbar-thumb { background: #404656 !important; }
 
   body.dark-mode .settings-dropdown,
-  body.dark-mode .view-as-dropdown,
   body.dark-mode .date-popover,
   body.dark-mode .job-card,
   body.dark-mode .board-card,
@@ -1948,7 +1913,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .color-toggle-row:hover { background: rgba(255,255,255,0.05); }
 
   body.dark-mode .settings-dropdown-item:hover { background: rgba(57,73,171,0.2); }
-  body.dark-mode .view-as-dropdown-item:hover { background: rgba(57,73,171,0.2); }
   body.dark-mode .settings-dropdown-divider { background: var(--border); }
   body.dark-mode .legend-float-title { color: var(--text); }
   body.dark-mode .legend-text { color: var(--text-light); }
@@ -2063,8 +2027,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
          { display:none }) without losing these controls. Order/IDs/
          onclick handlers are all unchanged, so every function that reads
          them by id (renderPresenceAvatars(), updateProjectToggle(),
-         renderViewAsSelect(), applyPermissionGating(), etc.) keeps
-         working with zero changes on the JS side. -->
+         applyPermissionGating(), etc.) keeps working with zero changes
+         on the JS side. View As no longer lives here — see Manage Users. -->
     <!-- Order is deliberately reversed from what it was — settings ⋮
          first, presence avatars last — per explicit request. -->
     <div class="rail-header-icons">
@@ -2095,16 +2059,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       </div>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
       <button class="project-toggle-btn" id="projectToggleBtn" onclick="toggleProject()" title="Switch project"></button>
-      <!-- Admin only (see setViewAs()) — previews the whole app (Job
-           Manager, Board, Calendar, Gantt) exactly as a specific Member
-           would see it, without changing what that member — or anyone
-           else — actually sees. -->
-      <div class="view-as-wrap" id="viewAsWrap">
-        <button class="view-as-toggle-btn" id="viewAsToggleBtn" onclick="toggleViewAsDropdown(event)" title="View the whole app as a specific member (Admin only)">
-          <svg viewBox="0 0 24 24" width="13" height="13" style="vertical-align:-2px;margin-right:4px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="3.5" fill="currentColor" opacity="0.85"/><path d="M4.5 19c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.85"/></svg><span id="viewAsToggleLabel">View as</span>
-        </button>
-        <div class="view-as-dropdown" id="viewAsDropdown"></div>
-      </div>
       <div class="presence-avatars" id="presenceAvatars"></div>
     </div>
     <!-- View switcher — the active view shows full-size (icon + label),
@@ -2447,7 +2401,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <div class="modal-overlay" id="manageUsersModal">
   <div class="modal-box" style="max-width:560px;">
     <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</h4>
-    <p>Only admin accounts can add, remove, or reset passwords for other users.</p>
+    <p>Only admin accounts can add, remove, or reset passwords for other users. Use "View as" on any account below to preview the whole app exactly as they'd see it.</p>
     <div style="display:flex; gap:10px; margin:10px 0 16px;">
       <button class="btn btn-secondary" onclick="showAddUserForm()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14m-7-7h14" stroke="#28a745" stroke-width="2.5" stroke-linecap="round"/></svg> Add User</button>
       <button class="btn btn-secondary" onclick="loadUsersList()"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 12a8 8 0 0113.7-5.7L20 8M20 8V4M20 8h-4M20 12a8 8 0 01-13.7 5.7L4 16m0 0v4m0-4h4" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Refresh List</button>
@@ -4224,104 +4178,32 @@ async function ensureUserRosterLoaded() {
 // (see hasMinTier() below, which checks viewAsRole instead of
 // currentUserRole whenever viewAsUsername is set) — so the whole UI
 // gates itself exactly the way it would for that account, buttons and
-// all. The View As control itself is the one deliberate exception: every
-// check that guards it (setViewAs/toggleViewAsDropdown/renderViewAsSelect
-// above, and #viewAsWrap's visibility in applyPermissionGating()) tests
-// currentUserRole directly rather than going through hasMinTier(), so the
-// admin can always change or exit the simulation regardless of how
-// restrictive the tier being previewed is. Session-only, like
-// ganttFocusedJobId — not persisted, and cleared on project switch (see
+// all. The View As control itself is the one deliberate exception:
+// setViewAs() above tests currentUserRole directly rather than going
+// through hasMinTier(), so the admin can always change or exit the
+// simulation regardless of how restrictive the tier being previewed is.
+// (Reachable only via the Admin-only Manage Users modal — see
+// loadUsersList()'s per-row buttons — rather than its own standalone
+// control, so there's no separate visibility toggle to keep in sync
+// here any more.) Session-only, like ganttFocusedJobId — not persisted,
+// and cleared on project switch (see
 // switchProject()).
 let viewAsUsername = null;
 let viewAsRole = null;
 
 // Admin-only roster WITH role — the public roster (cachedUserRoster, via
 // /users/roster) deliberately strips role for privacy (see its own
-// comment), but View As is itself Admin-gated, so it's safe to use the
-// richer /users/list endpoint (same one Manage Users uses) here
-// specifically to know which tier to simulate. Cached the same
-// stays-null-until-a-fetch-succeeds way as cachedUserRoster.
-let cachedAdminUserRoster = null;
-async function ensureAdminUserRosterLoaded() {
-  if (cachedAdminUserRoster) return cachedAdminUserRoster;
-  try {
-    const data = await postUsersEndpoint('users/list');
-    cachedAdminUserRoster = data.users || [];
-  } catch (e) {
-    // Leave it null — next call retries instead of caching a failure.
-  }
-  return cachedAdminUserRoster || [];
-}
-
-function setViewAs(username) {
+// comment) — but View As now lives entirely inside the (Admin-only)
+// Manage Users modal, whose own user list (see loadUsersList()) already
+// carries role, so there's no separate roster fetch/cache needed here
+// any more (used to be cachedAdminUserRoster/ensureAdminUserRosterLoaded(),
+// hitting the same /users/list endpoint Manage Users does — redundant
+// once both live in the same place).
+function setViewAs(username, role) {
   if (currentUserRole !== 'admin') return;
   viewAsUsername = username || null;
-  viewAsRole = null;
-  closeViewAsDropdown();
-  if (viewAsUsername) {
-    ensureAdminUserRosterLoaded().then(function(list) {
-      if (viewAsUsername !== username) return; // superseded by a newer pick while this was in flight
-      const match = list.find(function(u) { return u.username === username; });
-      viewAsRole = match ? match.role : null;
-      renderAll();
-    });
-  }
+  viewAsRole = viewAsUsername ? (role || null) : null;
   renderAll();
-}
-function toggleViewAsDropdown(event) {
-  event.stopPropagation();
-  if (currentUserRole !== 'admin') return;
-  const dd = document.getElementById('viewAsDropdown');
-  if (!dd) return;
-  const isOpen = dd.classList.contains('show');
-  closeAllDropdowns();
-  if (!isOpen) {
-    dd.classList.add('show');
-    renderViewAsDropdown();
-  }
-}
-function closeViewAsDropdown() {
-  const dd = document.getElementById('viewAsDropdown');
-  if (dd) dd.classList.remove('show');
-}
-function renderViewAsDropdown() {
-  const dd = document.getElementById('viewAsDropdown');
-  if (!dd) return;
-  if (!cachedAdminUserRoster) {
-    dd.innerHTML = '<div class="view-as-dropdown-empty">Loading…</div>';
-    ensureAdminUserRosterLoaded().then(function() {
-      if (dd.classList.contains('show')) renderViewAsDropdown();
-    });
-    return;
-  }
-  let html = '<div class="view-as-dropdown-item' + (!viewAsUsername ? ' active' : '') + '" onclick="setViewAs(\'\')">My view</div>';
-  html += cachedAdminUserRoster.length
-    ? cachedAdminUserRoster.map(function(u) {
-        const tierLabel = TIER_LABELS[u.role] || u.role;
-        return '<div class="view-as-dropdown-item' + (u.username === viewAsUsername ? ' active' : '') + '" onclick="setViewAs(\'' + u.username.replace(/'/g, "\\'") + '\')">' + escapeHtml(u.displayName) + ' <span class="view-as-dropdown-tier">' + escapeHtml(tierLabel) + '</span></div>';
-      }).join('')
-    : '<div class="view-as-dropdown-empty">No team accounts yet</div>';
-  dd.innerHTML = html;
-}
-// Just the toggle button's own label/active state — the dropdown's list
-// itself is only ever (re)built on open (see renderViewAsDropdown()), not
-// on every renderAll(), since it's invisible the rest of the time anyway.
-function renderViewAsSelect() {
-  const label = document.getElementById('viewAsToggleLabel');
-  const btn = document.getElementById('viewAsToggleBtn');
-  if (!label || !btn || currentUserRole !== 'admin') return;
-  if (!viewAsUsername) {
-    label.textContent = 'View as';
-    btn.title = 'View the whole app as a specific member (Admin only)';
-    btn.classList.remove('active');
-    return;
-  }
-  const match = (cachedAdminUserRoster || []).find(function(u) { return u.username === viewAsUsername; });
-  const tierLabel = viewAsRole ? (TIER_LABELS[viewAsRole] || viewAsRole) : '…';
-  const fullLabel = (match ? match.displayName : viewAsUsername) + ' (' + tierLabel + ')';
-  label.textContent = fullLabel;
-  btn.title = 'Previewing as ' + fullLabel + ' — click to change';
-  btn.classList.add('active');
 }
 
 const CUSTOM_FIELD_DEFS = [
@@ -4751,7 +4633,6 @@ function updateProjectToggle() {
 }
 
 function renderAll() {
-  renderViewAsSelect();
   renderGantt();
   renderJobList();
   updateJobCount();
@@ -4784,12 +4665,6 @@ function applyPermissionGating() {
       el.classList.toggle('perm-hidden', !allowed);
     }
   });
-  // "View as a member" picker — Admin only, not even Project Admin (see
-  // setViewAs()). Full-hide like the other nav/feature-level controls
-  // above, not just disabled — an inert dropdown sitting in the header
-  // would just read as broken to everyone else.
-  const viewAsWrapEl = document.getElementById('viewAsWrap');
-  if (viewAsWrapEl) viewAsWrapEl.style.display = currentUserRole === 'admin' ? '' : 'none';
   // Job add/delete/duplicate, and the Archived Jobs list's own delete
   // button, get the same full-hide treatment — a greyed-out Delete/
   // Duplicate button sitting right in the job form reads as "still there"
@@ -4842,7 +4717,6 @@ function promptRenameProject(projectId) {
 function closeAllDropdowns() {
   closeSettingsMenu();
   closeAllColSettings();
-  closeViewAsDropdown();
   closeAllMsDropdowns();
 }
 
@@ -5183,9 +5057,6 @@ document.addEventListener('mousedown', function() {
 document.addEventListener('click', function(e) {
   const wrap = document.querySelector('.settings-menu-wrap');
   if (wrap && !wrap.contains(e.target)) closeSettingsMenu();
-
-  // Close the "View as member" dropdown
-  if (!e.target.closest('.view-as-wrap')) closeViewAsDropdown();
 
   // Close column settings dropdowns
   if (!e.target.closest('.board-col-settings-wrap')) closeAllColSettings();
@@ -10387,16 +10258,31 @@ async function loadUsersList() {
         ? (' — ' + ((projects[u.assignedProjectId] && projects[u.assignedProjectId].name) || '(unknown project)'))
         : '';
       const leadLabel = u.isLead ? ' — Lead' : '';
+      // "View as" (see setViewAs()) — previews the whole app exactly as
+      // this account would see it. Meaningless on your own row (isMe),
+      // so it's the one action button omitted there. Toggles: clicking
+      // it again while already previewing this account stops the
+      // simulation instead of restarting it.
+      const viewAsActive = !isMe && u.username === viewAsUsername;
+      const viewAsBtn = isMe ? '' :
+        '<button class="btn ' + (viewAsActive ? 'btn-primary' : 'btn-secondary') + '" style="padding:4px 10px; font-size:12px;" data-action="viewas">' + (viewAsActive ? 'Viewing ✓' : 'View as') + '</button>';
       row.innerHTML =
         '<div style="min-width:0;">' +
           '<div style="font-size:13px; font-weight:600;">' + escapeHtml(u.displayName) + (isMe ? ' <span style="font-weight:400; color:var(--text-secondary);">(you)</span>' : '') + '</div>' +
           '<div style="font-size:12px; color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + escapeHtml(tierLabel) + escapeHtml(projectLabel) + escapeHtml(leadLabel) + '</div>' +
         '</div>' +
         '<div style="display:flex; gap:6px; flex-shrink:0;">' +
+          viewAsBtn +
           '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="edit">Edit</button>' +
           '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="reset">Reset Password</button>' +
           '<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="remove">Remove</button>' +
         '</div>';
+      if (!isMe) {
+        row.querySelector('[data-action="viewas"]').onclick = function() {
+          setViewAs(viewAsActive ? '' : u.username, u.role);
+          loadUsersList();
+        };
+      }
       row.querySelector('[data-action="edit"]').onclick = function() { showEditUserForm(u.username, u.displayName, u.role, u.assignedProjectId, u.isLead); };
       row.querySelector('[data-action="reset"]').onclick = function() { resetUserPasswordUI(u.username, u.displayName); };
       row.querySelector('[data-action="remove"]').onclick = function() { removeUserUI(u.username, u.displayName); };
@@ -12898,11 +12784,9 @@ const PERMISSION_TIERS = ['viewer', 'commenter', 'editor', 'projectAdmin', 'admi
 // hasMinTier() check throughout the app — which is nearly all of them,
 // including the data-min-tier sweep in applyPermissionGating() — reflects
 // the SIMULATED account's own tier instead of the real admin's. The View
-// As control itself is the deliberate exception: it's guarded by literal
-// currentUserRole === 'admin' checks (setViewAs/toggleViewAsDropdown/
-// renderViewAsSelect, and #viewAsWrap's own visibility below), which
-// don't go through hasMinTier() at all, so it stays usable no matter how
-// restrictive the tier being previewed is.
+// As control itself is the deliberate exception: setViewAs() is guarded
+// by a literal currentUserRole === 'admin' check, not hasMinTier(), so
+// it stays usable no matter how restrictive the tier being previewed is.
 function hasMinTier(tier) {
   const effectiveRole = viewAsUsername ? viewAsRole : currentUserRole;
   const mine = PERMISSION_TIERS.indexOf(effectiveRole);
