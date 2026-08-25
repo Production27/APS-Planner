@@ -722,7 +722,20 @@
      living next to the rail now slides in as a drawer that overlays
      whichever tab is active (position:absolute inside #panelsContainer,
      see the rule below) so the rail stays visible while editing. */
-  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; transition: width 0.15s ease; }
+  /* Home already surfaces job-relevant info directly (overdue jobs, open
+     items) — the Jobs search+list is redundant noise there, and hiding
+     it lets Home's own dashboard use the reclaimed width. Keyed off
+     switchTab()'s data-active-tab, not a class, so this stays correct
+     across renderAll()/project switches without extra wiring. Width
+     narrows only above the existing ≤1100px breakpoint (which already
+     forces 210px unconditionally) and ≤480px (100%, mobile) so this
+     never fights either of those — see their own rules further down. */
+  body[data-active-tab="home"] .manager-sidebar-header,
+  body[data-active-tab="home"] .job-list { display: none; }
+  @media (min-width: 1101px) {
+    body[data-active-tab="home"] .manager-sidebar { width: 210px; min-width: 210px; }
+  }
   .manager-sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafafa; }
   .manager-sidebar-header h2 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
   /* Second "+ Add Job" entry point, alongside the one at the end of the
@@ -1976,7 +1989,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <base target="_blank">
 <base target="_blank">
 </head>
-<body>
+<body data-active-tab="home">
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
 
 <!-- FRESH-DEVICE LOADING SCREEN — see showFreshLoadOverlay()/hideFreshLoadOverlay() -->
@@ -5277,6 +5290,9 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('panel-' + tab).classList.add('active');
+  // Lets the Jobs list/search hide itself (and the sidebar narrow) while
+  // Home is active — see the body[data-active-tab="home"] CSS rules.
+  document.body.dataset.activeTab = tab;
   if (tab === 'home') { renderHomeDashboard(); }
   else if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
   else if (tab === 'board') { renderBoard(); }
