@@ -1805,8 +1805,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        current state (!important since body:not(.job-rail-open)'s own
        hide rules outrank a plain override here on specificity alone). */
     .manager-sidebar-header, .job-list, .search-box { display: block !important; }
-    .job-rail-header-label, .job-rail-add-btn { display: flex !important; }
+    .job-rail-header-label, .job-rail-add-btn, .presence-avatars { display: flex !important; }
     .manager-sidebar-header h2 { display: flex !important; margin-bottom: 10px !important; justify-content: flex-start !important; }
+    /* The pull-tab toggle itself is the one piece of desktop chrome that
+       doesn't just need forcing back open here — clicking it flips
+       body.job-rail-open, but every rule that state would otherwise
+       change is already force-overridden above, so on mobile it'd be a
+       dead control that still visually invites a tap (the chevron even
+       flips) and does nothing. Hidden rather than forced-inert, same
+       treatment as the redundant view-switcher tabs above. */
+    .job-rail-toggle-icon { display: none; }
     /* !important — body:not(.job-rail-open) .manager-sidebar (see above,
        and the ≤1100px breakpoint's own copy of it) outranks this plain
        rule on specificity alone, same reasoning as the other overrides
