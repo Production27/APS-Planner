@@ -4294,23 +4294,27 @@ function getVisibleJobs() {
 
 // ===== CALENDAR EVENT VISIBILITY =====
 // A calendar event's own 'all'/'private'/'members' setting (see the
-// Visibility field in the event modal, saveCalendarEventFromModal()) —
-// same shape/bypass rules as isJobVisibleToMe() just above (Project
-// Admin/Admin see everything; viewAsUsername simulates a specific
-// member's own view when an Admin is previewing). Unset/'all' means
-// visible to everyone, same default as isChecklistStageVisibleToMe()
-// (unlike isJobVisibleToMe()'s deliberately-inverted empty-Members-hides
-// default) — an event created before this feature existed, or left on
-// the default option, is unaffected. 'private' means only the account
-// that created it (evt.createdBy) can see it.
+// Visibility field in the event modal, saveCalendarEventFromModal()).
+// Unset/'all' means visible to everyone, same default as
+// isChecklistStageVisibleToMe() (unlike isJobVisibleToMe()'s
+// deliberately-inverted empty-Members-hides default) — an event created
+// before this feature existed, or left on the default option, is
+// unaffected. 'private' means only the account that created it
+// (evt.createdBy) can see it.
+//
+// Project Admin still bypasses (an exact-role check, not hasMinTier(),
+// deliberately — Admin does NOT bypass here, unlike isJobVisibleToMe()
+// just above: Admin doesn't need visibility into other people's private
+// calendar items just by virtue of the role, per explicit request).
+// viewAsUsername simulates a specific member's own view when an Admin is
+// previewing, so this still correctly bypasses for a simulated Project
+// Admin's own preview.
 function isCalendarEventVisibleToMe(evt) {
   if (!evt) return false;
   const visibility = evt.visibility || 'all';
   if (visibility === 'all') return true;
-  // hasMinTier() already reflects the simulated account's role while
-  // previewing (see its own comment) — a simulated Project Admin/Admin
-  // bypasses here too, same as isJobVisibleToMe().
-  if (hasMinTier('projectAdmin')) return true;
+  const effectiveRole = viewAsUsername ? viewAsRole : currentUserRole;
+  if (effectiveRole === 'projectAdmin') return true;
   const asUsername = viewAsUsername || getStoredUsername();
   if (visibility === 'private') return evt.createdBy === asUsername;
   if (visibility === 'members') return (evt.visibleMembers || []).indexOf(asUsername) !== -1;
