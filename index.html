@@ -711,22 +711,25 @@
      whichever tab is active (position:absolute inside #panelsContainer,
      see the rule below) so the rail stays visible while editing. */
   .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; transition: width 0.15s ease; }
-  /* Home already surfaces job-relevant info directly (overdue jobs, open
-     items) — the Jobs search+list is redundant noise there, and hiding
-     it lets Home's own dashboard use the reclaimed width. Keyed off
-     switchTab()'s data-active-tab, not a class, so this stays correct
-     across renderAll()/project switches without extra wiring. Width
-     narrows only above the existing ≤1100px breakpoint (which already
-     forces 210px unconditionally) and ≤480px (100%, mobile) so this
-     never fights either of those — see their own rules further down. */
-  body[data-active-tab="home"] .manager-sidebar-header,
-  body[data-active-tab="home"] .job-list { display: none; }
+  /* The sidebar defaults to closed — a narrow icon rail, Jobs search/list
+     hidden — on EVERY view now, not just Home; toggleJobRail() (see
+     #jobRailToggleBtn below) is the one manual override, via a plain
+     class rather than switchTab()'s data-active-tab (that only ever
+     reflected which TAB was active, but this state is now independent
+     of that — it stays however the user left it across tab switches).
+     Width narrows only above the existing ≤1100px breakpoint (which
+     already forces 210px unconditionally) and ≤480px (100%, mobile) so
+     this never fights either of those — see their own rules further
+     down. */
+  body:not(.job-rail-open) .manager-sidebar-header,
+  body:not(.job-rail-open) .job-list { display: none; }
   /* Both icon rows go from a horizontal row to a vertical column — a row
      of 5 tabs (or 4 header icons) needs real width even collapsed to
      icon-only, which is what actually capped how narrow the sidebar
      could get; stacked, each row only needs to be as wide as ONE icon. */
-  body[data-active-tab="home"] .rail-header-icons,
-  body[data-active-tab="home"] .rail-tab-row {
+  body:not(.job-rail-open) .rail-header-icons,
+  body:not(.job-rail-open) .rail-tab-row,
+  body:not(.job-rail-open) .job-rail-toggle-row {
     flex-direction: column; align-items: stretch; flex-wrap: nowrap;
   }
   /* Icon-only, permanently — the label/badge reveal-on-active-or-hover
@@ -734,13 +737,13 @@
      column doesn't have. Each button already carries its own title=""
      tooltip for identification, same as any icon-rail sidebar (VS
      Code's activity bar, Slack's app rail, etc). */
-  body[data-active-tab="home"] .rail-tab,
-  body[data-active-tab="home"] .rail-tab.active,
-  body[data-active-tab="home"] .rail-tab:hover {
+  body:not(.job-rail-open) .rail-tab,
+  body:not(.job-rail-open) .rail-tab.active,
+  body:not(.job-rail-open) .rail-tab:hover {
     flex: 0 0 34px;
   }
-  body[data-active-tab="home"] .rail-tab-label,
-  body[data-active-tab="home"] .rail-tab .badge {
+  body:not(.job-rail-open) .rail-tab-label,
+  body:not(.job-rail-open) .rail-tab .badge {
     display: none;
   }
   /* Each tab's icon is a hardcoded hex fill, not currentColor (Home and
@@ -750,13 +753,20 @@
      same color. Force every icon to solid white on active/hover instead
      of relying on each one's own fill happening to contrast; robust
      regardless of which hex a given tab's icon uses. */
-  body[data-active-tab="home"] .rail-tab.active svg,
-  body[data-active-tab="home"] .rail-tab:hover svg {
+  body:not(.job-rail-open) .rail-tab.active svg,
+  body:not(.job-rail-open) .rail-tab:hover svg {
     filter: brightness(0) invert(1);
   }
   @media (min-width: 1101px) {
-    body[data-active-tab="home"] .manager-sidebar { width: 64px; min-width: 64px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
   }
+  /* Separate small section directly below the view-switcher tabs, not
+     mixed into that same row — a distinct control (toggles the Jobs
+     panel, doesn't switch the main view) gets its own visual group
+     rather than reading as a 6th tab. Same box treatment as
+     .rail-tab-row itself for visual consistency. */
+  .job-rail-toggle-row { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border); background: #fafafa; }
+  body.dark-mode .job-rail-toggle-row { background: #1a1d25; border-bottom-color: var(--border); }
   .manager-sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafafa; }
   .manager-sidebar-header h2 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
   /* Second "+ Add Job" entry point, alongside the one at the end of the
@@ -1587,6 +1597,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        doesn't hide it — it needs its own rule or it's left floating over
        the job list with nothing on-screen for it to be a legend of. */
     .rail-tab-row, .activity-sidebar, #activityToggleBtn, .legend-float { display: none; }
+    /* Mobile has its own separate "Jobs" nav mode (.mobile-view-switcher
+       below) where the job list is always what's showing — the desktop
+       open/closed toggle (see toggleJobRail()) doesn't apply here at
+       all, so its own row is hidden and the list/header it would
+       otherwise hide are forced back on regardless of that toggle's
+       current state (!important since body:not(.job-rail-open)'s own
+       hide rule outranks a plain override here on specificity alone). */
+    .job-rail-toggle-row { display: none; }
+    .manager-sidebar-header, .job-list { display: block !important; }
     .manager-sidebar { width: 100%; min-width: 0; }
     .manager-sidebar-header { padding: 12px; }
 
@@ -1757,7 +1776,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        .rail-header-icons lives inside .manager-sidebar, which sits in
        the wide "shell" area here, not the cramped 130px "tabs" column,
        so unlike the old header it never needs to squeeze/hide any of
-       its icons in this landscape-phone case. */
+       its icons in this landscape-phone case. Overrides the desktop
+       closed-by-default column layout (see toggleJobRail()) back to a
+       normal row for the same reason — plenty of width here, no need
+       to squeeze into a narrow icon strip. */
+    body:not(.job-rail-open) .rail-header-icons {
+      flex-direction: row; flex-wrap: wrap; align-items: center;
+    }
     .mobile-view-switcher {
       grid-area: tabs; display: flex; flex-direction: column; width: 130px;
       border-bottom: none; border-right: 1px solid var(--border);
@@ -2010,7 +2035,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 <base target="_blank">
 <base target="_blank">
 </head>
-<body data-active-tab="home">
+<body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
 
 <!-- FRESH-DEVICE LOADING SCREEN — see showFreshLoadOverlay()/hideFreshLoadOverlay() -->
@@ -2109,6 +2134,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <button class="rail-tab" onclick="switchTab('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
       <button class="rail-tab" onclick="switchTab('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
       <button class="rail-tab" onclick="switchTab('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
+    </div>
+    <!-- Toggles the Jobs search/list below (and the sidebar's own width)
+         independently of which tab is active — see toggleJobRail(). Not
+         a view switch, so it's deliberately its own row, not a 6th
+         .rail-tab-row entry. -->
+    <div class="job-rail-toggle-row">
+      <button class="rail-tab" onclick="toggleJobRail()" id="jobRailToggleBtn" title="Show Jobs list"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg><span class="rail-tab-label">Jobs</span></button>
     </div>
     <div class="manager-sidebar-header">
       <h2><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Jobs <span class="badge" id="jobCount">0</span><button class="job-rail-add-btn" data-min-tier="projectAdmin" onclick="addNewJob()" title="Add a new job">+</button></h2>
@@ -5327,19 +5359,35 @@ function switchTab(tab) {
   // cancelEdit() also flushes any debounced edit first, same safety net
   // switchTab() always had. Harmless no-op if nothing was open.
   cancelEdit();
-  document.querySelectorAll('.rail-tab').forEach(b => b.classList.remove('active'));
+  // #jobRailToggleBtn also carries the .rail-tab class (for identical
+  // icon-rail styling/collapse behavior) but isn't a view switch — it's
+  // independent of which tab is active, so it's excluded here or every
+  // tab switch would silently clear its own .active highlight.
+  document.querySelectorAll('.rail-tab').forEach(b => { if (b.id !== 'jobRailToggleBtn') b.classList.remove('active'); });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('panel-' + tab).classList.add('active');
-  // Lets the Jobs list/search hide itself (and the sidebar narrow) while
-  // Home is active — see the body[data-active-tab="home"] CSS rules.
-  document.body.dataset.activeTab = tab;
   if (tab === 'home') { renderHomeDashboard(); }
   else if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
   else if (tab === 'board') { renderBoard(); }
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
   else if (tab === 'checklist') { renderMyChecklist(); }
   sendPresenceUpdate();
+}
+
+// The sidebar defaults to closed (a narrow icon rail, Jobs search/list
+// hidden — see the body:not(.job-rail-open) CSS rules) on every view now,
+// not just Home. This is the one manual override, independent of which
+// tab is active — switching tabs while it's open leaves it open (see the
+// #jobRailToggleBtn carve-out in switchTab() above), same as any
+// persistent panel toggle.
+function toggleJobRail() {
+  const open = document.body.classList.toggle('job-rail-open');
+  const btn = document.getElementById('jobRailToggleBtn');
+  if (btn) {
+    btn.classList.toggle('active', open);
+    btn.title = open ? 'Hide Jobs list' : 'Show Jobs list';
+  }
 }
 
 // Mobile-only Jobs/Board/Calendar/Gantt toggle — see .mobile-view-switcher
