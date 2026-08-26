@@ -2003,6 +2003,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .gantt-top-row { flex-wrap: wrap; height: auto; }
     .gantt-view-toggle-row { width: 100%; min-width: 0; }
     .gantt-toolbar { width: 100%; flex: 1 1 100%; }
+    /* Mobile zooms by pinch instead (see the GANTT PINCH-TO-ZOOM JS
+       block) — the +/-/reset buttons are desktop-only affordances for
+       mice/keyboards that don't have a pinch gesture available.
+       "button.gantt-zoom-btn" (not just the bare class) deliberately
+       matches .gantt-toolbar button's own specificity — same fix
+       .gantt-toolbar-text-btn's own selector already uses for the same
+       reason: a bare .gantt-zoom-btn selector loses to that compound
+       rule's display:flex regardless of which comes later in the
+       stylesheet, since specificity outranks source order. */
+    .gantt-toolbar button.gantt-zoom-btn { display: none; }
     /* Collapsed entirely rather than just narrowed — .right-panel is
        flex:1 (see its own rule), so it fills the freed width automatically,
        no JS involved. Each bar still carries its own job-name tag directly
@@ -2515,6 +2525,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
             <button class="gantt-toolbar-text-btn" onclick="expandAllGantt()" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
             <button class="gantt-toolbar-text-btn" onclick="collapseAllGantt()" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
+            <!-- Desktop only — see .gantt-zoom-btn's mobile hide rule.
+                 Mobile zooms by pinch instead (see the GANTT PINCH-TO-ZOOM
+                 JS block); these stay for mouse/keyboard-only desktop use
+                 where there's no pinch gesture available at all. -->
+            <button class="gantt-zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
+            <button class="gantt-zoom-btn" onclick="zoomOut()" title="Zoom out">−</button>
+            <button class="gantt-zoom-btn" onclick="resetZoom()" title="Reset zoom">⟲</button>
             <button onclick="fitToView()" title="Fit to view">⤢</button>
             <button onclick="scrollToToday()" title="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
           </div>
@@ -8683,12 +8700,16 @@ function scrollToToday() {
 }
 
 // ===== GANTT PINCH-TO-ZOOM =====
-// Replaces the old +/- zoom buttons. Two input paths land here: real
-// multi-touch (phones/tablets — handleGanttTouchStart/Move/End below) and
-// the wheel event a trackpad's pinch gesture synthesizes with ctrlKey set
-// on both macOS and Windows precision touchpads (handleGanttWheelZoom),
-// so a laptop trackpad pinch works the same way without an actual
-// touchscreen.
+// Mobile-only (see .gantt-zoom-btn's mobile hide rule, which removes the
+// +/-/reset buttons there in favor of this) — desktop keeps the buttons
+// since there's no pinch gesture available to a mouse. Two input paths
+// land here: real multi-touch (phones/tablets —
+// handleGanttTouchStart/Move/End below) and the wheel event a trackpad's
+// pinch gesture synthesizes with ctrlKey set on both macOS and Windows
+// precision touchpads (handleGanttWheelZoom), so a laptop trackpad pinch
+// works the same way without an actual touchscreen — this one desktop
+// input path stays even though the buttons came back, since a trackpad
+// pinch is a strictly nicer way to zoom than clicking + repeatedly.
 //
 // The touch path deliberately does NOT call renderGantt() on every
 // touchmove the way the first version of this did. A touch's move/end
@@ -8789,6 +8810,13 @@ function handleGanttWheelZoom(e) {
   e.preventDefault();
   requestGanttZoom(dayWidth * Math.exp(-e.deltaY * 0.01), e.clientX);
 }
+
+// Desktop-only zoom buttons (see .gantt-zoom-btn) — plain step/reset, no
+// anchor-point math the way the pinch/wheel paths have, matching how
+// these behaved before pinch-to-zoom existed at all.
+function zoomIn() { dayWidth = Math.min(dayWidth + 6, GANTT_ZOOM_MAX); renderGantt(); }
+function zoomOut() { dayWidth = Math.max(dayWidth - 6, GANTT_ZOOM_MIN); renderGantt(); }
+function resetZoom() { dayWidth = 34; renderGantt(); }
 
 function fitToView() {
   const containerWidth = document.getElementById('timelineBody').clientWidth - 20;
