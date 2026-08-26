@@ -545,7 +545,7 @@
      topmost overlay on the row (above the name pill's z-index 70) so it
      frames everything else instead of being painted over by it. */
   .job-span-border {
-    position: absolute; height: 26px; border-radius: 5px; border-width: 2px;
+    position: absolute; height: 26px; border-radius: 5px; border-width: 3px;
     border-style: solid; box-sizing: border-box; z-index: 80; pointer-events: none;
   }
   /* Condensed Jobs/Leads bar's due-date marker — see the isJobSpan branch
@@ -5559,7 +5559,7 @@ function buildCalBarHtml(seg, left, top, width) {
   const textColor = isDarkColor(contrastColor) ? '#fff' : darkenColor(contrastColor, 0.6);
   const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') :
     ('background:' + fillColor + '; color: ' + textColor + ';' +
-     (showJobBorder ? ' border: 2px solid ' + (job.color || '#3949ab') + ';' + (job.isLinkedReference ? ' border-style: dashed;' : '') : ''));
+     (showJobBorder ? ' border: 3px solid ' + (job.color || '#3949ab') + ';' + (job.isLinkedReference ? ' border-style: dashed;' : '') : ''));
 
   // Read-only: no drag handles for a linked reference (its real data
   // lives in, and can only be edited from, its home project) or a
@@ -5605,7 +5605,7 @@ function buildCalBarHtml(seg, left, top, width) {
   if (isMultiSegmentCluster) {
     const windowOffset = seg.spanWindowOffset || 0;
     const windowDays = Math.max(1, (seg.colEnd - seg.colStart) + 1);
-    const borderW = 2; // matches the bar's own border: 2px, see showJobBorder above
+    const borderW = 3; // matches the bar's own border: 3px, see showJobBorder above
     const perDayPx = Math.max(0, width - borderW * 2) / windowDays;
     clusterSegs.forEach(function(s) {
       const clipStart = Math.max(0, s.startOffset - windowOffset);
