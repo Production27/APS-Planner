@@ -765,13 +765,7 @@
      page, both before and after this fix). 150 clears every in-page
      z-index in the file (the highest is 100) while staying well under
      the modal/toast system (1000+). */
-  /* overflow:hidden — .job-list below stays a fixed 260px wide at all
-     times now (see its own rule) rather than display:none/block
-     snapping; clipping it via this container's own width transitioning
-     64px<->260px is what makes it genuinely slide out from behind the
-     icon rail instead of popping into existence once the width
-     transition already finished. */
-  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 150; overflow: hidden; transition: width 0.15s ease; }
+  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 150; transition: width 0.15s ease; }
   /* The sidebar defaults to closed — a narrow icon rail, Jobs search/list
      hidden — on EVERY view now, not just Home; toggleJobRail() (see
      #jobRailToggleBtn, the header's own icon below) is the one manual
@@ -868,12 +862,17 @@
   .job-rail-add-btn:hover { background: var(--primary); transform: scale(1.1); }
   .search-box { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; transition: border-color 0.2s; }
   .search-box:focus { border-color: var(--primary-light); }
-  /* width:260px, flex-shrink:0 — stays its natural open-state width
-     regardless of .manager-sidebar's own current width, so its content
-     never squishes; .manager-sidebar's own overflow:hidden clips it down
-     to nothing when narrow, and reveals it as the sidebar's width
-     transitions back up — see the comment on .manager-sidebar itself. */
-  .job-list { flex: 1; overflow-y: auto; padding: 8px; width: 260px; min-width: 260px; flex-shrink: 0; opacity: 1; transition: opacity 0.15s ease; }
+  /* Clips .job-list's fixed 260px width down when narrow — scoped to
+     just this wrapper (not .manager-sidebar itself, which the settings
+     dropdown also lives in and needs to pop out past) — see the comment
+     on the markup. flex:1/min-height:0 claims the vertical space
+     .job-list itself used to claim directly. */
+  .job-list-clip { flex: 1; min-height: 0; overflow: hidden; }
+  /* width:260px — stays its natural open-state width regardless of the
+     clip wrapper's own current width, so its content never squishes;
+     the wrapper's overflow:hidden clips it down to nothing when narrow,
+     and reveals it as .manager-sidebar's width transitions back up. */
+  .job-list { height: 100%; overflow-y: auto; padding: 8px; width: 260px; min-width: 260px; opacity: 1; transition: opacity 0.15s ease; }
   .job-list::-webkit-scrollbar { width: 6px; }
   .job-list::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
   .job-card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
@@ -1726,14 +1725,22 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   @media (max-width: 1100px) {
     .left-panel, .gantt-view-toggle-row { width: 260px; min-width: 260px; }
     .manager-sidebar { width: 210px; min-width: 210px; }
-    /* The ≥1101px breakpoint's own closed-rail narrowing (see
-       body:not(.job-rail-open) .manager-sidebar above) only fired above
-       1100px — below it the sidebar stayed at the unconditional 210px
-       above even while closed, which (combined with .job-list's fixed
-       260px width) left the job list only lightly clipped instead of
-       genuinely hidden. Icon-only collapse itself isn't width-gated (see
-       the rules above), so this is the one piece that needed its own
-       copy down here. */
+  }
+  /* The ≥1101px breakpoint's own closed-rail narrowing (see
+     body:not(.job-rail-open) .manager-sidebar above) only fired above
+     1100px — below it the sidebar stayed at the unconditional 210px
+     above even while closed, which (combined with .job-list's fixed
+     260px width) left the job list only lightly clipped instead of
+     genuinely hidden. Icon-only collapse itself isn't width-gated (see
+     the rules above), so this needed its own copy down here — but
+     floored at 481px, not the same ≤1100px range as the block above:
+     body:not(.job-rail-open) is a higher-specificity selector than true
+     mobile's plain .manager-sidebar{width:100%} rule below, so left
+     unfloored it would win there on specificity despite coming first in
+     the file, squeezing the sidebar to 64px on mobile (which never sets
+     .job-rail-open at all, since it doesn't use this toggle) even
+     though the mobile block's own rule is meant to be the final word. */
+  @media (max-width: 1100px) and (min-width: 481px) {
     body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
   }
 
@@ -1768,12 +1775,20 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .manager-sidebar-header, .job-list, .search-box { display: block !important; }
     .job-rail-header-label, .job-rail-add-btn { display: flex !important; }
     .manager-sidebar-header h2 { display: flex !important; margin-bottom: 10px !important; justify-content: flex-start !important; }
-    .manager-sidebar { width: 100%; min-width: 0; }
+    /* !important — body:not(.job-rail-open) .manager-sidebar (see above,
+       and the ≤1100px breakpoint's own copy of it) outranks this plain
+       rule on specificity alone, same reasoning as the other overrides
+       in this block; without it, a landscape phone wide enough to also
+       match that ≤1100px range would get squeezed to 64px here despite
+       never setting .job-rail-open (mobile doesn't use that toggle). */
+    .manager-sidebar { width: 100% !important; min-width: 0; }
     .manager-sidebar-header { padding: 12px !important; }
-    /* Undoes .job-list's fixed 260px desktop width (see its own rule) —
-       mobile doesn't use the slide-clip toggle at all, so this only
-       needs to fill whatever width the sidebar actually has here. */
-    .job-list { width: 100%; min-width: 0; }
+    /* Undoes .job-list's fixed 260px desktop width and its closed-state
+       opacity:0/pointer-events:none (see both rules) — mobile doesn't
+       use the slide-clip toggle at all (body never gets .job-rail-open
+       here), so without this override the list would render invisible
+       and unclickable despite display:block above. */
+    .job-list { width: 100%; min-width: 0; opacity: 1 !important; pointer-events: auto !important; }
 
     .mobile-view-switcher { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .mobile-view-btn {
@@ -2314,7 +2329,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <h2><button class="job-rail-toggle-icon" onclick="toggleJobRail()" id="jobRailToggleBtn" title="Show Jobs list"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button class="job-rail-add-btn" data-min-tier="projectAdmin" onclick="addNewJob()" title="Add a new job">+</button></h2>
       <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
     </div>
-    <div class="job-list" id="jobList"></div>
+    <!-- Clips .job-list's fixed 260px width down when the rail is
+         narrow (see toggleJobRail()) — scoped to just this wrapper, not
+         .manager-sidebar itself, so the settings dropdown (a sibling,
+         earlier in the rail, deliberately popping out past the rail's
+         own narrow box) doesn't get clipped along with it. -->
+    <div class="job-list-clip"><div class="job-list" id="jobList"></div></div>
   </div>
   <div class="app-shell-main">
 
