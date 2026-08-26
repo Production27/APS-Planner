@@ -751,7 +751,21 @@
      living next to the rail now slides in as a drawer that overlays
      whichever tab is active (position:absolute inside #panelsContainer,
      see the rule below) so the rail stays visible while editing. */
-  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; transition: width 0.15s ease; }
+  /* z-index 150 (not 10) — a flex item with a real z-index establishes
+     its own stacking context even without position:relative, so this
+     number is what the WHOLE sidebar (settings dropdown included — its
+     own z-index:200 only matters relative to its sidebar siblings, not
+     to anything outside the sidebar's context) gets compared against
+     everything else. Gantt's .left-panel carries its own z-index:10 —
+     tied with this rule's old value, and neither has an ancestor that
+     contains it in a shared stacking context, so the tie fell to DOM
+     order and .left-panel (deeper in the document than the sidebar)
+     won, burying the open settings dropdown under Gantt's left panel
+     specifically (confirmed via elementFromPoint() against the real
+     page, both before and after this fix). 150 clears every in-page
+     z-index in the file (the highest is 100) while staying well under
+     the modal/toast system (1000+). */
+  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 150; transition: width 0.15s ease; }
   /* The sidebar defaults to closed — a narrow icon rail, Jobs search/list
      hidden — on EVERY view now, not just Home; toggleJobRail() (see
      #jobRailToggleBtn, the header's own icon below) is the one manual
