@@ -1238,10 +1238,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   /* Checklist — item/sub-item styling shared with the My Checklist tab
      (see its own section below), which is now the only place a checklist
      is created or edited. */
-  .checklist-item { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+  .checklist-item { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-radius: 6px; transition: background 0.15s; }
+  .checklist-item:hover { background: rgba(0,0,0,0.025); }
+  body.dark-mode .checklist-item:hover { background: rgba(255,255,255,0.035); }
   .checklist-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
-  .checklist-item .ci-text { flex: 1; font-size: 13px; color: var(--text); }
-  .checklist-item.done .ci-text { text-decoration: line-through; color: #aaa; }
+  /* Medium weight by default so the task itself reads as the row's
+     primary content against the smaller, lighter metadata (job/stage
+     pills, assignee) next to it — .required below goes further still,
+     so a killer item stays the clearest thing on the page. */
+  .checklist-item .ci-text { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
+  .checklist-item.done .ci-text { text-decoration: line-through; color: #aaa; font-weight: 400; }
   /* Now an .ms-dropdown (see the shared multi-select dropdown styles
      above), not a <select> — item.assignee can hold more than one
      person. Compact toggle to fit inline in the item row; the panel
@@ -1258,10 +1264,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      confirmChecklistBeforeMove()) warns about once any exist on a stage,
      so this is the control for narrowing that warning down to what
      actually matters instead of every checklist line. */
-  .checklist-item .ci-required { background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px; padding: 2px 5px; flex-shrink: 0; line-height: 1; }
+  .checklist-item .ci-required {
+    background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px;
+    padding: 3px 6px; border-radius: 6px; flex-shrink: 0; line-height: 1;
+    transition: background 0.15s, color 0.15s;
+  }
+  .checklist-item .ci-required:hover { background: rgba(232,163,61,0.15); color: #e8a33d; }
+  body.dark-mode .checklist-item .ci-required:hover { background: rgba(232,163,61,0.22); }
   .checklist-item .ci-required.is-required { color: #e8a33d; }
   .checklist-item.required { border-left: 3px solid #e8a33d; padding-left: 7px; }
-  .checklist-item.required .ci-text { font-weight: 600; }
+  .checklist-item.required .ci-text { font-weight: 700; }
   .checklist-item.required.done { border-left-color: #e0c088; }
   /* Sub-items — no assignee control of their own, they just stay
      assigned to whoever's on the parent item (see the .ci-assignee
@@ -1274,7 +1286,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .checklist-subitem.done .ci-text { text-decoration: line-through; color: #aaa; }
   .checklist-subitem .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 13px; padding: 2px 5px; flex-shrink: 0; }
   .checklist-subitem .ci-delete:hover { color: var(--danger); }
-  .checklist-subitem-add-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+  /* Every item always ends with one of these (whether or not it has any
+     sub-items yet — see renderMyChecklistList()), which makes it a
+     reliable per-item terminator: the divider here marks the end of an
+     item's whole group (row + sub-items + this add-row), not just the
+     checkbox row, since sub-items render as separate sibling blocks
+     after that row rather than nested inside it. */
+  .checklist-subitem-add-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px 10px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+  .checklist-subitem-add-row:last-child { border-bottom: none; margin-bottom: 0; }
   .checklist-subitem-add-row input { flex: 1; min-width: 0; font-size: 12px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); color: var(--text); font-family: inherit; }
 
   /* ===== MY CHECKLIST TAB ===== */
@@ -1310,7 +1329,30 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .my-checklist-visibility .ms-dropdown-panel { width: 220px; left: auto; right: 0; }
   .my-checklist-item .ci-text { cursor: pointer; }
   .my-checklist-item .ci-text:hover { color: var(--primary); text-decoration: underline; }
-  .my-checklist-empty { font-size: 13px; color: var(--text-light); padding: 8px 2px; }
+  .my-checklist-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; padding: 44px 20px; font-size: 13px; color: var(--text-light); text-align: center;
+  }
+  .my-checklist-empty svg { opacity: 0.45; }
+  /* The list's own card — matches .home-widget's recipe so this page
+     reads as part of the same app as Home/Board instead of a bare list
+     floating on the page background. */
+  .my-checklist-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 6px 14px;
+  }
+  /* Small-caps job label separating same-job runs in the cross-job
+     "assigned to me" feed (rows already come pre-sorted by job name —
+     see buildMyChecklistRows() — so a header only needs to appear when
+     the job actually changes from the row before it; see
+     renderMyChecklistList()). Not shown in single-job view, where every
+     row already shares the one job the toolbar's picker names. */
+  .my-checklist-group-header {
+    display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
+    color: var(--text-light); text-transform: uppercase; letter-spacing: 0.3px;
+    padding: 14px 4px 6px;
+  }
+  .my-checklist-group-header:first-child { padding-top: 4px; }
 
   /* ===== HOME TAB ===== */
   /* Personal dashboard — the default landing tab (see the static
@@ -2252,7 +2294,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <span id="myChecklistAddVisibility"></span>
         </div>
         <div class="my-checklist-filter-bar" id="myChecklistFilterBar"></div>
-        <div id="myChecklistListBody"></div>
+        <div class="my-checklist-card"><div id="myChecklistListBody"></div></div>
       </div>
     </div>
 
@@ -11819,9 +11861,24 @@ function myChecklistMsDropdownHtml(idBase, current, onchangePrefix, minTier, emp
 // both toolbar modes (see myChecklistSelectedContext) — job-view rows can
 // include done items/sub-items (the assigned feed never does), hence the
 // .done class + checked attributes below.
-function renderMyChecklistList(rows, emptyMessage) {
-  if (!rows.length) return '<div class="my-checklist-empty">' + (emptyMessage || 'Nothing here.') + '</div>';
+// groupByJob (the cross-job "assigned to me" feed only — see
+// renderMyChecklist()) inserts a small job-name label wherever the job
+// changes from the row before it, so a long mixed-job feed reads in
+// chunks instead of one undifferentiated column. Rows already come
+// sorted by job name (buildMyChecklistRows()), so same-job rows are
+// always adjacent — no separate grouping pass needed, just watch for
+// the id changing as the list is walked.
+function renderMyChecklistList(rows, emptyMessage, groupByJob) {
+  if (!rows.length) {
+    return '<div class="my-checklist-empty"><svg viewBox="0 0 24 24" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 12.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div>' + (emptyMessage || 'Nothing here.') + '</div></div>';
+  }
+  let lastJobId = null;
   return rows.map(function(row) {
+    let groupHeader = '';
+    if (groupByJob && row.job.id !== lastJobId) {
+      lastJobId = row.job.id;
+      groupHeader = '<div class="my-checklist-group-header"><span class="home-row-dot" style="background:' + (row.job.color || '#3949ab') + ';"></span>' + escapeHtml(row.job.name) + '</div>';
+    }
     const item = row.item;
     const assignDropdownId = 'myciAssign_' + row.card.id + '_' + item.id;
     const assignPrefix = "setMyChecklistItemAssignee('" + activeProjectId + "', '" + row.card.id + "', '" + row.columnId + "', '" + item.id + "'";
@@ -11836,7 +11893,7 @@ function renderMyChecklistList(rows, emptyMessage) {
       '<div class="checklist-subitem-add-row">' +
         '<input type="text" id="' + subAddInputId + '" data-min-tier="editor" placeholder="Add sub-item…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addMyChecklistSubItem(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + subAddInputId + '\');}">' +
       '</div>';
-    return '<div class="checklist-item my-checklist-item' + (item.done ? ' done' : '') + (item.required ? ' required' : '') + '">' +
+    return groupHeader + '<div class="checklist-item my-checklist-item' + (item.done ? ' done' : '') + (item.required ? ' required' : '') + '">' +
       '<input type="checkbox"' + (item.done ? ' checked' : '') + ' onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
       '<button class="ci-required' + (item.required ? ' is-required' : '') + '" data-min-tier="editor" title="' + (item.required ? 'Required — click to unflag' : 'Mark as required') + '" onclick="toggleMyChecklistItemRequired(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' + (item.required ? '★' : '☆') + '</button>' +
       '<span class="ci-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
@@ -11991,7 +12048,7 @@ function renderMyChecklist() {
   else if (!jobRows.length) emptyMessage = 'This checklist is empty — add the first item below.';
   else if (!rows.length) emptyMessage = 'Everything on this stage is checked off.';
   const listBody = document.getElementById('myChecklistListBody');
-  if (listBody) listBody.innerHTML = renderMyChecklistList(rows, emptyMessage);
+  if (listBody) listBody.innerHTML = renderMyChecklistList(rows, emptyMessage, !isJobView);
   renderMyChecklistFilterBar(isJobView, doneCount);
   renderMyChecklistToolbar();
   updateMyChecklistBadge(assignedRows.length);
