@@ -795,6 +795,14 @@
   body:not(.job-rail-open) .search-box {
     display: none;
   }
+  /* Clipping alone (.manager-sidebar's overflow:hidden + .job-list's own
+     fixed 260px width, see both rules) only hides what falls outside the
+     narrow 64px rail — the LEFTMOST 64px of every job card, right where
+     its name starts, was still visibly peeking through. Fading it out
+     while closed keeps the width-driven slide (the whole point of the
+     fixed-width/clip approach) but means there's really nothing to see
+     until it's actually opening. */
+  body:not(.job-rail-open) .job-list { opacity: 0; pointer-events: none; }
   /* Both icon rows go from a horizontal row to a vertical column — a row
      of 5 tabs (or 4 header icons) needs real width even collapsed to
      icon-only, which is what actually capped how narrow the sidebar
@@ -865,7 +873,7 @@
      never squishes; .manager-sidebar's own overflow:hidden clips it down
      to nothing when narrow, and reveals it as the sidebar's width
      transitions back up — see the comment on .manager-sidebar itself. */
-  .job-list { flex: 1; overflow-y: auto; padding: 8px; width: 260px; min-width: 260px; flex-shrink: 0; }
+  .job-list { flex: 1; overflow-y: auto; padding: 8px; width: 260px; min-width: 260px; flex-shrink: 0; opacity: 1; transition: opacity 0.15s ease; }
   .job-list::-webkit-scrollbar { width: 6px; }
   .job-list::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
   .job-card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
@@ -1715,7 +1723,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .activity-sidebar-close { color: #777; }
   body.dark-mode .activity-sidebar-close:hover { background: rgba(220,53,69,0.18); color: var(--danger); }
 
-  @media (max-width: 1100px) { .left-panel, .gantt-view-toggle-row { width: 260px; min-width: 260px; } .manager-sidebar { width: 210px; min-width: 210px; } }
+  @media (max-width: 1100px) {
+    .left-panel, .gantt-view-toggle-row { width: 260px; min-width: 260px; }
+    .manager-sidebar { width: 210px; min-width: 210px; }
+    /* The ≥1101px breakpoint's own closed-rail narrowing (see
+       body:not(.job-rail-open) .manager-sidebar above) only fired above
+       1100px — below it the sidebar stayed at the unconditional 210px
+       above even while closed, which (combined with .job-list's fixed
+       260px width) left the job list only lightly clipped instead of
+       genuinely hidden. Icon-only collapse itself isn't width-gated (see
+       the rules above), so this is the one piece that needed its own
+       copy down here. */
+    body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
+  }
 
   /* ===== MOBILE (phone-width) =====
      Job list + editor and Board each get their own full-screen mode, since
