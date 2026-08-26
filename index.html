@@ -765,7 +765,13 @@
      page, both before and after this fix). 150 clears every in-page
      z-index in the file (the highest is 100) while staying well under
      the modal/toast system (1000+). */
-  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 150; transition: width 0.15s ease; }
+  /* overflow:hidden — .job-list below stays a fixed 260px wide at all
+     times now (see its own rule) rather than display:none/block
+     snapping; clipping it via this container's own width transitioning
+     64px<->260px is what makes it genuinely slide out from behind the
+     icon rail instead of popping into existence once the width
+     transition already finished. */
+  .manager-sidebar { width: 260px; min-width: 260px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 150; overflow: hidden; transition: width 0.15s ease; }
   /* The sidebar defaults to closed — a narrow icon rail, Jobs search/list
      hidden — on EVERY view now, not just Home; toggleJobRail() (see
      #jobRailToggleBtn, the header's own icon below) is the one manual
@@ -778,7 +784,6 @@
      further down. The header itself stays visible (just its label/badge/
      add-button/search collapse away, see the icon-only rules below) since
      its icon is now the only way to reopen the rail. */
-  body:not(.job-rail-open) .job-list { display: none; }
   body:not(.job-rail-open) .manager-sidebar-header {
     padding: 8px;
   }
@@ -855,7 +860,12 @@
   .job-rail-add-btn:hover { background: var(--primary); transform: scale(1.1); }
   .search-box { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; transition: border-color 0.2s; }
   .search-box:focus { border-color: var(--primary-light); }
-  .job-list { flex: 1; overflow-y: auto; padding: 8px; }
+  /* width:260px, flex-shrink:0 — stays its natural open-state width
+     regardless of .manager-sidebar's own current width, so its content
+     never squishes; .manager-sidebar's own overflow:hidden clips it down
+     to nothing when narrow, and reveals it as the sidebar's width
+     transitions back up — see the comment on .manager-sidebar itself. */
+  .job-list { flex: 1; overflow-y: auto; padding: 8px; width: 260px; min-width: 260px; flex-shrink: 0; }
   .job-list::-webkit-scrollbar { width: 6px; }
   .job-list::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
   .job-card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
@@ -1740,6 +1750,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .manager-sidebar-header h2 { display: flex !important; margin-bottom: 10px !important; justify-content: flex-start !important; }
     .manager-sidebar { width: 100%; min-width: 0; }
     .manager-sidebar-header { padding: 12px !important; }
+    /* Undoes .job-list's fixed 260px desktop width (see its own rule) —
+       mobile doesn't use the slide-clip toggle at all, so this only
+       needs to fill whatever width the sidebar actually has here. */
+    .job-list { width: 100%; min-width: 0; }
 
     .mobile-view-switcher { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .mobile-view-btn {
