@@ -45,9 +45,10 @@
 
   /* ===== EDITABLE HEADER ===== */
   /* The whole title bar is gone per user request — its functional
-     controls (settings, project switch, view-as, activity toggle,
-     presence avatars) moved into .rail-header-icons at the top of the
-     left sidebar instead of vanishing along with it (see the
+     controls (settings, project switch, view-as, activity toggle) now
+     lead the .rail-tab-row at the top of the left sidebar (see
+     .settings-menu-wrap) instead of vanishing along with it, and presence
+     avatars moved into .manager-sidebar-header's own row instead (see the
      "manager-sidebar" markup). #headerTitle/#headerSubtitle stay in the
      DOM here (not deleted): saveActiveProject()/the live-sync push read
      them directly, and two keydown/paste listeners are attached to
@@ -80,16 +81,12 @@
     background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.5);
     outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
   }
-  /* Former .header-actions — same controls, now living at the top of the
-     left rail instead of a wide top bar, so it wraps onto a second row
-     rather than needing to fit on one line. */
-  .rail-header-icons {
-    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-    padding: 8px; border-bottom: 1px solid var(--border); background: #fafafa;
-  }
-  body.dark-mode .rail-header-icons { background: #1a1d25; border-bottom-color: var(--border); }
-  /* ===== PRESENCE AVATARS ===== */
-  .presence-avatars { display: flex; align-items: center; }
+  /* ===== PRESENCE AVATARS =====
+     Lives in .manager-sidebar-header's own <h2> now, right after the Jobs
+     add button — that button's own margin-left:auto already pushes both
+     it and this (its next sibling) flush to the row's right edge, so no
+     extra positioning is needed here. */
+  .presence-avatars { display: flex; align-items: center; flex-shrink: 0; }
   .presence-avatar {
     width: 24px; height: 24px; border-radius: 50%; margin-left: -8px;
     display: flex; align-items: center; justify-content: center;
@@ -118,13 +115,29 @@
   /* Mobile-only Jobs/Board toggle — see setMobileBoardView() and the
      @media (max-width:480px) rules that turn this into a visible tab bar. */
   .mobile-view-switcher { display: none; }
-  .settings-menu-wrap { position: relative; }
-  .settings-dots-btn {
-    background: transparent; border: none; color: var(--text-light);
-    font-size: 19px; line-height: 1; padding: 8px 10px; border-radius: 6px;
-    cursor: pointer; transition: all 0.15s; letter-spacing: 2px;
+  /* Sized/shaped exactly like a .rail-tab (icon-only collapsed, expands
+     on hover — see .rail-tab.active/.rail-tab:hover further down, both
+     extended to include this selector) since it now leads that same row,
+     but it never gets .active itself (it opens a dropdown, not a tab) —
+     keeps its own position:relative so .settings-dropdown still anchors
+     against it rather than the whole row. Deliberately NOT overflow:hidden
+     here unlike .rail-tab — .settings-dropdown is this wrap's own child,
+     absolutely positioned to escape it, and overflow:hidden on the
+     containing block would clip it right back off-screen regardless of
+     its position. The icon/label clip that overflow would otherwise be
+     for lives on .settings-dots-btn itself instead (see below), which has
+     no such child needing to escape it. */
+  .settings-menu-wrap {
+    position: relative; display: flex; align-items: center;
+    flex: 0 0 34px; height: 34px; border-radius: 8px;
+    transition: flex-basis 0.2s ease, background 0.2s ease;
   }
-  .settings-dots-btn:hover { color: var(--primary); background: rgba(57,73,171,0.1); box-shadow: none; }
+  .settings-dots-btn {
+    display: flex; align-items: center; gap: 6px; overflow: hidden;
+    width: 100%; height: 100%; background: transparent; border: none;
+    color: var(--text-light); padding: 0; cursor: pointer; white-space: nowrap;
+  }
+  .settings-dots-btn svg { flex-shrink: 0; margin-left: 9px; }
   .settings-dots-btn:active { transform: translateY(1px); }
   .settings-dropdown {
     /* Anchored left:0 (extends rightward) — the trigger now sits in the
@@ -188,10 +201,11 @@
     font-size: 12px; font-weight: 700; opacity: 0; max-width: 0;
     overflow: hidden; transition: opacity 0.15s ease, max-width 0.2s ease;
   }
-  .rail-tab.active, .rail-tab:hover {
+  .rail-tab.active, .rail-tab:hover, .settings-menu-wrap:hover {
     flex: 1 1 auto; background: var(--primary-light); color: white;
   }
-  .rail-tab.active .rail-tab-label, .rail-tab:hover .rail-tab-label { opacity: 1; max-width: 140px; }
+  .settings-menu-wrap:hover .settings-dots-btn { color: white; }
+  .rail-tab.active .rail-tab-label, .rail-tab:hover .rail-tab-label, .settings-menu-wrap:hover .rail-tab-label { opacity: 1; max-width: 140px; }
   .rail-tab.active .badge, .rail-tab:hover .badge { opacity: 1; max-width: 40px; }
   .manager-sidebar-header .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; margin-left: 2px; }
 
@@ -786,6 +800,7 @@
   }
   body:not(.job-rail-open) .job-rail-header-label,
   body:not(.job-rail-open) .job-rail-add-btn,
+  body:not(.job-rail-open) .presence-avatars,
   body:not(.job-rail-open) .search-box {
     display: none;
   }
@@ -797,11 +812,10 @@
      fixed-width/clip approach) but means there's really nothing to see
      until it's actually opening. */
   body:not(.job-rail-open) .job-list { opacity: 0; pointer-events: none; }
-  /* Both icon rows go from a horizontal row to a vertical column — a row
-     of 5 tabs (or 4 header icons) needs real width even collapsed to
+  /* This row goes from a horizontal row to a vertical column — a row of
+     6 icons (5 tabs + settings) needs real width even collapsed to
      icon-only, which is what actually capped how narrow the sidebar
      could get; stacked, each row only needs to be as wide as ONE icon. */
-  body:not(.job-rail-open) .rail-header-icons,
   body:not(.job-rail-open) .rail-tab-row {
     flex-direction: column; align-items: stretch; flex-wrap: nowrap;
   }
@@ -809,25 +823,31 @@
      (see .rail-tab.active/:hover below) needs horizontal room a narrow
      column doesn't have. Each button already carries its own title=""
      tooltip for identification, same as any icon-rail sidebar (VS
-     Code's activity bar, Slack's app rail, etc). */
+     Code's activity bar, Slack's app rail, etc). Settings never gets
+     .active, but it's still locked to icon-only here alongside the tabs
+     it now shares a row with. */
   body:not(.job-rail-open) .rail-tab,
   body:not(.job-rail-open) .rail-tab.active,
-  body:not(.job-rail-open) .rail-tab:hover {
+  body:not(.job-rail-open) .rail-tab:hover,
+  body:not(.job-rail-open) .settings-menu-wrap,
+  body:not(.job-rail-open) .settings-menu-wrap:hover {
     flex: 0 0 34px;
   }
   body:not(.job-rail-open) .rail-tab-label,
   body:not(.job-rail-open) .rail-tab .badge {
     display: none;
   }
-  /* Each tab's icon is a hardcoded hex fill, not currentColor (Home and
-     Gantt both happen to use the exact --primary-light indigo) — with
-     the label gone, an active/hovered icon that color would be
-     completely invisible against the active background of that exact
-     same color. Force every icon to solid white on active/hover instead
-     of relying on each one's own fill happening to contrast; robust
-     regardless of which hex a given tab's icon uses. */
+  /* Each tab's icon is a hardcoded hex fill, not currentColor (Home,
+     Gantt, and the settings dots all happen to use the exact
+     --primary-light indigo) — with the label gone, an active/hovered
+     icon that color would be completely invisible against the active
+     background of that exact same color. Force every icon to solid
+     white on active/hover instead of relying on each one's own fill
+     happening to contrast; robust regardless of which hex a given tab's
+     icon uses. */
   body:not(.job-rail-open) .rail-tab.active svg,
-  body:not(.job-rail-open) .rail-tab:hover svg {
+  body:not(.job-rail-open) .rail-tab:hover svg,
+  body:not(.job-rail-open) .settings-menu-wrap:hover svg {
     filter: brightness(0) invert(1);
   }
   @media (min-width: 1101px) {
@@ -1758,13 +1778,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      instant the phone turns sideways. Same threshold as the portrait
      case, just checked on whichever axis is currently the narrow one. */
   @media (max-width: 480px), (max-height: 480px) {
-    .rail-header-icons { gap: 4px; }
-
     /* .legend-float lives outside .app-shell-main (it's a top-level fixed
        element, not nested in the Gantt panel), so hiding that panel alone
        doesn't hide it — it needs its own rule or it's left floating over
        the job list with nothing on-screen for it to be a legend of. */
-    .rail-tab-row, .activity-sidebar, #activityToggleBtn, .legend-float { display: none; }
+    /* Only the view-switcher buttons hide here, not the whole row —
+       mobile has its own separate Jobs/Board nav (.mobile-view-switcher)
+       so switchTab()'s tabs are redundant, but .settings-menu-wrap leads
+       this same row now and is still the only way to reach Settings on
+       mobile, so it (and the row itself) must stay. */
+    .rail-tab-row .rail-tab, .activity-sidebar, #activityToggleBtn, .legend-float { display: none; }
     /* Mobile has its own separate "Jobs" nav mode (.mobile-view-switcher
        below) where the job list is always what's showing — the desktop
        open/closed toggle (see toggleJobRail()) doesn't apply here at
@@ -1954,16 +1977,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     /* .app-header itself no longer occupies the "header" grid area at
        all (it's permanently display:none — see its base rule) — that
        row simply collapses to 0 height since nothing occupies it.
-       .rail-header-icons lives inside .manager-sidebar, which sits in
-       the wide "shell" area here, not the cramped 130px "tabs" column,
-       so unlike the old header it never needs to squeeze/hide any of
-       its icons in this landscape-phone case. Overrides the desktop
-       closed-by-default column layout (see toggleJobRail()) back to a
-       normal row for the same reason — plenty of width here, no need
-       to squeeze into a narrow icon strip. */
-    body:not(.job-rail-open) .rail-header-icons {
-      flex-direction: row; flex-wrap: wrap; align-items: center;
-    }
+       .rail-tab-row (settings + the view-switcher tabs) lives inside
+       .manager-sidebar, which sits in the wide "shell" area here, not
+       the cramped 130px "tabs" column — it gets the same icon-only
+       column collapse as desktop's narrow rail in this landscape-phone
+       case, nothing landscape-specific needed for it. */
     .mobile-view-switcher {
       grid-area: tabs; display: flex; flex-direction: column; width: 130px;
       border-bottom: none; border-right: 1px solid var(--border);
@@ -2273,11 +2291,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
          them by id (renderPresenceAvatars(), updateProjectToggle(),
          applyPermissionGating(), etc.) keeps working with zero changes
          on the JS side. View As no longer lives here — see Manage Users. -->
-    <!-- Order is deliberately reversed from what it was — settings ⋮
-         first, presence avatars last — per explicit request. -->
-    <div class="rail-header-icons">
+    <!-- View switcher — the active view shows full-size (icon + label),
+         the other two collapse to icon-only and expand back to full-size
+         on hover (see .rail-tab/.rail-tab-label). switchTab() drives
+         which one has .active via the same #tab-<name> ids/.rail-tab
+         query it always used (renamed from .tab-btn), just relocated.
+         Settings now leads this same row instead of its own row above it
+         — same icon-only collapse/hover-expand behavior as any other
+         entry here, it just opens a dropdown instead of switching tabs
+         (see .settings-menu-wrap's own rules, which extend the .rail-tab
+         selectors rather than duplicating them). -->
+    <div class="rail-tab-row">
       <div class="settings-menu-wrap">
-        <button class="settings-dots-btn" onclick="toggleSettingsMenu()" title="Settings">⋮</button>
+        <button class="settings-dots-btn" onclick="toggleSettingsMenu()" title="Settings"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="rail-tab-label">Settings</span></button>
         <div class="settings-dropdown" id="settingsDropdown">
           <!-- Was its own standalone square icon button in the rail row —
                see updateProjectToggle(), which now targets this list item
@@ -2306,14 +2332,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openArchivedJobsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</div>
         </div>
       </div>
-      <div class="presence-avatars" id="presenceAvatars"></div>
-    </div>
-    <!-- View switcher — the active view shows full-size (icon + label),
-         the other two collapse to icon-only and expand back to full-size
-         on hover (see .rail-tab/.rail-tab-label). switchTab() drives
-         which one has .active via the same #tab-<name> ids/.rail-tab
-         query it always used (renamed from .tab-btn), just relocated. -->
-    <div class="rail-tab-row">
       <button class="rail-tab active" onclick="switchTab('home')" id="tab-home" title="Home"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg><span class="rail-tab-label">Home</span> <span class="badge" id="homeCount">0</span></button>
       <button class="rail-tab" onclick="switchTab('checklist')" id="tab-checklist" title="My Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">My Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
       <button class="rail-tab" onclick="switchTab('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
@@ -2326,7 +2344,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
          toggleJobRail(). Independent of which tab is active, same as
          before. -->
     <div class="manager-sidebar-header">
-      <h2><button class="job-rail-toggle-icon" onclick="toggleJobRail()" id="jobRailToggleBtn" title="Show Jobs list"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button class="job-rail-add-btn" data-min-tier="projectAdmin" onclick="addNewJob()" title="Add a new job">+</button></h2>
+      <h2><button class="job-rail-toggle-icon" onclick="toggleJobRail()" id="jobRailToggleBtn" title="Show Jobs list"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg></button><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button class="job-rail-add-btn" data-min-tier="projectAdmin" onclick="addNewJob()" title="Add a new job">+</button><div class="presence-avatars" id="presenceAvatars"></div></h2>
       <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
     </div>
     <!-- Clips .job-list's fixed 260px width down when the rail is
