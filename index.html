@@ -5528,7 +5528,14 @@ function applyProjectBgVisual() {
   // exactly, box included — Board shows that exact same box in its own
   // dark mode today (confirmed directly), so this isn't a new problem,
   // just Board's already-shipped look applied consistently everywhere.
-  const bgCss = staticBg ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + staticBg + '") center/cover no-repeat') : '';
+  // contain, not cover — cover crops a square source down to whatever
+  // sliver matches the panel's own aspect ratio, which on a lot of this
+  // app's wide/short panels was cutting off the bottom of a logo that
+  // pairs a mark with a wordmark underneath it (Bludorn's). contain
+  // always shows the whole image, letterboxed on whichever axis has
+  // room to spare, at the cost of not filling every corner — the
+  // overlay tint already covers those corners uniformly regardless.
+  const bgCss = staticBg ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + staticBg + '") center/contain no-repeat') : '';
   STATIC_BG_PANEL_IDS.forEach(function(id) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -5549,7 +5556,7 @@ function applyProjectBgVisual() {
   if (boardWrapper) {
     const boardPhoto = staticBg || localStorage.getItem('gantt_board_bg_photo_v1');
     boardWrapper.style.background = boardPhoto
-      ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + boardPhoto + '") center/cover no-repeat')
+      ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + boardPhoto + '") center/contain no-repeat')
       : '';
   }
 }
