@@ -1830,26 +1830,28 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        and unclickable despite display:block above. */
     .job-list { width: 100%; min-width: 0; opacity: 1 !important; pointer-events: auto !important; }
 
-    /* Icon-over-label (like a phone's own bottom tab bar) instead of
-       text-only buttons — 6 tabs' worth of full words ("Checklist" is
-       the long pole) never fits an even flex:1 split of a phone's width
-       at a legible size, but an icon plus a ~9px caption does, with room
-       to spare, and reuses the exact icon each view already has on the
-       desktop rail-tab-row so it's the same visual language, not a new
-       one just for mobile. */
+    /* Icon-only (like a phone's own bottom tab bar minus the captions) —
+       6 tabs' worth of full words ("Checklist" is the long pole) never
+       fits an even flex:1 split of a phone's width at a legible size;
+       dropping the label entirely rather than shrinking it further reads
+       cleaner than a near-illegible caption would. Reuses the exact icon
+       each view already has on the desktop rail-tab-row, so it's the
+       same visual language, not a new one just for mobile — title=""
+       carries the name for anyone using an accessibility tree. */
     .mobile-view-switcher { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .mobile-view-btn {
-      flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 3px; padding: 7px 2px 6px; border: none; background: transparent;
+      flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
+      padding: 11px 2px; border: none; background: transparent;
       cursor: pointer; border-bottom: 3px solid transparent;
     }
-    .mobile-view-btn svg { flex-shrink: 0; }
-    .mobile-view-btn span {
-      font-size: 9.5px; font-weight: 700; color: var(--text-light); max-width: 100%;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
+    /* Dimmed at rest, full strength when active — with the caption gone,
+       the underline alone read as too subtle a selection cue next to 5
+       other equally-bold icons; each one keeps its own hardcoded color
+       either way (not a uniform tint swap) since they're multi-color to
+       begin with. */
+    .mobile-view-btn svg { flex-shrink: 0; opacity: 0.5; }
     .mobile-view-btn.active { border-bottom-color: var(--primary); }
-    .mobile-view-btn.active span { color: var(--primary); }
+    .mobile-view-btn.active svg { opacity: 1; }
 
     /* NOT display:none — the job drawer (#formArea) lives inside
        .app-shell-main too, and display:none on an ancestor hides a
@@ -2021,16 +2023,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       grid-area: tabs; display: flex; flex-direction: column; width: 130px;
       border-bottom: none; border-right: 1px solid var(--border);
     }
-    /* Icon-left/label-right instead of the portrait bar's icon-over-label
-       stack — this column has width to spare (130px) but not much height
-       once there are 6 rows, so a horizontal row per tab fits both
-       better than a taller stacked one would. */
+    /* Left-edge indicator instead of the portrait bar's underline — this
+       is a vertical list here, not a horizontal row, so a left border
+       reads as "selected" the way the underline did there. */
     .mobile-view-btn {
-      flex-direction: row; justify-content: flex-start; gap: 8px;
+      justify-content: flex-start; padding: 10px;
       border-bottom: none; border-left: 3px solid transparent;
-      padding: 8px 10px;
     }
-    .mobile-view-btn span { font-size: 12px; }
     .mobile-view-btn.active { border-left-color: var(--primary); border-bottom-color: transparent; }
 
     .app-shell { grid-area: shell; height: 100%; min-height: 0; }
@@ -2312,19 +2311,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      Gantt/Calendar keep their desktop layout, just narrowed/compacted as
      far as they reasonably can be (see the .gantt-*/.calendar-* mobile
      rules) — not going to be as good an experience as the other views,
-     but real and reachable rather than hidden entirely. Icon-over-label
-     (see .mobile-view-btn) rather than text alone — 6 full words never
-     fit an even flex:1 split of a phone's width, an icon plus a short
-     caption does. Icons are the exact same ones each view already uses
-     on the desktop rail-tab-row (Jobs has no rail-tab of its own, so
-     it gets a one-off briefcase here instead). See setMobileView(). -->
+     but real and reachable rather than hidden entirely. Icon-only, no
+     caption — title="" carries the name for a long-press/accessibility
+     tree instead. Icons are the exact same ones each view already uses
+     on the desktop rail-tab-row (Jobs has no rail-tab of its own, so it
+     gets a one-off briefcase here instead). See setMobileView(). -->
 <div class="mobile-view-switcher" id="mobileViewSwitcher">
-  <button class="mobile-view-btn active" data-view="jobs" onclick="setMobileView('jobs')"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg><span>Jobs</span></button>
-  <button class="mobile-view-btn" data-view="home" onclick="setMobileView('home')"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg><span>Home</span></button>
-  <button class="mobile-view-btn" data-view="checklist" onclick="setMobileView('checklist')"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Checklist</span></button>
-  <button class="mobile-view-btn" data-view="calendar" onclick="setMobileView('calendar')"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span>Calendar</span></button>
-  <button class="mobile-view-btn" data-view="gantt" onclick="setMobileView('gantt')"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span>Gantt</span></button>
-  <button class="mobile-view-btn" data-view="board" onclick="setMobileView('board')"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span>Board</span></button>
+  <button class="mobile-view-btn active" data-view="jobs" title="Jobs" onclick="setMobileView('jobs')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
+  <button class="mobile-view-btn" data-view="home" title="Home" onclick="setMobileView('home')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg></button>
+  <button class="mobile-view-btn" data-view="checklist" title="Checklist" onclick="setMobileView('checklist')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="mobile-view-btn" data-view="calendar" title="Calendar" onclick="setMobileView('calendar')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></button>
+  <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" onclick="setMobileView('gantt')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></button>
+  <button class="mobile-view-btn" data-view="board" title="Board" onclick="setMobileView('board')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></button>
 </div>
 
 <div class="app-shell">
