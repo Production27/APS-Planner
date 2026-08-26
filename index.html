@@ -245,7 +245,10 @@
      move into the hourly grid below) sized to content instead of filling
      all available height, and the hourly grid taking the rest. */
   .calendar-days.week-all-day-mode { flex: 0 0 auto; max-height: 30vh; grid-auto-rows: auto; }
-  .cal-day { background: var(--card); padding: 6px; min-height: 90px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+  /* Slightly transparent (not the flat var(--card) fill) so a project's
+     background image — set on the panel itself, see applyProjectBgVisual()
+     — has a chance to show through the grid, not just the gaps around it. */
+  .cal-day { background: rgba(255,255,255,0.9); padding: 6px; min-height: 90px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
   .cal-day.cal-outside { background: var(--bg); opacity: 0.55; }
   /* A light fill (matching Google Calendar's own "today" treatment) reads
      better than a heavy border alone, especially on an otherwise-empty
@@ -284,7 +287,7 @@
      via z-index). */
   .cal-bar-segment { position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none; }
   .cal-bar-content { position: relative; z-index: 2; }
-  body.dark-mode .cal-day { background: #1e2130; }
+  body.dark-mode .cal-day { background: rgba(30,33,48,0.9); }
   body.dark-mode .cal-day.cal-outside { background: #16182380; }
 
   /* ===== DAY VIEW (calendarViewMode = 'day') ===== */
@@ -418,7 +421,10 @@
   }
   .timeline-header .day-header.today-header .day-num { color: var(--accent); }
 
-  .timeline-body { flex: 1; overflow: auto; position: relative; background: white; }
+  /* Slightly transparent, same reasoning as .cal-day above — lets a
+     project's background image (set on the panel itself, see
+     applyProjectBgVisual()) show through instead of being fully covered. */
+  .timeline-body { flex: 1; overflow: auto; position: relative; background: rgba(255,255,255,0.9); }
   .timeline-body::-webkit-scrollbar { width: 8px; height: 8px; }
   .timeline-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
   .timeline-grid { position: relative; min-height: 100%; }
@@ -1884,12 +1890,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .btn-secondary:active { background: #1a1d24; }
 
   /* Bigger canvas areas get a soft gradient instead of a flat fill */
-  body.dark-mode .timeline-body,
   body.dark-mode .manager-form-area,
   body.dark-mode .board-wrapper,
   body.dark-mode .left-panel,
   body.dark-mode .manager-sidebar {
     background: linear-gradient(165deg, #20232f 0%, #171a22 55%, #1c1f29 100%);
+  }
+  /* Same gradient as above, slightly transparent — same reasoning as the
+     light-mode rule, letting a project's background image show through. */
+  body.dark-mode .timeline-body {
+    background: linear-gradient(165deg, rgba(32,35,47,0.9) 0%, rgba(23,26,34,0.9) 55%, rgba(28,31,41,0.9) 100%);
   }
 
   body.dark-mode .left-header,
