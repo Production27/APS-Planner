@@ -358,17 +358,22 @@
      solid strip that would otherwise fully block a project's background
      image (applyProjectBgVisual()) on its side of the chart. */
   .left-panel {
-    width: 300px; min-width: 300px; background: rgba(255,255,255,0.8); border-right: 1px solid var(--border);
+    width: 340px; min-width: 340px; background: rgba(255,255,255,0.8); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 6px rgba(0,0,0,0.04);
   }
   /* Now just an empty alignment spacer — see the comment on it in the
      markup — the view-mode tabs and later the "View as" picker that used
-     to live here are both gone. */
-  .gantt-view-toggle-row { width: 300px; min-width: 300px; box-sizing: border-box; }
+     to live here are both gone. Kept in sync with .left-panel's width
+     above. */
+  .gantt-view-toggle-row { width: 340px; min-width: 340px; box-sizing: border-box; }
+  /* 58px — matches .timeline-header-wrap's height exactly (its own
+     content is precisely 24px .week-header + 34px .day-header, no
+     slack) so the task rows below line up with the bar rows next to
+     them instead of starting 10px lower. */
   .left-header {
     display: flex; background: #f8f9fa; border-bottom: 2px solid #dee2e6;
     font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
-    color: #495057; height: 68px; flex-shrink: 0;
+    color: #495057; height: 58px; flex-shrink: 0;
   }
   .left-header .col { padding: 8px 10px; display: flex; align-items: center; border-right: 1px solid #e9ecef; }
   .left-header .col-start { width: 88px; } .left-header .col-finish { width: 88px; } .left-header .col-jobs { flex: 1; border-right: none; }
