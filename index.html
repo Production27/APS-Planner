@@ -8688,15 +8688,28 @@ function scrollToToday() {
 // the wheel event a trackpad's pinch gesture synthesizes with ctrlKey set
 // on both macOS and Windows precision touchpads (handleGanttWheelZoom),
 // so a laptop trackpad pinch works the same way without an actual
-// touchscreen. Both funnel into requestGanttZoom(), which coalesces to at
-// most one renderGantt() per animation frame — a raw per-event render
-// would be far more renders/sec than this chart can keep smooth through a
-// continuous gesture — and keeps whatever day was under the gesture's
-// anchor point stationary on screen, the way pinch-zoom reads everywhere
-// else (maps, image viewers, etc).
+// touchscreen.
+//
+// The touch path deliberately does NOT call renderGantt() on every
+// touchmove the way the first version of this did. A touch's move/end
+// events are dispatched to whatever element was actually under the
+// finger at touchstart (commonly a specific bar/cell inside
+// #timelineGrid, not the container the listener is bound to) — the FIRST
+// renderGantt() rebuilds that element's innerHTML and detaches the
+// original node the browser is tracking the gesture against, and most
+// mobile browsers simply stop delivering further touchmove/touchend for
+// a touch once its original target is gone. In testing that showed up as
+// "pinch does nothing": the very first frame silently broke the rest of
+// the gesture. Fixed by keeping touchmove purely visual — a CSS
+// scaleX() preview on #timelineGrid, which repaints without touching the
+// DOM tree at all — and only running the real renderGantt() once, at
+// touchend, after the gesture (and its original touch targets) is done
+// mattering.
 const GANTT_ZOOM_MIN = 14, GANTT_ZOOM_MAX = 80;
 let ganttPinchStartDist = null;
 let ganttPinchStartDayWidth = null;
+let ganttPinchAnchorX = null;
+let ganttPinchScale = 1;
 let ganttZoomRafPending = false;
 let ganttZoomPendingWidth = null;
 let ganttZoomAnchorX = null;
@@ -8705,24 +8718,35 @@ function ganttTouchDist(touches) {
   return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
 }
 
+// Shared commit path for both input methods: clamp, bail if it's a no-op,
+// otherwise re-render at the new width and correct scrollLeft so whatever
+// day was under the anchor point lands back under that same screen point
+// instead of the zoom recentering on the timeline's left edge.
+function setGanttDayWidthAnchored(newDayWidth, anchorClientX) {
+  const clamped = Math.max(GANTT_ZOOM_MIN, Math.min(GANTT_ZOOM_MAX, Math.round(newDayWidth)));
+  if (clamped === dayWidth) return;
+  const timelineBody = document.getElementById('timelineBody');
+  const anchorOffset = anchorClientX - timelineBody.getBoundingClientRect().left;
+  const dayPos = (timelineBody.scrollLeft + anchorOffset) / dayWidth;
+  dayWidth = clamped;
+  renderGantt();
+  timelineBody.scrollLeft = dayPos * dayWidth - anchorOffset;
+}
+
+// Wheel/trackpad path only — a wheel event has no persistent "original
+// target" the way a touch sequence does (each tick just hits whatever's
+// currently under the cursor), so re-rendering mid-gesture here doesn't
+// have the touch path's problem. Still coalesced to at most one
+// renderGantt() per animation frame purely for perf, since a trackpad
+// can fire wheel ticks much faster than this chart can usefully re-render.
 function requestGanttZoom(newDayWidth, anchorClientX) {
-  ganttZoomPendingWidth = Math.max(GANTT_ZOOM_MIN, Math.min(GANTT_ZOOM_MAX, newDayWidth));
+  ganttZoomPendingWidth = newDayWidth;
   ganttZoomAnchorX = anchorClientX;
   if (ganttZoomRafPending) return;
   ganttZoomRafPending = true;
   requestAnimationFrame(function() {
     ganttZoomRafPending = false;
-    if (ganttZoomPendingWidth === dayWidth) return;
-    const timelineBody = document.getElementById('timelineBody');
-    const anchorOffset = ganttZoomAnchorX - timelineBody.getBoundingClientRect().left;
-    // "Which day (fractional) sits under the anchor" in the OLD scale —
-    // recomputed in the NEW scale after re-render to land the same day
-    // back under the same screen point instead of the zoom recentering
-    // on the timeline's left edge.
-    const dayPos = (timelineBody.scrollLeft + anchorOffset) / dayWidth;
-    dayWidth = ganttZoomPendingWidth;
-    renderGantt();
-    timelineBody.scrollLeft = dayPos * dayWidth - anchorOffset;
+    setGanttDayWidthAnchored(ganttZoomPendingWidth, ganttZoomAnchorX);
   });
 }
 
@@ -8730,17 +8754,32 @@ function handleGanttTouchStart(e) {
   if (e.touches.length === 2) {
     ganttPinchStartDist = ganttTouchDist(e.touches);
     ganttPinchStartDayWidth = dayWidth;
+    ganttPinchAnchorX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    ganttPinchScale = 1;
+    const grid = document.getElementById('timelineGrid');
+    if (grid) {
+      grid.style.transformOrigin = (ganttPinchAnchorX - grid.getBoundingClientRect().left) + 'px 0';
+    }
   }
 }
 function handleGanttTouchMove(e) {
   if (e.touches.length !== 2 || ganttPinchStartDist == null) return;
   e.preventDefault();
-  const scale = ganttTouchDist(e.touches) / ganttPinchStartDist;
-  const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-  requestGanttZoom(ganttPinchStartDayWidth * scale, midX);
+  const rawScale = ganttTouchDist(e.touches) / ganttPinchStartDist;
+  // Clamp the SCALE (not dayWidth, which doesn't change until touchend)
+  // so the live preview can't stretch past what touchend would actually
+  // commit to.
+  ganttPinchScale = Math.max(GANTT_ZOOM_MIN / ganttPinchStartDayWidth, Math.min(GANTT_ZOOM_MAX / ganttPinchStartDayWidth, rawScale));
+  const grid = document.getElementById('timelineGrid');
+  if (grid) grid.style.transform = 'scaleX(' + ganttPinchScale + ')';
 }
 function handleGanttTouchEnd(e) {
-  if (e.touches.length < 2) { ganttPinchStartDist = null; ganttPinchStartDayWidth = null; }
+  if (e.touches.length >= 2 || ganttPinchStartDist == null) return;
+  const grid = document.getElementById('timelineGrid');
+  if (grid) { grid.style.transform = ''; grid.style.transformOrigin = ''; }
+  setGanttDayWidthAnchored(ganttPinchStartDayWidth * ganttPinchScale, ganttPinchAnchorX);
+  ganttPinchStartDist = null;
+  ganttPinchStartDayWidth = null;
 }
 // ctrlKey is how both macOS and Windows report a trackpad pinch as a
 // wheel event — a plain scroll wheel/two-finger-pan never sets it, so
