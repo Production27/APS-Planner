@@ -198,6 +198,19 @@
   .tab-panel { display: none; height: 100%; overflow: hidden; }
     .tab-panel.active { display: block; }
 
+  /* Morph transition for homeWidgetGoTo() — the browser's View
+     Transitions API screenshots the page before/after switchTab() runs
+     inside document.startViewTransition() and cross-fades between them
+     by default; these override that default cross-fade with a subtle
+     zoom so it reads as one view morphing into the next rather than a
+     plain fade. Root-scoped (there's only ever one tab visible at a
+     time), so this fires for the whole panel swap, not a per-element
+     animation. */
+  ::view-transition-old(root) { animation: homeMorphOut 0.32s cubic-bezier(.4,0,.2,1) both; }
+  ::view-transition-new(root) { animation: homeMorphIn 0.32s cubic-bezier(.4,0,.2,1) both; }
+  @keyframes homeMorphOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.04); } }
+  @keyframes homeMorphIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+
   /* ===== CALENDAR TAB ===== */
   .calendar-wrapper { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
   .calendar-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-shrink: 0; }
@@ -1333,10 +1346,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     transition: box-shadow .15s;
   }
   .home-widget:hover { box-shadow: var(--shadow-hover); }
+  /* Clickable — jumps to the widget's corresponding tab (see
+     homeWidgetGoTo()); each icon is literally the same glyph as that
+     tab's own rail icon, so the destination is already implied visually. */
   .home-widget-header {
     font-size: 13px; font-weight: 700; color: var(--text); padding: 12px 14px;
     border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    cursor: pointer; transition: background 0.15s;
   }
+  .home-widget-header:hover { background: rgba(0,0,0,0.03); }
+  body.dark-mode .home-widget-header:hover { background: rgba(255,255,255,0.04); }
   .home-widget-icon { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .home-widget-icon.tint-green { background: #e6f4ea; }
   .home-widget-icon.tint-red { background: #fdecea; }
@@ -2203,19 +2222,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="home-stats" id="homeStats"></div>
         <div class="home-grid">
           <div class="home-widget">
-            <div class="home-widget-header"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> My Open Items</div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to My Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> My Open Items</div>
             <div class="home-widget-body" id="homeChecklistBody"></div>
           </div>
           <div class="home-widget">
-            <div class="home-widget-header"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Overdue &amp; Due Soon</div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Overdue &amp; Due Soon</div>
             <div class="home-widget-body" id="homeOverdueBody"></div>
           </div>
           <div class="home-widget">
-            <div class="home-widget-header"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board Summary</div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board Summary</div>
             <div class="home-widget-body" id="homeStageBody"></div>
           </div>
           <div class="home-widget">
-            <div class="home-widget-header"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Today's Schedule</div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Today's Schedule</div>
             <div class="home-widget-body" id="homeTodayBody"></div>
           </div>
         </div>
@@ -5400,6 +5419,20 @@ function applyProjectBgVisual() {
     boardWrapper.style.background = boardPhoto
       ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + boardPhoto + '") center/cover no-repeat')
       : '';
+  }
+}
+
+// Home widget headers (icon + title) jump to that widget's corresponding
+// tab — see homeWidgetGoTo() call sites in #panel-home's markup, and the
+// morph keyframes on ::view-transition-old(root)/new(root) below. Falls
+// back to a plain switchTab() on a browser without the View Transitions
+// API (Firefox, older Safari) — same end state either way, just no
+// animation.
+function homeWidgetGoTo(tab) {
+  if (document.startViewTransition) {
+    document.startViewTransition(() => switchTab(tab));
+  } else {
+    switchTab(tab);
   }
 }
 
