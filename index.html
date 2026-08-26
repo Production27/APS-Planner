@@ -201,7 +201,12 @@
   /* ===== CALENDAR TAB ===== */
   .calendar-wrapper { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
   .calendar-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-shrink: 0; }
-  .calendar-toolbar h3 { flex: 1; text-align: center; font-size: 15px; color: var(--text); }
+  /* Sits snug against the prev/next pill instead of centered across the
+     whole toolbar (was flex:1 + text-align:center) — Google Calendar's
+     own layout groups Today/‹/›/month-label together on the left, with
+     everything else pushed to the right (see .calendar-view-toggle-wrap's
+     margin-left:auto). */
+  .calendar-toolbar h3 { font-size: 19px; color: var(--text); }
   /* Slightly smaller than the app's default .btn (padding:10px 22px) —
      the request was specifically to make this bar a little shorter, and
      the default button size was what set its height. */
