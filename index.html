@@ -472,8 +472,13 @@
 
   /* Slightly transparent, same reasoning as .cal-day above — lets a
      project's background image (set on the panel itself, see
-     applyProjectBgVisual()) show through instead of being fully covered. */
-  .timeline-body { flex: 1; overflow: auto; position: relative; background: rgba(255,255,255,0.8); }
+     applyProjectBgVisual()) show through instead of being fully covered.
+     touch-action:pan-x pan-y — same idea as .calendar-days' pan-y: explicitly
+     allowing only single-touch panning (both axes, since this scrolls both
+     ways unlike the calendar grid) hands a 2-finger pinch straight to JS
+     (see handleGanttTouchMove()) instead of the browser's own page-zoom
+     fighting over it. */
+  .timeline-body { flex: 1; overflow: auto; position: relative; background: rgba(255,255,255,0.8); touch-action: pan-x pan-y; }
   .timeline-body::-webkit-scrollbar { width: 8px; height: 8px; }
   .timeline-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
   .timeline-grid { position: relative; min-height: 100%; }
@@ -2497,9 +2502,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
             <button class="gantt-toolbar-text-btn" onclick="expandAllGantt()" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
             <button class="gantt-toolbar-text-btn" onclick="collapseAllGantt()" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
-            <button onclick="zoomIn()" title="Zoom in">+</button>
-            <button onclick="zoomOut()" title="Zoom out">−</button>
-            <button onclick="resetZoom()" title="Reset zoom">⟲</button>
             <button onclick="fitToView()" title="Fit to view">⤢</button>
             <button onclick="scrollToToday()" title="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
           </div>
@@ -5993,6 +5995,16 @@ function setupScrollSync() {
     timelineBody.scrollTop = leftBody.scrollTop;
     isSyncingScroll = false;
   };
+
+  // Pinch-to-zoom (see the GANTT PINCH-TO-ZOOM block near fitToView()) —
+  // re-wired here since renderGantt() rebuilds timelineBody's contents
+  // (though not the element itself) on every call; property assignment
+  // rather than addEventListener so re-running this never stacks up
+  // duplicate listeners the way repeated addEventListener calls would.
+  timelineBody.ontouchstart = handleGanttTouchStart;
+  timelineBody.ontouchmove = handleGanttTouchMove;
+  timelineBody.ontouchend = handleGanttTouchEnd;
+  timelineBody.onwheel = handleGanttWheelZoom;
 }
 
 // ===== CALENDAR TAB =====
@@ -8646,9 +8658,75 @@ function scrollToToday() {
   timelineBody.scrollLeft = targetLeft;
 }
 
-function zoomIn() { dayWidth = Math.min(dayWidth + 6, 80); renderGantt(); }
-function zoomOut() { dayWidth = Math.max(dayWidth - 6, 14); renderGantt(); }
-function resetZoom() { dayWidth = 34; renderGantt(); }
+// ===== GANTT PINCH-TO-ZOOM =====
+// Replaces the old +/- zoom buttons. Two input paths land here: real
+// multi-touch (phones/tablets — handleGanttTouchStart/Move/End below) and
+// the wheel event a trackpad's pinch gesture synthesizes with ctrlKey set
+// on both macOS and Windows precision touchpads (handleGanttWheelZoom),
+// so a laptop trackpad pinch works the same way without an actual
+// touchscreen. Both funnel into requestGanttZoom(), which coalesces to at
+// most one renderGantt() per animation frame — a raw per-event render
+// would be far more renders/sec than this chart can keep smooth through a
+// continuous gesture — and keeps whatever day was under the gesture's
+// anchor point stationary on screen, the way pinch-zoom reads everywhere
+// else (maps, image viewers, etc).
+const GANTT_ZOOM_MIN = 14, GANTT_ZOOM_MAX = 80;
+let ganttPinchStartDist = null;
+let ganttPinchStartDayWidth = null;
+let ganttZoomRafPending = false;
+let ganttZoomPendingWidth = null;
+let ganttZoomAnchorX = null;
+
+function ganttTouchDist(touches) {
+  return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+}
+
+function requestGanttZoom(newDayWidth, anchorClientX) {
+  ganttZoomPendingWidth = Math.max(GANTT_ZOOM_MIN, Math.min(GANTT_ZOOM_MAX, newDayWidth));
+  ganttZoomAnchorX = anchorClientX;
+  if (ganttZoomRafPending) return;
+  ganttZoomRafPending = true;
+  requestAnimationFrame(function() {
+    ganttZoomRafPending = false;
+    if (ganttZoomPendingWidth === dayWidth) return;
+    const timelineBody = document.getElementById('timelineBody');
+    const anchorOffset = ganttZoomAnchorX - timelineBody.getBoundingClientRect().left;
+    // "Which day (fractional) sits under the anchor" in the OLD scale —
+    // recomputed in the NEW scale after re-render to land the same day
+    // back under the same screen point instead of the zoom recentering
+    // on the timeline's left edge.
+    const dayPos = (timelineBody.scrollLeft + anchorOffset) / dayWidth;
+    dayWidth = ganttZoomPendingWidth;
+    renderGantt();
+    timelineBody.scrollLeft = dayPos * dayWidth - anchorOffset;
+  });
+}
+
+function handleGanttTouchStart(e) {
+  if (e.touches.length === 2) {
+    ganttPinchStartDist = ganttTouchDist(e.touches);
+    ganttPinchStartDayWidth = dayWidth;
+  }
+}
+function handleGanttTouchMove(e) {
+  if (e.touches.length !== 2 || ganttPinchStartDist == null) return;
+  e.preventDefault();
+  const scale = ganttTouchDist(e.touches) / ganttPinchStartDist;
+  const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+  requestGanttZoom(ganttPinchStartDayWidth * scale, midX);
+}
+function handleGanttTouchEnd(e) {
+  if (e.touches.length < 2) { ganttPinchStartDist = null; ganttPinchStartDayWidth = null; }
+}
+// ctrlKey is how both macOS and Windows report a trackpad pinch as a
+// wheel event — a plain scroll wheel/two-finger-pan never sets it, so
+// this leaves ordinary wheel scrolling of the timeline completely alone.
+function handleGanttWheelZoom(e) {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  requestGanttZoom(dayWidth * Math.exp(-e.deltaY * 0.01), e.clientX);
+}
+
 function fitToView() {
   const containerWidth = document.getElementById('timelineBody').clientWidth - 20;
   computeDateRange();
