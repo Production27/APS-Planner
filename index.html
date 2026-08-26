@@ -5495,11 +5495,11 @@ function resetThemeDefault() {
 // full resolution, no size cap. Keyed by FIXED_PROJECT_NAMES (the two
 // permanent projects this app already treats as fixed). Originally
 // Board-only (applyBoardBgVisual); extended to every other view's own
-// panel per explicit request. bludorn-board-bg.jpg is the icon mark
-// only, cropped from the source logo (which pairs it with "BLUDORN
-// BUILDERS" lettering below) — same request as APS's own asset, which
-// already includes its wordmark, so the two aren't perfectly identical
-// in kind, just each matching what was actually asked for.
+// panel per explicit request. bludorn-board-bg.jpg is the full source
+// logo (icon + "BLUDORN BUILDERS" lettering), centered on a white
+// square canvas the same way APS's own asset is composed, so both
+// behave identically under background-size:cover across every panel
+// shape.
 const STATIC_PROJECT_BG_BY_NAME = {
   'ADVANCED PRECUT SYSTEMS': 'assets/aps-board-bg.jpg',
   'BLUDORN BUILDERS': 'assets/bludorn-board-bg.jpg'
