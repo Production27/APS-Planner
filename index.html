@@ -30,7 +30,7 @@
      the viewport (100vh) and this only needs to show rarely/briefly. */
   .new-version-banner {
     display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
-    background: linear-gradient(90deg, #1a237e, #3949ab); color: #fff;
+    background: linear-gradient(90deg, var(--primary), var(--primary-light)); color: #fff;
     padding: 10px 20px; font-size: 13px; font-weight: 600;
     align-items: center; justify-content: center; gap: 16px; text-align: center;
     box-shadow: 0 2px 10px rgba(0,0,0,0.3);
@@ -1548,7 +1548,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      placeholder content while the real snapshot loads, instead of
      flashing fake project names. A returning device with real cached
      data never sees this; it renders that data instantly as always. */
-  #freshLoadOverlay { position: fixed; inset: 0; background: linear-gradient(135deg, #1a237e 0%, #3949ab 100%); z-index: 9999; display: none; align-items: center; justify-content: center; flex-direction: column; color: #fff; }
+  #freshLoadOverlay { position: fixed; inset: 0; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); z-index: 9999; display: none; align-items: center; justify-content: center; flex-direction: column; color: #fff; }
   #freshLoadOverlay.show { display: flex; }
   #freshLoadOverlay .spinner { width: 34px; height: 34px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: freshLoadSpin 0.8s linear infinite; margin-bottom: 16px; }
   #freshLoadOverlay .msg { font-size: 15px; font-weight: 500; letter-spacing: 0.2px; }
@@ -2159,7 +2159,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
             <span class="mini-toggle" id="darkModeToggle"></span>
           </div>
-          <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openThemeModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Header Color</div>
+          <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openThemeModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Theme Color</div>
           <div class="settings-dropdown-divider"></div>
           <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
           <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
@@ -2466,23 +2466,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   </div>
 </div>
 
-<!-- HEADER THEME MODAL -->
+<!-- THEME COLOR MODAL -->
 <div class="modal-overlay" id="themeModal">
   <div class="modal-box">
-    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Customize Header</h4>
-    <p>Pick a preset or set your own gradient colors.</p>
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Theme Color</h4>
+    <p>Pick a preset or set your own accent color — applies to buttons, active tabs, badges, and the Home banner.</p>
     <div class="theme-presets" id="themePresets"></div>
     <div class="theme-custom-row">
       <div class="cf-field">
-        <label>Start Color</label>
-        <input type="color" id="theme_color1" oninput="updateThemePreview()">
-      </div>
-      <div class="cf-field">
-        <label>End Color</label>
-        <input type="color" id="theme_color2" oninput="updateThemePreview()">
+        <label>Custom Color</label>
+        <input type="color" id="theme_color" oninput="updateThemePreview()">
       </div>
     </div>
-    <div class="theme-preview" id="themePreview">APS Production</div>
+    <div class="theme-preview" id="themePreview">Sample Button</div>
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-secondary" onclick="resetThemeDefault()">Reset to Default</button>
       <div style="display:flex; gap:10px;">
@@ -4379,7 +4375,10 @@ function migrateFromLegacy() {
   const oldFields = localStorage.getItem('gantt_board_field_options_v1');
   const oldTitle = localStorage.getItem('gantt_header_title_v2');
   const oldSub = localStorage.getItem('gantt_header_subtitle_v2');
-  const oldTheme = localStorage.getItem('gantt_header_theme_v1');
+  // Old shape was {c1,c2} (a header gradient) — c2 was the lighter/more
+  // visible of the two, closest to what's now a single theme color.
+  const oldThemeRaw = localStorage.getItem('gantt_header_theme_v1');
+  const oldTheme = oldThemeRaw ? (function() { try { const t = JSON.parse(oldThemeRaw); return t.c2 || t.c1 || null; } catch (e) { return null; } })() : null;
   const oldBg = localStorage.getItem('gantt_header_bg_photo_v1');
   const oldBoardBg = localStorage.getItem('gantt_board_bg_photo_v1');
 
@@ -4423,7 +4422,7 @@ function migrateFromLegacy() {
     header: {
       title: oldTitle || 'APS Production',
       subtitle: oldSub || '',
-      theme: oldTheme ? JSON.parse(oldTheme) : DEFAULT_THEME,
+      theme: oldTheme || DEFAULT_THEME_COLOR,
       bgPhoto: oldBg || null,
       boardBgPhoto: oldBoardBg || null
     }
@@ -4585,7 +4584,7 @@ function enforceFixedProjectSet() {
         timeframe: ['This Week', 'Next Week', 'This Month', 'This Quarter'],
         incentivePeriod: ['Q1', 'Q2', 'Q3', 'Q4']
       },
-      header: { title: name, subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
+      header: { title: name, subtitle: '', theme: DEFAULT_THEME_COLOR, bgPhoto: null, boardBgPhoto: null }
     };
     p.jobs.forEach(function(j) { if (!j.notes) j.notes = ''; });
     return p;
@@ -4646,12 +4645,12 @@ function loadActiveProjectData() {
   fieldOptions = p.fieldOptions || {};
   document.getElementById('headerTitle').textContent = p.header.title || 'APS Production';
   document.getElementById('headerSubtitle').textContent = p.header.subtitle || '';
-  if (p.header.theme) localStorage.setItem('gantt_header_theme_v1', JSON.stringify(p.header.theme));
+  if (p.header.theme) localStorage.setItem('gantt_theme_color_v1', normalizeThemeColor(p.header.theme));
   if (p.header.bgPhoto) localStorage.setItem('gantt_header_bg_photo_v1', p.header.bgPhoto);
   else localStorage.removeItem('gantt_header_bg_photo_v1');
   if (p.header.boardBgPhoto) localStorage.setItem('gantt_board_bg_photo_v1', p.header.boardBgPhoto);
   else localStorage.removeItem('gantt_board_bg_photo_v1');
-  applyHeaderVisual();
+  applyThemeColor();
   applyProjectBgVisual();
 
   // Section 6: link/adopt any cards that predate the jobId field, before
@@ -4691,7 +4690,7 @@ function saveActiveProject() {
   // empty mid-edit.
   if (p.header.title) p.name = p.header.title;
   p.header.subtitle = document.getElementById('headerSubtitle').textContent.trim();
-  p.header.theme = getSavedTheme();
+  p.header.theme = getSavedThemeColor();
   p.header.bgPhoto = localStorage.getItem('gantt_header_bg_photo_v1') || null;
   p.header.boardBgPhoto = localStorage.getItem('gantt_board_bg_photo_v1') || null;
   saveProjects();
@@ -5208,57 +5207,68 @@ function loadHeader() {
   const hSub = localStorage.getItem('gantt_header_subtitle_v2');
   if (hTitle) document.getElementById('headerTitle').textContent = hTitle;
   if (hSub) document.getElementById('headerSubtitle').textContent = hSub;
-  loadHeaderTheme();
+  loadThemeColor();
 }
 
-// ===== HEADER THEME =====
-const DEFAULT_THEME = { c1: '#1a237e', c2: '#3949ab' };
+// ===== THEME COLOR =====
+// Was a header-background gradient picker (start/end color) back when
+// .app-header was a visible gradient bar — now that it's display:none
+// (see its own rule), this drives --primary/--primary-light instead,
+// which is what buttons, active tabs, badges, and the Home banner
+// actually render from. A single picked color becomes --primary-light
+// (what most of those render as flat); --primary (the darker anchor
+// gradients pair it with) is derived via darkenColor() rather than
+// picked separately, since one color is simpler for the person picking
+// it, and every existing --primary/--primary-light consumer already
+// composes the two the same way regardless of exactly how dark
+// --primary is.
+const DEFAULT_THEME_COLOR = '#3949ab';
 const THEME_PRESETS = [
-  { c1: '#1a237e', c2: '#3949ab' }, // Navy (default)
-  { c1: '#1b5e20', c2: '#43a047' }, // Forest
-  { c1: '#4a0000', c2: '#b71c1c' }, // Maroon
-  { c1: '#263238', c2: '#546e7a' }, // Slate
-  { c1: '#212121', c2: '#424242' }, // Charcoal
-  { c1: '#004d40', c2: '#00897b' }, // Teal
-  { c1: '#4a148c', c2: '#7b1fa2' }, // Purple
-  { c1: '#e65100', c2: '#fb8c00' }  // Amber
+  '#3949ab', // Indigo (default)
+  '#2e7d32', // Forest
+  '#c62828', // Maroon
+  '#546e7a', // Slate
+  '#424242', // Charcoal
+  '#00897b', // Teal
+  '#7b1fa2', // Purple
+  '#fb8c00'  // Amber
 ];
 
-function getSavedTheme() {
-  const saved = localStorage.getItem('gantt_header_theme_v1');
-  return saved ? JSON.parse(saved) : DEFAULT_THEME;
+// A project's own header.theme may still be the old {c1,c2} gradient
+// shape (every project's default was DEFAULT_THEME = {c1,c2} for as
+// long as the header-gradient picker existed, so most real project
+// records predate this switch to a single color) — collapses either
+// shape down to one hex string.
+function normalizeThemeColor(theme) {
+  if (typeof theme === 'string') return theme;
+  if (theme && typeof theme === 'object') return theme.c2 || theme.c1 || DEFAULT_THEME_COLOR;
+  return DEFAULT_THEME_COLOR;
 }
 
-function loadHeaderTheme() {
-  applyHeaderVisual();
+function getSavedThemeColor() {
+  return localStorage.getItem('gantt_theme_color_v1') || DEFAULT_THEME_COLOR;
 }
 
-function applyHeaderBackground(c1, c2) {
-  document.querySelector('.app-header').style.background = 'linear-gradient(135deg, ' + c1 + ' 0%, ' + c2 + ' 100%)';
+function loadThemeColor() {
+  applyThemeColor();
 }
 
-function applyHeaderVisual() {
-  const theme = getSavedTheme();
-  const photo = localStorage.getItem('gantt_header_bg_photo_v1');
-  const header = document.querySelector('.app-header');
-  if (photo) {
-    header.style.background = 'linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), url("' + photo + '") center/cover no-repeat';
-  } else {
-    applyHeaderBackground(theme.c1, theme.c2);
-  }
+function applyThemeColor() {
+  const color = getSavedThemeColor();
+  document.documentElement.style.setProperty('--primary-light', color);
+  document.documentElement.style.setProperty('--primary', darkenColor(color, 0.3));
 }
 
 function buildThemePresets(selected) {
   const container = document.getElementById('themePresets');
   container.innerHTML = '';
-  THEME_PRESETS.forEach(p => {
+  THEME_PRESETS.forEach(c => {
     const div = document.createElement('div');
     div.className = 'theme-preset';
-    div.style.background = 'linear-gradient(135deg, ' + p.c1 + ' 0%, ' + p.c2 + ' 100%)';
-    if (selected && selected.c1 === p.c1 && selected.c2 === p.c2) div.classList.add('selected');
+    div.style.background = c;
+    if (selected && selected.toLowerCase() === c.toLowerCase()) div.classList.add('selected');
     div.onclick = () => {
-      document.getElementById('theme_color1').value = p.c1;
-      document.getElementById('theme_color2').value = p.c2;
+      document.getElementById('theme_color').value = c;
       container.querySelectorAll('.theme-preset').forEach(el => el.classList.remove('selected'));
       div.classList.add('selected');
       updateThemePreview();
@@ -5268,22 +5278,17 @@ function buildThemePresets(selected) {
 }
 
 function updateThemePreview() {
-  const c1 = document.getElementById('theme_color1').value;
-  const c2 = document.getElementById('theme_color2').value;
-  document.getElementById('themePreview').style.background = 'linear-gradient(135deg, ' + c1 + ' 0%, ' + c2 + ' 100%)';
+  const c = document.getElementById('theme_color').value;
+  document.getElementById('themePreview').style.background = 'linear-gradient(135deg, ' + c + ' 0%, ' + darkenColor(c, 0.3) + ' 100%)';
   document.querySelectorAll('#themePresets .theme-preset').forEach(el => el.classList.remove('selected'));
-  const match = THEME_PRESETS.find(p => p.c1 === c1 && p.c2 === c2);
-  if (match) {
-    const idx = THEME_PRESETS.indexOf(match);
-    document.querySelectorAll('#themePresets .theme-preset')[idx].classList.add('selected');
-  }
+  const idx = THEME_PRESETS.findIndex(p => p.toLowerCase() === c.toLowerCase());
+  if (idx !== -1) document.querySelectorAll('#themePresets .theme-preset')[idx].classList.add('selected');
 }
 
 function openThemeModal() {
-  const theme = getSavedTheme();
-  document.getElementById('theme_color1').value = theme.c1;
-  document.getElementById('theme_color2').value = theme.c2;
-  buildThemePresets(theme);
+  const color = getSavedThemeColor();
+  document.getElementById('theme_color').value = color;
+  buildThemePresets(color);
   updateThemePreview();
   document.getElementById('themeModal').classList.add('show');
 }
@@ -5293,15 +5298,14 @@ function closeThemeModal() {
 }
 
 function applyTheme() {
-  const c1 = document.getElementById('theme_color1').value;
-  const c2 = document.getElementById('theme_color2').value;
-  localStorage.setItem('gantt_header_theme_v1', JSON.stringify({ c1, c2 }));
-  applyHeaderVisual();
+  const color = document.getElementById('theme_color').value;
+  localStorage.setItem('gantt_theme_color_v1', color);
+  applyThemeColor();
   closeThemeModal();
-  showToast('Header color updated', 'success');
-  logActivity('changed header theme');
-  // saveActiveProject() picks the new theme up from localStorage (via
-  // getSavedTheme()) into proj.header, then the staleness-protected
+  showToast('Theme color updated', 'success');
+  logActivity('changed theme color');
+  // saveActiveProject() picks the new color up from localStorage (via
+  // getSavedThemeColor()) into proj.header, then the staleness-protected
   // setHeader path (not the routine batch's unprotected header field)
   // actually pushes it — see the comment on saveHeader() above.
   saveActiveProject();
@@ -5309,11 +5313,11 @@ function applyTheme() {
 }
 
 function resetThemeDefault() {
-  localStorage.removeItem('gantt_header_theme_v1');
-  applyHeaderVisual();
+  localStorage.removeItem('gantt_theme_color_v1');
+  applyThemeColor();
   closeThemeModal();
-  showToast('Header reset to default', 'info');
-  logActivity('reset header theme to default');
+  showToast('Theme color reset to default', 'info');
+  logActivity('reset theme color to default');
   saveActiveProject();
   pushHeaderToShared(activeProjectId);
 }
@@ -5321,9 +5325,10 @@ function resetThemeDefault() {
 // ===== HEADER BACKGROUND PHOTO =====
 // The Settings > Header Background upload UI (openHeaderBgModal/
 // handleHeaderBgUpload/removeHeaderBgPhoto/etc.) was removed, same as the
-// Board Background one before it. applyHeaderVisual() and
-// gantt_header_bg_photo_v1 stay: whatever was already uploaded keeps
-// displaying, it's just no longer changeable from the UI.
+// Board Background one below. gantt_header_bg_photo_v1 stays: whatever
+// was already uploaded keeps being stored/synced, it's just no longer
+// changeable from the UI, and .app-header itself is display:none now so
+// it has no visible effect regardless.
 
 // ===== BOARD BACKGROUND PHOTO =====
 // The Settings > Board Background upload UI (openBoardBgModal/
@@ -13349,7 +13354,7 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
         calendarEvents: [],
         deletedIds: {},
         fieldOptions: {},
-        header: { title: remoteName || 'Untitled Project', subtitle: '', theme: DEFAULT_THEME, bgPhoto: null, boardBgPhoto: null }
+        header: { title: remoteName || 'Untitled Project', subtitle: '', theme: DEFAULT_THEME_COLOR, bgPhoto: null, boardBgPhoto: null }
       };
       projects[projectId] = local;
       listChanged = true;
@@ -13614,7 +13619,7 @@ function pushProjectToShared(projectId, headerOverride) {
     jobs: proj.jobs.map(function(j) { return Object.assign({}, j, { updatedAt: Date.now() }); }),
     boardCards: proj.boardCards.map(function(c) { return Object.assign({}, c, { updatedAt: Date.now() }); }),
     calendarEvents: (proj.calendarEvents || []).map(function(e) { return Object.assign({}, e, { updatedAt: Date.now() }); }),
-    header: { title: header.title || proj.name, subtitle: header.subtitle || '', theme: header.theme || DEFAULT_THEME }
+    header: { title: header.title || proj.name, subtitle: header.subtitle || '', theme: normalizeThemeColor(header.theme) }
   });
 }
 
@@ -13743,7 +13748,7 @@ function pushLiveblocksState() {
     pushProjectToShared(p.id, {
       title: document.getElementById('headerTitle').textContent.trim(),
       subtitle: document.getElementById('headerSubtitle').textContent.trim(),
-      theme: getSavedTheme()
+      theme: getSavedThemeColor()
     });
   } catch (e) {
     console.error(e);
