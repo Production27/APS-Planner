@@ -5493,13 +5493,16 @@ function resetThemeDefault() {
 // room-storage size limit entirely (see handleBoardBgUpload()'s history)
 // — the browser just requests and caches it like any other website asset,
 // full resolution, no size cap. Keyed by FIXED_PROJECT_NAMES (the two
-// permanent projects this app already treats as fixed) so each can
-// eventually get its own; only ADVANCED PRECUT SYSTEMS has one for now.
-// Originally Board-only (applyBoardBgVisual); extended to every other
-// view's own panel per explicit request — Bludorn stays background-free
-// on every view, same as it already was on Board alone.
+// permanent projects this app already treats as fixed). Originally
+// Board-only (applyBoardBgVisual); extended to every other view's own
+// panel per explicit request. bludorn-board-bg.jpg is the icon mark
+// only, cropped from the source logo (which pairs it with "BLUDORN
+// BUILDERS" lettering below) — same request as APS's own asset, which
+// already includes its wordmark, so the two aren't perfectly identical
+// in kind, just each matching what was actually asked for.
 const STATIC_PROJECT_BG_BY_NAME = {
-  'ADVANCED PRECUT SYSTEMS': 'assets/aps-board-bg.jpg'
+  'ADVANCED PRECUT SYSTEMS': 'assets/aps-board-bg.jpg',
+  'BLUDORN BUILDERS': 'assets/bludorn-board-bg.jpg'
 };
 // Panels that get the plain static-image treatment — full-bleed on the
 // PANEL itself, not each view's own inner content wrapper, so it reads
