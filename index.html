@@ -385,6 +385,7 @@
   .task-row .col-start { width: 88px; color: #555; font-size: 11px; }
   .task-row .col-finish { width: 88px; color: #555; font-size: 11px; }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
+  .task-row .col-jobs .task-row-name { font-weight: 700; }
   .task-row .col-jobs .company-tag { display: inline-block; font-size: 9px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: 600; color: white; vertical-align: middle; }
   .task-row .col-jobs .task-row-jobname { display: inline-block; font-size: 10px; font-weight: 600; color: #fff; margin-left: 6px; padding: 1px 8px; border-radius: 10px; vertical-align: middle; line-height: 1.5; }
   .task-row .col-jobs .task-row-jobname.collapsible { cursor: pointer; }
@@ -7421,7 +7422,12 @@ function renderGantt() {
         jobPill = '<span class="task-row-jobname' + (entry.collapsible ? ' collapsible' : '') + '"' + (collapseTitle ? ' title="' + collapseTitle + '"' : '') + ' style="background:' + (job.color || '#999') + ';">' + collapseGlyph + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
       }
       row.title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
-      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabel + (mainLabel ? ' ' : '') + jobPill + phasePillHtml + subPillHtml + noteDot + '</div>';
+      // Bolded so the task/phase name itself reads as the row's primary
+      // content — the job/phase pills next to it are already full-
+      // saturation color, which otherwise out-competes plain-weight text
+      // for attention despite being the smaller of the two.
+      const mainLabelHtml = mainLabel ? '<span class="task-row-name">' + mainLabel + '</span> ' : '';
+      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabelHtml + jobPill + phasePillHtml + subPillHtml + noteDot + '</div>';
       row.addEventListener('click', () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); });
       if (isTasksMode) {
         const jobPillEl = row.querySelector('.task-row-jobname');
