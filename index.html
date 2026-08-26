@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- user-scalable=no — without it, iOS Safari/Android Chrome treat a
+     2-finger touch as the page's OWN native pinch-zoom gesture first,
+     which either consumes it outright or fights with the Gantt's custom
+     pinch-to-zoom (see handleGanttTouchMove()/touch-action:pan-x pan-y on
+     .timeline-body) for the same gesture. Every screen in this app is
+     already hand-tuned per breakpoint (see the @media rules throughout),
+     not designed to be zoomed as a webpage, so losing page-level pinch
+     costs nothing real elsewhere while being the standard, necessary
+     precondition for a custom in-app pinch gesture to work at all. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>APS Production | Live Gantt + Job Manager</title>
 <style>
   :root {
@@ -366,7 +375,11 @@
      box-shadow would otherwise cut through). The panels row below it is
      where .left-panel's border/shadow actually starts. */
   .gantt-top-row { display: flex; height: 45px; box-sizing: border-box; background: #eef1fa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .gantt-panels-row { display: flex; flex: 1; overflow: hidden; }
+  /* touch-action here (not just on .timeline-body) covers a pinch that
+     starts with a finger over the date header or task-list column too —
+     see the comment in setupScrollSync() on why the pinch listeners
+     themselves are bound at this level. */
+  .gantt-panels-row { display: flex; flex: 1; overflow: hidden; touch-action: pan-x pan-y; }
   /* Slightly transparent (not the flat var(--card) fill) — same reasoning
      as .timeline-body below: this 300px job/task-name column is a large
      solid strip that would otherwise fully block a project's background
@@ -5997,13 +6010,24 @@ function setupScrollSync() {
   };
 
   // Pinch-to-zoom (see the GANTT PINCH-TO-ZOOM block near fitToView()) —
-  // re-wired here since renderGantt() rebuilds timelineBody's contents
-  // (though not the element itself) on every call; property assignment
-  // rather than addEventListener so re-running this never stacks up
-  // duplicate listeners the way repeated addEventListener calls would.
-  timelineBody.ontouchstart = handleGanttTouchStart;
-  timelineBody.ontouchmove = handleGanttTouchMove;
-  timelineBody.ontouchend = handleGanttTouchEnd;
+  // bound on .gantt-panels-row (the date header row is a SIBLING of
+  // timelineBody, not a descendant of it — see the "right-panel" markup —
+  // so a pinch starting with either finger over the header would never
+  // reach a listener scoped to timelineBody alone) rather than just
+  // timelineBody itself, even though the zoom math inside still targets
+  // timelineBody specifically (its own getBoundingClientRect()/scrollLeft
+  // — touch clientX/Y are viewport-relative regardless of which element
+  // the listener sits on, so this doesn't need to change). Re-wired here
+  // since renderGantt() rebuilds timelineBody's contents (though not the
+  // panels-row itself) on every call; property assignment rather than
+  // addEventListener so re-running this never stacks up duplicate
+  // listeners the way repeated addEventListener calls would.
+  const panelsRow = document.querySelector('.gantt-panels-row');
+  if (panelsRow) {
+    panelsRow.ontouchstart = handleGanttTouchStart;
+    panelsRow.ontouchmove = handleGanttTouchMove;
+    panelsRow.ontouchend = handleGanttTouchEnd;
+  }
   timelineBody.onwheel = handleGanttWheelZoom;
 }
 
