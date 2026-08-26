@@ -7819,11 +7819,19 @@ function renderGantt() {
 
   requestAnimationFrame(() => {
     const tb = document.getElementById('timelineBody');
-    if (ganttFirstRender) {
+    // renderAll() calls renderGantt() unconditionally on load/refresh even
+    // when Home (or any other tab) is what's actually showing — Gantt's
+    // own panel is display:none then, so tb.clientWidth is 0 and
+    // scrollToToday() below would silently compute against zero width and
+    // effectively no-op. Only consume ganttFirstRender once the panel is
+    // genuinely visible, so the real first scroll-to-today happens the
+    // first time a user actually switches to the Gantt tab, not whenever
+    // it happens to render invisibly first.
+    if (ganttFirstRender && tb && tb.clientWidth > 0) {
       ganttFirstRender = false;
-      if (tb) tb.scrollTop = savedScrollTop;
+      tb.scrollTop = savedScrollTop;
       scrollToToday();
-      setHeaderScroll(tb ? tb.scrollLeft : savedScrollLeft);
+      setHeaderScroll(tb.scrollLeft);
     } else {
       if (tb) tb.scrollLeft = savedScrollLeft;
       setHeaderScroll(savedScrollLeft);
