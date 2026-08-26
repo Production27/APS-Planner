@@ -233,7 +233,14 @@
      the weekday-label row above it also shares — that row has no per-cell
      background of its own, so the same treatment there would just paint
      the whole strip solid instead of showing thin lines. */
-  .calendar-grid.calendar-days { gap: 1px; background: var(--border); border: 1px solid var(--border); }
+  /* This grid-gap fill is itself a solid opaque layer sitting directly
+     behind every .cal-day cell — .cal-day's own transparency (below) never
+     reaches the panel's background image if this one stays opaque, since
+     it's the very thing .cal-day is layered on top of. Same alpha as
+     .cal-day so the whole grid (cells + gap lines) reads as one uniformly
+     transparent surface instead of cells floating over a solid frame. */
+  .calendar-grid.calendar-days { gap: 1px; background: rgba(224,224,224,0.8); border: 1px solid var(--border); }
+  body.dark-mode .calendar-grid.calendar-days { background: rgba(50,55,68,0.8); }
   #calendarWeekdays { flex-shrink: 0; margin-bottom: 6px; }
   #calendarWeekdays .cal-weekday { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; padding: 4px 0; }
   /* touch-action:pan-y — tells the browser this element only handles
@@ -248,7 +255,7 @@
   /* Slightly transparent (not the flat var(--card) fill) so a project's
      background image — set on the panel itself, see applyProjectBgVisual()
      — has a chance to show through the grid, not just the gaps around it. */
-  .cal-day { background: rgba(255,255,255,0.9); padding: 6px; min-height: 90px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+  .cal-day { background: rgba(255,255,255,0.8); padding: 6px; min-height: 90px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
   .cal-day.cal-outside { background: var(--bg); opacity: 0.55; }
   /* A light fill (matching Google Calendar's own "today" treatment) reads
      better than a heavy border alone, especially on an otherwise-empty
@@ -287,7 +294,7 @@
      via z-index). */
   .cal-bar-segment { position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none; }
   .cal-bar-content { position: relative; z-index: 2; }
-  body.dark-mode .cal-day { background: rgba(30,33,48,0.9); }
+  body.dark-mode .cal-day { background: rgba(30,33,48,0.8); }
   body.dark-mode .cal-day.cal-outside { background: #16182380; }
 
   /* ===== DAY VIEW (calendarViewMode = 'day') ===== */
@@ -328,8 +335,12 @@
      where .left-panel's border/shadow actually starts. */
   .gantt-top-row { display: flex; height: 45px; box-sizing: border-box; background: #eef1fa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .gantt-panels-row { display: flex; flex: 1; overflow: hidden; }
+  /* Slightly transparent (not the flat var(--card) fill) — same reasoning
+     as .timeline-body below: this 300px job/task-name column is a large
+     solid strip that would otherwise fully block a project's background
+     image (applyProjectBgVisual()) on its side of the chart. */
   .left-panel {
-    width: 300px; min-width: 300px; background: var(--card); border-right: 1px solid var(--border);
+    width: 300px; min-width: 300px; background: rgba(255,255,255,0.8); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 6px rgba(0,0,0,0.04);
   }
   /* Now just an empty alignment spacer — see the comment on it in the
@@ -424,7 +435,7 @@
   /* Slightly transparent, same reasoning as .cal-day above — lets a
      project's background image (set on the panel itself, see
      applyProjectBgVisual()) show through instead of being fully covered. */
-  .timeline-body { flex: 1; overflow: auto; position: relative; background: rgba(255,255,255,0.9); }
+  .timeline-body { flex: 1; overflow: auto; position: relative; background: rgba(255,255,255,0.8); }
   .timeline-body::-webkit-scrollbar { width: 8px; height: 8px; }
   .timeline-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
   .timeline-grid { position: relative; min-height: 100%; }
@@ -1892,14 +1903,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   /* Bigger canvas areas get a soft gradient instead of a flat fill */
   body.dark-mode .manager-form-area,
   body.dark-mode .board-wrapper,
-  body.dark-mode .left-panel,
   body.dark-mode .manager-sidebar {
     background: linear-gradient(165deg, #20232f 0%, #171a22 55%, #1c1f29 100%);
   }
   /* Same gradient as above, slightly transparent — same reasoning as the
-     light-mode rule, letting a project's background image show through. */
-  body.dark-mode .timeline-body {
-    background: linear-gradient(165deg, rgba(32,35,47,0.9) 0%, rgba(23,26,34,0.9) 55%, rgba(28,31,41,0.9) 100%);
+     light-mode rules, letting a project's background image show through. */
+  body.dark-mode .timeline-body,
+  body.dark-mode .left-panel {
+    background: linear-gradient(165deg, rgba(32,35,47,0.8) 0%, rgba(23,26,34,0.8) 55%, rgba(28,31,41,0.8) 100%);
   }
 
   body.dark-mode .left-header,
