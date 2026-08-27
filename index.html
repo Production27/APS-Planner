@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.4';
+const APP_VERSION = '2026-08-27.5';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -12018,14 +12018,28 @@ function deleteAttachmentFile(key) {
   }).catch(function(err) { console.error('Failed to delete attachment file ' + key, err); });
 }
 
-function renderJobAttachments() {
-  const container = document.getElementById('jmAttachmentItems');
+// Shared behind Job Manager's and the card modal's attachment panels
+// (previously renderJobAttachments()/renderAttachments(),
+// handleJobAttachmentUpload()/handleAttachmentUpload(),
+// removeJobAttachment()/removeAttachment() — near-full duplicates of each
+// other, confirmed already drifted once, the missing-null-guard bug this
+// same review fixed in Tier 2). config shape: {draftArrayGetter,
+// draftArraySetter, containerId, removeHandlerName, flushFn} — the getter/
+// setter pair exists because each caller's draft array is reassigned
+// (filtered), not just mutated in place, so a plain reference wouldn't
+// see removals. removeHandlerName is the caller's own thin-wrapper
+// function name (e.g. "removeJobAttachment"), embedded literally in the
+// rendered onclick= so each panel's remove button keeps calling its own
+// stable global name rather than this shared one plus a config object.
+function renderAttachmentPanel(config) {
+  const container = document.getElementById(config.containerId);
   if (!container) return;
-  if (!jmDraftAttachments.length) {
+  const items = config.draftArrayGetter();
+  if (!items.length) {
     container.innerHTML = '<p style="font-size:11px;color:#999;">No attachments yet.</p>';
     return;
   }
-  container.innerHTML = jmDraftAttachments.map(att => {
+  container.innerHTML = items.map(att => {
     const src = attachmentSrc(att);
     const thumb = att.isImage
       ? '<img class="att-thumb" src="' + src + '">'
@@ -12035,13 +12049,13 @@ function renderJobAttachments() {
       thumb +
       '<div class="att-info"><span class="att-name">' + escapeHtml(att.name) + '</span><span class="att-size">' + formatFileSize(att.size) + '</span></div>' +
       '</a>' +
-      '<button class="att-remove" data-min-tier="editor" onclick="removeJobAttachment(' + att.id + ')">×</button>' +
+      '<button class="att-remove" data-min-tier="editor" onclick="' + config.removeHandlerName + '(' + att.id + ')">×</button>' +
       '</div>';
   }).join('');
   applyPermissionGating(); // rebuilt on every attachment change, outside renderAll()'s own sweep
 }
 
-function handleJobAttachmentUpload(e) {
+function handleAttachmentPanelUpload(e, config) {
   const files = Array.from(e.target.files || []);
   files.forEach(function(file) {
     if (file.size > MAX_ATTACHMENT_SIZE) {
@@ -12050,30 +12064,42 @@ function handleJobAttachmentUpload(e) {
     }
     const localId = Date.now() + Math.random();
     uploadAttachmentFile(file).then(function(result) {
-      jmDraftAttachments.push({
+      config.draftArrayGetter().push({
         id: localId,
         name: file.name,
         size: file.size,
         isImage: file.type.startsWith('image/'),
         key: result.key
       });
-      renderJobAttachments();
-      flushAutoSaveJobForm();
+      renderAttachmentPanel(config);
+      config.flushFn();
     }).catch(function(err) {
-      console.error('Job attachment upload failed', err);
+      console.error('Attachment upload failed', err);
       showToast('"' + file.name + '" failed to upload — ' + err.message, 'error');
     });
   });
   e.target.value = '';
 }
 
-function removeJobAttachment(id) {
-  const att = jmDraftAttachments.find(function(a) { return a.id === id; });
+function removeAttachmentPanelItem(id, config) {
+  const items = config.draftArrayGetter();
+  const att = items.find(function(a) { return a.id === id; });
   if (att && att.key) deleteAttachmentFile(att.key);
-  jmDraftAttachments = jmDraftAttachments.filter(a => a.id !== id);
-  renderJobAttachments();
-  flushAutoSaveJobForm();
+  config.draftArraySetter(items.filter(a => a.id !== id));
+  renderAttachmentPanel(config);
+  config.flushFn();
 }
+
+const JM_ATTACHMENT_PANEL_CONFIG = {
+  draftArrayGetter: function() { return jmDraftAttachments; },
+  draftArraySetter: function(arr) { jmDraftAttachments = arr; },
+  containerId: 'jmAttachmentItems',
+  removeHandlerName: 'removeJobAttachment',
+  flushFn: flushAutoSaveJobForm
+};
+function renderJobAttachments() { renderAttachmentPanel(JM_ATTACHMENT_PANEL_CONFIG); }
+function handleJobAttachmentUpload(e) { handleAttachmentPanelUpload(e, JM_ATTACHMENT_PANEL_CONFIG); }
+function removeJobAttachment(id) { removeAttachmentPanelItem(id, JM_ATTACHMENT_PANEL_CONFIG); }
 
 // ----- Manage custom field options -----
 function openManageFields() {
@@ -12697,68 +12723,22 @@ function setMyChecklistStageAssignee(projectId, cardId, columnId, username, chec
 }
 
 // ----- Attachments -----
-function renderAttachments() {
-  const container = document.getElementById('attachmentItems');
-  if (!container) return;
-  if (!draftAttachments.length) {
-    container.innerHTML = '<p style="font-size:11px;color:#999;">No attachments yet.</p>';
-    return;
-  }
-  container.innerHTML = draftAttachments.map(att => {
-    const src = attachmentSrc(att);
-    const thumb = att.isImage
-      ? '<img class="att-thumb" src="' + src + '">'
-      : '<div class="att-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
-    return '<div class="attachment-item">' +
-      '<a href="' + src + '" download="' + escapeHtml(att.name) + '" target="_blank" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;">' +
-      thumb +
-      '<div class="att-info"><span class="att-name">' + escapeHtml(att.name) + '</span><span class="att-size">' + formatFileSize(att.size) + '</span></div>' +
-      '</a>' +
-      '<button class="att-remove" data-min-tier="editor" onclick="removeAttachment(' + att.id + ')">×</button>' +
-      '</div>';
-  }).join('');
-  applyPermissionGating(); // rebuilt on every attachment change, outside renderAll()'s own sweep
-}
-
 function formatFileSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-function handleAttachmentUpload(e) {
-  const files = Array.from(e.target.files || []);
-  files.forEach(function(file) {
-    if (file.size > MAX_ATTACHMENT_SIZE) {
-      showToast('"' + file.name + '" is too large (max 25MB)', 'error');
-      return;
-    }
-    const localId = Date.now() + Math.random();
-    uploadAttachmentFile(file).then(function(result) {
-      draftAttachments.push({
-        id: localId,
-        name: file.name,
-        size: file.size,
-        isImage: file.type.startsWith('image/'),
-        key: result.key
-      });
-      renderAttachments();
-      flushCardAutosave();
-    }).catch(function(err) {
-      console.error('Attachment upload failed', err);
-      showToast('"' + file.name + '" failed to upload — ' + err.message, 'error');
-    });
-  });
-  e.target.value = '';
-}
-
-function removeAttachment(id) {
-  const att = draftAttachments.find(function(a) { return a.id === id; });
-  if (att && att.key) deleteAttachmentFile(att.key);
-  draftAttachments = draftAttachments.filter(a => a.id !== id);
-  renderAttachments();
-  flushCardAutosave();
-}
+const CARD_ATTACHMENT_PANEL_CONFIG = {
+  draftArrayGetter: function() { return draftAttachments; },
+  draftArraySetter: function(arr) { draftAttachments = arr; },
+  containerId: 'attachmentItems',
+  removeHandlerName: 'removeAttachment',
+  flushFn: flushCardAutosave
+};
+function renderAttachments() { renderAttachmentPanel(CARD_ATTACHMENT_PANEL_CONFIG); }
+function handleAttachmentUpload(e) { handleAttachmentPanelUpload(e, CARD_ATTACHMENT_PANEL_CONFIG); }
+function removeAttachment(id) { removeAttachmentPanelItem(id, CARD_ATTACHMENT_PANEL_CONFIG); }
 
 function toggleActivitySidebar() {
   const sidebar = document.getElementById('activitySidebar');
