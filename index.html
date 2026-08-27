@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.6';
+const APP_VERSION = '2026-08-27.7';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -3219,17 +3219,31 @@ function ensureJobAndTaskIds(arr) {
   return arr;
 }
 
-function flattenJobs(jobsArr) {
-  const hiddenOrders = new Set(
-    BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
-  );
-  const rows = [];
-  // Linked reference jobs (see getLinkedReferenceJobs()) only make sense
-  // tacked onto the active project's own list — a caller passing some
-  // other array (there currently isn't one, but just in case) gets them
-  // too, same as it always gets whatever jobsArr itself contains; skipping
-  // isLinkedReference items that show up in jobsArr already avoids ever
-  // double-adding one.
+// Shared job -> phase -> sub-unit walk behind flattenJobs() (Gantt Tasks
+// view) and buildCalendarJobRows() (Calendar) — the genuinely-matching
+// pair (already cross-referenced by comment below as "Same 'first
+// sub-unit only' placement as flattenJobs()"). Skips archived jobs, folds
+// in linked reference jobs the same way both callers already did, visits
+// every phase then every sub-unit within it (including the synthetic
+// single-entry wrap an unphased job/phase gets from getJobPhases()/
+// getPhaseSubUnits()), and appends that phase's one due-marker row on the
+// FIRST sub-unit only — there's no per-sub-phase card to carry a second
+// one, so it must never be duplicated across every sub-phase.
+// subUnitCallback(job, jobIdx, phase, phaseName, subUnit, subIdx,
+// subPhaseName) does each caller's own per-sub-unit row shaping;
+// dueRowBuilder(...) builds that caller's own due-marker row shape (only
+// called when a due task actually exists).
+//
+// buildVisibleTaskRows() (the Gantt's collapse-aware nested helper,
+// inside renderGantt()) is deliberately NOT built on this — it's tightly
+// coupled to Gantt-only collapse state (collapsedPhaseIds/
+// tasksExpandedPhaseIds/tasksExpandedSubPhaseIds/ganttFocusedJobId) and
+// produces a genuinely different row shape (collapse-aware synthetic
+// phase/sub-phase rows). Forcing it through this walker would mean
+// threading Gantt-specific collapse logic into code the other two
+// callers don't need — worse for long-term readability than the current
+// split, not better.
+function forEachVisibleSubUnit(jobsArr, subUnitCallback, dueRowBuilder) {
   const combined = (jobsArr || []).concat(getLinkedReferenceJobs());
   combined.forEach(function(job, jobIdx) {
     if (job.archived) return;
@@ -3237,21 +3251,27 @@ function flattenJobs(jobsArr) {
       const phaseName = phase.isDefault ? null : phase.name;
       getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
         const subPhaseName = subUnit.isDefault ? null : subUnit.name;
-        (subUnit.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-        (subUnit.tasks || []).forEach(function(task, taskIdx) {
-          if (hiddenOrders.has(task.order)) return;
-          rows.push({job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName});
-        });
-        // The phase's one due marker (there's no per-sub-phase card to
-        // carry a second one) only ever shows on the FIRST sub-unit's row
-        // — real or the synthetic default — never duplicated across every
-        // sub-phase.
+        subUnitCallback(job, jobIdx, phase, phaseName, subUnit, subIdx, subPhaseName);
         if (!job.isLinkedReference && subIdx === 0) {
           const dueTask = getJobDueMarkerTask(job, phase.id);
-          if (dueTask) rows.push({job: job, jobIdx: jobIdx, task: dueTask, taskIdx: -1, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName});
+          if (dueTask) dueRowBuilder(job, jobIdx, phase, phaseName, subUnit, subPhaseName, dueTask);
         }
       });
     });
+  });
+}
+
+function flattenJobs(jobsArr) {
+  const hiddenOrders = getHiddenTaskOrders();
+  const rows = [];
+  forEachVisibleSubUnit(jobsArr, function(job, jobIdx, phase, phaseName, subUnit, subIdx, subPhaseName) {
+    (subUnit.tasks || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    (subUnit.tasks || []).forEach(function(task, taskIdx) {
+      if (hiddenOrders.has(task.order)) return;
+      rows.push({job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName});
+    });
+  }, function(job, jobIdx, phase, phaseName, subUnit, subPhaseName, dueTask) {
+    rows.push({job: job, jobIdx: jobIdx, task: dueTask, taskIdx: -1, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName});
   });
   return rows;
 }
@@ -3380,34 +3400,22 @@ function isCalendarJobSpanTaskId(taskId) {
 function buildCalendarJobRows(jobsArr) {
   const hiddenOrders = getHiddenTaskOrders();
   const rows = [];
-  const combined = (jobsArr || []).concat(getLinkedReferenceJobs());
-  combined.forEach(function(job) {
-    if (job.archived) return;
-    getJobPhases(job).forEach(function(phase) {
-      const phaseName = phase.isDefault ? null : phase.name;
-      getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
-        const subPhaseName = subUnit.isDefault ? null : subUnit.name;
-        const clusters = buildSubUnitClusters(job, subUnit, hiddenOrders);
-        const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
-        clusters.forEach(function(cluster, clusterIdx) {
-          const single = cluster.segments.length === 1 ? cluster.segments[0] : null;
-          const pseudoTask = {
-            id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || '') + '|' + clusterIdx,
-            name: job.name + namePart,
-            start: toIsoDate(cluster.start), finish: toIsoDate(cluster.finish),
-            notes: '', color: (single && single.taskCount === 1) ? single.colors[0] : job.color, order: 0, isJobSpan: true,
-            clusterSegments: cluster.segments
-          };
-          rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
-        });
-        // Same "first sub-unit only" placement as flattenJobs() — see its
-        // own comment on this.
-        if (!job.isLinkedReference && subIdx === 0) {
-          const dueTask = getJobDueMarkerTask(job, phase.id);
-          if (dueTask) rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
-        }
-      });
+  forEachVisibleSubUnit(jobsArr, function(job, jobIdx, phase, phaseName, subUnit, subIdx, subPhaseName) {
+    const clusters = buildSubUnitClusters(job, subUnit, hiddenOrders);
+    const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+    clusters.forEach(function(cluster, clusterIdx) {
+      const single = cluster.segments.length === 1 ? cluster.segments[0] : null;
+      const pseudoTask = {
+        id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || '') + '|' + clusterIdx,
+        name: job.name + namePart,
+        start: toIsoDate(cluster.start), finish: toIsoDate(cluster.finish),
+        notes: '', color: (single && single.taskCount === 1) ? single.colors[0] : job.color, order: 0, isJobSpan: true,
+        clusterSegments: cluster.segments
+      };
+      rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
     });
+  }, function(job, jobIdx, phase, phaseName, subUnit, subPhaseName, dueTask) {
+    rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
   });
   return rows;
 }
