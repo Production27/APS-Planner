@@ -4052,9 +4052,20 @@ function deriveColumnForTasks(tasks, card) {
 }
 
 function syncCardColumns() {
+  // Was calling getPhaseCard() (a full boardCards.find() scan) once per
+  // phase across every job -- an O(jobs x phases x boardCards) scan that
+  // runs at the top of renderJobList(), including once per keystroke via
+  // filterJobList(). Builds one jobId|phaseId -> card lookup Map here
+  // instead, scoped to just this call (not a persistent cross-call
+  // cache -- boardCards is mutated from enough places elsewhere in this
+  // file that keeping a cache reliably invalidated everywhere would be
+  // its own risk), so the O(cards) cost of building it is paid once per
+  // call instead of once per phase.
+  const cardMap = new Map();
+  boardCards.forEach(function(c) { cardMap.set(c.jobId + '|' + (c.phaseId || ''), c); });
   jobs.forEach(function(job) {
     getJobPhases(job).forEach(function(phase) {
-      const card = getPhaseCard(job, phase.id);
+      const card = cardMap.get(job.id + '|' + (phase.id || ''));
       if (card) {
         // A phase with sub-phases has nothing left in its own phase.tasks
         // (mirrors job.tasks emptying once split into phases) — its one
@@ -6521,9 +6532,17 @@ function renderWeekHourGrid(cellDates, timedCalRows, today, sectionId, labelsId,
   section.scrollTop = scrollHour * WEEK_HOUR_ROW_H;
 }
 
+// Debounced — a manual window resize-drag or a mobile orientation
+// change/on-screen-keyboard show-hide can fire 'resize' many times in
+// quick succession, each otherwise triggering a full calendar rebuild
+// mid-gesture instead of one settled render once it's actually done.
+let calendarResizeDebounceTimer = null;
 window.addEventListener('resize', () => {
-  const panel = document.getElementById('panel-calendar');
-  if (panel && panel.classList.contains('active')) renderCalendar();
+  clearTimeout(calendarResizeDebounceTimer);
+  calendarResizeDebounceTimer = setTimeout(() => {
+    const panel = document.getElementById('panel-calendar');
+    if (panel && panel.classList.contains('active')) renderCalendar();
+  }, 200);
 });
 
 /* ===== CALENDAR DRAG HANDLERS ===== */
@@ -9184,7 +9203,17 @@ function renderJobList() {
   applyPermissionGating(); // rebuilt on every job list refresh, outside renderAll()'s own sweep
 }
 
-function filterJobList() { renderJobList(); }
+// Debounced — renderJobList() tears down and rebuilds the entire job
+// list's innerHTML (with per-card inline SVGs) on every call, which used
+// to run on every single keystroke. 150ms is short enough that typing
+// still feels immediate (the gap between keystrokes during normal typing
+// is usually well over that) but collapses a fast typist's burst of
+// keystrokes into one render instead of one per character.
+let filterJobListDebounceTimer = null;
+function filterJobList() {
+  clearTimeout(filterJobListDebounceTimer);
+  filterJobListDebounceTimer = setTimeout(renderJobList, 150);
+}
 function updateJobCount() {
   const myJobs = getVisibleJobs();
   const visible = myJobs.filter(j => showArchived || !j.archived).length;
@@ -11552,6 +11581,18 @@ function handleCardDragEnd(e) {
   document.querySelectorAll('.board-column').forEach(c => c.classList.remove('card-drag-over'));
 }
 
+// The reposition-while-dragging work below (getDragAfterElement's
+// getBoundingClientRect() over every card in the column, then an
+// insertBefore/appendChild) is rAF-coalesced -- native dragover can fire
+// far more often than this can usefully repaint, same reason every other
+// drag handler in this file is throttled this way. Not cached across
+// ticks (unlike the Gantt/Calendar bar-drag fixes) since the cards this
+// reads the position of are the SAME ones insertBefore/appendChild just
+// reordered — recomputing fresh each rAF tick (instead of on every raw
+// event) is what makes this safe: never stale, just not redone dozens of
+// times a second for no visual benefit.
+let dragOverRafPending = false;
+let dragOverLatestEvent = null;
 function handleColumnDragOver(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -11560,18 +11601,28 @@ function handleColumnDragOver(e) {
   body.classList.add('drag-over');
   const col = body.closest('.board-column');
   if (col) col.classList.add('card-drag-over');
+
+  dragOverLatestEvent = { body: body, clientY: e.clientY };
+  if (dragOverRafPending) return;
+  dragOverRafPending = true;
+  requestAnimationFrame(function() {
+    dragOverRafPending = false;
+    if (dragOverLatestEvent) applyColumnDragOver(dragOverLatestEvent.body, dragOverLatestEvent.clientY);
+  });
+}
+function applyColumnDragOver(body, clientY) {
   const dragging = document.querySelector('.board-card.dragging');
   if (!dragging) return;
   // Only move if not already in this body
   if (dragging.parentElement === body) {
-    const afterEl = getDragAfterElement(body, e.clientY);
+    const afterEl = getDragAfterElement(body, clientY);
     if (afterEl == null) {
       if (body.lastElementChild !== dragging) body.appendChild(dragging);
     } else {
       if (afterEl !== dragging) body.insertBefore(dragging, afterEl);
     }
   } else {
-    const afterEl = getDragAfterElement(body, e.clientY);
+    const afterEl = getDragAfterElement(body, clientY);
     if (afterEl == null) body.appendChild(dragging);
     else body.insertBefore(dragging, afterEl);
   }
@@ -11646,6 +11697,17 @@ function confirmChecklistBeforeMove(card) {
 function handleColumnDrop(e) {
   e.preventDefault();
   e.stopPropagation();
+  // Flush any dragover reposition still waiting on its rAF (see
+  // handleColumnDragOver()) before syncBoardCardsFromDOM() below reads
+  // the DOM's card order -- drop fires as its own event, so without this
+  // the last dragover's reorder could still be pending when we read the
+  // order, and applying it a moment later (between drop and dragend,
+  // when dragend is what actually clears .dragging) would silently
+  // reorder the DOM again after boardCards had already been captured.
+  if (dragOverLatestEvent) {
+    applyColumnDragOver(dragOverLatestEvent.body, dragOverLatestEvent.clientY);
+    dragOverLatestEvent = null;
+  }
   const body = e.currentTarget;
   body.classList.remove('drag-over');
   const colEl = body.closest('.board-column');
