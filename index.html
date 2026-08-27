@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.5';
+const APP_VERSION = '2026-08-27.6';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -12578,41 +12578,49 @@ function persistMyChecklistChange(projectId) {
   if (projectId === activeProjectId) { saveJobs(); } else { saveProjects(); pushProjectToShared(projectId); }
 }
 
-function toggleMyChecklistItemDone(projectId, cardId, columnId, itemId) {
+// Shared resolve→find-items→find-item→mutate→persist→render skeleton
+// behind the item-level My Checklist mutations that all need an EXISTING
+// item looked up by id first. mutateFn(item, items) does the
+// mutation-specific work; returning `false` from it skips the
+// persist+render tail (used when there's genuinely nothing to save, e.g.
+// a sub-item id that no longer exists — matches what each of these did
+// individually before). addMyChecklistItem() (creates a brand-new item,
+// nothing to look up) and deleteMyChecklistItem() (branches on template
+// metadata that doesn't depend on the item still existing, and must
+// still persist+render even when it doesn't) don't fit this shape and
+// stay as their own separate implementations below.
+function withMyChecklistItem(projectId, cardId, columnId, itemId, mutateFn) {
   const resolved = resolveMyChecklistCard(projectId, cardId);
   if (!resolved) return;
   const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
   const item = items.find(function(i) { return String(i.id) === String(itemId); });
   if (!item) return;
-  item.done = !item.done;
+  if (mutateFn(item, items) === false) return;
   persistMyChecklistChange(projectId);
   renderMyChecklist();
+}
+
+function toggleMyChecklistItemDone(projectId, cardId, columnId, itemId) {
+  withMyChecklistItem(projectId, cardId, columnId, itemId, function(item) {
+    item.done = !item.done;
+  });
 }
 
 // Flags/unflags an item as a "killer item" — see the .ci-required CSS and
 // confirmChecklistBeforeMove() (the board-move gate), which narrows its
 // warning to just required items once any exist on a stage.
 function toggleMyChecklistItemRequired(projectId, cardId, columnId, itemId) {
-  const resolved = resolveMyChecklistCard(projectId, cardId);
-  if (!resolved) return;
-  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
-  const item = items.find(function(i) { return String(i.id) === String(itemId); });
-  if (!item) return;
-  item.required = !item.required;
-  persistMyChecklistChange(projectId);
-  renderMyChecklist();
+  withMyChecklistItem(projectId, cardId, columnId, itemId, function(item) {
+    item.required = !item.required;
+  });
 }
 
 function toggleMyChecklistSubItemDone(projectId, cardId, columnId, itemId, subId) {
-  const resolved = resolveMyChecklistCard(projectId, cardId);
-  if (!resolved) return;
-  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
-  const item = items.find(function(i) { return String(i.id) === String(itemId); });
-  const sub = item && (item.subItems || []).find(function(s) { return String(s.id) === String(subId); });
-  if (!sub) return;
-  sub.done = !sub.done;
-  persistMyChecklistChange(projectId);
-  renderMyChecklist();
+  withMyChecklistItem(projectId, cardId, columnId, itemId, function(item) {
+    const sub = (item.subItems || []).find(function(s) { return String(s.id) === String(subId); });
+    if (!sub) return false;
+    sub.done = !sub.done;
+  });
 }
 
 // Sub-items have no assignee of their own (see myChecklistMsDropdownHtml's
@@ -12623,27 +12631,17 @@ function addMyChecklistSubItem(projectId, cardId, columnId, itemId, inputId) {
   if (!input) return;
   const text = input.value.trim();
   if (!text) return;
-  const resolved = resolveMyChecklistCard(projectId, cardId);
-  if (!resolved) return;
-  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
-  const item = items.find(function(i) { return String(i.id) === String(itemId); });
-  if (!item) return;
-  if (!item.subItems) item.subItems = [];
-  item.subItems.push({ id: genId(), text: text, done: false });
-  input.value = '';
-  persistMyChecklistChange(projectId);
-  renderMyChecklist();
+  withMyChecklistItem(projectId, cardId, columnId, itemId, function(item) {
+    if (!item.subItems) item.subItems = [];
+    item.subItems.push({ id: genId(), text: text, done: false });
+    input.value = '';
+  });
 }
 
 function deleteMyChecklistSubItem(projectId, cardId, columnId, itemId, subId) {
-  const resolved = resolveMyChecklistCard(projectId, cardId);
-  if (!resolved) return;
-  const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
-  const item = items.find(function(i) { return String(i.id) === String(itemId); });
-  if (!item) return;
-  item.subItems = (item.subItems || []).filter(function(s) { return String(s.id) !== String(subId); });
-  persistMyChecklistChange(projectId);
-  renderMyChecklist();
+  withMyChecklistItem(projectId, cardId, columnId, itemId, function(item) {
+    item.subItems = (item.subItems || []).filter(function(s) { return String(s.id) !== String(subId); });
+  });
 }
 
 // Reads/clears the input by id itself (rather than taking the text as a
@@ -12672,6 +12670,11 @@ function addMyChecklistItem(projectId, cardId, columnId, inputId) {
 // has nothing to resurrect, so it's just spliced out outright. Checked
 // against THIS project's own boardColumns, not the global BOARD_COLUMNS,
 // so a template item from a non-active project is identified correctly.
+// Deliberately NOT built on withMyChecklistItem() (see its comment) —
+// the template/non-template branch depends on itemId matching the
+// stage's template metadata, not on the item still existing in `items`,
+// and always persists+renders either way (an already-gone item is a
+// harmless no-op filter/removed-flag, not an error state to bail out of).
 function deleteMyChecklistItem(projectId, cardId, columnId, itemId) {
   const resolved = resolveMyChecklistCard(projectId, cardId);
   if (!resolved) return;
