@@ -6814,7 +6814,11 @@ function handleCalBarMouseDown(e) {
     jobId, taskId, job, task, bar, dragType, startX, origLeft, origWidth,
     startDateObj: s, finishDateObj: f, duration, phaseId, subPhaseId,
     isCalendarEvent: !!calEventId, calEventId, calEventSourceDate,
-    moved: false
+    moved: false,
+    // Read once here instead of on every mousemove tick (see
+    // applyCalBarMouseMove()) — a day cell's width can't change mid-drag,
+    // there's nothing to invalidate by caching it up front.
+    cellWidth: document.querySelector('.cal-day')?.offsetWidth || 1
   };
 
   if (dragType === 'move') bar.classList.add('cal-dragging');
@@ -6824,8 +6828,26 @@ function handleCalBarMouseDown(e) {
   document.addEventListener('mouseup', handleCalBarMouseUp);
 }
 
+// rAF-coalesced the same way the Gantt drag handlers are (see
+// onBarMoveMove()/applyBarMoveMove()) — a raw mousemove can fire far more
+// often than this can usefully repaint, and every tick was doing a
+// tooltip innerHTML write immediately followed by an offsetWidth/
+// offsetHeight read (see moveTooltip()), forcing a synchronous layout
+// flush of the bar's own pending style writes on every single event
+// instead of once per frame.
+let calBarMoveRafPending = false;
+let calBarMoveLatestEvent = null;
 function handleCalBarMouseMove(e) {
   if (!calDragState) return;
+  calBarMoveLatestEvent = e;
+  if (calBarMoveRafPending) return;
+  calBarMoveRafPending = true;
+  requestAnimationFrame(function() {
+    calBarMoveRafPending = false;
+    if (calDragState && calBarMoveLatestEvent) applyCalBarMouseMove(calBarMoveLatestEvent);
+  });
+}
+function applyCalBarMouseMove(e) {
   // Below Editor: never let the drag actually move anything (and never set
   // .moved, so a click-drag attempt just resolves as a plain click on
   // mouseup and opens the event read-only, same as any other click).
@@ -6835,9 +6857,8 @@ function handleCalBarMouseMove(e) {
   // real tasks merged into one — there's no single task to reschedule, so
   // it's read-only the same way, and a click-drag just opens the job.
   if (!hasMinTier('editor') || (calDragState.task && calDragState.task.isJobSpan)) return;
-  const { bar, dragType, startX, origLeft, origWidth, duration, startDateObj, finishDateObj, job, task } = calDragState;
+  const { bar, dragType, startX, origLeft, origWidth, duration, startDateObj, finishDateObj, job, task, cellWidth } = calDragState;
   const deltaX = e.clientX - startX;
-  const cellWidth = document.querySelector('.cal-day')?.offsetWidth || 1;
   const deltaDays = Math.round(deltaX / cellWidth);
 
   if (Math.abs(deltaX) > 3) calDragState.moved = true;
@@ -8308,8 +8329,22 @@ function startBarResizeLeft(e, jobId, taskId, bar) {
   document.addEventListener('mouseup', onBarResizeEnd);
 }
 
+// rAF-coalesced for the same reason as onBarMoveMove()/applyBarMoveMove()
+// just below — one tooltip innerHTML-write-then-offsetWidth-read forced
+// layout flush per animation frame instead of per raw mousemove event.
+let barResizeRafPending = false;
+let barResizeLatestEvent = null;
 function onBarResizeMove(e) {
   if (!barResizeState) return;
+  barResizeLatestEvent = e;
+  if (barResizeRafPending) return;
+  barResizeRafPending = true;
+  requestAnimationFrame(function() {
+    barResizeRafPending = false;
+    if (barResizeState && barResizeLatestEvent) applyBarResizeMove(barResizeLatestEvent);
+  });
+}
+function applyBarResizeMove(e) {
   const deltaX = e.clientX - barResizeState.startX;
   const rawDeltaDays = Math.round(deltaX / dayWidth);
   const tt = document.getElementById('tooltip');
@@ -8411,8 +8446,24 @@ function startTickResize(e, jobId, taskId, tick) {
   document.addEventListener('mouseup', onTickResizeEnd);
 }
 
+// Same rAF-coalescing as onBarResizeMove()/onBarMoveMove() above — this
+// wasn't named in the original review pass, but it's the identical
+// tooltip write-then-forced-layout-read pattern on every raw mousemove,
+// just for the condensed Jobs/Leads view's tick-resize drag instead of a
+// normal task bar's.
+let tickResizeRafPending = false;
+let tickResizeLatestEvent = null;
 function onTickResizeMove(e) {
   if (!tickResizeState) return;
+  tickResizeLatestEvent = e;
+  if (tickResizeRafPending) return;
+  tickResizeRafPending = true;
+  requestAnimationFrame(function() {
+    tickResizeRafPending = false;
+    if (tickResizeState && tickResizeLatestEvent) applyTickResizeMove(tickResizeLatestEvent);
+  });
+}
+function applyTickResizeMove(e) {
   const deltaX = e.clientX - tickResizeState.startX;
   const rawDeltaDays = Math.round(deltaX / dayWidth);
   const newDuration = Math.max(1, tickResizeState.initialDuration + rawDeltaDays);
@@ -8506,15 +8557,47 @@ function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId, subPhaseId) {
     startDateObj: s, duration, deltaDays: 0, moved: false, phaseId: phaseId || null, subPhaseId: subPhaseId || null,
     origLeftPx: parseFloat(bar.style.left),
     origTopPx: parseFloat(bar.style.top),
-    reorderMode: false, newIndex: null, isJobSpan: !!isJobSpan
+    reorderMode: false, newIndex: null, isJobSpan: !!isJobSpan,
+    // Queried + filtered ONCE here at drag start instead of on every
+    // mousemove tick (see applyBarMoveMove()) — this used to be a
+    // whole-document 6-class querySelectorAll + per-element dataset
+    // filter running dozens of times a second for the whole duration of
+    // a drag. The matching set can't change mid-drag (nothing else
+    // touches these overlay elements while a drag is in progress), so
+    // there's nothing to invalidate by caching it up front.
+    jobSpanOverlayEls: isJobSpan ? Array.from(document.querySelectorAll(
+      '.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap, .job-span-border'
+    )).filter(function(tk) {
+      return tk.dataset.jobId === jobId &&
+        (tk.dataset.phaseId || '') === (phaseId || '') &&
+        (tk.dataset.subPhaseId || '') === (subPhaseId || '');
+    }).map(function(tk) { return { el: tk, origLeft: parseFloat(tk.dataset.origLeft) }; }) : null
   };
 
   document.addEventListener('mousemove', onBarMoveMove);
   document.addEventListener('mouseup', onBarMoveEnd);
 }
 
+// rAF-coalesced the same way requestGanttZoom() is (see the GANTT
+// PINCH-TO-ZOOM block) — a raw mousemove can fire far more often than
+// this can usefully repaint, and every tick was doing a tooltip
+// innerHTML write immediately followed by an offsetWidth/offsetHeight
+// read (see moveTooltip()), which forces a synchronous layout flush of
+// whatever DOM writes are still pending (the bar's own style.left/width,
+// here) on every single event instead of once per frame.
+let barMoveRafPending = false;
+let barMoveLatestEvent = null;
 function onBarMoveMove(e) {
   if (!barMoveState) return;
+  barMoveLatestEvent = e;
+  if (barMoveRafPending) return;
+  barMoveRafPending = true;
+  requestAnimationFrame(function() {
+    barMoveRafPending = false;
+    if (barMoveState && barMoveLatestEvent) applyBarMoveMove(barMoveLatestEvent);
+  });
+}
+function applyBarMoveMove(e) {
   // Below Editor: never let the drag actually move anything (and never set
   // .moved, so a click-drag attempt just resolves as a plain click on
   // mouseup and opens the job read-only, same as any other click) — mirrors
@@ -8546,22 +8629,11 @@ function onBarMoveMove(e) {
   // Drag the job-span bar's phase-boundary ticks, gap hashing, solid task
   // segments, overlap hatching, name label, and outline along with it so
   // they don't visually detach from the bar mid-drag (they otherwise only
-  // catch up once renderGantt() redraws everything on drop).
-  if (barMoveState.isJobSpan) {
-    // Phase-scoped (and one level deeper, sub-phase-scoped): a job with
-    // phases — or a phase with sub-phases — has one condensed bar (and one
-    // set of these decorative overlays) per unit, all sharing the same
-    // jobId (and possibly phaseId) — so matching on those alone would also
-    // drag-along a sibling phase's or sibling sub-phase's bar that happens
-    // to sit in a different Gantt row, snapping back only once
-    // renderGantt() redraws on drop. '' matches an unphased/undivided
-    // unit's overlays, consistent with how phaseId/subPhaseId are stamped
-    // (id || '') when built.
-    document.querySelectorAll('.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap, .job-span-border').forEach(function(tk) {
-      if (tk.dataset.jobId !== barMoveState.jobId) return;
-      if ((tk.dataset.phaseId || '') !== (barMoveState.phaseId || '')) return;
-      if ((tk.dataset.subPhaseId || '') !== (barMoveState.subPhaseId || '')) return;
-      tk.style.left = (parseFloat(tk.dataset.origLeft) + deltaDays * dayWidth) + 'px';
+  // catch up once renderGantt() redraws everything on drop). Set (see
+  // startBarMove()) once at drag start instead of re-queried here.
+  if (barMoveState.isJobSpan && barMoveState.jobSpanOverlayEls) {
+    barMoveState.jobSpanOverlayEls.forEach(function(entry) {
+      entry.el.style.left = (entry.origLeft + deltaDays * dayWidth) + 'px';
     });
   }
 
