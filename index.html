@@ -2968,7 +2968,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete Job?</h4>
     <p>Are you sure you want to delete "<span id="deleteJobName"></span>"? This action cannot be undone.</p>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-secondary" onclick="closeDeleteJobModal()">Cancel</button>
       <button class="btn btn-danger" onclick="executeDelete()">Delete</button>
     </div>
   </div>
@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.3';
+const APP_VERSION = '2026-08-27.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5496,11 +5496,11 @@ function openThemeModal() {
   document.getElementById('theme_color').value = color;
   buildThemePresets(color);
   updateThemePreview();
-  document.getElementById('themeModal').classList.add('show');
+  openModal('themeModal');
 }
 
 function closeThemeModal() {
-  document.getElementById('themeModal').classList.remove('show');
+  closeModal('themeModal');
 }
 
 function applyTheme() {
@@ -7148,7 +7148,7 @@ function openAddCalendarEvent(dateStr, timeStr) {
   toggleRepeatUntilField();
   document.getElementById('ce_visibility').value = 'all';
   toggleCalendarEventVisibilityFields([]);
-  document.getElementById('calendarEventModal').classList.add('show');
+  openModal('calendarEventModal');
   setTimeout(function() { document.getElementById('ce_title').focus(); }, 50);
 }
 
@@ -7184,13 +7184,14 @@ function openEditCalendarEvent(eventId, sourceDate) {
   toggleRepeatUntilField();
   document.getElementById('ce_visibility').value = evt.visibility || 'all';
   toggleCalendarEventVisibilityFields(evt.visibleMembers || []);
-  document.getElementById('calendarEventModal').classList.add('show');
+  openModal('calendarEventModal');
 }
 
 function closeCalendarEventModal() {
-  document.getElementById('calendarEventModal').classList.remove('show');
-  editingCalendarEventId = null;
-  calendarEventTargetDate = null;
+  closeModal('calendarEventModal', function() {
+    editingCalendarEventId = null;
+    calendarEventTargetDate = null;
+  });
 }
 
 function toggleRepeatUntilField() {
@@ -10374,11 +10375,11 @@ function restoreJob(jobId) {
 }
 
 function openArchivedJobsModal() {
-  document.getElementById('archivedJobsModal').classList.add('show');
+  openModal('archivedJobsModal');
   renderArchivedJobsList();
 }
 function closeArchivedJobsModal() {
-  document.getElementById('archivedJobsModal').classList.remove('show');
+  closeModal('archivedJobsModal');
 }
 function refreshArchivedJobsListIfOpen() {
   const modal = document.getElementById('archivedJobsModal');
@@ -10509,6 +10510,24 @@ function duplicateJob(jobId, event) {
   editJob(newJob.id);
 }
 
+// Shared show/hide for the app's 9 modal dialogs (deleteModal, cardModal,
+// calendarEventModal, archivedJobsModal, backupsModal, manageUsersModal,
+// manageFieldsModal, manageColumnChecklistModal, themeModal). Each keeps
+// its own named openXModal()/closeXModal() wrapper — referenced by
+// onclick= attributes in the HTML and by call sites throughout the app —
+// which now delegates here instead of hand-rolling the same classList
+// shape 9 times. onClose (if given) runs AFTER the modal is hidden, for
+// state that only needs resetting once the modal's actually closed; any
+// work that must happen BEFORE hiding (like cardModal's autosave flush)
+// stays in the wrapper, ahead of this call.
+function openModal(id) {
+  document.getElementById(id).classList.add('show');
+}
+function closeModal(id, onClose) {
+  document.getElementById(id).classList.remove('show');
+  if (onClose) onClose();
+}
+
 function promptDeleteJob(jobId) {
   // Defense-in-depth — its own trigger buttons are already data-min-tier
   // gated, but delete is irreversible enough to warrant a second check here.
@@ -10516,7 +10535,7 @@ function promptDeleteJob(jobId) {
   deleteTargetJobId = jobId;
   const found = findJob(jobId);
   document.getElementById('deleteJobName').textContent = found ? found.job.name : '';
-  document.getElementById('deleteModal').classList.add('show');
+  openModal('deleteModal');
 }
 
 function confirmDelete() {
@@ -10568,12 +10587,13 @@ function executeDelete() {
     showToast('Job deleted', 'info');
     refreshArchivedJobsListIfOpen();
   }
-  closeModal();
+  closeDeleteJobModal();
 }
 
-function closeModal() {
-  document.getElementById('deleteModal').classList.remove('show');
-  deleteTargetJobId = null;
+function closeDeleteJobModal() {
+  closeModal('deleteModal', function() {
+    deleteTargetJobId = null;
+  });
 }
 
 // ===== BACKUPS (shared room, via the Cloudflare Worker) =====
@@ -10586,11 +10606,11 @@ function getBackupsAuthCredentials() {
 }
 
 function openBackupsModal() {
-  document.getElementById('backupsModal').classList.add('show');
+  openModal('backupsModal');
   loadBackupsList();
 }
 function closeBackupsModal() {
-  document.getElementById('backupsModal').classList.remove('show');
+  closeModal('backupsModal');
 }
 
 async function triggerBackupNow() {
@@ -10724,11 +10744,11 @@ async function postUsersEndpoint(path, extraBody) {
 }
 
 function openManageUsersModal() {
-  document.getElementById('manageUsersModal').classList.add('show');
+  openModal('manageUsersModal');
   loadUsersList();
 }
 function closeManageUsersModal() {
-  document.getElementById('manageUsersModal').classList.remove('show');
+  closeModal('manageUsersModal');
 }
 
 const TIER_LABELS = { admin: 'Admin', projectAdmin: 'Project Admin', editor: 'Editor', commenter: 'Commenter', viewer: 'Viewer' };
@@ -12058,20 +12078,21 @@ function removeJobAttachment(id) {
 // ----- Manage custom field options -----
 function openManageFields() {
   renderManageFieldsBody();
-  document.getElementById('manageFieldsModal').classList.add('show');
+  openModal('manageFieldsModal');
 }
 
 function closeManageFields() {
-  document.getElementById('manageFieldsModal').classList.remove('show');
-  saveFieldOptions();
-  // Both the card modal and Job Manager can have this open behind it —
-  // refresh whichever grid(s)/checklist(s) actually exist right now, so a
-  // newly added/removed option (Job Type, Timeframe, etc.) shows up in an
-  // open field's dropdown immediately instead of only after reopening.
-  if (document.getElementById('customFieldsGrid')) renderCustomFieldsGrid(collectCustomFieldValues());
-  if (document.getElementById('teamFieldsGrid')) renderTeamFieldsGrid(collectCustomFieldValues());
-  if (document.getElementById('jmCustomFieldsGrid')) renderJobCustomFieldsGrid(collectJobCustomFieldValues());
-  if (document.getElementById('jmTeamFieldsGrid')) renderJobTeamFieldsGrid(collectJobCustomFieldValues());
+  closeModal('manageFieldsModal', function() {
+    saveFieldOptions();
+    // Both the card modal and Job Manager can have this open behind it —
+    // refresh whichever grid(s)/checklist(s) actually exist right now, so a
+    // newly added/removed option (Job Type, Timeframe, etc.) shows up in an
+    // open field's dropdown immediately instead of only after reopening.
+    if (document.getElementById('customFieldsGrid')) renderCustomFieldsGrid(collectCustomFieldValues());
+    if (document.getElementById('teamFieldsGrid')) renderTeamFieldsGrid(collectCustomFieldValues());
+    if (document.getElementById('jmCustomFieldsGrid')) renderJobCustomFieldsGrid(collectJobCustomFieldValues());
+    if (document.getElementById('jmTeamFieldsGrid')) renderJobTeamFieldsGrid(collectJobCustomFieldValues());
+  });
 }
 
 function renderManageFieldsBody() {
@@ -12120,12 +12141,13 @@ function openManageColumnChecklist(colId, event) {
   managingChecklistColumnId = colId;
   document.getElementById('manageColumnChecklistTitle').textContent = col.label;
   renderManageColumnChecklistBody();
-  document.getElementById('manageColumnChecklistModal').classList.add('show');
+  openModal('manageColumnChecklistModal');
 }
 
 function closeManageColumnChecklist() {
-  document.getElementById('manageColumnChecklistModal').classList.remove('show');
-  managingChecklistColumnId = null;
+  closeModal('manageColumnChecklistModal', function() {
+    managingChecklistColumnId = null;
+  });
 }
 
 function renderManageColumnChecklistBody() {
@@ -13093,17 +13115,18 @@ function openEditCard(id) {
   renderCustomFieldsGrid(card.customFields || {});
   renderTeamFieldsGrid(card.customFields || {});
   renderAttachments();
-  document.getElementById('cardModal').classList.add('show');
+  openModal('cardModal');
 }
 
 function closeCardModal() {
   // Flush while the modal is still marked open and editingCardId is still
   // valid — autoSaveCardForm() bails out once either isn't true.
   flushCardAutosave();
-  document.getElementById('cardModal').classList.remove('show');
-  editingCardId = null;
-  setCardTitleHint(false);
-  draftAttachments = [];
+  closeModal('cardModal', function() {
+    editingCardId = null;
+    setCardTitleHint(false);
+    draftAttachments = [];
+  });
 }
 
 // ===== CARD MODAL AUTOSAVE =====
@@ -13210,7 +13233,7 @@ function showToast(msg, type) {
 
 // ===== EVENTS =====
 document.getElementById('deleteModal').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
+  if (e.target === this) closeDeleteJobModal();
 });
 
 document.getElementById('cardModal').addEventListener('click', function(e) {
@@ -13231,7 +13254,7 @@ document.getElementById('themeModal').addEventListener('click', function(e) {
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
-    closeModal();
+    closeDeleteJobModal();
     closeCardModal();
     if (document.getElementById('calendarEventModal').classList.contains('show')) closeCalendarEventModal();
     closeSettingsMenu();
