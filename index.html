@@ -1840,6 +1840,23 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        match that ≤1100px range would get squeezed to 64px here despite
        never setting .job-rail-open (mobile doesn't use that toggle). */
     .manager-sidebar { width: 100% !important; min-width: 0; }
+    /* z-index:150 on the base rule (desktop-only reason: keeps the
+       settings dropdown above the Gantt chart's own high-z-index overlay
+       elements — see that rule's own comment) sits above the job drawer's
+       z-index:95 (#formArea), so opening a job here rendered the drawer
+       fully HIDDEN behind this still-visible Jobs list instead of sliding
+       in over it — looked like tapping a job did nothing at all in
+       portrait, or "opened somewhere I can't see" in landscape. Doesn't
+       reintroduce the Gantt-overlay problem the 150 was for: whenever
+       .manager-sidebar is actually visible on mobile, it's specifically
+       because the current view is "jobs" (Gantt/Board/Calendar all
+       display:none the whole sidebar instead — see the
+       body[data-mobile-view=...] rules below), so it's never on-screen
+       at the same time as anything from the Gantt chart to compete with
+       here. No !important needed — same selector, same specificity as
+       the base rule, so this plain override already wins on source order
+       alone. */
+    .manager-sidebar { z-index: auto; }
     .manager-sidebar-header { padding: 12px !important; }
     /* Undoes .job-list's fixed 260px desktop width and its closed-state
        opacity:0/pointer-events:none (see both rules) — mobile doesn't
