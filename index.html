@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.1';
+const APP_VERSION = '2026-08-27.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -4388,7 +4388,7 @@ function isChecklistStageVisibleToMe(assigneesMap, columnId) {
   // While previewing (viewAsUsername set), the bypass reflects the
   // SIMULATED account's own role, not the real admin's — see hasMinTier()
   // and the "View as" section below for the fuller rationale.
-  const effectiveRole = viewAsUsername ? viewAsRole : currentUserRole;
+  const effectiveRole = getEffectiveRole();
   if (effectiveRole === 'admin') return true;
   const asUsername = viewAsUsername || getStoredUsername();
   return assignedTo.indexOf(asUsername) !== -1;
@@ -4453,7 +4453,7 @@ function isCalendarEventVisibleToMe(evt) {
   if (!evt) return false;
   const visibility = evt.visibility || 'all';
   if (visibility === 'all') return true;
-  const effectiveRole = viewAsUsername ? viewAsRole : currentUserRole;
+  const effectiveRole = getEffectiveRole();
   if (effectiveRole === 'projectAdmin') return true;
   const asUsername = viewAsUsername || getStoredUsername();
   if (visibility === 'private') return evt.createdBy === asUsername;
@@ -11926,9 +11926,11 @@ function collectJobCustomFieldValues() {
 // genuinely useful context — just can't change it). Project Admin gets the
 // same content-editing powers as Admin within their assigned project; only
 // true Admin bypasses a checklist's own per-stage privacy restriction (see
-// isChecklistStageVisibleToMe()'s separate, deliberately-unchanged
-// currentUserRole === 'admin' check). Same "UI convenience" caveat as
-// currentUserRole itself: nothing server-side actually enforces this.
+// isChecklistStageVisibleToMe()'s own effectiveRole === 'admin' check,
+// via getEffectiveRole() — same View-As-aware resolution as hasMinTier()
+// uses, not a hardcoded currentUserRole read). Same "UI convenience"
+// caveat as currentUserRole itself: nothing server-side actually
+// enforces this.
 function canAssignChecklistStages() {
   return hasMinTier('projectAdmin');
 }
@@ -13336,12 +13338,18 @@ const PERMISSION_TIERS = ['viewer', 'commenter', 'editor', 'projectAdmin', 'admi
 // While "View as" is active (see viewAsUsername/viewAsRole above), every
 // hasMinTier() check throughout the app — which is nearly all of them,
 // including the data-min-tier sweep in applyPermissionGating() — reflects
-// the SIMULATED account's own tier instead of the real admin's. The View
-// As control itself is the deliberate exception: setViewAs() is guarded
-// by a literal currentUserRole === 'admin' check, not hasMinTier(), so
-// it stays usable no matter how restrictive the tier being previewed is.
+// the SIMULATED account's own tier instead of the real admin's. Only 2
+// places deliberately read currentUserRole directly instead of going
+// through this: setViewAs() (guarded by a literal currentUserRole ===
+// 'admin' check, so it stays usable no matter how restrictive the tier
+// being previewed is) and enforceProjectScopeForRole() (must react to the
+// REAL account's assignment, not a simulated one). Everywhere else should
+// prefer getEffectiveRole()/hasMinTier() over reading currentUserRole.
+function getEffectiveRole() {
+  return viewAsUsername ? viewAsRole : currentUserRole;
+}
 function hasMinTier(tier) {
-  const effectiveRole = viewAsUsername ? viewAsRole : currentUserRole;
+  const effectiveRole = getEffectiveRole();
   const mine = PERMISSION_TIERS.indexOf(effectiveRole);
   const need = PERMISSION_TIERS.indexOf(tier);
   if (mine === -1 || need === -1) return false;
