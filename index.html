@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.7';
+const APP_VERSION = '2026-08-27.8';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -7487,31 +7487,44 @@ function renderGantt() {
     return rows;
   }
 
-  computeDateRange();
-  const totalDays = getDaysDiff(startDate, endDate) + 1;
-  const containerW = document.getElementById('timelineBody').clientWidth;
-  const containerH = document.getElementById('timelineBody').clientHeight;
-  const gridWidth = Math.max(totalDays * dayWidth, containerW);
-  const grid = document.getElementById('timelineGrid');
-  const header = document.getElementById('timelineHeader');
-  const leftBody = document.getElementById('leftBody');
+  // The 10 phases below are split into named nested functions purely for
+  // readability — same closures, same shared-variable access, same
+  // execution order as one long function body, zero behavior change.
+  // Everything a later phase needs from an earlier one is declared here
+  // (not deeper) so each phase function can just assign into it, instead
+  // of ~11 values needing to be threaded through parameters/return
+  // values by hand.
+  let grid, header, leftBody, totalDays, containerH, gridWidth,
+    savedScrollLeft, savedScrollTop, today, visibleRows, jobBarMap;
 
-  // timelineBody's own scrollLeft is the source of truth for horizontal
-  // position now — the header is positioned via transform, driven from
-  // it (see setHeaderScroll()), not independently scrolled itself.
-  const savedScrollTb = document.getElementById('timelineBody');
-  const savedScrollLeft = savedScrollTb ? savedScrollTb.scrollLeft : 0;
-  const savedScrollTop = savedScrollTb ? savedScrollTb.scrollTop : 0;
+  function setupDateRangeAndGrid() {
+    computeDateRange();
+    totalDays = getDaysDiff(startDate, endDate) + 1;
+    const containerW = document.getElementById('timelineBody').clientWidth;
+    containerH = document.getElementById('timelineBody').clientHeight;
+    gridWidth = Math.max(totalDays * dayWidth, containerW);
+    grid = document.getElementById('timelineGrid');
+    header = document.getElementById('timelineHeader');
+    leftBody = document.getElementById('leftBody');
 
-  grid.style.width = gridWidth + 'px';
-  header.style.width = gridWidth + 'px';
-  grid.innerHTML = '';
-  header.innerHTML = '';
-  leftBody.innerHTML = '';
+    // timelineBody's own scrollLeft is the source of truth for horizontal
+    // position now — the header is positioned via transform, driven from
+    // it (see setHeaderScroll()), not independently scrolled itself.
+    const savedScrollTb = document.getElementById('timelineBody');
+    savedScrollLeft = savedScrollTb ? savedScrollTb.scrollLeft : 0;
+    savedScrollTop = savedScrollTb ? savedScrollTb.scrollTop : 0;
 
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    grid.style.width = gridWidth + 'px';
+    header.style.width = gridWidth + 'px';
+    grid.innerHTML = '';
+    header.innerHTML = '';
+    leftBody.innerHTML = '';
+  }
+
+  function buildDateHeader() {
+    today = new Date();
+    today.setHours(0,0,0,0);
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
   let current = new Date(startDate);
   let weekStart = new Date(current);
@@ -7564,10 +7577,11 @@ function renderGantt() {
 
     current.setDate(current.getDate() + 1);
   }
+  }
 
-  let visibleRowIdx = 0;
-  const jobBarMap = {};
-  const visibleRows = buildVisibleTaskRows();
+  function buildRowModel() {
+  jobBarMap = {};
+  visibleRows = buildVisibleTaskRows();
 
   // .timeline-grid's own CSS only guarantees min-height:100% of its
   // scroll container — every child in here (row backgrounds aside) is
@@ -7580,7 +7594,16 @@ function renderGantt() {
   // the viewport height so a short list still fills the visible area.
   const GANTT_EXTRA_ROWS_BELOW = 4;
   grid.style.height = Math.max(containerH, (visibleRows.length + GANTT_EXTRA_ROWS_BELOW) * GANTT_ROW_H) + 'px';
+  }
 
+  // visibleRowIdx here and barVisibleIdx in renderTimelineBars() below
+  // MUST stay in lockstep: both loops walk the identical visibleRows
+  // array, unconditionally, once — that's the only reason a left-panel
+  // row's Y-position and its timeline bar's Y-position (computed from
+  // two separately-incrementing counters) stay aligned. If either loop
+  // ever gains a mid-loop skip/continue, the other must get the same one.
+  function renderLeftPanelRows() {
+  let visibleRowIdx = 0;
   visibleRows.forEach(function(entry) {
     const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
     // "Sub-Phase (Phase)" when both exist, otherwise whichever one does —
@@ -7694,7 +7717,9 @@ function renderGantt() {
       visibleRowIdx++;
     }
   });
+  }
 
+  function drawTodayLine() {
   const todayIdx = getDaysDiff(startDate, today);
   if (todayIdx >= 0 && todayIdx < totalDays) {
     const tl = document.createElement('div');
@@ -7707,7 +7732,11 @@ function renderGantt() {
     tlbl.textContent = 'Today — ' + today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     grid.appendChild(tlbl);
   }
+  }
 
+  // See renderLeftPanelRows()'s comment on visibleRowIdx — barVisibleIdx
+  // here must stay in exact lockstep with it for the same reason.
+  function renderTimelineBars() {
   let barVisibleIdx = 0;
   visibleRows.forEach(function(entry) {
     const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
@@ -8146,7 +8175,9 @@ function renderGantt() {
 
     barVisibleIdx++;
   });
+  }
 
+  function drawConnectorLines() {
   const svgNs = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNs, 'svg');
   svg.style.cssText = 'position:absolute;top:0;left:0;width:' + gridWidth + 'px;height:100%;pointer-events:none;z-index:30;overflow:visible;';
@@ -8183,7 +8214,9 @@ function renderGantt() {
     }
   });
   grid.appendChild(svg);
+  }
 
+  function restoreScrollPosition() {
   requestAnimationFrame(() => {
     const tb = document.getElementById('timelineBody');
     // renderAll() calls renderGantt() unconditionally on load/refresh even
@@ -8206,7 +8239,16 @@ function renderGantt() {
     }
     setupScrollSync();
   });
+  }
 
+  setupDateRangeAndGrid();
+  buildDateHeader();
+  buildRowModel();
+  renderLeftPanelRows();
+  drawTodayLine();
+  renderTimelineBars();
+  drawConnectorLines();
+  restoreScrollPosition();
   buildLegend();
 }
 
