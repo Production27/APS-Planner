@@ -2493,7 +2493,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <!-- Day mode only (see renderCalendar()) — the day agenda has no
                empty-cell-to-click affordance for adding an event the way
                month/week's grid cells do. -->
-          <button class="btn btn-secondary" id="calAddEventBtn" data-min-tier="editor" onclick="openAddCalendarEvent(calendarViewDate.toISOString().split('T')[0])" style="display:none;">+ Add</button>
+          <button class="btn btn-secondary" id="calAddEventBtn" data-min-tier="editor" onclick="openAddCalendarEvent(toIsoDate(calendarViewDate))" style="display:none;">+ Add</button>
           <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap:4px;background:#eef1fa;padding:3px;border-radius:8px;">
             <button class="btn btn-secondary" id="calViewMonth" onclick="setCalendarView('month')" style="padding:6px 14px;font-size:12px;">Month</button>
             <button class="btn btn-secondary" id="calViewWeek" onclick="setCalendarView('week')" style="padding:6px 14px;font-size:12px;">Week</button>
@@ -3417,7 +3417,7 @@ function buildCalendarJobRows(jobsArr, includeArchived) {
           const pseudoTask = {
             id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || '') + '|' + clusterIdx,
             name: job.name + namePart,
-            start: cluster.start.toISOString().split('T')[0], finish: cluster.finish.toISOString().split('T')[0],
+            start: toIsoDate(cluster.start), finish: toIsoDate(cluster.finish),
             notes: '', color: (single && single.taskCount === 1) ? single.colors[0] : job.color, order: 0, isJobSpan: true,
             clusterSegments: cluster.segments
           };
@@ -3450,9 +3450,7 @@ function parseCalendarEventTaskId(taskId) {
 // from the anchor date, so a repeating event is usable without typing an
 // end date, but doesn't generate occurrences forever.
 function defaultRepeatUntil(anchorDate) {
-  const d = new Date(anchorDate);
-  d.setMonth(d.getMonth() + 6);
-  return d;
+  return addMonths(anchorDate, 6);
 }
 
 // Expands one calendar event into its concrete occurrences within
@@ -3472,11 +3470,11 @@ function getCalendarEventOccurrences(evt, rangeStart, rangeEnd) {
     let cursor = new Date(anchor);
     let guard = 0;
     while (cursor <= until && guard < 500) {
-      const dateStr = cursor.toISOString().split('T')[0];
+      const dateStr = toIsoDate(cursor);
       theoretical.push({ sourceDate: dateStr, start: dateStr, time: evt.time || '', duration: evt.duration || 1 });
       if (evt.repeat === 'daily') cursor.setDate(cursor.getDate() + 1);
       else if (evt.repeat === 'weekly') cursor.setDate(cursor.getDate() + 7);
-      else if (evt.repeat === 'monthly') cursor.setMonth(cursor.getMonth() + 1);
+      else if (evt.repeat === 'monthly') cursor = addMonths(cursor, 1);
       else break; // unrecognized repeat value — treat as non-repeating
       guard++;
     }
@@ -3514,8 +3512,8 @@ function flattenCalendarEventsForRange(rangeStart, rangeEnd) {
         name: evt.title,
         notes: '',
         color: evt.color,
-        start: occ.start.toISOString().split('T')[0],
-        finish: occ.finish.toISOString().split('T')[0],
+        start: toIsoDate(occ.start),
+        finish: toIsoDate(occ.finish),
         isCalendarEvent: true,
         time: occ.time
       };
@@ -5738,6 +5736,46 @@ function getDaysDiff(d1, d2) {
   return Math.round((d2 - d1) / 86400000);
 }
 
+// .toISOString().split('T')[0] always formats in UTC, but every date in
+// this app is parsed as LOCAL midnight (new Date(x + 'T00:00:00')) and
+// manipulated with local-time methods (setDate/setMonth/etc) — for any
+// user in a UTC-ahead timezone (most of Europe/Asia/Australia), local
+// midnight falls on the PREVIOUS UTC day, so toISOString() silently wrote
+// back a date one day earlier than what a drag/resize's own tooltip had
+// just shown. Every date-to-string call site in the app (Gantt/Calendar
+// drag-resize, recurring event expansion, day-cell dataset.date, etc.)
+// now goes through this instead — formats using the Date's own local
+// getters, so what's on screen is what gets saved.
+function toIsoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+// Adding N months via a naive date.setMonth(date.getMonth() + N) overflows
+// into a LATER month than intended whenever the target month is shorter
+// than the current day-of-month — e.g. Aug 31 + 1 month lands on Oct 1,
+// not Sep 30, silently skipping September entirely. That bit both the
+// Calendar's Prev/Next navigation (skipping a whole month whenever the
+// view date fell on the 29th-31st) and monthly-repeating events (an
+// event anchored on the 31st permanently drifted to "the 3rd" of every
+// following month, since each iteration compounds the same overflow).
+// Clamping to the target month's actual last day — the same "recur near
+// the end of short months" behavior Google Calendar/Outlook use — fixes
+// both call sites with one shared helper instead of patching the
+// overflow differently in each place. Returns a new Date; never mutates
+// the one passed in.
+function addMonths(date, delta) {
+  const d = new Date(date);
+  const day = d.getDate();
+  d.setDate(1); // land on a date that exists in every month before changing month
+  d.setMonth(d.getMonth() + delta);
+  const lastDayOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDayOfTargetMonth));
+  return d;
+}
+
 // Business-day (Mon-Fri) versions of the above, used only for the Job
 // Manager's Days field — the Gantt itself still positions/sizes bars by
 // calendar days, since a bar's width needs to represent real elapsed time
@@ -6061,7 +6099,7 @@ function setCalendarView(mode) {
 
 function calendarPrev() {
   if (calendarViewMode === 'month') {
-    calendarViewDate.setMonth(calendarViewDate.getMonth() - 1);
+    calendarViewDate = addMonths(calendarViewDate, -1);
   } else if (calendarViewMode === 'day') {
     calendarViewDate.setDate(calendarViewDate.getDate() - 1);
   } else {
@@ -6072,7 +6110,7 @@ function calendarPrev() {
 
 function calendarNext() {
   if (calendarViewMode === 'month') {
-    calendarViewDate.setMonth(calendarViewDate.getMonth() + 1);
+    calendarViewDate = addMonths(calendarViewDate, 1);
   } else if (calendarViewMode === 'day') {
     calendarViewDate.setDate(calendarViewDate.getDate() + 1);
   } else {
@@ -6213,7 +6251,7 @@ function renderMonthCalendar() {
       const isOutside = cellDate.getMonth() !== month;
       const isToday = cellDate.getTime() === today.getTime();
       html += '<div class="cal-day' + (isOutside ? ' cal-outside' : '') + (isToday ? ' cal-today' : '') +
-        '" style="min-height:' + minH + 'px;" data-row="' + row + '" data-col="' + col + '" data-date="' + cellDate.toISOString().split('T')[0] + '">' +
+        '" style="min-height:' + minH + 'px;" data-row="' + row + '" data-col="' + col + '" data-date="' + toIsoDate(cellDate) + '">' +
         '<div class="cal-day-num">' + cellDate.getDate() + '</div>' +
       '</div>';
     }
@@ -6303,7 +6341,7 @@ function renderWeekCalendar() {
   for (let col = 0; col < 7; col++) {
     const cellDate = cellDates[col];
     const isToday = cellDate.getTime() === today.getTime();
-    html += '<div class="cal-day week-day' + (isToday ? ' cal-today' : '') + '" data-week-col="' + col + '" data-date="' + cellDate.toISOString().split('T')[0] + '">' +
+    html += '<div class="cal-day week-day' + (isToday ? ' cal-today' : '') + '" data-week-col="' + col + '" data-date="' + toIsoDate(cellDate) + '">' +
       '<div class="cal-day-num">' + cellDate.getDate() + '</div>' +
     '</div>';
   }
@@ -6448,7 +6486,7 @@ function renderWeekHourGrid(cellDates, timedCalRows, today, sectionId, labelsId,
       nowLineHtml = '<div class="week-current-time-line" style="top:' + nowTop + 'px;"></div>';
     }
 
-    colsHtml += '<div class="week-hour-col" data-col="' + col + '" data-date="' + cellDates[col].toISOString().split('T')[0] + '">' +
+    colsHtml += '<div class="week-hour-col" data-col="' + col + '" data-date="' + toIsoDate(cellDates[col]) + '">' +
       rowLines + eventsHtml + nowLineHtml + '</div>';
   }
   colsEl.innerHTML = colsHtml;
@@ -6740,7 +6778,7 @@ function handleCalBarMouseDown(e) {
     calEventId = parsed.eventId;
     calEventSourceDate = parsed.sourceDate;
     job = { id: 'calevt-job-' + evt.id, name: evt.title };
-    task = { id: taskId, name: evt.title, start: occ.start.toISOString().split('T')[0], finish: occ.finish.toISOString().split('T')[0] };
+    task = { id: taskId, name: evt.title, start: toIsoDate(occ.start), finish: toIsoDate(occ.finish) };
   } else if (isCalendarJobSpanTaskId(taskId)) {
     const jf = findJob(jobId);
     if (!jf) return;
@@ -6893,7 +6931,7 @@ function handleCalBarMouseUp(e) {
         newStart = new Date(finishDateObj);
         newStart.setDate(newStart.getDate() - (newDuration - 1));
       }
-      const newStartStr = newStart.toISOString().split('T')[0];
+      const newStartStr = toIsoDate(newStart);
       const evt = calendarEvents.find(function(ev) { return ev.id === calEventId; });
       if (evt) {
         // A one-off (non-repeating) event just updates directly. A
@@ -6922,7 +6960,7 @@ function handleCalBarMouseUp(e) {
     newStart.setDate(newStart.getDate() + deltaDays);
     const card = getPhaseCard(job, phaseId);
     if (card) {
-      card.due = newStart.toISOString().split('T')[0];
+      card.due = toIsoDate(newStart);
       saveJobs();
       logActivity('rescheduled due date for job "' + job.name + '"');
       renderGantt();
@@ -6936,8 +6974,8 @@ function handleCalBarMouseUp(e) {
     newStart.setDate(newStart.getDate() + deltaDays);
     const newFinish = new Date(newStart);
     newFinish.setDate(newFinish.getDate() + duration - 1);
-    task.start = newStart.toISOString().split('T')[0];
-    task.finish = newFinish.toISOString().split('T')[0];
+    task.start = toIsoDate(newStart);
+    task.finish = toIsoDate(newFinish);
     saveJobs();
     logActivity('rescheduled job "' + task.name + '"');
     renderGantt();
@@ -6949,7 +6987,7 @@ function handleCalBarMouseUp(e) {
     const newDuration = Math.max(1, duration + deltaDays);
     const newFinish = new Date(startDateObj);
     newFinish.setDate(newFinish.getDate() + newDuration - 1);
-    task.finish = newFinish.toISOString().split('T')[0];
+    task.finish = toIsoDate(newFinish);
     saveJobs();
     logActivity('rescheduled job "' + task.name + '"');
     renderGantt();
@@ -6961,7 +6999,7 @@ function handleCalBarMouseUp(e) {
     const newDuration = Math.max(1, duration - deltaDays);
     const newStart = new Date(finishDateObj);
     newStart.setDate(newStart.getDate() - (newDuration - 1));
-    task.start = newStart.toISOString().split('T')[0];
+    task.start = toIsoDate(newStart);
     saveJobs();
     logActivity('rescheduled job "' + task.name + '"');
     renderGantt();
@@ -7042,7 +7080,7 @@ function renderDayCalendarView() {
 
   const d = new Date(calendarViewDate);
   d.setHours(0, 0, 0, 0);
-  const dateStr = d.toISOString().split('T')[0];
+  const dateStr = toIsoDate(d);
 
   labelEl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   weekdaysEl.style.display = 'none';
@@ -7359,8 +7397,8 @@ function renderGantt() {
     const pseudoTask = {
       id: 'jobspan-collapsed|' + job.id + '|' + (phase.id || ''),
       name: job.name + namePart,
-      start: overallStart.toISOString().split('T')[0],
-      finish: overallFinish.toISOString().split('T')[0],
+      start: toIsoDate(overallStart),
+      finish: toIsoDate(overallFinish),
       notes: '',
       color: job.color,
       order: 0,
@@ -7377,8 +7415,8 @@ function renderGantt() {
     const pseudoTask = {
       id: 'jobspan|' + job.id + '|' + (phase.id || '') + '|' + (seg.subPhaseId || ''),
       name: job.name + namePart,
-      start: seg.start.toISOString().split('T')[0],
-      finish: seg.finish.toISOString().split('T')[0],
+      start: toIsoDate(seg.start),
+      finish: toIsoDate(seg.finish),
       notes: '',
       color: job.color,
       order: 0,
@@ -7487,7 +7525,7 @@ function renderGantt() {
     dayDiv.style.left = dayLeft + 'px';
     dayDiv.style.width = dayWidth + 'px';
     dayDiv.innerHTML = '<span class="day-num">' + current.getDate() + '</span><span class="day-name">' + dayNames[current.getDay()] + '</span>';
-    dayDiv.dataset.date = current.toISOString().split('T')[0];
+    dayDiv.dataset.date = toIsoDate(current);
     dayDiv.addEventListener('click', (e) => showDatePopover(e, current));
     dayDiv.addEventListener('mouseenter', (e) => showDatePopover(e, current));
     dayDiv.addEventListener('mouseleave', hideDatePopover);
@@ -7514,7 +7552,7 @@ function renderGantt() {
       wDiv.style.left = wLeft + 'px';
       wDiv.style.width = (wDays * dayWidth) + 'px';
       wDiv.textContent = 'Week of ' + weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      wDiv.dataset.weekStart = weekStart.toISOString().split('T')[0];
+      wDiv.dataset.weekStart = toIsoDate(weekStart);
       wDiv.addEventListener('click', () => {
         document.getElementById('timelineBody').scrollTo({ left: wLeft - 20, behavior: 'smooth' });
       });
@@ -7942,7 +7980,7 @@ function renderGantt() {
               t: {
                 id: 'subphaseseg|' + (seg.subPhaseId || ''),
                 name: seg.name, color: job.color, notes: '',
-                start: seg.start.toISOString().split('T')[0], finish: seg.finish.toISOString().split('T')[0],
+                start: toIsoDate(seg.start), finish: toIsoDate(seg.finish),
                 subPhaseId: seg.subPhaseId
               },
               sIdx: getDaysDiff(startDate, seg.start), eIdx: getDaysDiff(startDate, seg.finish)
@@ -8213,8 +8251,8 @@ function cascadeShiftLaterTasks(jobId, taskId, deltaDays) {
     if (isNaN(newStart.getTime()) || isNaN(newFinish.getTime())) continue;
     newStart.setDate(newStart.getDate() + deltaDays);
     newFinish.setDate(newFinish.getDate() + deltaDays);
-    t.start = newStart.toISOString().split('T')[0];
-    t.finish = newFinish.toISOString().split('T')[0];
+    t.start = toIsoDate(newStart);
+    t.finish = toIsoDate(newFinish);
   }
 }
 
@@ -8317,12 +8355,12 @@ function onBarResizeEnd(e) {
     if (side === 'right') {
       const newFinish = new Date(barResizeState.startDateObj);
       newFinish.setDate(newFinish.getDate() + currentDuration - 1);
-      task.finish = newFinish.toISOString().split('T')[0];
+      task.finish = toIsoDate(newFinish);
       cascadeShiftLaterTasks(jobId, taskId, currentDuration - initialDuration);
     } else {
       const newStart = new Date(barResizeState.finishDateObj);
       newStart.setDate(newStart.getDate() - (currentDuration - 1));
-      task.start = newStart.toISOString().split('T')[0];
+      task.start = toIsoDate(newStart);
     }
     saveJobs();
     logActivity('rescheduled task "' + task.name + '"');
@@ -8399,7 +8437,7 @@ function onTickResizeEnd(e) {
   if (currentDuration !== initialDuration) {
     const newFinish = new Date(tickResizeState.startDateObj);
     newFinish.setDate(newFinish.getDate() + currentDuration - 1);
-    task.finish = newFinish.toISOString().split('T')[0];
+    task.finish = toIsoDate(newFinish);
     cascadeShiftLaterTasks(jobId, taskId, currentDuration - initialDuration);
     saveJobs();
     logActivity('rescheduled task "' + task.name + '"');
@@ -8440,7 +8478,7 @@ function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId, subPhaseId) {
       if (!maxFinish || f > maxFinish) maxFinish = f;
     });
     if (!minStart || !maxFinish) return;
-    task = { name: jf.job.name, start: minStart.toISOString().split('T')[0], finish: maxFinish.toISOString().split('T')[0] };
+    task = { name: jf.job.name, start: toIsoDate(minStart), finish: toIsoDate(maxFinish) };
   } else if (taskId === DUE_MARKER_TASK_ID) {
     const jf = findJob(jobId);
     if (!jf) return;
@@ -8556,8 +8594,8 @@ function onBarMoveEnd(e) {
           ns.setDate(ns.getDate() + deltaDays);
           const nf = new Date(t.finish + 'T00:00:00');
           nf.setDate(nf.getDate() + deltaDays);
-          t.start = ns.toISOString().split('T')[0];
-          t.finish = nf.toISOString().split('T')[0];
+          t.start = toIsoDate(ns);
+          t.finish = toIsoDate(nf);
         });
         saveJobs();
         logActivity('moved job "' + jf.job.name + '"' + (phase.isDefault ? '' : ' phase "' + phase.name + '"') + (subUnit.isDefault ? '' : ' sub-phase "' + subUnit.name + '"'));
@@ -8605,7 +8643,7 @@ function onBarMoveEnd(e) {
     const dueJf = findJob(jobId);
     const card = dueJf ? getPhaseCard(dueJf.job, phaseId) : null;
     if (card) {
-      card.due = newStart.toISOString().split('T')[0];
+      card.due = toIsoDate(newStart);
       saveJobs();
       const jf = findJob(jobId);
       logActivity('rescheduled due date for job "' + (jf ? jf.job.name : '') + '"');
@@ -8619,8 +8657,8 @@ function onBarMoveEnd(e) {
     newStart.setDate(newStart.getDate() + deltaDays);
     const newFinish = new Date(newStart);
     newFinish.setDate(newFinish.getDate() + duration - 1);
-    task.start = newStart.toISOString().split('T')[0];
-    task.finish = newFinish.toISOString().split('T')[0];
+    task.start = toIsoDate(newStart);
+    task.finish = toIsoDate(newFinish);
     // Keep the rest of the job's schedule connected — later tasks slide
     // along by the same delta instead of only the dragged one moving.
     cascadeShiftLaterTasks(jobId, taskId, deltaDays);
@@ -8846,7 +8884,7 @@ function buildLegend() {
 // ===== DATE POPOVER =====
 function showDatePopover(e, date) {
   const popover = document.getElementById('datePopover');
-  const dateStr = date.toISOString().split('T')[0];
+  const dateStr = toIsoDate(date);
   const dayJobs = [];
   getVisibleJobs().forEach(job => {
     if (!showArchived && job.archived) return;
@@ -9246,7 +9284,7 @@ function renderFixedTaskGrid(taskList) {
       const s = new Date(startInput.value + 'T00:00:00');
       if (isNaN(s.getTime())) return;
       const f = addBusinessDays(s, durVal);
-      finishInput.value = f.toISOString().split('T')[0];
+      finishInput.value = toIsoDate(f);
       renderDateDisplayContent(finishCell.display, finishInput.value);
     }
 
