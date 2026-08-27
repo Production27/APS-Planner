@@ -124,29 +124,29 @@
   /* Mobile-only Jobs/Board toggle — see setMobileBoardView() and the
      @media (max-width:480px) rules that turn this into a visible tab bar. */
   .mobile-view-switcher { display: none; }
-  /* Sized/shaped exactly like a .rail-tab (icon-only collapsed, expands
-     on hover — see .rail-tab.active/.rail-tab:hover further down, both
-     extended to include this selector) since it now leads that same row,
-     but it never gets .active itself (it opens a dropdown, not a tab) —
-     keeps its own position:relative so .settings-dropdown still anchors
+  /* Sized/shaped exactly like a .rail-tab (icon-only, fixed-width — see
+     .rail-tab.active/.rail-tab:hover further down, both extended to
+     include this selector) since it now leads that same row, but it
+     never gets .active itself (it opens a dropdown, not a tab) — keeps
+     its own position:relative so .settings-dropdown still anchors
      against it rather than the whole row. Deliberately NOT overflow:hidden
      here unlike .rail-tab — .settings-dropdown is this wrap's own child,
      absolutely positioned to escape it, and overflow:hidden on the
      containing block would clip it right back off-screen regardless of
-     its position. The icon/label clip that overflow would otherwise be
-     for lives on .settings-dots-btn itself instead (see below), which has
-     no such child needing to escape it. */
+     its position. The icon clip that overflow would otherwise be for
+     lives on .settings-dots-btn itself instead (see below), which has no
+     such child needing to escape it. */
   .settings-menu-wrap {
     position: relative; display: flex; align-items: center;
     flex: 0 0 34px; height: 34px; border-radius: 8px;
-    transition: flex-basis 0.2s ease, background 0.2s ease;
+    transition: background 0.2s ease;
   }
   .settings-dots-btn {
-    display: flex; align-items: center; gap: 6px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
     width: 100%; height: 100%; background: transparent; border: none;
     color: var(--text-light); padding: 0; cursor: pointer; white-space: nowrap;
   }
-  .settings-dots-btn svg { flex-shrink: 0; margin-left: 9px; }
+  .settings-dots-btn svg { flex-shrink: 0; }
   .settings-dots-btn:active { transform: translateY(1px); }
   .settings-dropdown {
     /* Anchored left:0 (extends rightward) — the trigger now sits in the
@@ -182,40 +182,37 @@
   .theme-custom-row input[type="color"] { width: 100%; height: 38px; padding: 2px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); }
   .theme-preview { margin-top: 16px; height: 50px; border-radius: 8px; display: flex; align-items: center; padding: 0 16px; color: white; font-weight: 600; font-size: 13px; transition: background 0.15s; }
   /* ===== VIEW SWITCHER (rail-tab-row, top of the job rail) =====
-     Active tab shows full-size (icon + label); the other two collapse to
-     icon-only (flex-basis 34px) and expand back to full-size on hover —
-     same idea as a dock/activity-bar rather than a conventional tab strip,
-     chosen to fit inside the rail's narrow width. Hovering a non-active
-     tab shares flex-grow with whichever tab is .active, so both end up
-     visible at once rather than the active one snapping back to icon-only
-     while you're pointed at a different one. */
+     Icon-only, permanently — no label reveal on active/hover (see
+     .rail-tab-label below, matching the mobile view-switcher's own
+     icon-only redesign). Each button keeps its own title="" for
+     identification via native tooltip, same as any icon-rail sidebar (VS
+     Code's activity bar, Slack's app rail, etc). */
   .rail-tab-row { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border); background: #fafafa; }
   .rail-tab {
-    display: flex; align-items: center; gap: 6px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
     flex: 0 0 34px; height: 34px; padding: 0; border: none; border-radius: 8px;
     background: transparent; color: var(--text-light); cursor: pointer;
-    white-space: nowrap; transition: flex-basis 0.2s ease, background 0.2s ease, color 0.2s ease;
+    white-space: nowrap; transition: background 0.2s ease, color 0.2s ease;
   }
-  .rail-tab svg { flex-shrink: 0; margin-left: 9px; }
+  .rail-tab svg { flex-shrink: 0; }
   .rail-tab:active { transform: translateY(1px); }
-  /* Both collapse the same way as the label — a badge visible at 34px
-     collapsed width would overflow it (icon alone already takes ~25px). */
-  .rail-tab .badge {
-    background: rgba(255,255,255,0.9); color: var(--primary); font-size: 10px;
-    padding: 2px 7px; border-radius: 10px; font-weight: 700; flex-shrink: 0;
-    opacity: 0; max-width: 0; overflow: hidden;
-    transition: opacity 0.15s ease, max-width 0.2s ease, padding 0.2s ease;
-  }
-  .rail-tab-label {
-    font-size: 12px; font-weight: 700; opacity: 0; max-width: 0;
-    overflow: hidden; transition: opacity 0.15s ease, max-width 0.2s ease;
-  }
+  .rail-tab-label, .rail-tab .badge { display: none; }
   .rail-tab.active, .rail-tab:hover, .settings-menu-wrap:hover {
-    flex: 1 1 auto; background: var(--primary-light); color: white;
+    background: var(--primary-light); color: white;
   }
   .settings-menu-wrap:hover .settings-dots-btn { color: white; }
-  .rail-tab.active .rail-tab-label, .rail-tab:hover .rail-tab-label, .settings-menu-wrap:hover .rail-tab-label { opacity: 1; max-width: 140px; }
-  .rail-tab.active .badge, .rail-tab:hover .badge { opacity: 1; max-width: 40px; }
+  /* Only Home/Gantt/the settings dots happen to use the exact
+     --primary-light indigo as their own hardcoded fill — those three
+     specifically need forcing to white on active/hover or they'd vanish
+     against the active background of that same color. A blanket filter
+     on every tab would "fix" that but wreck the two-tone ones instead
+     (Checklist's green+white check, Calendar's white+red cells already
+     contrast fine on their own) — inverting the whole icon turns a
+     two-color glyph into an undifferentiated white blob, since both of
+     its colors end up mapped to the same white. */
+  #tab-home.active svg, #tab-home:hover svg,
+  #tab-gantt.active svg, #tab-gantt:hover svg,
+  .settings-menu-wrap:hover svg { filter: brightness(0) invert(1); }
   .manager-sidebar-header .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; margin-left: 2px; }
 
   .tab-panel { display: none; height: 100%; overflow: hidden; }
@@ -831,42 +828,14 @@
      until it's actually opening. */
   body:not(.job-rail-open) .job-list { opacity: 0; pointer-events: none; }
   /* This row goes from a horizontal row to a vertical column — a row of
-     6 icons (5 tabs + settings) needs real width even collapsed to
-     icon-only, which is what actually capped how narrow the sidebar
-     could get; stacked, each row only needs to be as wide as ONE icon. */
+     6 icons (5 tabs + settings) needs real width even at their fixed
+     icon-only size, which is what actually capped how narrow the sidebar
+     could get; stacked, each row only needs to be as wide as ONE icon.
+     (The tabs/settings themselves no longer need their own closed-rail
+     sizing/label/filter overrides here — they're icon-only unconditionally
+     now, see .rail-tab's own base rules further up.) */
   body:not(.job-rail-open) .rail-tab-row {
     flex-direction: column; align-items: stretch; flex-wrap: nowrap;
-  }
-  /* Icon-only, permanently — the label/badge reveal-on-active-or-hover
-     (see .rail-tab.active/:hover below) needs horizontal room a narrow
-     column doesn't have. Each button already carries its own title=""
-     tooltip for identification, same as any icon-rail sidebar (VS
-     Code's activity bar, Slack's app rail, etc). Settings never gets
-     .active, but it's still locked to icon-only here alongside the tabs
-     it now shares a row with. */
-  body:not(.job-rail-open) .rail-tab,
-  body:not(.job-rail-open) .rail-tab.active,
-  body:not(.job-rail-open) .rail-tab:hover,
-  body:not(.job-rail-open) .settings-menu-wrap,
-  body:not(.job-rail-open) .settings-menu-wrap:hover {
-    flex: 0 0 34px;
-  }
-  body:not(.job-rail-open) .rail-tab-label,
-  body:not(.job-rail-open) .rail-tab .badge {
-    display: none;
-  }
-  /* Each tab's icon is a hardcoded hex fill, not currentColor (Home,
-     Gantt, and the settings dots all happen to use the exact
-     --primary-light indigo) — with the label gone, an active/hovered
-     icon that color would be completely invisible against the active
-     background of that exact same color. Force every icon to solid
-     white on active/hover instead of relying on each one's own fill
-     happening to contrast; robust regardless of which hex a given tab's
-     icon uses. */
-  body:not(.job-rail-open) .rail-tab.active svg,
-  body:not(.job-rail-open) .rail-tab:hover svg,
-  body:not(.job-rail-open) .settings-menu-wrap:hover svg {
-    filter: brightness(0) invert(1);
   }
   @media (min-width: 1101px) {
     body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
@@ -2398,13 +2367,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
          them by id (renderPresenceAvatars(), updateProjectToggle(),
          applyPermissionGating(), etc.) keeps working with zero changes
          on the JS side. View As no longer lives here — see Manage Users. -->
-    <!-- View switcher — the active view shows full-size (icon + label),
-         the other two collapse to icon-only and expand back to full-size
-         on hover (see .rail-tab/.rail-tab-label). switchTab() drives
-         which one has .active via the same #tab-<name> ids/.rail-tab
-         query it always used (renamed from .tab-btn), just relocated.
-         Settings now leads this same row instead of its own row above it
-         — same icon-only collapse/hover-expand behavior as any other
+    <!-- View switcher — icon-only, permanently (see .rail-tab-label's
+         display:none — the .rail-tab-label/.badge spans stay in the
+         markup since renderHomeDashboard()/renderMyChecklist()/etc still
+         write real counts into the badge ones, just invisible now,
+         rather than threading a "does this even render" check through
+         every badge-updating call site for a purely cosmetic change).
+         switchTab() drives which one has .active via the same
+         #tab-<name> ids/.rail-tab query it always used (renamed from
+         .tab-btn), just relocated. Settings leads this same row instead
+         of its own row above it — same icon-only styling as any other
          entry here, it just opens a dropdown instead of switching tabs
          (see .settings-menu-wrap's own rules, which extend the .rail-tab
          selectors rather than duplicating them). -->
