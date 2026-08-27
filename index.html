@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.9';
+const APP_VERSION = '2026-08-27.10';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -4736,6 +4736,13 @@ function switchProject(projectId) {
   cancelEdit();
   closeCardModal();
   closeCalendarEventModal();
+  // Those flushes above can re-arm the debounced ROOM-sync push (see
+  // flushPendingRoomPush()'s own comment) — must fire it now, synchronously,
+  // while activeProjectId still correctly points at the OLD project.
+  // Otherwise the 300ms timer fires after the flip below and pushes the
+  // NEW project's data instead, silently dropping this edit from ever
+  // reaching the shared room.
+  flushPendingRoomPush();
   // The old project's job id means nothing in the new one — see
   // ganttFocusedJobId/buildVisibleTaskRows(). Same reasoning for the
   // "view as member" preview — see viewAsUsername/isJobVisibleToMe().
@@ -4768,6 +4775,12 @@ function enforceProjectScopeForRole() {
   if (currentUserRole === 'admin' || !currentAssignedProjectId) return;
   if (!projects[currentAssignedProjectId]) return; // assigned project not loaded/known yet — fail open, not crash
   if (activeProjectId !== currentAssignedProjectId) {
+    // Same reasoning as switchProject()'s own flushPendingRoomPush() call
+    // — an admin reassigning this account to a different project while
+    // it's mid-edit on the (about to be former) assigned one must not
+    // silently drop that edit when this reconnect-triggered reassignment
+    // yanks activeProjectId out from under it.
+    flushPendingRoomPush();
     activeProjectId = currentAssignedProjectId;
     saveProjects();
     loadActiveProjectData();
@@ -13522,7 +13535,7 @@ function cancelOfflineEscalation() {
 }
 
 function isBusyEditing() {
-  const openModal = ['cardModal', 'themeModal', 'manageFieldsModal', 'deleteModal', 'calendarEventModal'].some(function(id) {
+  const openModal = ['cardModal', 'themeModal', 'manageFieldsModal', 'deleteModal', 'calendarEventModal', 'manageColumnChecklistModal'].some(function(id) {
     const el = document.getElementById(id);
     return el && el.classList.contains('show');
   });
@@ -13557,6 +13570,25 @@ function queueSharedSync() {
   syncPushTimer = setTimeout(pushLiveblocksState, 300);
 }
 
+// Synchronously pushes any project edit still sitting in the debounced
+// room-sync queue, if one is pending — must run before anything
+// reassigns activeProjectId (switchProject()/enforceProjectScopeForRole())
+// so the still-armed timer can't fire AFTER the flip and misdirect a
+// pending edit at the new project instead of the one it was actually for.
+// pushLiveblocksState() resolves its target via getActiveProject() at
+// FIRE time, with no memory of which project queueSharedSync() was
+// originally armed for — left unflushed, an edit made just before a
+// switch is silently never pushed to the shared room at all (it stays
+// correct in this browser's own localStorage, but the timer that fires
+// 300ms later pushes whatever project is active BY THEN instead).
+function flushPendingRoomPush() {
+  if (syncPushTimer) {
+    clearTimeout(syncPushTimer);
+    syncPushTimer = null;
+    pushLiveblocksState();
+  }
+}
+
 // A page close/refresh within that 300ms window used to lose the edit
 // entirely (a bug fixed earlier, kept fixed here): saved to localStorage
 // synchronously, but the debounced push never fires. Flush any pending
@@ -13568,11 +13600,7 @@ function queueSharedSync() {
 function flushPendingSync() {
   flushAutoSaveJobForm();
   flushCardAutosave();
-  if (syncPushTimer) {
-    clearTimeout(syncPushTimer);
-    syncPushTimer = null;
-    pushLiveblocksState();
-  }
+  flushPendingRoomPush();
   if (pendingWrites.size > 0) {
     const creds = { username: getStoredUsername(), password: getStoredUserPassword() };
     pendingWrites.forEach(function(entry) {
