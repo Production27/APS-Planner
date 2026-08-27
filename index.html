@@ -4771,18 +4771,6 @@ function enforceProjectScopeForRole() {
 // this app is locked to exactly two fixed projects (see
 // enforceFixedProjectSet). These are kept as no-ops, rather than removed
 // outright, so any leftover call site just shows a toast instead of erroring.
-function createNewProject(name) {
-  showToast('Adding projects is disabled — this app is fixed to two projects.', 'info');
-}
-
-function duplicateProject(projectId) {
-  showToast('Duplicating projects is disabled — this app is fixed to two projects.', 'info');
-}
-
-function deleteProject(projectId) {
-  showToast('Deleting projects is disabled — this app is fixed to two projects.', 'info');
-}
-
 // ===== FIXED PROJECT SET =====
 // This app is locked to exactly two projects. On load (and again after the
 // initial Liveblocks sync resolves — since remote data can otherwise
@@ -5040,12 +5028,6 @@ function applyPermissionGating() {
       el.style.display = 'none';
     });
   }
-}
-
-function promptNewProject() {
-  const name = prompt('Enter project name:');
-  if (name && name.trim()) createNewProject(name.trim());
-  closeAllDropdowns();
 }
 
 function closeAllDropdowns() {
@@ -14184,8 +14166,8 @@ function removeProjectFromShared(projectId) {
 // caller — a stray empty "Untitled Project" reached production once
 // already) can leave a genuinely empty, still-default-named "Untitled
 // Project" sitting in the shared room. This app is fixed to exactly two
-// projects and has no user-facing way to delete one (see deleteProject()'s
-// no-op), so instead of leaving it to keep syncing down to every client
+// projects and has no user-facing way to delete one, so instead of
+// leaving it to keep syncing down to every client
 // forever, prune it automatically on every snapshot: remove it locally AND
 // tell the shared room to drop it too (removeProjectFromShared()) so it
 // doesn't just reappear on the next one. Deliberately narrow — only ever
