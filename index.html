@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.8';
+const APP_VERSION = '2026-08-27.9';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13916,9 +13916,126 @@ function safeMergeInto(target, source) {
   return target;
 }
 
+// Shared timeout-scheduling shape behind applyRoomSnapshot()'s two card-
+// orphan recovery paths below (healOrphanedJobCards/healOrphanedPhaseCards)
+// — a job-level card whose job hasn't arrived yet, and a phase-level card
+// whose job exists but is missing that one phase. They differ in what
+// they recheck/recover, not in the dedup + grace-period + recheck-before-
+// recovering bookkeeping itself, so only that shape is shared; the
+// domain-specific filter/recheck/recover logic stays in the two distinct
+// caller functions rather than being forced into one generic callback.
+// Defined as an ordinary top-level function (not nested inside
+// applyRoomSnapshot) since it has no dependency on that function's own
+// closure — projectId/recheckFn/recoverFn are passed in explicitly.
+//
+// recheckFn(proj) returns true if recovery is still needed (job/phase
+// still missing, not tombstoned, card still present) — checked fresh
+// after the grace period in case something else already resolved the
+// gap. recoverFn(proj) does the actual reconstruction once recheckFn
+// confirms it's still needed.
+function scheduleOrphanRecovery(key, projectId, recheckFn, recoverFn) {
+  if (pendingOrphanRecovery[key]) return;
+  pendingOrphanRecovery[key] = setTimeout(function() {
+    delete pendingOrphanRecovery[key];
+    const proj = projects[projectId];
+    if (!proj) return;
+    if (!recheckFn(proj)) return;
+    recoverFn(proj);
+    if (projectId === activeProjectId) refreshActiveProjectFromShared();
+    queueSharedSync();
+  }, ORPHAN_RECOVERY_GRACE_MS);
+}
+
+// Self-heals the "card shows but job doesn't" sync gap: if the jobId is
+// tombstoned, the job was deliberately deleted and this card is a
+// leftover that should have gone with it — clean it up instead of
+// resurrecting a job nobody wants back. Otherwise it's the genuine sync
+// gap: reconstruct a minimal job shell from what the card still has and
+// re-link it, after a grace period in case the job is just still in
+// flight.
+function healOrphanedJobCards(local, projectId) {
+  const orphanCards = local.boardCards.filter(function(c) { return c.jobId && !local.jobs.some(function(j) { return j.id === c.jobId; }); });
+  if (!orphanCards.length) return;
+  const staleCards = orphanCards.filter(function(c) { return local.deletedIds[String(c.jobId)]; });
+  const trulyOrphaned = orphanCards.filter(function(c) { return !local.deletedIds[String(c.jobId)]; });
+
+  if (staleCards.length) {
+    console.warn('applyRoomSnapshot: dropping ' + staleCards.length + ' card(s) whose job was deliberately deleted for project ' + projectId, staleCards.map(function(c) { return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
+    local.boardCards = local.boardCards.filter(function(c) { return staleCards.indexOf(c) === -1; });
+    staleCards.forEach(function(c) { deleteCardFromShared(projectId, c.id); });
+    queueSharedSync();
+  }
+
+  trulyOrphaned.forEach(function(card) {
+    const jobId = card.jobId;
+    scheduleOrphanRecovery(jobId, projectId, function(proj) {
+      const stillMissing = !proj.jobs.some(function(j) { return j.id === jobId; });
+      const stillTombstoned = proj.deletedIds && proj.deletedIds[String(jobId)];
+      const stillHasCard = proj.boardCards.some(function(c) { return c.id === card.id; });
+      return stillMissing && !stillTombstoned && stillHasCard;
+    }, function(proj) {
+      console.warn('applyRoomSnapshot: job ' + jobId + ' still missing ' + (ORPHAN_RECOVERY_GRACE_MS / 1000) + 's after its card arrived — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title, jobId: jobId});
+      proj.jobs.push(synthesizeJobFromOrphanCard(card, proj.boardColumns));
+    });
+  });
+}
+
+// A narrower version of the same gap, one level down: the card's own job
+// DOES exist, but that job is phased and its phases array is missing the
+// specific phase this card belongs to. Same stale-vs-genuine split and
+// grace period as healOrphanedJobCards(), keyed by "jobId|phaseId" so it
+// can't collide with that function's whole-job pendingOrphanRecovery keys.
+function healOrphanedPhaseCards(local, projectId) {
+  const phaseOrphanCards = local.boardCards.filter(function(c) {
+    if (!c.jobId || !c.phaseId) return false;
+    const j = local.jobs.find(function(j) { return j.id === c.jobId; });
+    return !!(j && j.phases && j.phases.length && !j.phases.some(function(p) { return p.id === c.phaseId; }));
+  });
+  if (!phaseOrphanCards.length) return;
+  const stalePhaseCards = phaseOrphanCards.filter(function(c) { return local.deletedIds[String(c.phaseId)]; });
+  const trulyPhaseOrphaned = phaseOrphanCards.filter(function(c) { return !local.deletedIds[String(c.phaseId)]; });
+
+  if (stalePhaseCards.length) {
+    console.warn('applyRoomSnapshot: dropping ' + stalePhaseCards.length + ' card(s) whose phase was deliberately deleted for project ' + projectId, stalePhaseCards.map(function(c) { return {cardId: c.id, title: c.title, phaseId: c.phaseId}; }));
+    local.boardCards = local.boardCards.filter(function(c) { return stalePhaseCards.indexOf(c) === -1; });
+    stalePhaseCards.forEach(function(c) { deleteCardFromShared(projectId, c.id); });
+    queueSharedSync();
+  }
+
+  trulyPhaseOrphaned.forEach(function(card) {
+    const key = card.jobId + '|' + card.phaseId;
+    scheduleOrphanRecovery(key, projectId, function(proj) {
+      const j = proj.jobs.find(function(j) { return j.id === card.jobId; });
+      if (!j || !j.phases) return false;
+      const stillMissing = !j.phases.some(function(p) { return p.id === card.phaseId; });
+      const stillTombstoned = proj.deletedIds && proj.deletedIds[String(card.phaseId)];
+      const stillHasCard = proj.boardCards.some(function(c) { return c.id === card.id; });
+      return stillMissing && !stillTombstoned && stillHasCard;
+    }, function(proj) {
+      const j = proj.jobs.find(function(j) { return j.id === card.jobId; });
+      console.warn('applyRoomSnapshot: phase ' + card.phaseId + ' of job ' + card.jobId + ' still missing after grace period — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title});
+      const shell = synthesizeJobFromOrphanCard(card, proj.boardColumns);
+      j.phases.push({ id: card.phaseId, name: (card.title || 'Recovered phase').split(' — ').pop(), order: j.phases.length, tasks: shell.tasks });
+    });
+  });
+}
+
+// Scoped to the active project only in applyRoomSnapshot() below — that's
+// the only project whose merged local.jobs is actually being viewed/
+// relied on for immediate feedback right now.
+function healOrphanedCardsForProject(local, projectId) {
+  healOrphanedJobCards(local, projectId);
+  healOrphanedPhaseCards(local, projectId);
+}
+
 function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
   if (!remoteProjects || typeof remoteProjects !== 'object') return;
 
+  // The phases below are split into named nested functions purely for
+  // readability — same closures, same execution order, zero behavior
+  // change. remoteIds/activeDataChanged/listChanged/busy are shared
+  // across the per-project loop and the 3 post-loop phases, so they're
+  // declared here rather than threaded through as parameters.
   const remoteIds = new Set();
   let activeDataChanged = false;
   let listChanged = false;
@@ -13945,208 +14062,138 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
     const remoteActivityLog = entry.activityLog;
     const remoteFieldRevisions = entry.fieldRevisions;
 
+    // local/isActive/projectId/entry/the remote* extractions above are
+    // freshly computed each loop iteration and consumed by most of the
+    // sub-concerns below — keeping the next two as nested functions
+    // sharing THIS iteration's closure avoids threading them through
+    // parameters on every call, while still keeping each sub-concern
+    // separately named and readable.
     let local = projects[projectId];
-    if (!local) {
-      local = {
-        id: projectId,
-        name: remoteName || 'Untitled Project',
-        jobs: [],
-        boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
-        boardCards: [],
-        calendarEvents: [],
-        deletedIds: {},
-        fieldOptions: {},
-        header: { title: remoteName || 'Untitled Project', subtitle: '', theme: DEFAULT_THEME_COLOR, bgPhoto: null, boardBgPhoto: null }
-      };
-      projects[projectId] = local;
-      listChanged = true;
-    }
 
-    if (typeof remoteName === 'string' && remoteName !== local.name) {
-      local.name = remoteName;
-      listChanged = true;
-    }
-
-    // ── delete tombstones ── merged/pruned before jobs/cards/events below
-    // so they can be filtered against it. Always safe to merge in — a
-    // tombstone only ever adds deletion knowledge, it can't itself wipe
-    // out data the way blindly re-deriving jobs/cards/events below can.
-    local.deletedIds = mergeTombstones(local.deletedIds, remoteDeletedIds);
-
-    // If a write for this project is still unacked, this snapshot may be
-    // racing ahead of it (broadcast by something unrelated) and not yet
-    // reflect it — re-deriving local.jobs/boardCards/calendarEvents from
-    // it now would clobber an optimistic local add/edit before it ever
-    // reaches the server. Skip it for just this project on just this
-    // snapshot; the DO always broadcasts a fresh snapshot immediately
-    // after accepting any write, so the very next one (once acked) will
-    // already include our change and is safe to apply normally.
-    const projectSyncPending = hasPendingWriteForProject(projectId);
-
-    // ── jobs (now a plain {id: job} object from the server, not a LiveMap) ──
-    if (!projectSyncPending) {
-      const j = Object.values(remoteJobs).filter(function(job) { return !local.deletedIds[String(job.id)]; });
-      ensureJobAndTaskIds(j);
-      j.forEach(function(job) { if (!job.notes) job.notes = ''; });
-      j.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-      local.jobs = j;
-    }
-
-    // ── columns ──
-    if (Array.isArray(remoteColumns) && remoteColumns.length) local.boardColumns = remoteColumns;
-
-    // ── cards ──
-    if (!projectSyncPending) {
-      const c = Object.values(remoteCards).filter(function(card) { return !local.deletedIds[String(card.id)]; });
-      ensureCardIds(c);
-      local.boardCards = c;
-    }
-
-    // ── calendar-only events ──
-    if (!projectSyncPending) {
-      const ce = Object.values(remoteCalEvents).filter(function(ev) { return !local.deletedIds[String(ev.id)]; });
-      ensureCalendarEventIds(ce);
-      local.calendarEvents = ce;
-    }
-
-    // ── fields ──
-    if (remoteFieldOpts) local.fieldOptions = safeMergeInto(Object.assign({}, local.fieldOptions), remoteFieldOpts);
-
-    // ── header ── same race this project's jobs/cards/events are guarded
-    // against above: a snapshot arriving while our own header edit (title,
-    // subtitle, or theme/color) is still in flight could otherwise revert
-    // it to whatever the server had before that edit landed — reported
-    // live as "changing the header color defaults back to red."
-    if (remoteHeader && !projectSyncPending) {
-      if (typeof remoteHeader.title === 'string') local.header.title = remoteHeader.title;
-      if (typeof remoteHeader.subtitle === 'string') local.header.subtitle = remoteHeader.subtitle;
-      if (remoteHeader.theme) local.header.theme = remoteHeader.theme;
-    }
-
-    // ── activity log — plain array now, no LiveList wrapping to unwrap ──
-    if (Array.isArray(remoteActivityLog)) local.activityLog = remoteActivityLog;
-
-    // ── field revisions — what pushFieldToShared() needs to include as
-    // baseFieldRevision next time it changes boardColumns/fieldOptions/
-    // header, so the server can tell a stale write from a current one.
-    // See aps-room-state.js's handleSetWholeField().
-    local.fieldRevisions = remoteFieldRevisions || local.fieldRevisions || { boardColumns: 0, fieldOptions: 0, header: 0 };
-
-    // Self-heals the "card shows but job doesn't" sync gap: if the jobId
-    // is tombstoned, the job was deliberately deleted and this card is a
-    // leftover that should have gone with it — clean it up instead of
-    // resurrecting a job nobody wants back. Otherwise it's the genuine
-    // sync gap: reconstruct a minimal job shell from what the card still
-    // has and re-link it. Scoped to isActive since that's the only
-    // project whose merged local.jobs is actually being viewed/relied on
-    // for immediate feedback right now.
-    if (isActive) {
-      const orphanCards = local.boardCards.filter(function(c) { return c.jobId && !local.jobs.some(function(j) { return j.id === c.jobId; }); });
-      if (orphanCards.length) {
-        const staleCards = orphanCards.filter(function(c) { return local.deletedIds[String(c.jobId)]; });
-        const trulyOrphaned = orphanCards.filter(function(c) { return !local.deletedIds[String(c.jobId)]; });
-
-        if (staleCards.length) {
-          console.warn('applyRoomSnapshot: dropping ' + staleCards.length + ' card(s) whose job was deliberately deleted for project ' + projectId, staleCards.map(function(c){ return {cardId: c.id, title: c.title, jobId: c.jobId}; }));
-          local.boardCards = local.boardCards.filter(function(c) { return staleCards.indexOf(c) === -1; });
-          staleCards.forEach(function(c) { deleteCardFromShared(projectId, c.id); });
-          queueSharedSync();
-        }
-
-        if (trulyOrphaned.length) {
-          trulyOrphaned.forEach(function(card) {
-            const jobId = card.jobId;
-            if (pendingOrphanRecovery[jobId]) return;
-            pendingOrphanRecovery[jobId] = setTimeout(function() {
-              delete pendingOrphanRecovery[jobId];
-              const proj = projects[projectId];
-              if (!proj) return;
-              const stillMissing = !proj.jobs.some(function(j) { return j.id === jobId; });
-              const stillTombstoned = proj.deletedIds && proj.deletedIds[String(jobId)];
-              const stillHasCard = proj.boardCards.some(function(c) { return c.id === card.id; });
-              if (!stillMissing || stillTombstoned || !stillHasCard) return;
-              console.warn('applyRoomSnapshot: job ' + jobId + ' still missing ' + (ORPHAN_RECOVERY_GRACE_MS / 1000) + 's after its card arrived — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title, jobId: jobId});
-              proj.jobs.push(synthesizeJobFromOrphanCard(card, proj.boardColumns));
-              if (projectId === activeProjectId) refreshActiveProjectFromShared();
-              queueSharedSync();
-            }, ORPHAN_RECOVERY_GRACE_MS);
-          });
-        }
-      }
-
-      // A narrower version of the same gap, one level down: the card's own
-      // job DOES exist, but that job is phased and its phases array is
-      // missing the specific phase this card belongs to. Same stale-vs-
-      // genuine split and grace period, keyed by "jobId|phaseId" so it
-      // can't collide with the whole-job pendingOrphanRecovery keys above.
-      const phaseOrphanCards = local.boardCards.filter(function(c) {
-        if (!c.jobId || !c.phaseId) return false;
-        const j = local.jobs.find(function(j) { return j.id === c.jobId; });
-        return !!(j && j.phases && j.phases.length && !j.phases.some(function(p) { return p.id === c.phaseId; }));
-      });
-      if (phaseOrphanCards.length) {
-        const stalePhaseCards = phaseOrphanCards.filter(function(c) { return local.deletedIds[String(c.phaseId)]; });
-        const trulyPhaseOrphaned = phaseOrphanCards.filter(function(c) { return !local.deletedIds[String(c.phaseId)]; });
-
-        if (stalePhaseCards.length) {
-          console.warn('applyRoomSnapshot: dropping ' + stalePhaseCards.length + ' card(s) whose phase was deliberately deleted for project ' + projectId, stalePhaseCards.map(function(c){ return {cardId: c.id, title: c.title, phaseId: c.phaseId}; }));
-          local.boardCards = local.boardCards.filter(function(c) { return stalePhaseCards.indexOf(c) === -1; });
-          stalePhaseCards.forEach(function(c) { deleteCardFromShared(projectId, c.id); });
-          queueSharedSync();
-        }
-
-        trulyPhaseOrphaned.forEach(function(card) {
-          const key = card.jobId + '|' + card.phaseId;
-          if (pendingOrphanRecovery[key]) return;
-          pendingOrphanRecovery[key] = setTimeout(function() {
-            delete pendingOrphanRecovery[key];
-            const proj = projects[projectId];
-            if (!proj) return;
-            const j = proj.jobs.find(function(j) { return j.id === card.jobId; });
-            if (!j || !j.phases) return;
-            const stillMissing = !j.phases.some(function(p) { return p.id === card.phaseId; });
-            const stillTombstoned = proj.deletedIds && proj.deletedIds[String(card.phaseId)];
-            const stillHasCard = proj.boardCards.some(function(c) { return c.id === card.id; });
-            if (!stillMissing || stillTombstoned || !stillHasCard) return;
-            console.warn('applyRoomSnapshot: phase ' + card.phaseId + ' of job ' + card.jobId + ' still missing after grace period — reconstructing from card for project ' + projectId, {cardId: card.id, title: card.title});
-            const shell = synthesizeJobFromOrphanCard(card, proj.boardColumns);
-            j.phases.push({ id: card.phaseId, name: (card.title || 'Recovered phase').split(' — ').pop(), order: j.phases.length, tasks: shell.tasks });
-            if (projectId === activeProjectId) refreshActiveProjectFromShared();
-            queueSharedSync();
-          }, ORPHAN_RECOVERY_GRACE_MS);
-        });
-      }
-    }
-
-    if (isActive) activeDataChanged = true;
-  });
-
-  // prune projects no longer present remotely
-  Object.keys(projects).forEach(function(localId) {
-    if (remoteIds.has(localId)) return;
-    if (Object.keys(projects).length <= 1) return;
-    if (localId === activeProjectId) {
-      const survivor = Object.keys(projects).find(function(id) { return id !== localId; });
-      if (survivor) {
-        activeProjectId = survivor;
-        delete projects[localId];
+    function resolveLocalProject() {
+      if (!local) {
+        local = {
+          id: projectId,
+          name: remoteName || 'Untitled Project',
+          jobs: [],
+          boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
+          boardCards: [],
+          calendarEvents: [],
+          deletedIds: {},
+          fieldOptions: {},
+          header: { title: remoteName || 'Untitled Project', subtitle: '', theme: DEFAULT_THEME_COLOR, bgPhoto: null, boardBgPhoto: null }
+        };
+        projects[projectId] = local;
         listChanged = true;
-        activeDataChanged = true;
       }
-      return;
+
+      if (typeof remoteName === 'string' && remoteName !== local.name) {
+        local.name = remoteName;
+        listChanged = true;
+      }
     }
-    delete projects[localId];
-    listChanged = true;
+
+    function mergeProjectFields() {
+      // ── delete tombstones ── merged/pruned before jobs/cards/events below
+      // so they can be filtered against it. Always safe to merge in — a
+      // tombstone only ever adds deletion knowledge, it can't itself wipe
+      // out data the way blindly re-deriving jobs/cards/events below can.
+      local.deletedIds = mergeTombstones(local.deletedIds, remoteDeletedIds);
+
+      // If a write for this project is still unacked, this snapshot may be
+      // racing ahead of it (broadcast by something unrelated) and not yet
+      // reflect it — re-deriving local.jobs/boardCards/calendarEvents from
+      // it now would clobber an optimistic local add/edit before it ever
+      // reaches the server. Skip it for just this project on just this
+      // snapshot; the DO always broadcasts a fresh snapshot immediately
+      // after accepting any write, so the very next one (once acked) will
+      // already include our change and is safe to apply normally.
+      const projectSyncPending = hasPendingWriteForProject(projectId);
+
+      // ── jobs (now a plain {id: job} object from the server, not a LiveMap) ──
+      if (!projectSyncPending) {
+        const j = Object.values(remoteJobs).filter(function(job) { return !local.deletedIds[String(job.id)]; });
+        ensureJobAndTaskIds(j);
+        j.forEach(function(job) { if (!job.notes) job.notes = ''; });
+        j.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+        local.jobs = j;
+      }
+
+      // ── columns ──
+      if (Array.isArray(remoteColumns) && remoteColumns.length) local.boardColumns = remoteColumns;
+
+      // ── cards ──
+      if (!projectSyncPending) {
+        const c = Object.values(remoteCards).filter(function(card) { return !local.deletedIds[String(card.id)]; });
+        ensureCardIds(c);
+        local.boardCards = c;
+      }
+
+      // ── calendar-only events ──
+      if (!projectSyncPending) {
+        const ce = Object.values(remoteCalEvents).filter(function(ev) { return !local.deletedIds[String(ev.id)]; });
+        ensureCalendarEventIds(ce);
+        local.calendarEvents = ce;
+      }
+
+      // ── fields ──
+      if (remoteFieldOpts) local.fieldOptions = safeMergeInto(Object.assign({}, local.fieldOptions), remoteFieldOpts);
+
+      // ── header ── same race this project's jobs/cards/events are guarded
+      // against above: a snapshot arriving while our own header edit (title,
+      // subtitle, or theme/color) is still in flight could otherwise revert
+      // it to whatever the server had before that edit landed — reported
+      // live as "changing the header color defaults back to red."
+      if (remoteHeader && !projectSyncPending) {
+        if (typeof remoteHeader.title === 'string') local.header.title = remoteHeader.title;
+        if (typeof remoteHeader.subtitle === 'string') local.header.subtitle = remoteHeader.subtitle;
+        if (remoteHeader.theme) local.header.theme = remoteHeader.theme;
+      }
+
+      // ── activity log — plain array now, no LiveList wrapping to unwrap ──
+      if (Array.isArray(remoteActivityLog)) local.activityLog = remoteActivityLog;
+
+      // ── field revisions — what pushFieldToShared() needs to include as
+      // baseFieldRevision next time it changes boardColumns/fieldOptions/
+      // header, so the server can tell a stale write from a current one.
+      // See aps-room-state.js's handleSetWholeField().
+      local.fieldRevisions = remoteFieldRevisions || local.fieldRevisions || { boardColumns: 0, fieldOptions: 0, header: 0 };
+    }
+
+    resolveLocalProject();
+    mergeProjectFields();
+
+    // healOrphanedCardsForProject() (job-level + phase-level card-orphan
+    // self-healing, via scheduleOrphanRecovery()) is scoped to isActive
+    // only — that's the only project whose merged local.jobs is actually
+    // being viewed/relied on for immediate feedback right now.
+    if (isActive) {
+      healOrphanedCardsForProject(local, projectId);
+      activeDataChanged = true;
+    }
   });
 
-  // See pruneStrayEmptyProjects() — catches a stray empty "Untitled
-  // Project" as soon as it syncs down, before it has a chance to "pop up"
-  // in the project switcher at all.
-  pruneStrayEmptyProjects();
+  function pruneRemovedProjects() {
+    Object.keys(projects).forEach(function(localId) {
+      if (remoteIds.has(localId)) return;
+      if (Object.keys(projects).length <= 1) return;
+      if (localId === activeProjectId) {
+        const survivor = Object.keys(projects).find(function(id) { return id !== localId; });
+        if (survivor) {
+          activeProjectId = survivor;
+          delete projects[localId];
+          listChanged = true;
+          activeDataChanged = true;
+        }
+        return;
+      }
+      delete projects[localId];
+      listChanged = true;
+    });
+  }
 
-  saveProjects();
-
-  if (isFirstSnapshot) {
+  function bootstrapFirstSnapshot() {
+    if (!isFirstSnapshot) return;
     // First snapshot of this page load: if the room already has real
     // data, adopt it (same handling as every other snapshot, just once
     // more explicitly named here for clarity); if the room is completely
@@ -14179,23 +14226,37 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
     enforceProjectScopeForRole();
   }
 
-  if (activeDataChanged) {
-    if (busy) {
-      pendingRemoteRefresh = true;
-    } else {
-      pendingRemoteRefresh = false;
-      refreshActiveProjectFromShared();
+  function triggerPostSnapshotRefresh() {
+    if (activeDataChanged) {
+      if (busy) {
+        pendingRemoteRefresh = true;
+      } else {
+        pendingRemoteRefresh = false;
+        refreshActiveProjectFromShared();
+      }
     }
+    if (activeDataChanged || listChanged) updateProjectToggle();
+
+    const sidebar = document.getElementById('activitySidebar');
+    if (sidebar && !sidebar.classList.contains('collapsed')) renderActivityLogSidebar();
+
+    // Real data (or the deliberate empty-room bootstrap) has now been
+    // merged and rendered above — safe to reveal the app. No-op if the
+    // loading screen was never shown (the normal, returning-device case).
+    if (isFirstSnapshot) hideFreshLoadOverlay();
   }
-  if (activeDataChanged || listChanged) updateProjectToggle();
 
-  const sidebar = document.getElementById('activitySidebar');
-  if (sidebar && !sidebar.classList.contains('collapsed')) renderActivityLogSidebar();
+  pruneRemovedProjects();
 
-  // Real data (or the deliberate empty-room bootstrap) has now been
-  // merged and rendered above — safe to reveal the app. No-op if the
-  // loading screen was never shown (the normal, returning-device case).
-  if (isFirstSnapshot) hideFreshLoadOverlay();
+  // See pruneStrayEmptyProjects() — catches a stray empty "Untitled
+  // Project" as soon as it syncs down, before it has a chance to "pop up"
+  // in the project switcher at all.
+  pruneStrayEmptyProjects();
+
+  saveProjects();
+
+  bootstrapFirstSnapshot();
+  triggerPostSnapshotRefresh();
 }
 
 // ---- Outbound pushes ----
