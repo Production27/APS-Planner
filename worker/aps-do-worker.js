@@ -1,8 +1,11 @@
 // ==========================================
 // APS Planner — Worker (Durable Objects backend)
-// NOT YET DEPLOYED — this is the migration target, built and tested
-// alongside the still-live worker/aps-liveblocks-worker.js. See the
-// migration plan and worker/README.md before deploying this anywhere.
+// LIVE — this is what's actually deployed at aps-planner-staging
+// (confirmed via `wrangler deployments list` against this file's own git
+// history). worker/aps-liveblocks-worker.js and this file's README.md
+// describe the OLD pre-migration Liveblocks-based worker and its
+// hand-paste deploy process — both stale, superseded by this file and
+// wrangler.jsonc's wrangler-based deploy.
 // ==========================================
 //
 // Replaces Liveblocks entirely with a single Durable Object (ApsRoom,
@@ -770,7 +773,12 @@ async function handleUsersResetPassword(request, env, corsHeaders) {
 // download/delete matters: it's what stops these endpoints from being
 // used to read/delete backup files out of the same shared bucket.
 async function handleAttachmentUpload(request, env, corsHeaders, url) {
-  const identity = await resolveIdentity(env, url.searchParams.get("username"), url.searchParams.get("password"));
+  // Credentials via headers, not query params — this request's body IS
+  // the raw file (streamed straight into R2 below), so there's no JSON
+  // body to put them in the way every other POST endpoint does, and a
+  // query string would land in Worker access logs like the backup
+  // endpoints used to.
+  const identity = await resolveIdentity(env, request.headers.get("X-Aps-Username"), request.headers.get("X-Aps-Password"));
   if (!identity) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
 
   const name = url.searchParams.get("name") || "file";
@@ -836,16 +844,6 @@ async function checkAdminAuth(request, env) {
   }
 }
 
-async function checkAdminAuthFlexible(request, env, url) {
-  const qUsername = url.searchParams.get("username");
-  const qPassword = url.searchParams.get("password");
-  if (qUsername && qPassword) {
-    const caller = await resolveIdentity(env, qUsername, qPassword);
-    if (caller && caller.role === "admin") return true;
-  }
-  return checkAdminAuth(request, env);
-}
-
 // --- 9. WORKER ENTRYPOINTS ---
 export default {
   async scheduled(controller, env, ctx) {
@@ -857,7 +855,11 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      // X-Aps-Username/X-Aps-Password — attachment upload sends credentials
+      // as headers instead of query params (its POST body is the raw file
+      // bytes, not JSON, so there's no body field to put them in) — see
+      // handleAttachmentUpload().
+      "Access-Control-Allow-Headers": "Content-Type, X-Aps-Username, X-Aps-Password",
       "Cache-Control": "no-store",
     };
 
@@ -877,8 +879,8 @@ export default {
       return handleAuth(request, env, corsHeaders);
     }
 
-    if (url.pathname === "/trigger-backup") {
-      if (!(await checkAdminAuthFlexible(request, env, url))) {
+    if (url.pathname === "/trigger-backup" && request.method === "POST") {
+      if (!(await checkAdminAuth(request, env))) {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
       try {
@@ -890,8 +892,8 @@ export default {
       }
     }
 
-    if (url.pathname === "/list-backups") {
-      if (!(await checkAdminAuthFlexible(request, env, url))) {
+    if (url.pathname === "/list-backups" && request.method === "POST") {
+      if (!(await checkAdminAuth(request, env))) {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
       const list = await env.BACKUP_BUCKET.list({ prefix: "backups/" });
@@ -906,12 +908,19 @@ export default {
       return jsonResponse({ backups }, 200, corsHeaders);
     }
 
-    if (url.pathname === "/download-backup") {
-      const dlCaller = await resolveIdentity(env, url.searchParams.get("username"), url.searchParams.get("password"));
+    // POST-only, credentials in the JSON body — was GET with
+    // username/password/key as query params, which lands verbatim in
+    // Worker access logs on every download. The client now fetch()es this
+    // (instead of window.open(), which can't send a POST body) and turns
+    // the response into a local download itself.
+    if (url.pathname === "/download-backup" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
+      const dlCaller = await resolveIdentity(env, body.username, body.password);
       if (!dlCaller || dlCaller.role !== "admin") {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
-      const key = url.searchParams.get("key");
+      const key = body.key;
       if (!key) return jsonResponse({ error: "Missing key" }, 400, corsHeaders);
 
       const obj = await env.BACKUP_BUCKET.get(key);
@@ -926,16 +935,20 @@ export default {
       });
     }
 
-    if (url.pathname === "/restore-backup") {
-      const restoreCaller = await resolveIdentity(env, url.searchParams.get("username"), url.searchParams.get("password"));
+    // Same reasoning as /download-backup above — POST + JSON body instead
+    // of the admin password sitting in a GET query string.
+    if (url.pathname === "/restore-backup" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
+      const restoreCaller = await resolveIdentity(env, body.username, body.password);
       if (!restoreCaller || restoreCaller.role !== "admin") {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
-      const key = url.searchParams.get("key");
-      const confirm = url.searchParams.get("confirm");
+      const key = body.key;
+      const confirm = body.confirm;
       if (!key) return jsonResponse({ error: "Missing key" }, 400, corsHeaders);
       if (confirm !== "RESTORE") {
-        return jsonResponse({ error: "Missing confirm=RESTORE — this action overwrites the live room. Add &confirm=RESTORE to proceed." }, 400, corsHeaders);
+        return jsonResponse({ error: "Missing confirm:'RESTORE' — this action overwrites the live room. Include confirm:'RESTORE' in the body to proceed." }, 400, corsHeaders);
       }
       try {
         const result = await runRestore(env, key);

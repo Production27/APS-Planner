@@ -9035,7 +9035,7 @@ function renderJobList() {
     const card = document.createElement('div');
     card.className = 'job-card' + (editingJobId === job.id ? ' active' : '') + (job.archived ? ' archived' : '') + (isJobFinished(job) ? ' finished' : '');
     card.innerHTML = '<div class="color-strip" style="background:' + job.color + ';"></div>' +
-      '<div class="job-card-title">' + job.name + (job.archived ? ' <span style="font-size:10px;color:#888;">(archived)</span>' : '') + '</div>' +
+      '<div class="job-card-title">' + escapeHtml(job.name) + (job.archived ? ' <span style="font-size:10px;color:#888;">(archived)</span>' : '') + '</div>' +
       '<div class="job-card-meta">' +
       (s && f ? '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + s.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + f.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>' : '') +
       boardTag +
@@ -10365,7 +10365,7 @@ function renderArchivedJobsList() {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--border); gap:8px;';
     row.innerHTML =
-      '<div style="min-width:0; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + job.name + '</div>' +
+      '<div style="min-width:0; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(job.name) + '</div>' +
       '<div style="display:flex; gap:6px; flex-shrink:0;">' +
         '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" data-action="restore" data-min-tier="editor"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore</button>' +
         '<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" data-action="delete" data-min-tier="projectAdmin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>' +
@@ -10562,13 +10562,12 @@ function closeBackupsModal() {
 }
 
 async function triggerBackupNow() {
-  const { username, password } = getBackupsAuthCredentials();
   const statusEl = document.getElementById('backupsListStatus');
   statusEl.textContent = 'Running backup…';
   try {
-    const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}trigger-backup?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Backup failed');
+    // postUsersEndpoint() — POST + JSON body, not a GET query string
+    // carrying the admin password into Worker access logs.
+    await postUsersEndpoint('trigger-backup', {});
     logActivity('triggered manual backup');
     showToast('Backup saved', 'success');
     loadBackupsList();
@@ -10579,15 +10578,12 @@ async function triggerBackupNow() {
 }
 
 async function loadBackupsList() {
-  const { username, password } = getBackupsAuthCredentials();
   const statusEl = document.getElementById('backupsListStatus');
   const listEl = document.getElementById('backupsList');
   statusEl.textContent = 'Loading…';
   listEl.innerHTML = '';
   try {
-    const res = await fetch(`${LIVEBLOCKS_AUTH_ENDPOINT}list-backups?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Could not load backups');
+    const data = await postUsersEndpoint('list-backups', {});
     statusEl.textContent = `${data.backups.length} backup(s) — most recent first`;
     if (!data.backups.length) {
       listEl.innerHTML = '<div style="padding:14px; color:var(--text-secondary);">No backups yet.</div>';
@@ -10617,15 +10613,38 @@ async function loadBackupsList() {
   }
 }
 
-function downloadBackupFile(key) {
+// Was a plain window.open(url) with credentials in the query string —
+// window.open() can only do a GET navigation, so moving to POST+JSON-body
+// auth (matching every other endpoint here) means fetching the file
+// ourselves and handing the browser the resulting blob instead of letting
+// it navigate directly.
+async function downloadBackupFile(key) {
   const { username, password } = getBackupsAuthCredentials();
-  const url = `${LIVEBLOCKS_AUTH_ENDPOINT}download-backup?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&key=${encodeURIComponent(key)}`;
-  window.open(url, '_blank');
+  try {
+    const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, password: password, key: key })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(function() { return {}; });
+      throw new Error(data.error || ('Download failed: ' + res.status));
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = 'aps-backup-' + key.split('/').pop();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    showToast('Download failed: ' + err.message, 'error');
+  }
 }
 
 async function restoreBackupFile(key, dateLabel) {
-  const { username, password } = getBackupsAuthCredentials();
-
   const step1 = window.confirm(
     `Restore the SHARED project back to the backup from:\n\n${dateLabel}\n\n` +
     `This replaces the live data for everyone and briefly disconnects the team while it happens. ` +
@@ -10642,11 +10661,7 @@ async function restoreBackupFile(key, dateLabel) {
   const statusEl = document.getElementById('backupsListStatus');
   statusEl.textContent = 'Restoring… please wait';
   try {
-    const res = await fetch(
-      `${LIVEBLOCKS_AUTH_ENDPOINT}restore-backup?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&key=${encodeURIComponent(key)}&confirm=RESTORE`
-    );
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Restore failed');
+    await postUsersEndpoint('restore-backup', { key: key, confirm: 'RESTORE' });
     logActivity('restored from backup');
     showToast('Restore complete — reloading…', 'success');
     setTimeout(() => window.location.reload(), 1500);
@@ -11722,7 +11737,7 @@ function renderFieldDefHtml(def, val, onNeedsRoster, idPrefix) {
     const optionsHtml = '<option value="">Select...</option>' + opts.map(o =>
       '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
     ).join('');
-    return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+    return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
   }
   if (def.type === 'user-select') {
     // Real-account single-select (PM/Foreman) — same roster source as
@@ -11734,12 +11749,12 @@ function renderFieldDefHtml(def, val, onNeedsRoster, idPrefix) {
     // it doesn't hit that cross-browser closed-state styling issue).
     if (!cachedUserRoster) {
       ensureUserRosterLoaded().then(onNeedsRoster);
-      return '<div class="cf-field"><label>' + def.label + '</label><select disabled><option>Loading…</option></select></div>';
+      return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select disabled><option>Loading…</option></select></div>';
     }
     const optionsHtml = '<option value="">Select...</option>' + getLeadRoster(val).map(function(u) {
       return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
     }).join('');
-    return '<div class="cf-field"><label>' + def.label + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+    return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
   }
   if (def.type === 'multiselect') {
     // Backed by the REAL account roster (same one the "Visible to"
@@ -11756,14 +11771,14 @@ function renderFieldDefHtml(def, val, onNeedsRoster, idPrefix) {
     const selected = Array.isArray(val) ? val : [];
     if (!cachedUserRoster) {
       ensureUserRosterLoaded().then(onNeedsRoster);
-      return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
+      return '<div class="cf-field cf-field-wide"><label>' + escapeHtml(def.label) + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
     }
     const dropdownId = (idPrefix || '') + 'MsDropdown_' + def.key;
     const optionsId = dropdownId + '_options';
     const optionsHtml = cachedUserRoster.length
       ? cachedUserRoster.map(u => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>').join('')
       : '<span class="cf-multiselect-empty">No team accounts yet</span>';
-    return '<div class="cf-field cf-field-wide"><label>' + def.label + '</label>' +
+    return '<div class="cf-field cf-field-wide"><label>' + escapeHtml(def.label) + '</label>' +
       '<div class="ms-dropdown" id="' + dropdownId + '">' +
         '<button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown(\'' + dropdownId + '\')"><span>' + msDropdownLabelText(selected.length) + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
         '<div class="ms-dropdown-panel">' +
@@ -11773,7 +11788,7 @@ function renderFieldDefHtml(def, val, onNeedsRoster, idPrefix) {
       '</div>' +
     '</div>';
   }
-  return '<div class="cf-field"><label>' + def.label + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + def.label + '..."></div>';
+  return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val) + '" placeholder="Add ' + escapeHtml(def.label) + '..."></div>';
 }
 
 function renderCustomFieldsGrid(values) {
@@ -11883,10 +11898,16 @@ function attachmentSrc(att) {
 
 async function uploadAttachmentFile(file) {
   const { username, password } = ensureUserCredentials(false);
-  const url = LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/upload?username=' + encodeURIComponent(username) +
-    '&password=' + encodeURIComponent(password) + '&name=' + encodeURIComponent(file.name) +
+  // Credentials as headers, not query params — this request's body IS the
+  // raw file, so there's no JSON body to put them in the way every other
+  // POST endpoint does (matches the Worker's handleAttachmentUpload()).
+  const url = LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/upload?name=' + encodeURIComponent(file.name) +
     '&type=' + encodeURIComponent(file.type || 'application/octet-stream');
-  const res = await fetch(url, { method: 'POST', body: file });
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'X-Aps-Username': username, 'X-Aps-Password': password },
+    body: file
+  });
   if (!res.ok) throw new Error('Upload failed: ' + res.status);
   return res.json(); // { key, name }
 }
@@ -13744,6 +13765,23 @@ function hasPendingWriteForProject(projectId) {
   return false;
 }
 
+// Object.assign({}, ..., remoteFieldOpts) below merges JSON parsed
+// straight off the WebSocket — unlike an object literal, JSON.parse
+// creates "__proto__" as an ordinary own-enumerable data property (not
+// prototype-setting syntax), and Object.assign copies via [[Set]], which
+// DOES trigger the target's inherited __proto__ setter for a key with
+// that exact name. A remote payload carrying a top-level "__proto__" key
+// would silently repoint local.fieldOptions's prototype. Filters that
+// (and the two other prototype-chain property names) out before merging.
+function safeMergeInto(target, source) {
+  if (!source || typeof source !== 'object') return target;
+  Object.keys(source).forEach(function(key) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+    target[key] = source[key];
+  });
+  return target;
+}
+
 function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
   if (!remoteProjects || typeof remoteProjects !== 'object') return;
 
@@ -13838,7 +13876,7 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
     }
 
     // ── fields ──
-    if (remoteFieldOpts) local.fieldOptions = Object.assign({}, local.fieldOptions, remoteFieldOpts);
+    if (remoteFieldOpts) local.fieldOptions = safeMergeInto(Object.assign({}, local.fieldOptions), remoteFieldOpts);
 
     // ── header ── same race this project's jobs/cards/events are guarded
     // against above: a snapshot arriving while our own header edit (title,
