@@ -2288,22 +2288,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
 </style>
 <base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
 </head>
 <body>
 <script>if (localStorage.getItem('gantt_dark_mode_v1') === '1') document.body.classList.add('dark-mode');</script>
@@ -10941,6 +10925,13 @@ async function submitUserForm() {
     hideUserFormPanel();
     loadUsersList();
   } catch (err) {
+    // Toast added to match every sibling account-mutation function's own
+    // catch block (resetUserPasswordUI/removeUserUI/changeMyPasswordUI,
+    // right below) — this one only wrote into the inline hint before,
+    // which is fine for the pre-flight validation checks above (still
+    // shown that way), but a genuine save failure deserves the same
+    // visible-immediately toast every other account action gets.
+    showToast('Could not save user: ' + err.message, 'error');
     hintEl.textContent = err.message;
     hintEl.style.display = 'block';
   }
@@ -12592,6 +12583,7 @@ function addMyChecklistSubItem(projectId, cardId, columnId, itemId, inputId) {
   if (!item) return;
   if (!item.subItems) item.subItems = [];
   item.subItems.push({ id: genId(), text: text, done: false });
+  input.value = '';
   persistMyChecklistChange(projectId);
   renderMyChecklist();
 }
@@ -12686,6 +12678,7 @@ function setMyChecklistStageAssignee(projectId, cardId, columnId, username, chec
 // ----- Attachments -----
 function renderAttachments() {
   const container = document.getElementById('attachmentItems');
+  if (!container) return;
   if (!draftAttachments.length) {
     container.innerHTML = '<p style="font-size:11px;color:#999;">No attachments yet.</p>';
     return;
