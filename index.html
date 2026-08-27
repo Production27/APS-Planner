@@ -2088,6 +2088,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        the right edge of the screen. */
     .manager-form-area { top: 0; left: 130px; width: min(888px, calc(100vw - 130px)); }
     .manager-form-area.comments-collapsed { width: min(592px, calc(100vw - 130px)); }
+    /* The CLOSED-state transform (see .manager-form-area's base rule) is
+       translateX(-100%) — a shift measured against the drawer's OWN
+       width, which only fully clears the viewport when left:0. With
+       left:130px above, that same -100% shift lands the drawer's right
+       edge exactly at x=130 instead of off-screen — permanently covering
+       the header/tabs column with the drawer's own (visually blank,
+       same-as-background) closed panel, even though nothing is "open".
+       The extra "- 130px" makes up exactly that gap regardless of the
+       drawer's own (viewport-dependent) width. .open's translateX(0)
+       (see the base rule, specificity 0,2,0) already outranks this plain
+       .manager-form-area override (0,1,0) unconditionally, so it doesn't
+       need repeating here for the open state to still work. */
+    .manager-form-area { transform: translateX(calc(-100% - 130px)); }
 
     /* Comments panel restored to sitting beside the form (the base/
        desktop layout) instead of the @media(max-width:1440px) block's
