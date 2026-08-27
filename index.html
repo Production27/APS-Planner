@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.2';
+const APP_VERSION = '2026-08-27.3';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -10063,6 +10063,28 @@ function handleJobCommentKey(event) {
   }
 }
 
+// Shared debounce shape behind both the Job form's and the Card modal's
+// autosave (see createAutosaveController() call sites below and near
+// CARD MODAL AUTOSAVE) — schedule() debounces by delayMs, flush() saves
+// immediately and clears any pending timer, cancel() drops a pending
+// timer without saving (used before destructive transitions so a stale
+// timer can't resurrect old field values afterward).
+function createAutosaveController(saveFn, delayMs) {
+  let timer = null;
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(function() { timer = null; saveFn(); }, delayMs);
+  }
+  function flush() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    saveFn();
+  }
+  function cancel() {
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
+  return { schedule: schedule, flush: flush, cancel: cancel };
+}
+
 // ===== JOB FORM AUTOSAVE =====
 // Replaces the old explicit "Save Job" button. Every field change schedules
 // a debounced save; leaving a field, switching jobs, changing tabs, or the
@@ -10079,21 +10101,13 @@ function handleJobCommentKey(event) {
 //    set, or start after finish) is skipped — that row keeps its last
 //    valid start/finish rather than saving the bad value — while every
 //    other valid row still saves normally.
-let jobAutosaveTimer = null;
-function scheduleAutoSaveJobForm() {
-  clearTimeout(jobAutosaveTimer);
-  jobAutosaveTimer = setTimeout(function() { jobAutosaveTimer = null; autoSaveJobForm(); }, 500);
-}
-function flushAutoSaveJobForm() {
-  if (jobAutosaveTimer) { clearTimeout(jobAutosaveTimer); jobAutosaveTimer = null; }
-  autoSaveJobForm();
-}
+const jobAutosave = createAutosaveController(function() { autoSaveJobForm(); }, 500);
+function scheduleAutoSaveJobForm() { jobAutosave.schedule(); }
+function flushAutoSaveJobForm() { jobAutosave.flush(); }
 // Use before destructive transitions (deleting/clearing the job this form
 // is open on) so a pending timer can't fire afterward and resurrect it
 // from whatever was still sitting in the form fields.
-function cancelPendingJobAutosave() {
-  if (jobAutosaveTimer) { clearTimeout(jobAutosaveTimer); jobAutosaveTimer = null; }
-}
+function cancelPendingJobAutosave() { jobAutosave.cancel(); }
 
 function setJobNameHint(show) {
   const hint = document.getElementById('f_job_hint');
@@ -13098,17 +13112,11 @@ function closeCardModal() {
 // buttons are both gone, and jobs are only ever created from Job
 // Manager's own "+ Add Job" — so there's no standalone-card-creation path
 // left; editingCardId is always set while this is open.
-let cardAutosaveTimer = null;
-function scheduleCardAutosave() {
-  clearTimeout(cardAutosaveTimer);
-  cardAutosaveTimer = setTimeout(function() { cardAutosaveTimer = null; autoSaveCardForm(); }, 500);
-}
-function flushCardAutosave() {
-  if (cardAutosaveTimer) { clearTimeout(cardAutosaveTimer); cardAutosaveTimer = null; }
-  autoSaveCardForm();
-}
+const cardAutosave = createAutosaveController(function() { autoSaveCardForm(); }, 500);
+function scheduleCardAutosave() { cardAutosave.schedule(); }
+function flushCardAutosave() { cardAutosave.flush(); }
 function cancelPendingCardAutosave() {
-  if (cardAutosaveTimer) { clearTimeout(cardAutosaveTimer); cardAutosaveTimer = null; }
+  cardAutosave.cancel();
 }
 function setCardTitleHint(show) {
   const hint = document.getElementById('c_title_hint');
