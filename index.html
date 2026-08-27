@@ -3220,6 +3220,18 @@ function genId() {
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 }
 
+// A handful of top-level `let`s below parse straight out of localStorage
+// as the script itself loads — before init() even runs — with no
+// try/catch (unlike loadLinkEnabledPref()/loadBoardColumns()/etc, which
+// correctly guard the identical localStorage-get→JSON.parse pattern
+// elsewhere in this file). Any manual edit, extension interference, or
+// partial write leaving one of those keys as invalid JSON would throw
+// uncaught at parse time and halt the whole script before it ever
+// reaches init() — a blank, non-functional page with no error shown.
+function safeJsonParse(str, fallback) {
+  try { return JSON.parse(str); } catch (e) { return fallback; }
+}
+
 function ensureJobAndTaskIds(arr) {
   (arr || []).forEach(function(job, i) {
     if (!job.id) job.id = genId();
@@ -4142,7 +4154,7 @@ const ganttViewMode = 'tasks';
 // to other users. Keyed by phase id (globally unique) rather than job id,
 // since a job's OTHER phases stay exactly as they are regardless of one
 // phase's collapse state.
-let collapsedPhaseIds = new Set(JSON.parse(localStorage.getItem('gantt_collapsed_phases_v1') || '[]'));
+let collapsedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_collapsed_phases_v1') || '[]', []));
 function togglePhaseCollapse(phaseId) {
   if (collapsedPhaseIds.has(phaseId)) collapsedPhaseIds.delete(phaseId); else collapsedPhaseIds.add(phaseId);
   localStorage.setItem('gantt_collapsed_phases_v1', JSON.stringify(Array.from(collapsedPhaseIds)));
@@ -4168,8 +4180,8 @@ function togglePhaseCollapse(phaseId) {
 // sub-unit share id:null (see getJobPhases()/getPhaseSubUnits()) —
 // without the job/phase prefix, expanding one flat job's default bar
 // would collide with every other flat job's.
-let tasksExpandedPhaseIds = new Set(JSON.parse(localStorage.getItem('gantt_tasks_expanded_phases_v1') || '[]'));
-let tasksExpandedSubPhaseIds = new Set(JSON.parse(localStorage.getItem('gantt_tasks_expanded_subphases_v1') || '[]'));
+let tasksExpandedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_tasks_expanded_phases_v1') || '[]', []));
+let tasksExpandedSubPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_tasks_expanded_subphases_v1') || '[]', []));
 function getSubUnitKey(job, phaseId, subPhaseId) {
   return job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
 }
@@ -4688,8 +4700,14 @@ function migrateFromLegacy() {
 function loadProjects() {
   const saved = localStorage.getItem(PROJECTS_KEY);
   const active = localStorage.getItem(ACTIVE_PROJECT_KEY);
-  if (saved) {
-    projects = JSON.parse(saved);
+  // safeJsonParse(saved, null) — a corrupted PROJECTS_KEY value used to
+  // throw here uncaught, halting the whole script before init() finishes
+  // and leaving a blank page with no error shown. Falls back to the same
+  // migrateFromLegacy() path already used for "nothing saved yet" rather
+  // than a corrupted save being any worse than a fresh install.
+  const parsed = saved ? safeJsonParse(saved, null) : null;
+  if (parsed) {
+    projects = parsed;
     activeProjectId = active && projects[active] ? active : Object.keys(projects)[0];
   } else {
     migrateFromLegacy();
@@ -7325,6 +7343,10 @@ function saveCalendarEventFromModal() {
 }
 
 function deleteCalendarEventFromModal() {
+  // Defense-in-depth, matching deleteCardFromModal()'s same pattern — its
+  // trigger button is already data-min-tier gated, but delete is
+  // irreversible enough to warrant a second check here.
+  if (!hasMinTier('editor')) return;
   if (!editingCalendarEventId) return;
   const evt = calendarEvents.find(function(e) { return e.id === editingCalendarEventId; });
   if (evt) logActivity('deleted calendar event "' + evt.title + '"');
@@ -8648,6 +8670,11 @@ function onBarMoveEnd(e) {
       const jf = findJob(jobId);
       logActivity('rescheduled due date for job "' + (jf ? jf.job.name : '') + '"');
       renderJobList();
+      // Was missing here — the identical Calendar-side due-marker drag
+      // (a few hundred lines up) already calls this; card.due drives the
+      // Board's own "overdue" badge (see the isOverdue check), so without
+      // it a Gantt-side due-date drag left that badge stale.
+      renderBoard();
       refreshJobFormIfOpen(jobId);
       showToast('Due date updated', 'success');
     }
@@ -10349,6 +10376,12 @@ function cancelEdit() {
 }
 
 function archiveJob(jobId) {
+  // Defense-in-depth, matching addNewJob()/duplicateJob()/
+  // promptDeleteJob()'s same pattern — its trigger button is already
+  // data-min-tier gated, but a function-level check here doesn't depend
+  // on that DOM state having been applied correctly at the moment of the
+  // click.
+  if (!hasMinTier('editor')) return;
   const found = findJob(jobId);
   if (!found) return;
   const job = found.job;
@@ -10364,6 +10397,8 @@ function archiveJob(jobId) {
 }
 
 function restoreJob(jobId) {
+  // Defense-in-depth, matching archiveJob()'s same pattern just above.
+  if (!hasMinTier('editor')) return;
   const found = findJob(jobId);
   if (!found) return;
   const job = found.job;
@@ -11020,6 +11055,16 @@ function deleteBoardColumn(colId, event) {
   if (event) event.stopPropagation();
   if (BOARD_COLUMNS.length <= 1) {
     showToast('You need at least one board', 'error');
+    return;
+  }
+  // 'complete'/'invoiced' are hardcoded as the terminal stages in 4 other
+  // spots (the overdue badge, Home's overdue/due-soon and active-jobs
+  // widgets, the "done" stage-bar styling) — none of them re-derive
+  // "which columns count as done" from BOARD_COLUMNS itself, so deleting
+  // either id out from under them would leave cards that finished work in
+  // whatever column replaced it permanently mis-treated as still active.
+  if (colId === 'complete' || colId === 'invoiced') {
+    showToast('The Complete and Invoiced boards can\'t be deleted', 'error');
     return;
   }
   const col = BOARD_COLUMNS.find(c => c.id === colId);
@@ -12546,7 +12591,7 @@ function addMyChecklistSubItem(projectId, cardId, columnId, itemId, inputId) {
   const item = items.find(function(i) { return String(i.id) === String(itemId); });
   if (!item) return;
   if (!item.subItems) item.subItems = [];
-  item.subItems.push({ id: Date.now(), text: text, done: false });
+  item.subItems.push({ id: genId(), text: text, done: false });
   persistMyChecklistChange(projectId);
   renderMyChecklist();
 }
@@ -12573,7 +12618,7 @@ function addMyChecklistItem(projectId, cardId, columnId, inputId) {
   const resolved = resolveMyChecklistCard(projectId, cardId);
   if (!resolved) return;
   const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
-  items.push({ id: Date.now(), text: text, done: false, assignee: [] });
+  items.push({ id: genId(), text: text, done: false, assignee: [] });
   input.value = '';
   persistMyChecklistChange(projectId);
   renderMyChecklist();
@@ -12606,6 +12651,9 @@ function deleteMyChecklistItem(projectId, cardId, columnId, itemId) {
 }
 
 function setMyChecklistItemAssignee(projectId, cardId, columnId, itemId, username, checked) {
+  // Defense-in-depth, matching setMyChecklistStageAssignee()'s own gate
+  // just below — its checkboxes are already data-min-tier="editor" gated.
+  if (!hasMinTier('editor')) return;
   const resolved = resolveMyChecklistCard(projectId, cardId);
   if (!resolved) return;
   const items = getChecklistForStageInProject(resolved.card.checklists, columnId, resolved.proj.boardColumns || DEFAULT_BOARD_COLUMNS);
