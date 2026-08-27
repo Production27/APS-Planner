@@ -523,24 +523,6 @@
   }
   .task-bar.resizing { transition: none; z-index: 60; filter: brightness(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: ew-resize; }
   .task-bar.moving { transition: none; z-index: 60; filter: brightness(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: grabbing; }
-  .task-bar.reordering { opacity: 0.35; filter: grayscale(0.4); cursor: ns-resize; }
-  .reorder-ghost {
-    position: fixed; height: 26px; border-radius: 5px; pointer-events: none; z-index: 100;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.35); display: flex; align-items: center;
-    padding: 0 8px; font-size: 10px; color: white; font-weight: 600;
-    white-space: nowrap; overflow: hidden; border: 1px solid rgba(255,255,255,0.25);
-    cursor: ns-resize;
-  }
-  .reorder-indicator {
-    position: absolute; left: 0; right: 0; height: 3px;
-    background: var(--primary-light); border-radius: 2px; z-index: 55;
-    pointer-events: none; box-shadow: 0 0 0 3px rgba(57,73,171,0.15);
-    transition: top 0.08s ease-out;
-  }
-  .task-row.reorder-target { background: #c5cae9 !important; }
-  body.dark-mode .reorder-indicator { background: #5c6bc0; box-shadow: 0 0 0 3px rgba(92,107,192,0.35); }
-  body.dark-mode .task-bar.reordering { opacity: 0.25; }
-  body.dark-mode .task-row.reorder-target { background: rgba(92,107,192,0.45) !important; }
   .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; justify-content: center; font-size: 9px; }
   .task-bar.due-marker-bar { border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935, 0 1px 3px rgba(0,0,0,0.25); }
   /* Phase-boundary tick on a condensed Jobs/Leads bar — see the
@@ -3206,9 +3188,8 @@ function genId() {
 
 // A handful of top-level `let`s below parse straight out of localStorage
 // as the script itself loads — before init() even runs — with no
-// try/catch (unlike loadLinkEnabledPref()/loadBoardColumns()/etc, which
-// correctly guard the identical localStorage-get→JSON.parse pattern
-// elsewhere in this file). Any manual edit, extension interference, or
+// try/catch (unlike loadLinkEnabledPref()/etc, which correctly guard the
+// identical localStorage-get→JSON.parse pattern elsewhere in this file). Any manual edit, extension interference, or
 // partial write leaving one of those keys as invalid JSON would throw
 // uncaught at parse time and halt the whole script before it ever
 // reaches init() — a blank, non-functional page with no error shown.
@@ -3238,7 +3219,7 @@ function ensureJobAndTaskIds(arr) {
   return arr;
 }
 
-function flattenJobs(jobsArr, includeArchived) {
+function flattenJobs(jobsArr) {
   const hiddenOrders = new Set(
     BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
   );
@@ -3251,7 +3232,7 @@ function flattenJobs(jobsArr, includeArchived) {
   // double-adding one.
   const combined = (jobsArr || []).concat(getLinkedReferenceJobs());
   combined.forEach(function(job, jobIdx) {
-    if (!includeArchived && job.archived) return;
+    if (job.archived) return;
     getJobPhases(job).forEach(function(phase) {
       const phaseName = phase.isDefault ? null : phase.name;
       getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
@@ -3396,12 +3377,12 @@ function isCalendarJobSpanTaskId(taskId) {
 // collapsed-row look, a real scheduling gap between two of a sub-phase's
 // tasks gets no bar at all instead of one continuous bar painted
 // straight through it.
-function buildCalendarJobRows(jobsArr, includeArchived) {
+function buildCalendarJobRows(jobsArr) {
   const hiddenOrders = getHiddenTaskOrders();
   const rows = [];
   const combined = (jobsArr || []).concat(getLinkedReferenceJobs());
   combined.forEach(function(job) {
-    if (!includeArchived && job.archived) return;
+    if (job.archived) return;
     getJobPhases(job).forEach(function(phase) {
       const phaseName = phase.isDefault ? null : phase.name;
       getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
@@ -4115,17 +4096,16 @@ let editingPhaseId = null;
 let editingSubPhaseId = null;
 let dayWidth = 34;
 // Gantt row/bar sizing — kept in one place since it's threaded through
-// renderGantt(), the drag/resize/reorder handlers, and the SVG connector
-// lines between split job-span segments. The matching CSS (.task-row,
-// .task-bar, .row-bg, .job-span-*, .reorder-ghost) is hand-kept in sync
-// with these since plain CSS can't reference JS constants — search for
+// renderGantt(), the drag/resize handlers, and the SVG connector lines
+// between split job-span segments. The matching CSS (.task-row,
+// .task-bar, .row-bg, .job-span-*) is hand-kept in sync with these since
+// plain CSS can't reference JS constants — search for
 // GANTT_ROW_H/GANTT_BAR_H in a comment there if these ever change again.
 const GANTT_ROW_H = 40;
 const GANTT_BAR_H = 26;
 const GANTT_BAR_PAD = (GANTT_ROW_H - GANTT_BAR_H) / 2;
 let startDate, endDate;
 let deleteTargetJobId = null;
-let showArchived = false;
 
 // ===== GANTT VIEW MODE =====
 // One row per task, with its own per-job/per-phase/per-sub-phase collapse
@@ -5153,13 +5133,12 @@ function autoArchiveJobs() {
   }
 }
 
-// The Gantt toolbar's "show archived" toggle was removed — showArchived
-// stays permanently false now (its original default), so every existing
-// `showArchived ||`/`!showArchived &&` check across Gantt/Job List/
-// Calendar keeps working unchanged, just always evaluating as if it was
-// never turned on. Archived jobs are still reachable via the separate
-// Archived Jobs modal (Settings menu) for browsing/restoring — this only
-// removed the "show them inline, mixed into the normal views" toggle.
+// Archived jobs are excluded from Gantt/Job List/Calendar outright — the
+// Gantt toolbar's "show archived" toggle (and the showArchived flag that
+// backed it) was removed, since nothing ever turned it on. They're still
+// reachable via the separate Archived Jobs modal (Settings menu) for
+// browsing/restoring — this only removed the "show them inline, mixed
+// into the normal views" option.
 
 /* Old flat-task archive/restore removed — hierarchical versions used instead */
 
@@ -5377,18 +5356,8 @@ function init() {
   }, 60000);
 }
 
-function loadFieldOptions() {
-  const saved = localStorage.getItem('gantt_board_field_options_v1');
-  const defaults = {
-    pm: [], foreman: [],
-    jobType: ['New Home', 'Remodel', 'Commercial', 'Addition', 'Service Call'],
-    timeframe: ['This Week', 'Next Week', 'This Month', 'This Quarter'],
-    incentivePeriod: ['Q1', 'Q2', 'Q3', 'Q4']
-  };
-  fieldOptions = saved ? Object.assign(defaults, JSON.parse(saved)) : defaults;
-}
-
-/* loadTasks() removed — hierarchical loadActiveProjectData() handles this */
+/* loadFieldOptions()/loadTasks() removed — hierarchical
+   loadActiveProjectData() handles this */
 
 // ===== SETTINGS DROPDOWN =====
 function toggleSettingsMenu() {
@@ -5462,13 +5431,12 @@ function toggleDarkMode() {
   applyDarkMode(isOn);
 }
 
-function loadHeader() {
-  const hTitle = localStorage.getItem('gantt_header_title_v2');
-  const hSub = localStorage.getItem('gantt_header_subtitle_v2');
-  if (hTitle) document.getElementById('headerTitle').textContent = hTitle;
-  if (hSub) document.getElementById('headerSubtitle').textContent = hSub;
-  loadThemeColor();
-}
+/* loadHeader() removed — loadActiveProjectData() sets
+   #headerTitle/#headerSubtitle directly from the per-project data now.
+   loadThemeColor() (a 1-line wrapper that only ever called
+   applyThemeColor()) removed alongside it — applyThemeColor() itself is
+   still called directly from its other live call sites, so nothing
+   actually depended on the wrapper. */
 
 // ===== THEME COLOR =====
 // Was a header-background gradient picker (start/end color) back when
@@ -5507,10 +5475,6 @@ function normalizeThemeColor(theme) {
 
 function getSavedThemeColor() {
   return localStorage.getItem('gantt_theme_color_v1') || DEFAULT_THEME_COLOR;
-}
-
-function loadThemeColor() {
-  applyThemeColor();
 }
 
 function applyThemeColor() {
@@ -6207,7 +6171,7 @@ function renderMonthCalendar() {
   // flattenJobs()) so a job's sub-units always render as one condensed,
   // overlapping bar each instead of one row per task — see its own
   // comment for the full rationale.
-  const flatRows = buildCalendarJobRows(getVisibleJobs(), showArchived);
+  const flatRows = buildCalendarJobRows(getVisibleJobs());
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
@@ -6337,7 +6301,7 @@ function renderWeekCalendar() {
   // except calendar events that have a time set, which render in the
   // separate hourly grid below (built further down) instead of up here in
   // the all-day-style row.
-  const flatRows = buildCalendarJobRows(getVisibleJobs(), showArchived);
+  const flatRows = buildCalendarJobRows(getVisibleJobs());
   const allJobs = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
@@ -7076,7 +7040,7 @@ function calendarOpenJob(jobId, taskId, phaseId) {
 function getScheduledItemsForDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const items = [];
-  flattenJobs(getVisibleJobs(), showArchived).forEach(function(row) {
+  flattenJobs(getVisibleJobs()).forEach(function(row) {
     if (!row.task.start || !row.task.finish) return;
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
@@ -7479,7 +7443,7 @@ function renderGantt() {
   function buildVisibleTaskRows() {
     const rows = [];
     getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
-      if (!showArchived && job.archived) return;
+      if (job.archived) return;
       // See ganttFocusedJobId/toggleGanttJobFocus() — isolates the chart to
       // one job's rows when set, Tasks view only.
       if (ganttFocusedJobId && job.id !== ganttFocusedJobId) return;
@@ -8258,8 +8222,6 @@ function renderGantt() {
 // ===== GANTT BAR RESIZE & MOVE (drag edges to resize, drag body to move) =====
 let barResizeState = null;
 let barMoveState = null;
-let reorderGhostEl = null;
-let reorderIndicatorEl = null;
 
 // --- Right edge: drag to change finish date ---
 // Shifts every task that comes after the given task in the same job (by
@@ -8572,11 +8534,10 @@ function startBarMove(e, jobId, taskId, bar, isJobSpan, phaseId, subPhaseId) {
   const duration = getDaysDiff(s, f) + 1;
 
   barMoveState = {
-    jobId, taskId, task, bar, startX: e.clientX, startY: e.clientY,
+    jobId, taskId, task, bar, startX: e.clientX,
     startDateObj: s, duration, deltaDays: 0, moved: false, phaseId: phaseId || null, subPhaseId: subPhaseId || null,
     origLeftPx: parseFloat(bar.style.left),
-    origTopPx: parseFloat(bar.style.top),
-    reorderMode: false, newIndex: null, isJobSpan: !!isJobSpan,
+    isJobSpan: !!isJobSpan,
     // Queried + filtered ONCE here at drag start instead of on every
     // mousemove tick (see applyBarMoveMove()) — this used to be a
     // whole-document 6-class querySelectorAll + per-element dataset
@@ -8623,17 +8584,6 @@ function applyBarMoveMove(e) {
   // handleCalBarMouseMove()'s same reasoning for the calendar's bars.
   if (!hasMinTier('editor')) return;
   const deltaX = e.clientX - barMoveState.startX;
-  const deltaY = e.clientY - barMoveState.startY;
-
-  // Detect vertical reorder mode first — disabled in Phase 1A, will be implemented in Phase 1B
-  if (!barMoveState.moved && !barMoveState.reorderMode && Math.abs(deltaY) > 8 && Math.abs(deltaY) > Math.abs(deltaX)) {
-    barMoveState.reorderMode = false;
-  }
-
-  if (barMoveState.reorderMode) {
-    // Phase 1B: linked drag / reorder interactions
-    return;
-  }
 
   if (Math.abs(deltaX) > 3) {
     barMoveState.moved = true;
@@ -8673,10 +8623,10 @@ function applyBarMoveMove(e) {
 
 function onBarMoveEnd(e) {
   if (!barMoveState) return;
-  const { task, taskId, deltaDays, moved, duration, startDateObj, bar, reorderMode, jobId, newJobIndex, isJobSpan, phaseId, subPhaseId } = barMoveState;
+  const { task, taskId, deltaDays, moved, duration, startDateObj, bar, jobId, isJobSpan, phaseId, subPhaseId } = barMoveState;
   document.removeEventListener('mousemove', onBarMoveMove);
   document.removeEventListener('mouseup', onBarMoveEnd);
-  bar.classList.remove('moving', 'reordering');
+  bar.classList.remove('moving');
   hideTooltip();
 
   if (isJobSpan) {
@@ -8704,31 +8654,6 @@ function onBarMoveEnd(e) {
     } else {
       bar.dataset.dragged = 'false';
     }
-    barMoveState = null;
-    renderGantt();
-    return;
-  }
-
-  if (reorderMode) {
-    removeReorderGhost();
-    removeReorderIndicator();
-    unhighlightReorderRows();
-
-    if (newJobIndex !== null) {
-      const found = findJob(jobId);
-      if (found) {
-        const currentIdx = found.idx;
-        if (currentIdx !== newJobIndex) {
-          const [movedJob] = jobs.splice(currentIdx, 1);
-          jobs.splice(newJobIndex, 0, movedJob);
-          saveJobs();
-          logActivity('reordered job "' + movedJob.name + '"');
-          showToast('Job reordered', 'success');
-        }
-      }
-    }
-
-    bar.dataset.dragged = 'true';
     barMoveState = null;
     renderGantt();
     return;
@@ -8778,53 +8703,6 @@ function onBarMoveEnd(e) {
   renderGantt();
 }
 
-function createReorderGhost(bar, e) {
-  reorderGhostEl = bar.cloneNode(true);
-  reorderGhostEl.classList.remove('reordering', 'moving', 'task-bar');
-  reorderGhostEl.classList.add('reorder-ghost');
-  reorderGhostEl.style.width = bar.offsetWidth + 'px';
-  reorderGhostEl.style.background = bar.style.background;
-  const handles = reorderGhostEl.querySelectorAll('.task-bar-resize-handle');
-  handles.forEach(h => h.remove());
-  document.body.appendChild(reorderGhostEl);
-  updateReorderGhost(e);
-}
-
-function updateReorderGhost(e) {
-  if (!reorderGhostEl) return;
-  reorderGhostEl.style.left = (e.clientX - reorderGhostEl.offsetWidth / 2) + 'px';
-  reorderGhostEl.style.top = (e.clientY - GANTT_BAR_H / 2) + 'px';
-}
-
-function removeReorderGhost() {
-  if (reorderGhostEl) { reorderGhostEl.remove(); reorderGhostEl = null; }
-}
-
-function createReorderIndicator() {
-  removeReorderIndicator();
-  reorderIndicatorEl = document.createElement('div');
-  reorderIndicatorEl.className = 'reorder-indicator';
-  document.getElementById('timelineGrid').appendChild(reorderIndicatorEl);
-}
-
-function updateReorderIndicator(newIndex) {
-  if (!reorderIndicatorEl) return;
-  reorderIndicatorEl.style.top = (newIndex * GANTT_ROW_H) + 'px';
-}
-
-function removeReorderIndicator() {
-  if (reorderIndicatorEl) { reorderIndicatorEl.remove(); reorderIndicatorEl = null; }
-}
-
-function highlightReorderRow(newIndex) {
-  unhighlightReorderRows();
-  const leftRows = document.querySelectorAll('#leftBody .task-row');
-  if (leftRows[newIndex]) leftRows[newIndex].classList.add('reorder-target');
-}
-
-function unhighlightReorderRows() {
-  document.querySelectorAll('#leftBody .task-row.reorder-target').forEach(r => r.classList.remove('reorder-target'));
-}
 function scrollToToday() {
   const today = new Date();
   today.setHours(0,0,0,0);
@@ -8973,7 +8851,7 @@ function buildLegend() {
   let html;
   const jobColors = {};
   getVisibleJobs().forEach(job => {
-    if (!showArchived && job.archived) return;
+    if (job.archived) return;
     jobColors[job.name] = job.color;
   });
   html = '<div class="legend-float-title">Jobs</div>';
@@ -8989,7 +8867,7 @@ function showDatePopover(e, date) {
   const dateStr = toIsoDate(date);
   const dayJobs = [];
   getVisibleJobs().forEach(job => {
-    if (!showArchived && job.archived) return;
+    if (job.archived) return;
     (job.tasks || []).forEach(task => {
       const s = new Date(task.start + 'T00:00:00');
       const f = new Date(task.finish + 'T00:00:00');
@@ -9132,7 +9010,7 @@ function renderJobList() {
   syncCardColumns();
 
   getVisibleJobs().forEach((job) => {
-    if (!showArchived && job.archived) return;
+    if (job.archived) return;
     if (search && !job.name.toLowerCase().includes(search)) return;
 
     const phases = getJobPhases(job);
@@ -9216,7 +9094,7 @@ function filterJobList() {
 }
 function updateJobCount() {
   const myJobs = getVisibleJobs();
-  const visible = myJobs.filter(j => showArchived || !j.archived).length;
+  const visible = myJobs.filter(j => !j.archived).length;
   const archived = myJobs.filter(j => j.archived).length;
   document.getElementById('jobCount').textContent = visible + (archived > 0 ? ' / ' + myJobs.length : '');
 }
@@ -10669,7 +10547,7 @@ function executeDelete() {
     // used to get cleaned up only as a side effect of the old delete-by-
     // absence push logic, which was removed for being unsafe under
     // concurrent edits; see the comment on pushProjectToShared's jobsMap).
-    const orphanedCardIds = boardCards.filter(function(c) { return c.jobId === jobId; }).map(function(c) { return c.id; });
+    const orphanedCardIds = getJobCards(found.job).map(function(c) { return c.id; });
     boardCards = boardCards.filter(function(c) { return c.jobId !== jobId; });
 
     saveJobs();
@@ -11083,21 +10961,10 @@ async function changeMyPasswordUI() {
   }
 }
 
-// ===== BOARD: STORAGE =====
-function loadBoardCards() {
-  const saved = localStorage.getItem('gantt_board_cards_v1');
-  boardCards = saved ? JSON.parse(saved) : [];
-}
-
-function loadBoardColumns() {
-  const saved = localStorage.getItem('gantt_board_columns_v1');
-  try {
-    const parsed = saved ? JSON.parse(saved) : null;
-    BOARD_COLUMNS = (Array.isArray(parsed) && parsed.length) ? parsed : JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS));
-  } catch (e) {
-    BOARD_COLUMNS = JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS));
-  }
-}
+/* loadBoardCards()/loadBoardColumns() removed — like loadFieldOptions()/
+   loadHeader() above, superseded by the hierarchical
+   loadActiveProjectData(), which reads boardCards/BOARD_COLUMNS from
+   the per-project data directly. */
 
 function slugifyColumnId(label) {
   let base = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '');
