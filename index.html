@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.2';
+const APP_VERSION = '2026-08-28.3';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -7507,7 +7507,7 @@ function renderGantt() {
   // (not deeper) so each phase function can just assign into it, instead
   // of ~11 values needing to be threaded through parameters/return
   // values by hand.
-  let grid, header, leftBody, totalDays, containerH, gridWidth,
+  let grid, header, leftBody, totalDays, containerH, gridWidth, gridHeightPx,
     savedScrollLeft, savedScrollTop, today, visibleRows, jobBarMap;
 
   function setupDateRangeAndGrid() {
@@ -7606,7 +7606,8 @@ function renderGantt() {
   // rows of breathing room below the last task, falling back to at least
   // the viewport height so a short list still fills the visible area.
   const GANTT_EXTRA_ROWS_BELOW = 4;
-  grid.style.height = Math.max(containerH, (visibleRows.length + GANTT_EXTRA_ROWS_BELOW) * GANTT_ROW_H) + 'px';
+  gridHeightPx = Math.max(containerH, (visibleRows.length + GANTT_EXTRA_ROWS_BELOW) * GANTT_ROW_H);
+  grid.style.height = gridHeightPx + 'px';
   }
 
   // visibleRowIdx here and barVisibleIdx in renderTimelineBars() below
@@ -7730,6 +7731,20 @@ function renderGantt() {
       visibleRowIdx++;
     }
   });
+
+  // leftBody's own scrollable height is just its stacked .task-row
+  // children (visibleRows.length * GANTT_ROW_H) — shorter than
+  // .timeline-grid's height (gridHeightPx, above), which pads in
+  // GANTT_EXTRA_ROWS_BELOW of empty space below the last row. Without
+  // matching that here, leftBody hits its own scroll limit first while
+  // timelineBody (synced 1:1 by scrollTop, see setupScrollSync()) can
+  // keep going those extra rows further — the two panels desync and
+  // job rows stop lining up with their Gantt bars. A trailing spacer
+  // the same size as that padding keeps both panels' max scrollTop
+  // identical.
+  const leftSpacer = document.createElement('div');
+  leftSpacer.style.height = Math.max(0, gridHeightPx - visibleRows.length * GANTT_ROW_H) + 'px';
+  leftBody.appendChild(leftSpacer);
   }
 
   function drawTodayLine() {
