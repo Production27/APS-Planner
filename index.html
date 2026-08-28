@@ -3042,7 +3042,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.14';
+const APP_VERSION = '2026-08-28.15';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13654,7 +13654,7 @@ function renderBoardWorkflowStrip() {
     const path = 'M' + inset + ',10 L' + (inset + flare) + ',2.5 L' + (bw - inset - flare) + ',2.5 L' + (bw - inset) + ',10';
     const bracketStyle = g.color ? ('color:' + g.color + ';') : 'color:var(--text-light);opacity:0.6;';
     const bracket = '<div class="wf-bracket-wrap" style="' + bracketStyle + '"><svg width="' + bw + '" height="10" viewBox="0 0 ' + bw + ' 10">' +
-      '<path d="' + path + '" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="' + path + '" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
       '</svg></div>';
     const title = g.count + ' job' + (g.count === 1 ? '' : 's') + ' in ' + g.label + (g.stalledCount ? ', ' + g.stalledCount + ' stalled' : '');
     return '<div class="wf-seg' + (isUnassigned ? ' unassigned' : '') + '" style="' + style + '" onclick="scrollToBoardColumn(\'' + g.firstColId + '\')" title="' + escapeHtml(title) + '">' + labelRow + bracket + '</div>';
