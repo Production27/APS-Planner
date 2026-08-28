@@ -3256,7 +3256,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.40';
+const APP_VERSION = '2026-08-28.41';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -14686,7 +14686,20 @@ async function reauthenticate(forceReprompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: username, password: password, name: username })
   });
-  if (!res.ok) throw new Error('Room auth failed: ' + res.status);
+  if (!res.ok) {
+    // A rejected login (wrong username OR wrong password — the Worker's
+    // handleAuth() doesn't distinguish which) must not leave a bad
+    // username cached: every later caller with no valid token reuses
+    // getStoredUsername() as-is (see reauthenticateOnce()/the !username
+    // check above), so a typo on the very first attempt would otherwise
+    // keep getting silently reused forever — every retry re-prompting
+    // for password only, with no way to fix the username that was
+    // actually wrong. This is the bug behind "it doesn't even ask for a
+    // username" — clearing the cache here means the very next attempt,
+    // from anywhere, naturally re-prompts for both again.
+    localStorage.removeItem(USERNAME_KEY);
+    throw new Error('Room auth failed: ' + res.status);
+  }
   const data = await res.json();
   if (!data || !data.token) throw new Error('Room auth response missing token');
   setStoredSessionToken(data.token);
