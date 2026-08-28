@@ -2024,12 +2024,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        visible on mobile, since tapping a day is how it's reached there. */
     body[data-calendar-mode="week"] #weekHourSection { display: none; }
     .calendar-wrapper { padding: 8px; }
-    /* Today wraps onto its own row below the month/year label instead of
-       fighting for one cramped row. The prev/next nav group is hidden
-       entirely — swiping the grid (see handleCalSwipeEnd()) is the mobile
-       way to change months, so it'd just be redundant. */
+    /* Today sits directly beside the month/year label — the prev/next nav
+       group is hidden entirely (swiping the grid, see handleCalSwipeEnd(),
+       is the mobile way to change months, so it'd just be redundant),
+       which leaves Today and the label as the only two things in this row
+       during month/week view, adjacent in DOM order already. */
     .calendar-toolbar { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-    .calendar-toolbar h3 { flex: 1 1 100%; order: -1; font-size: 15px; margin-bottom: 2px; }
+    .calendar-toolbar h3 { font-size: 15px; }
     .calendar-toolbar button { padding: 6px 10px; font-size: 12px; }
     .cal-nav-group { display: none; }
     .calendar-grid { gap: 3px; }
@@ -3079,7 +3080,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.26';
+const APP_VERSION = '2026-08-28.27';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
