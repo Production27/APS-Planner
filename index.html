@@ -1993,16 +1993,35 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .mobile-view-btn {
       flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
       padding: 11px 2px; border: none; background: transparent;
-      cursor: pointer; border-bottom: 3px solid transparent;
+      cursor: pointer; position: relative;
     }
     /* Dimmed at rest, full strength when active — with the caption gone,
-       the underline alone read as too subtle a selection cue next to 5
-       other equally-bold icons; each one keeps its own hardcoded color
-       either way (not a uniform tint swap) since they're multi-color to
-       begin with. */
-    .mobile-view-btn svg { flex-shrink: 0; opacity: 0.5; }
-    .mobile-view-btn.active { border-bottom-color: var(--primary); }
+       a thin underline alone read as too subtle a selection cue next to 5
+       other equally-bold icons. A colored pill behind the icon instead —
+       same visual language as the desktop rail-tab's own
+       .rail-tab.active background — reads unambiguously as "this one's
+       on" rather than a slight color shift. Sized/centered via ::before
+       (fixed 34px square) rather than just backgrounding the button
+       itself, since the button's own flex:1 click target spans the
+       whole column width and a background that wide would look like a
+       solid stripe, not a toggle. */
+    .mobile-view-btn svg { flex-shrink: 0; opacity: 0.5; position: relative; z-index: 1; }
+    .mobile-view-btn::before {
+      content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 34px; height: 34px; border-radius: 10px; background: var(--primary-light);
+      opacity: 0; transition: opacity 0.15s ease;
+    }
+    .mobile-view-btn.active::before { opacity: 1; }
     .mobile-view-btn.active svg { opacity: 1; }
+    /* Jobs' briefcase and Gantt's bars both happen to use the exact
+       --primary-light indigo as their own hardcoded fill (same reason
+       desktop's #tab-gantt.active svg needs this — see that rule's own
+       comment) — invisible against a same-color pill otherwise. Every
+       other icon here is either two-tone already (Checklist's
+       green+white check) or a different hue (Calendar's white+red,
+       Board's amber), so they read fine against the pill unchanged. */
+    .mobile-view-btn[data-view="jobs"].active svg,
+    .mobile-view-btn[data-view="gantt"].active svg { filter: brightness(0) invert(1); }
 
     /* NOT display:none — the job drawer (#formArea) lives inside
        .app-shell-main too, and display:none on an ancestor hides a
@@ -2201,18 +2220,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       grid-area: tabs; display: flex; flex-direction: column; width: 64px;
       border-bottom: none; border-right: 1px solid var(--border);
     }
-    /* Left-edge indicator instead of the portrait bar's underline — this
-       is a vertical list here, not a horizontal row, so a left border
-       reads as "selected" the way the underline did there. Centered
-       (not flex-start) now that the column is icon-only width (64px,
-       same as the desktop .rail-tab it's matching) — flex-start's own
-       left-hugging padding was the leftover from when this column was
-       130px wide and had that much empty space to fill. */
-    .mobile-view-btn {
-      justify-content: center; padding: 10px 0;
-      border-bottom: none; border-left: 3px solid transparent;
-    }
-    .mobile-view-btn.active { border-left-color: var(--primary); border-bottom-color: transparent; }
+    /* Centered (not flex-start) now that the column is icon-only width
+       (64px, same as the desktop .rail-tab it's matching) — flex-start's
+       own left-hugging padding was the leftover from when this column
+       was 130px wide and had that much empty space to fill. The active
+       pill (::before, base rule above) needs no changes here — it's
+       centered on the button itself regardless of the switcher's own
+       row/column direction, so it already works unmodified in this
+       vertical layout too. */
+    .mobile-view-btn { justify-content: center; padding: 10px 0; }
 
     .app-shell { grid-area: shell; height: 100%; min-height: 0; }
 
@@ -3213,7 +3229,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.37';
+const APP_VERSION = '2026-08-28.38';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
