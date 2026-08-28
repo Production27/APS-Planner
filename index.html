@@ -1468,6 +1468,49 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-stat-label { font-size: 11px; color: var(--text-light); font-weight: 700; margin-top: 4px; text-transform: uppercase; letter-spacing: .03em; }
   .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
+  /* Job Chat spans both columns — a compose row + feed wants more room
+     than a stat-list widget, unlike its four narrower siblings. At
+     desktop width this is what makes its DOM position (between the two
+     widget rows) actually read as "centered" rather than just wide;
+     .home-grid collapsing to one column on mobile would otherwise leave
+     it sitting between rows 1 and 2 there too, so `order` moves it after
+     all four instead — "last is fine" on mobile was a separate call from
+     "center" on desktop. */
+  .home-widget-wide { grid-column: 1 / -1; }
+  @media (max-width: 900px) { .home-widget-wide { order: 1; } }
+  /* Compose row — same container/input recipe as .my-checklist-add-bar
+     (job-picker + text + button), including the var(--bg)-on-var(--card)
+     field treatment — a plain <select>/<input> with no explicit
+     background falls back to the browser's own white UA style and
+     ignores dark mode entirely. */
+  .job-chat-compose {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 14px;
+  }
+  .job-chat-compose select, .job-chat-compose input[type="text"] {
+    font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font-family: inherit;
+  }
+  .job-chat-compose select { flex: 0 1 200px; min-width: 0; }
+  .job-chat-compose input[type="text"] { flex: 1 1 200px; min-width: 0; }
+  /* One colored chip identifying which job a feed item belongs to — same
+     dot+label idiom as .job-card-board-tag / .my-checklist-job-bubble
+     elsewhere, just inline in the comment's own meta row since a single-
+     job comment thread never needed to say which job it was on before.
+     Clickable — jumps straight to that job, same as the job list/board
+     card equivalents. */
+  .job-chat-source {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+    color: var(--text); background: var(--card); border: 1px solid var(--border);
+    padding: 2px 8px 2px 6px; border-radius: 10px; margin-right: 8px; flex-shrink: 0; cursor: pointer;
+  }
+  .job-chat-source:hover { border-color: var(--primary-light); color: var(--primary); }
+  .job-chat-source-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  /* Taller than the other widgets' 260px cap (.home-widget-body's base
+     rule) — a chat feed is the one widget here people plausibly want to
+     scroll back through, not just glance at four rows of. */
+  .job-chat-feed { max-height: 420px; }
   .home-widget {
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
     box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden;
@@ -1493,6 +1536,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .home-widget-icon.tint-red { background: rgba(220,53,69,0.2); }
   body.dark-mode .home-widget-icon.tint-amber { background: rgba(240,173,78,0.2); }
   body.dark-mode .home-widget-icon.tint-indigo { background: rgba(57,73,171,0.2); }
+  /* Fifth tint, for Job Chat below — reuses the same purple already
+     established elsewhere in this app for Custom Fields (#7e57c2), not a
+     new color introduced just for this widget. */
+  .home-widget-icon.tint-purple { background: #f1e9fb; }
+  body.dark-mode .home-widget-icon.tint-purple { background: rgba(126,87,194,0.22); }
+  /* Job Chat's own header isn't a homeWidgetGoTo() link (no single tab
+     "is" the comment feed) — undoes the base rule's pointer cursor and
+     hover tint so it doesn't visually promise a click that does nothing. */
+  .home-widget-header.no-nav { cursor: default; }
+  .home-widget-header.no-nav:hover { background: none; }
   .home-widget-body { padding: 6px 14px 12px; max-height: 260px; overflow-y: auto; }
   /* Same treatment as .my-checklist-empty — each widget's icon reused
      here (larger, faded) instead of a bare line of gray text, so an
@@ -2517,6 +2570,27 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Overdue &amp; Due Soon</div>
             <div class="home-widget-body" id="homeOverdueBody"></div>
           </div>
+          <!-- Sits between the two widget rows (not last) at desktop width
+               per Karl's own placement call — the wide span only actually
+               reads as "centered" because of where it sits in DOM order,
+               not the grid-column span alone (see .home-widget-wide,
+               which any of the five could use positionally). Reordered to
+               last on mobile instead (single-column layout — see the
+               .home-widget-wide media override) since "in the center"
+               only made sense against the two-column desktop layout. -->
+          <div class="home-widget home-widget-wide">
+            <div class="home-widget-header no-nav" title="Comments across every job you can see">
+              <span class="home-widget-icon tint-purple"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#7e57c2"/></svg></span> Job Chat
+            </div>
+            <div class="home-widget-body">
+              <div class="job-chat-compose">
+                <select id="homeJobChatJobPicker"></select>
+                <input type="text" id="homeJobChatInput" data-min-tier="commenter" placeholder="Message the team on this job&hellip;" onkeydown="if(event.key==='Enter'){event.preventDefault();postHomeJobChatComment();}">
+                <button class="btn btn-primary" data-min-tier="commenter" onclick="postHomeJobChatComment()">Post</button>
+              </div>
+              <div class="job-comments-list job-chat-feed" id="homeJobChatList"></div>
+            </div>
+          </div>
           <div class="home-widget">
             <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Workflow Summary</div>
             <div class="home-widget-body" id="homeStageBody">
@@ -3100,7 +3174,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.32';
+const APP_VERSION = '2026-08-28.33';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -10210,6 +10284,15 @@ function formatCommentWhen(when) {
 }
 
 function renderJobComments(job) {
+  // The drawer only ever shows ONE job's comments at a time, in a single
+  // shared #jobCommentsList element — without this guard, calling this
+  // for a job other than whichever one the drawer currently has open
+  // (e.g. deleteJobComment()/addJobReply() reached from the Home Job
+  // Chat widget, which acts on jobs regardless of what's open) would
+  // silently overwrite that list with the WRONG job's comments while the
+  // rest of the drawer (title, fields) kept showing the job that's
+  // actually open.
+  if (job.id !== editingJobId) return;
   const listEl = document.getElementById('jobCommentsList');
   if (!listEl) return;
   const comments = (job.comments || []).slice().sort(function(a, b) { return (b.when || 0) - (a.when || 0); });
@@ -10285,15 +10368,19 @@ function toggleReplyBox(commentId, event) {
   }
 }
 
-function addJobReply(jobId, commentId) {
+// Shared by the drawer's own reply box and the Home Job Chat widget's
+// (see toggleHomeReplyBox()/addHomeJobReply() below) — the actual "post a
+// reply" logic only cares about jobId/commentId/text, not which UI
+// surface it came from. Returns the new reply object, or null if nothing
+// was posted (empty text, unknown job/comment).
+function postJobReply(jobId, commentId, text) {
   const found = findJob(jobId);
-  if (!found) return;
+  if (!found) return null;
   const job = found.job;
   const comment = (job.comments || []).find(function(c) { return c.id === commentId; });
-  if (!comment) return;
-  const ta = document.getElementById('reply-ta-' + commentId);
-  const text = ((ta && ta.value) || '').trim();
-  if (!text) return;
+  if (!comment) return null;
+  text = (text || '').trim();
+  if (!text) return null;
 
   let author = getStoredDisplayName();
   if (!author) {
@@ -10302,10 +10389,19 @@ function addJobReply(jobId, commentId) {
   }
 
   if (!Array.isArray(comment.replies)) comment.replies = [];
-  comment.replies.push({ id: genId(), author: author, text: text, when: Date.now() });
+  const reply = { id: genId(), author: author, text: text, when: Date.now() };
+  comment.replies.push(reply);
   saveJobs();
   logActivity('replied to a comment on job "' + job.name + '"');
-  renderJobComments(job);
+  renderJobComments(job); // no-op unless job.id === editingJobId — see that function's own guard
+  renderHomeJobChat();
+  return reply;
+}
+
+function addJobReply(jobId, commentId) {
+  const ta = document.getElementById('reply-ta-' + commentId);
+  const posted = postJobReply(jobId, commentId, ta && ta.value);
+  if (posted && ta) ta.value = '';
 }
 
 function deleteJobReply(jobId, commentId, replyId) {
@@ -10317,6 +10413,7 @@ function deleteJobReply(jobId, commentId, replyId) {
   comment.replies = (comment.replies || []).filter(function(r) { return r.id !== replyId; });
   saveJobs();
   renderJobComments(job);
+  renderHomeJobChat();
 }
 
 // Ctrl/Cmd+Enter posts the reply — mirrors handleJobCommentKey below.
@@ -10327,13 +10424,15 @@ function handleReplyKey(event, jobId, commentId) {
   }
 }
 
-function addJobComment() {
-  if (!editingJobId) return;
-  const found = findJob(editingJobId);
-  if (!found) return;
-  const textarea = document.getElementById('newJobCommentText');
-  const text = (textarea.value || '').trim();
-  if (!text) return;
+// Shared by the drawer's own compose box and the Home Job Chat widget's
+// (see postHomeJobChatComment() below) — same reasoning as
+// postJobReply() above. Returns the new comment object, or null if
+// nothing was posted.
+function postJobComment(jobId, text, important) {
+  const found = findJob(jobId);
+  if (!found) return null;
+  text = (text || '').trim();
+  if (!text) return null;
 
   let author = getStoredDisplayName();
   if (!author) {
@@ -10341,18 +10440,26 @@ function addJobComment() {
     localStorage.setItem(DISPLAY_NAME_KEY, author);
   }
 
-  const importantEl = document.getElementById('newJobCommentImportant');
-  const important = !!(importantEl && importantEl.checked);
-
   const job = found.job;
   if (!Array.isArray(job.comments)) job.comments = [];
-  job.comments.push({ id: genId(), author: author, text: text, when: Date.now(), important: important });
-  textarea.value = '';
-  if (importantEl) importantEl.checked = false;
+  const comment = { id: genId(), author: author, text: text, when: Date.now(), important: !!important };
+  job.comments.push(comment);
   saveJobs();
   logActivity('commented on job "' + job.name + '"' + (important ? ' (marked important)' : ''));
-  renderJobComments(job);
+  renderJobComments(job); // no-op unless job.id === editingJobId — see that function's own guard
   renderJobList();
+  renderHomeJobChat();
+  return comment;
+}
+
+function addJobComment() {
+  if (!editingJobId) return;
+  const textarea = document.getElementById('newJobCommentText');
+  const importantEl = document.getElementById('newJobCommentImportant');
+  const posted = postJobComment(editingJobId, textarea.value, importantEl && importantEl.checked);
+  if (!posted) return;
+  textarea.value = '';
+  if (importantEl) importantEl.checked = false;
 }
 
 function deleteJobComment(jobId, commentId) {
@@ -10363,6 +10470,7 @@ function deleteJobComment(jobId, commentId) {
   saveJobs();
   renderJobComments(job);
   renderJobList();
+  renderHomeJobChat();
 }
 
 // Ctrl/Cmd+Enter posts — plain Enter still inserts a newline, since comments
@@ -13725,6 +13833,138 @@ function renderHomeTodayScheduleWidget(rows) {
   }).join('');
 }
 
+// ===== HOME JOB CHAT WIDGET =====
+// Aggregates every visible, non-archived job's own comments (the exact
+// array the job drawer's Comments panel already reads and writes — no
+// separate data model, no new sync path) into one combined, newest-first
+// feed. "Visible" reuses isJobVisibleToMe() — the same Members-based rule
+// governing everything else, so this never shows a comment on a job
+// someone isn't otherwise allowed to see. Archived jobs drop out
+// entirely (not just capped/hidden-by-default) per Karl's own call —
+// same lifecycle boundary "archived" already means everywhere else in
+// this app.
+function buildHomeJobChatFeed() {
+  const rows = [];
+  jobs.forEach(function(job) {
+    if (job.archived) return;
+    if (!isJobVisibleToMe(job)) return;
+    (job.comments || []).forEach(function(c) { rows.push({ job: job, comment: c }); });
+  });
+  rows.sort(function(a, b) { return (b.comment.when || 0) - (a.comment.when || 0); });
+  return rows;
+}
+
+function renderHomeJobChatComposeOptions() {
+  const select = document.getElementById('homeJobChatJobPicker');
+  if (!select) return;
+  const prevValue = select.value;
+  const visibleJobs = jobs.filter(function(j) { return !j.archived && isJobVisibleToMe(j); })
+    .slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
+  select.innerHTML = visibleJobs.map(function(j) {
+    return '<option value="' + j.id + '">' + escapeHtml(j.name) + '</option>';
+  }).join('');
+  // Re-selects whatever was picked before this refresh (a new comment
+  // arriving elsewhere shouldn't reset who you're about to message) —
+  // falls back to the list's own first option otherwise.
+  if (visibleJobs.some(function(j) { return j.id === prevValue; })) select.value = prevValue;
+}
+
+// Same shape as renderJobCommentItem() (the drawer's own per-comment
+// markup) plus one addition — a .job-chat-source chip naming which job
+// this is, since a single job's own comment thread never needed to say
+// that before. Reply UI uses its own "home-" id prefix
+// (toggleHomeReplyBox()/addHomeJobReply(), not toggleReplyBox()/
+// addJobReply()) because the drawer's comment list and this feed can
+// both be present in the DOM at once (tab panels stay mounted, just
+// hidden) — sharing ids would mean duplicate ids on the page and
+// document.getElementById() picking whichever one happened to come
+// first, not necessarily the one actually clicked.
+function renderHomeJobChatItem(job, c) {
+  const replies = (c.replies || []).slice().sort(function(a, b) { return (a.when || 0) - (b.when || 0); });
+  const repliesHtml = replies.map(function(r) {
+    return '<div class="job-comment-reply-item">' +
+      '<div class="job-comment-meta">' +
+        '<span class="job-comment-author" title="' + escapeHtml(r.author || 'Someone') + '">' + escapeHtml(r.author || 'Someone') + '</span>' +
+        '<span style="display:flex;align-items:center;gap:4px;">' +
+          '<span class="job-comment-when">' + formatCommentWhen(r.when) + '</span>' +
+          '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobReply(\'' + job.id + '\', \'' + c.id + '\', \'' + r.id + '\')" title="Delete reply">×</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="job-comment-text">' + escapeHtml(r.text) + '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="job-comment-item">' +
+    '<div class="job-comment-meta">' +
+      '<span style="display:flex;align-items:center;">' +
+        '<span class="job-chat-source" onclick="editJob(\'' + job.id + '\')" title="Open ' + escapeHtml(job.name) + '"><span class="job-chat-source-dot" style="background:' + (job.color || '#3949ab') + ';"></span>' + escapeHtml(job.name) + '</span>' +
+        (c.important ? '<span class="job-comment-important-badge" title="Marked important">●</span>' : '') +
+        '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
+      '</span>' +
+      '<span style="display:flex;align-items:center;gap:4px;">' +
+        '<span class="job-comment-when">' + formatCommentWhen(c.when) + '</span>' +
+        '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
+      '</span>' +
+    '</div>' +
+    '<div class="job-comment-text">' + escapeHtml(c.text) + '</div>' +
+    (replies.length ? '<div class="job-comment-replies">' + repliesHtml + '</div>' : '') +
+    '<button class="job-comment-reply-btn" onclick="toggleHomeReplyBox(\'' + c.id + '\', event)">Reply' + (replies.length ? ' (' + replies.length + ')' : '') + '</button>' +
+    '<div class="job-comment-reply-input-row" id="home-reply-row-' + c.id + '">' +
+      '<textarea id="home-reply-ta-' + c.id + '" data-min-tier="commenter" placeholder="Write a reply..." onkeydown="handleHomeReplyKey(event, \'' + job.id + '\', \'' + c.id + '\')"></textarea>' +
+      '<button class="btn btn-primary" data-min-tier="commenter" style="align-self:flex-end;padding:4px 10px;font-size:12px;" onclick="addHomeJobReply(\'' + job.id + '\', \'' + c.id + '\')">Post Reply</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderHomeJobChat() {
+  const listEl = document.getElementById('homeJobChatList');
+  if (!listEl) return;
+  renderHomeJobChatComposeOptions();
+  const rows = buildHomeJobChatFeed();
+  listEl.innerHTML = rows.length
+    ? rows.map(function(row) { return renderHomeJobChatItem(row.job, row.comment); }).join('')
+    : '<div class="job-comments-empty">No comments yet.</div>';
+  applyPermissionGating(); // rebuilt on every feed refresh, outside renderAll()'s own sweep
+}
+
+function postHomeJobChatComment() {
+  const select = document.getElementById('homeJobChatJobPicker');
+  const input = document.getElementById('homeJobChatInput');
+  if (!select || !input || !select.value) return;
+  const posted = postJobComment(select.value, input.value, false);
+  if (posted) input.value = '';
+}
+
+// home-reply-row-/home-reply-ta- prefixed variants of toggleReplyBox()/
+// addJobReply() above — see renderHomeJobChatItem()'s own comment for
+// why this feed can't just reuse those ids directly. The actual "post a
+// reply" logic is still the one shared postJobReply() helper.
+function toggleHomeReplyBox(commentId, event) {
+  if (event) event.stopPropagation();
+  const row = document.getElementById('home-reply-row-' + commentId);
+  if (!row) return;
+  const isOpen = row.style.display === 'flex';
+  document.querySelectorAll('#homeJobChatList .job-comment-reply-input-row').forEach(function(r) { r.style.display = 'none'; });
+  if (!isOpen) {
+    row.style.display = 'flex';
+    const ta = document.getElementById('home-reply-ta-' + commentId);
+    if (ta) ta.focus();
+  }
+}
+
+function addHomeJobReply(jobId, commentId) {
+  const ta = document.getElementById('home-reply-ta-' + commentId);
+  const posted = postJobReply(jobId, commentId, ta && ta.value);
+  if (posted && ta) ta.value = '';
+}
+
+function handleHomeReplyKey(event, jobId, commentId) {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    addHomeJobReply(jobId, commentId);
+  }
+}
+
 function renderHomeDashboard() {
   const panel = document.getElementById('panel-home');
   if (!panel) return;
@@ -13741,6 +13981,7 @@ function renderHomeDashboard() {
   if (document.getElementById('homeStageBody')) renderHomeWorkflowMiniBoard();
   const todayBody = document.getElementById('homeTodayBody');
   if (todayBody) todayBody.innerHTML = renderHomeTodayScheduleWidget(buildHomeTodayScheduleRows());
+  renderHomeJobChat();
   updateHomeBadge(checklistRows.length);
   applyPermissionGating();
 }
