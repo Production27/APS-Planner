@@ -2992,7 +2992,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.6';
+const APP_VERSION = '2026-08-28.7';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -4350,6 +4350,27 @@ const DEFAULT_BOARD_COLUMNS = [
   { id: 'invoiced', label: 'Invoiced' }
 ];
 let BOARD_COLUMNS = [];
+
+// A column counts as a "finished" trigger — cards sitting in it are done,
+// excluded from Home's overdue/due-soon/active-jobs widgets and the
+// board's own per-card overdue badge — via col.isFinished. Undefined
+// (every column predating this setting, including on projects saved
+// before it existed) falls back to the original hardcoded pair so
+// existing boards keep behaving exactly as before with no migration
+// needed; explicitly toggling any column (including Complete/Invoiced
+// themselves) via the board's ⋮ menu overrides that default either way.
+// Single source of truth other than the delete-guard on 'complete'/
+// 'invoiced' in deleteBoardColumn(), which is intentionally NOT re-based
+// on this — see that function's own comment.
+function isFinishedColumn(col) {
+  if (!col) return false;
+  if (col.isFinished !== undefined) return !!col.isFinished;
+  return col.id === 'complete' || col.id === 'invoiced';
+}
+function isFinishedColumnId(colId) {
+  return isFinishedColumn(BOARD_COLUMNS.find(c => c.id === colId));
+}
+
 let boardCards = [];
 let calendarEvents = [];
 let editingCalendarEventId = null;
@@ -11143,12 +11164,14 @@ function deleteBoardColumn(colId, event) {
     showToast('You need at least one board', 'error');
     return;
   }
-  // 'complete'/'invoiced' are hardcoded as the terminal stages in 4 other
-  // spots (the overdue badge, Home's overdue/due-soon and active-jobs
-  // widgets, the "done" stage-bar styling) — none of them re-derive
-  // "which columns count as done" from BOARD_COLUMNS itself, so deleting
-  // either id out from under them would leave cards that finished work in
-  // whatever column replaced it permanently mis-treated as still active.
+  // 'complete'/'invoiced' stay non-deletable on purpose, independent of
+  // isFinishedColumn()/the Finished Trigger toggle above: they're every
+  // project's starter "done" boards, and deleting one out from under a
+  // team mid-use (even with cards moved elsewhere) is more likely an
+  // accident than an intent a confirm dialog alone should be trusted to
+  // catch. A team that wants a different column as the/an ADDITIONAL
+  // finished trigger can just toggle that on directly — deleting these
+  // two isn't the way to do that.
   if (colId === 'complete' || colId === 'invoiced') {
     showToast('The Complete and Invoiced boards can\'t be deleted', 'error');
     return;
@@ -11247,6 +11270,10 @@ function renderBoard() {
             '<div class="board-col-gantt-toggle" onclick="toggleColumnScheduleSync(\'' + col.id + '\', event)" title="When off, cards sitting in this board stay put and stop auto-moving with the schedule, until dragged into a connected board.">' +
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg> Connect to Schedule</span>' +
               '<span class="board-col-gantt-switch' + (col.scheduleDisconnected ? '' : ' on') + '"><span class="knob"></span></span>' +
+            '</div>' +
+            '<div class="board-col-gantt-toggle" onclick="toggleColumnFinishedTrigger(\'' + col.id + '\', event)" title="Jobs whose card sits in this board count as finished — they stop showing as overdue/due-soon or counting toward Active Jobs on Home.">' +
+              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Finished Trigger</span>' +
+              '<span class="board-col-gantt-switch' + (isFinishedColumn(col) ? ' on' : '') + '"><span class="knob"></span></span>' +
             '</div>' +
             '<div class="board-col-duration-row" title="How many days this board\'s task defaults to when only a start date is set in Job Manager">' +
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Duration</span>' +
@@ -11374,7 +11401,7 @@ function buildCardEl(card) {
     : '';
 
   if (card.due) {
-    const isOverdue = card.column !== 'complete' && card.column !== 'invoiced' && new Date(card.due + 'T00:00:00') < new Date(new Date().toDateString());
+    const isOverdue = !isFinishedColumnId(card.column) && new Date(card.due + 'T00:00:00') < new Date(new Date().toDateString());
     const dueLabel = new Date(card.due + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     badges.push('<span class="board-card-due' + (isOverdue ? ' overdue' : '') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + dueLabel + '</span>');
   }
@@ -11890,6 +11917,23 @@ function toggleColumnScheduleSync(colId, event) {
   logActivity((col.scheduleDisconnected ? 'disconnected' : 'reconnected') + ' board "' + col.label + '" from the schedule');
   renderBoard();
   showToast('"' + col.label + '" ' + (col.scheduleDisconnected ? 'disconnected from' : 'reconnected to') + ' the schedule', 'success');
+  closeAllColSettings();
+}
+
+// See isFinishedColumn() for the default (Complete/Invoiced count even
+// when this has never been touched) — toggling always writes an explicit
+// true/false here, on any column, which then wins over that default.
+function toggleColumnFinishedTrigger(colId, event) {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find(c => c.id === colId);
+  if (!col) return;
+  const next = !isFinishedColumn(col);
+  col.isFinished = next;
+  saveBoardColumns();
+  logActivity((next ? 'marked' : 'unmarked') + ' board "' + col.label + '" as a finished trigger');
+  renderBoard();
+  renderHomeDashboard();
+  showToast('"' + col.label + '" ' + (next ? 'now marks jobs finished' : 'no longer marks jobs finished'), 'success');
   closeAllColSettings();
 }
 
@@ -12977,15 +13021,15 @@ const HOME_DUE_SOON_DAYS = 7;
 // Same visibility/archived gate buildMyChecklistRows() uses, deliberately
 // WITHOUT its isChecklistStageVisibleToMe() check — that's a checklist-
 // privacy control, unrelated to a job's due date. Excludes cards already
-// in a terminal column, same columns buildCardEl()'s own overdue badge
-// excludes.
+// in a finished-trigger column (isFinishedColumnId()), same columns
+// buildCardEl()'s own overdue badge excludes.
 function buildHomeOverdueRows() {
   const todayMidnight = new Date(new Date().toDateString());
   const dueSoonCutoff = new Date(todayMidnight.getTime() + HOME_DUE_SOON_DAYS * 86400000);
   const rows = [];
   boardCards.forEach(function(card) {
     if (!card.column || !card.due) return;
-    if (card.column === 'complete' || card.column === 'invoiced') return;
+    if (isFinishedColumnId(card.column)) return;
     const found = findJob(card.jobId);
     if (!found || found.job.archived) return;
     const job = found.job;
@@ -13065,7 +13109,7 @@ function buildHomeStats(checklistRows, overdueRows) {
   const overdueCount = overdueRows.filter(function(r) { return r.isOverdue; }).length;
   const activeJobIds = {};
   boardCards.forEach(function(card) {
-    if (!card.column || card.column === 'complete' || card.column === 'invoiced') return;
+    if (!card.column || isFinishedColumnId(card.column)) return;
     const found = findJob(card.jobId);
     if (!found || found.job.archived) return;
     if (!isJobVisibleToMe(found.job)) return;
@@ -13142,7 +13186,7 @@ function renderHomeStageSummaryWidget(counts) {
   if (!total) return '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><div>No cards on the board yet.</div></div>';
   const max = Math.max.apply(null, counts.map(function(c) { return c.count; }).concat([1]));
   return counts.map(function(col) {
-    const isDoneStage = col.id === 'complete' || col.id === 'invoiced';
+    const isDoneStage = isFinishedColumnId(col.id);
     const pct = Math.round((col.count / max) * 100);
     return '<div class="home-bar-row" onclick="switchTab(\'board\')">' +
       '<span class="home-bar-label">' + escapeHtml(col.label) + '</span>' +
