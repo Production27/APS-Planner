@@ -231,6 +231,24 @@
   @keyframes homeMorphOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.04); } }
   @keyframes homeMorphIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
 
+  /* Shared-element half of the same transition — see switchTabMorphed()
+     in the script below, which is what actually assigns/clears this name
+     on whichever Home widget or tab-panel is the "hero" for a given Home
+     <-> tab switch (My Open Items <-> Checklist, Overdue & Due Soon <->
+     Calendar, Workflow Summary <-> Board, Today's Schedule <-> Gantt).
+     An element carrying this name is pulled OUT of the root capture
+     above into its own layer, so it grows/shrinks between the widget's
+     on-screen rect and the full panel instead of just cross-fading in
+     place with everything else — the rest of the page still does the
+     subtle root zoom around it. Only one duration/easing needed (not
+     separate forward/reverse ones) since the browser interpolates
+     between whatever the "old" and "new" rects actually are each time,
+     symmetric either direction. */
+  ::view-transition-group(aps-home-tab-morph) {
+    animation-duration: 0.38s;
+    animation-timing-function: cubic-bezier(.4,0,.2,1);
+  }
+
   /* ===== CALENDAR TAB ===== */
   .calendar-wrapper { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
   .calendar-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-shrink: 0; }
@@ -2542,11 +2560,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openArchivedJobsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</div>
         </div>
       </div>
-      <button class="rail-tab active" onclick="switchTab('home')" id="tab-home" title="Home"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg><span class="rail-tab-label">Home</span> <span class="badge" id="homeCount">0</span></button>
-      <button class="rail-tab" onclick="switchTab('checklist')" id="tab-checklist" title="My Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">My Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
-      <button class="rail-tab" onclick="switchTab('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
-      <button class="rail-tab" onclick="switchTab('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
-      <button class="rail-tab" onclick="switchTab('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
+      <button class="rail-tab active" onclick="switchTabMorphed('home')" id="tab-home" title="Home"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg><span class="rail-tab-label">Home</span> <span class="badge" id="homeCount">0</span></button>
+      <button class="rail-tab" onclick="switchTabMorphed('checklist')" id="tab-checklist" title="My Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">My Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
+      <button class="rail-tab" onclick="switchTabMorphed('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
+      <button class="rail-tab" onclick="switchTabMorphed('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
+      <button class="rail-tab" onclick="switchTabMorphed('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
     </div>
     <!-- The header's own icon IS the toggle now — no separate row. Click
          it closed (icon-only) to open the Jobs search/list below (and
@@ -2574,11 +2592,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="home-greeting-banner" id="homeGreeting"></div>
         <div class="home-stats" id="homeStats"></div>
         <div class="home-grid">
-          <div class="home-widget">
+          <div class="home-widget" id="homeWidgetChecklist">
             <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to My Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> My Open Items</div>
             <div class="home-widget-body" id="homeChecklistBody"></div>
           </div>
-          <div class="home-widget">
+          <div class="home-widget" id="homeWidgetCalendar">
             <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Overdue &amp; Due Soon</div>
             <div class="home-widget-body" id="homeOverdueBody"></div>
           </div>
@@ -2602,14 +2620,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
               <div class="job-comments-list job-chat-feed" id="homeJobChatList"></div>
             </div>
           </div>
-          <div class="home-widget">
+          <div class="home-widget" id="homeWidgetWorkflow">
             <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Workflow Summary</div>
             <div class="home-widget-body" id="homeStageBody">
               <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
               <div class="wsm-bars-wrap" id="wsmBarsWrap"></div>
             </div>
           </div>
-          <div class="home-widget">
+          <div class="home-widget" id="homeWidgetToday">
             <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Today's Schedule</div>
             <div class="home-widget-body" id="homeTodayBody"></div>
           </div>
@@ -3185,7 +3203,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.34';
+const APP_VERSION = '2026-08-28.35';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5923,18 +5941,91 @@ function applyProjectBgVisual() {
   }
 }
 
-// Home widget headers (icon + title) jump to that widget's corresponding
-// tab — see homeWidgetGoTo() call sites in #panel-home's markup, and the
-// morph keyframes on ::view-transition-old(root)/new(root) below. Falls
+// Which Home widget represents each tab — Home widget headers (icon +
+// title) jump to their tab via homeWidgetGoTo() below; this is the same
+// 4 pairings, centralized so switchTabMorphed() can look up the widget
+// to grow from / shrink back into for either direction of a Home <-> tab
+// switch. Job Chat has no corresponding tab, so it's not here.
+const HOME_WIDGET_FOR_TAB = {
+  checklist: 'homeWidgetChecklist',
+  calendar: 'homeWidgetCalendar',
+  board: 'homeWidgetWorkflow',
+  gantt: 'homeWidgetToday'
+};
+
+// Reads whichever tab is currently showing straight off the DOM (the one
+// source of truth switchTab() itself already maintains via
+// .tab-panel.active) instead of tracking a second copy of that state.
+function getActiveTab() {
+  const active = document.querySelector('.tab-panel.active');
+  return active ? active.id.replace('panel-', '') : 'home';
+}
+
+// Only one shared-element morph is ever in flight at a time, so a single
+// hardcoded name is enough — but it still has to be actively cleared
+// after every transition (see switchTabMorphed()), not just left on
+// whatever last carried it: two elements can never carry the same
+// view-transition-name at once, and a stale name left over from the
+// previous switch would silently break the NEXT one instead of this one.
+const HOME_TAB_MORPH_NAME = 'aps-home-tab-morph';
+function clearHomeTabMorphNames() {
+  document.querySelectorAll('.home-widget, .tab-panel').forEach(function(el) {
+    if (el.style.viewTransitionName === HOME_TAB_MORPH_NAME) el.style.viewTransitionName = '';
+  });
+}
+
+// Home widget headers (icon + title) and the sidebar's own rail tabs both
+// route through this now (see their onclick markup) — switchTab() itself
+// still does the actual panel swap, this just wraps it in the
+// shared-element morph when the switch is Home <-> a tab: the
+// transitioning element visibly grows out of (or shrinks back into)
+// whichever widget represents that tab, using the View Transitions API
+// (::view-transition-group(aps-home-tab-morph) above handles the timing;
+// the browser interpolates the actual geometry on its own). Clicking the
+// tab you're already ON acts as "go home" instead of a no-op — same
+// gesture as clicking the Home rail icon. Switching directly between two
+// non-Home tabs (Gantt -> Board, say) stays a plain, instant switchTab()
+// — there's no widget to morph from/to when neither side is Home. Falls
 // back to a plain switchTab() on a browser without the View Transitions
 // API (Firefox, older Safari) — same end state either way, just no
 // animation.
-function homeWidgetGoTo(tab) {
-  if (document.startViewTransition) {
-    document.startViewTransition(() => switchTab(tab));
-  } else {
-    switchTab(tab);
+function switchTabMorphed(targetTab) {
+  const fromTab = getActiveTab();
+  if (fromTab === targetTab) {
+    if (targetTab !== 'home') switchTabMorphed('home');
+    return;
   }
+
+  const heroTab = fromTab === 'home' ? targetTab : (targetTab === 'home' ? fromTab : null);
+  const heroWidgetId = heroTab ? HOME_WIDGET_FOR_TAB[heroTab] : null;
+  const widgetEl = heroWidgetId ? document.getElementById(heroWidgetId) : null;
+
+  if (!widgetEl || !document.startViewTransition) {
+    switchTab(targetTab);
+    return;
+  }
+
+  clearHomeTabMorphNames();
+  const oldHeroEl = fromTab === 'home' ? widgetEl : document.getElementById('panel-' + fromTab);
+  if (oldHeroEl) oldHeroEl.style.viewTransitionName = HOME_TAB_MORPH_NAME;
+
+  const transition = document.startViewTransition(function() {
+    switchTab(targetTab);
+    // Move the name off the old hero onto the new one — both still
+    // within this same synchronous callback, so by the time it returns
+    // (and the API captures the "new" state) only the new hero carries
+    // it, never both at once.
+    if (oldHeroEl) oldHeroEl.style.viewTransitionName = '';
+    const newHeroEl = targetTab === 'home' ? widgetEl : document.getElementById('panel-' + targetTab);
+    if (newHeroEl) newHeroEl.style.viewTransitionName = HOME_TAB_MORPH_NAME;
+  });
+  transition.finished.then(clearHomeTabMorphNames).catch(function() {});
+}
+
+// Home widget headers (icon + title) jump to that widget's corresponding
+// tab — see homeWidgetGoTo() call sites in #panel-home's markup.
+function homeWidgetGoTo(tab) {
+  switchTabMorphed(tab);
 }
 
 function switchTab(tab) {
@@ -13731,7 +13822,7 @@ function renderHomeChecklistWidget(rows) {
       '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';">' + escapeHtml(row.job.name) + '</span>' +
     '</div>';
   }).join('');
-  const more = rows.length > shown.length ? '<div class="home-more-link" onclick="switchTab(\'checklist\')">+' + (rows.length - shown.length) + ' more — go to My Checklist</div>' : '';
+  const more = rows.length > shown.length ? '<div class="home-more-link" onclick="switchTabMorphed(\'checklist\')">+' + (rows.length - shown.length) + ' more — go to My Checklist</div>' : '';
   return html + more;
 }
 
@@ -13786,7 +13877,7 @@ function renderHomeWorkflowMiniBoard() {
     const color = item ? item.color : 'var(--text-light)';
     const h = Math.max(4, Math.round((count / max) * MAX_BAR_H));
     const title = count + ' job' + (count === 1 ? '' : 's') + ' in ' + col.label;
-    return '<div class="wsm-bar-col" data-column="' + col.id + '" onclick="switchTab(\'board\'); scrollToBoardColumn(\'' + col.id + '\');" title="' + escapeHtml(title) + '">' +
+    return '<div class="wsm-bar-col" data-column="' + col.id + '" onclick="switchTabMorphed(\'board\'); scrollToBoardColumn(\'' + col.id + '\');" title="' + escapeHtml(title) + '">' +
       '<span class="wsm-bar-label">' + escapeHtml(col.label) + '</span>' +
       '<span class="wsm-bar-count">' + count + '</span>' +
       '<span class="wsm-bar" style="height:' + h + 'px; background:' + color + ';"></span>' +
