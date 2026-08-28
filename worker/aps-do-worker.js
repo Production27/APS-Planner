@@ -587,20 +587,13 @@ async function resolveIdentityFromToken(env, token) {
   return { username: payload.username, displayName: payload.displayName, role: payload.role, assignedProjectId: payload.assignedProjectId || null };
 }
 
-// Single entry point every authenticated JSON-body endpoint below should
-// use: token preferred, raw username+password accepted as a transition
-// fallback for clients that haven't picked up the token-based client yet.
-// TODO(remove after legacy-password rollout confirmed): once no more
-// clients are sending body.username/body.password (the app's own
-// "reload for latest" version banner naturally pushes everyone off the
-// old client within a normal usage window), drop the fallback branch
-// here and the equivalent X-Aps-Username/X-Aps-Password and
-// ?username=&password= fallbacks inline in handleAttachmentUpload()/
-// handleAttachmentDownload() below, and make handleAuth() the only
-// remaining password-verification path.
+// Single entry point every authenticated JSON-body endpoint below uses.
+// handleAuth() (the /auth login endpoint) is the only remaining place a
+// raw password is verified — everything past it runs on the token that
+// mints. (The legacy username+password fallback this used to also accept
+// was removed once every client had picked up the token-based build.)
 async function resolveCaller(env, body) {
-  if (body && body.token) return resolveIdentityFromToken(env, body.token);
-  return resolveIdentity(env, body && body.username, body && body.password);
+  return resolveIdentityFromToken(env, body && body.token);
 }
 
 // --- 5. AUTH HANDLER — now mints a signed room token instead of calling
@@ -810,10 +803,7 @@ async function handleAttachmentUpload(request, env, corsHeaders, url) {
   // body to put them in the way every other POST endpoint does, and a
   // query string would land in Worker access logs like the backup
   // endpoints used to.
-  const token = request.headers.get("X-Aps-Token");
-  const identity = token
-    ? await resolveIdentityFromToken(env, token)
-    : await resolveIdentity(env, request.headers.get("X-Aps-Username"), request.headers.get("X-Aps-Password"));
+  const identity = await resolveIdentityFromToken(env, request.headers.get("X-Aps-Token"));
   if (!identity) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
 
   const name = url.searchParams.get("name") || "file";
@@ -827,10 +817,7 @@ async function handleAttachmentUpload(request, env, corsHeaders, url) {
 }
 
 async function handleAttachmentDownload(request, env, corsHeaders, url) {
-  const qToken = url.searchParams.get("token");
-  const identity = qToken
-    ? await resolveIdentityFromToken(env, qToken)
-    : await resolveIdentity(env, url.searchParams.get("username"), url.searchParams.get("password"));
+  const identity = await resolveIdentityFromToken(env, url.searchParams.get("token"));
   if (!identity) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 
   const key = url.searchParams.get("key") || "";
@@ -893,12 +880,11 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-      // X-Aps-Token (preferred) / X-Aps-Username+X-Aps-Password (legacy
-      // fallback, see resolveCaller()'s TODO) — attachment upload sends
-      // credentials as headers instead of query params (its POST body is
-      // the raw file bytes, not JSON, so there's no body field to put them
-      // in) — see handleAttachmentUpload().
-      "Access-Control-Allow-Headers": "Content-Type, X-Aps-Token, X-Aps-Username, X-Aps-Password",
+      // X-Aps-Token — attachment upload sends the session token as a
+      // header instead of a query param (its POST body is the raw file
+      // bytes, not JSON, so there's no body field to put it in) — see
+      // handleAttachmentUpload().
+      "Access-Control-Allow-Headers": "Content-Type, X-Aps-Token",
       "Cache-Control": "no-store",
     };
 
