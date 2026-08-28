@@ -1869,6 +1869,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        match that ≤1100px range would get squeezed to 64px here despite
        never setting .job-rail-open (mobile doesn't use that toggle). */
     .manager-sidebar { width: 100% !important; min-width: 0; }
+    /* Landscape phones match this block via (max-height:480px) despite
+       being 700-900px wide, so the plain width:100% above (right for a
+       narrow portrait screen, where the Jobs list IS the whole view)
+       stretched job cards edge-to-edge across the entire landscape width
+       instead. Nesting @media(min-width:481px) here scopes the cap to
+       exactly that case: a viewport this wide can only have matched the
+       outer query's max-height branch (the max-width:480px branch would
+       already rule out anything ≥481px wide), so this fires for landscape
+       phones only, never narrow portrait ones. */
+    @media (min-width: 481px) {
+      .manager-sidebar { width: 380px !important; min-width: 380px; }
+    }
     /* z-index:150 on the base rule (desktop-only reason: keeps the
        settings dropdown above the Gantt chart's own high-z-index overlay
        elements — see that rule's own comment) sits above the job drawer's
@@ -3080,7 +3092,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.27';
+const APP_VERSION = '2026-08-28.28';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
