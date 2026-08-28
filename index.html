@@ -1466,18 +1466,30 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   }
   .home-stat-value { font-size: 26px; font-weight: 800; line-height: 1.1; }
   .home-stat-label { font-size: 11px; color: var(--text-light); font-weight: 700; margin-top: 4px; text-transform: uppercase; letter-spacing: .03em; }
-  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  /* Three columns, not two — Job Chat (.home-widget-center below) takes
+     the middle one as a tall span across both rows, so it sits BETWEEN
+     the other four vertically (two stacked on its left, two stacked on
+     its right), not as a horizontal band splitting the two rows. Giving
+     it explicit placement (column 2, spanning both rows) is also what
+     makes the other four still land correctly without needing their own
+     explicit placement at all: CSS Grid reserves an explicitly-placed
+     item's cells FIRST, then auto-flows the rest of the DOM in row-major
+     order around whatever's left — column 1 fills row 1 then row 2, same
+     for column 3, automatically producing the two-stacked-per-side
+     layout from plain DOM order (My Open Items, Overdue & Due Soon, Job
+     Chat, Workflow Summary, Today's Schedule). */
+  .home-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
   @media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
-  /* Job Chat spans both columns — a compose row + feed wants more room
-     than a stat-list widget, unlike its four narrower siblings. At
-     desktop width this is what makes its DOM position (between the two
-     widget rows) actually read as "centered" rather than just wide;
-     .home-grid collapsing to one column on mobile would otherwise leave
-     it sitting between rows 1 and 2 there too, so `order` moves it after
-     all four instead — "last is fine" on mobile was a separate call from
-     "center" on desktop. */
-  .home-widget-wide { grid-column: 1 / -1; }
-  @media (max-width: 900px) { .home-widget-wide { order: 1; } }
+  .home-widget-center { grid-column: 2; grid-row: 1 / span 2; }
+  @media (max-width: 900px) {
+    /* The explicit column-2/row-span above would otherwise reserve a
+       phantom second column even after .home-grid collapses to one —
+       resetting both back to auto lets it fall into normal single-column
+       flow, same as its siblings. `order` still moves it after all four
+       once flattened to one column — "last is fine" on mobile was a
+       separate call from "center" on desktop. */
+    .home-widget-center { grid-column: auto; grid-row: auto; order: 1; }
+  }
   /* Compose row — same container/input recipe as .my-checklist-add-bar
      (job-picker + text + button), including the var(--bg)-on-var(--card)
      field treatment — a plain <select>/<input> with no explicit
@@ -2570,15 +2582,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Overdue &amp; Due Soon</div>
             <div class="home-widget-body" id="homeOverdueBody"></div>
           </div>
-          <!-- Sits between the two widget rows (not last) at desktop width
-               per Karl's own placement call — the wide span only actually
-               reads as "centered" because of where it sits in DOM order,
-               not the grid-column span alone (see .home-widget-wide,
-               which any of the five could use positionally). Reordered to
-               last on mobile instead (single-column layout — see the
-               .home-widget-wide media override) since "in the center"
-               only made sense against the two-column desktop layout. -->
-          <div class="home-widget home-widget-wide">
+          <!-- Middle column, spanning both rows — sits vertically between
+               the other four (two stacked on each side) at desktop width,
+               per Karl's own placement call (see .home-widget-center's
+               own comment for how the grid placement achieves this from
+               plain DOM order). Reordered to last on the single-column
+               mobile layout instead — "last is fine" on mobile was a
+               separate call from "center" on desktop. -->
+          <div class="home-widget home-widget-center">
             <div class="home-widget-header no-nav" title="Comments across every job you can see">
               <span class="home-widget-icon tint-purple"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#7e57c2"/></svg></span> Job Chat
             </div>
@@ -3174,7 +3185,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.33';
+const APP_VERSION = '2026-08-28.34';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
