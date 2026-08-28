@@ -2992,7 +2992,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.7';
+const APP_VERSION = '2026-08-28.8';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -3735,13 +3735,14 @@ function makeBlankPhaseTasks(color) {
 }
 
 function makePhaseCard(job, phase) {
-  return {
+  const card = {
     id: genId(),
     title: job.name + (phase.isDefault ? '' : ' — ' + phase.name),
     description: '',
     due: '',
     color: job.color || '#3949ab',
     column: BOARD_COLUMNS[0] ? BOARD_COLUMNS[0].id : '',
+    columnEnteredAt: Date.now(),
     jobId: job.id,
     phaseId: phase.id || null,
     manualColumn: null,
@@ -3750,6 +3751,13 @@ function makePhaseCard(job, phase) {
     checklists: {},
     attachments: []
   };
+  // Not routed through setCardColumn() — there's no prior column to
+  // compare against for a brand-new card, so its early-return guard
+  // would never apply here anyway. Still runs the same column-entry
+  // automation (e.g. checklist action-item) a card landing in this
+  // column via a drag would get.
+  runColumnEntryActions(card, card.column);
+  return card;
 }
 
 // Converts a phase-less job in place into its first phase, preserving the
@@ -4048,6 +4056,53 @@ function deriveColumnForTasks(tasks, card) {
   return BOARD_COLUMNS[0] ? BOARD_COLUMNS[0].id : '';
 }
 
+// Single point where a card's column actually changes — used instead of
+// assigning card.column directly so "entered a new column" side effects
+// (columnEnteredAt for stalled-job tracking, runColumnEntryActions() for
+// column-configured automation below) fire exactly once per real
+// transition, not on every no-op re-derivation — syncCardColumns()
+// below reassigns every job-linked card's column on nearly every
+// render, even when nothing about it actually changed, so this early-
+// return is what keeps that from resetting the stalled-time clock or
+// re-firing checklist assignment constantly.
+function setCardColumn(card, newColumnId) {
+  if (card.column === newColumnId) return;
+  card.column = newColumnId;
+  card.columnEnteredAt = Date.now();
+  runColumnEntryActions(card, newColumnId);
+}
+
+// Column-configured actions that fire once, at the moment a card enters
+// a column — currently just the checklist action-item automation
+// (col.autoAssignChecklist, see toggleColumnAutoAssignChecklist()). The
+// one seam any future column-entry action (set/clear due date, an
+// activity-log note, auto-color) would slot into as another
+// `if (col.<flag>)` block here, without touching setCardColumn() or its
+// three call sites.
+function runColumnEntryActions(card, colId) {
+  const col = BOARD_COLUMNS.find(function(c) { return c.id === colId; });
+  if (!col) return;
+  if (col.autoAssignChecklist) {
+    // getChecklistForStageInProject() already exists (see MY CHECKLIST
+    // below) to lazily seed a stage's checklist from the column's
+    // defaultChecklist the first time something asks for it — this is
+    // that same seeding, just run eagerly right now instead of waiting
+    // for someone to happen to open My Checklist or the card first.
+    if (!card.checklists) card.checklists = {};
+    const items = getChecklistForStageInProject(card.checklists, colId, BOARD_COLUMNS);
+    const assignee = col.checklistAssigneeOverride
+      || (card.customFields && card.customFields.foreman)
+      || (card.customFields && card.customFields.pm)
+      || '';
+    // Only fills items nobody's already claimed — doesn't reassign an
+    // item someone picked up before this column's automation was turned
+    // on, or before the card's foreman/PM was set.
+    if (assignee) {
+      items.forEach(function(item) { if (!item.assignee) item.assignee = assignee; });
+    }
+  }
+}
+
 function syncCardColumns() {
   // Was calling getPhaseCard() (a full boardCards.find() scan) once per
   // phase across every job -- an O(jobs x phases x boardCards) scan that
@@ -4070,7 +4125,7 @@ function syncCardColumns() {
         // sub-phase's own dates, not a combined read across all of them
         // (confirmed with the user).
         const tasksForColumn = getPhaseSubUnits(phase)[0].tasks;
-        card.column = deriveColumnForTasks(tasksForColumn, card);
+        setCardColumn(card, deriveColumnForTasks(tasksForColumn, card));
       }
     });
   });
@@ -11186,7 +11241,7 @@ function deleteBoardColumn(colId, event) {
   }
   if (!confirm(msg)) return;
   if (cardCount > 0) {
-    boardCards.forEach(c => { if (c.column === colId) c.column = remaining[0].id; });
+    boardCards.forEach(c => { if (c.column === colId) setCardColumn(c, remaining[0].id); });
     saveBoardCards();
   }
   BOARD_COLUMNS = remaining;
@@ -11275,6 +11330,20 @@ function renderBoard() {
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Finished Trigger</span>' +
               '<span class="board-col-gantt-switch' + (isFinishedColumn(col) ? ' on' : '') + '"><span class="knob"></span></span>' +
             '</div>' +
+            '<div class="board-col-gantt-toggle" onclick="toggleColumnAutoAssignChecklist(\'' + col.id + '\', event)" title="The moment a card lands here, this board\'s Default Checklist is created on it (not just left as a template) and assigned to the picked person below, so it shows up as a real action item in their My Checklist right away.">' +
+              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#f0ad4e"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="6" r="4" fill="#3949ab" stroke="#fff" stroke-width="1"/></svg> Send Checklist Action Item</span>' +
+              '<span class="board-col-gantt-switch' + (col.autoAssignChecklist ? ' on' : '') + '"><span class="knob"></span></span>' +
+            '</div>' +
+            (col.autoAssignChecklist ?
+              '<div class="board-col-duration-row" title="Who the checklist items get assigned to on arrival. Left on Auto, it uses the card\'s own Foreman, then Project Manager, whichever is set.">' +
+                '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" fill="#b0bec5"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke="#b0bec5" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg> Assign To</span>' +
+                '<select class="board-col-duration-input" style="width:auto;flex:1;" onclick="event.stopPropagation()" onchange="setColumnChecklistAssignee(\'' + col.id + '\', this.value, event)">' +
+                  '<option value="">Auto (card\'s Foreman/PM)</option>' +
+                  (cachedUserRoster || []).map(function(u) {
+                    return '<option value="' + escapeHtml(u.username) + '"' + (u.username === col.checklistAssigneeOverride ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+                  }).join('') +
+                '</select>' +
+              '</div>' : '') +
             '<div class="board-col-duration-row" title="How many days this board\'s task defaults to when only a start date is set in Job Manager">' +
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Duration</span>' +
               '<input type="number" min="1" class="board-col-duration-input" value="' + (col.defaultDuration || DEFAULT_TASK_DURATION_DAYS) + '" onclick="event.stopPropagation()" onchange="setColumnDefaultDuration(\'' + col.id + '\', this.value, event)">' +
@@ -11743,7 +11812,7 @@ function handleColumnDrop(e) {
   if (!card) return;
   if (!confirmChecklistBeforeMove(card)) return;
 
-  card.column = targetColumnId;
+  setCardColumn(card, targetColumnId);
   if (card.jobId) {
     // Job-linked cards are normally auto-positioned by date; a manual
     // drop overrides that for 24 hours, or until the job's dates are
@@ -11775,7 +11844,7 @@ function moveCardToColumn(cardId, targetColumnId) {
   if (!card || card.column === targetColumnId) return;
   if (!confirmChecklistBeforeMove(card)) return;
   const targetCol = BOARD_COLUMNS.find(function(c) { return c.id === targetColumnId; });
-  card.column = targetColumnId;
+  setCardColumn(card, targetColumnId);
   if (card.jobId) {
     if (dropNeedsManualOverride(targetColumnId)) {
       card.manualColumn = targetColumnId;
@@ -11808,7 +11877,7 @@ function syncBoardCardsFromDOM() {
     if (!body) return;
     body.querySelectorAll('.board-card').forEach(el => {
       const card = boardCards.find(c => String(c.id) === el.dataset.id);
-      if (card) { card.column = col.id; ordered.push(card); }
+      if (card) { setCardColumn(card, col.id); ordered.push(card); }
     });
   });
   boardCards = ordered;
@@ -11935,6 +12004,41 @@ function toggleColumnFinishedTrigger(colId, event) {
   renderHomeDashboard();
   showToast('"' + col.label + '" ' + (next ? 'now marks jobs finished' : 'no longer marks jobs finished'), 'success');
   closeAllColSettings();
+}
+
+// See runColumnEntryActions() for what this actually does when a card
+// lands here — materializes the column's Default Checklist onto the
+// card immediately (rather than lazily, the first time someone happens
+// to open My Checklist or the card) and assigns it, turning it into a
+// real action item right away instead of sitting inert.
+function toggleColumnAutoAssignChecklist(colId, event) {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find(c => c.id === colId);
+  if (!col) return;
+  col.autoAssignChecklist = !col.autoAssignChecklist;
+  saveBoardColumns();
+  logActivity((col.autoAssignChecklist ? 'enabled' : 'disabled') + ' checklist action-items for board "' + col.label + '"');
+  renderBoard();
+  showToast('"' + col.label + '" ' + (col.autoAssignChecklist ? 'now sends' : 'no longer sends') + ' checklist action items', 'success');
+  closeAllColSettings();
+}
+
+// Not itself a toggle — overwrites col.checklistAssigneeOverride with
+// whatever the "Assign To" <select> was set to; '' means "Auto" (falls
+// back to the card's own Foreman, then PM, at runColumnEntryActions()
+// time). Deliberately doesn't re-render/close the dropdown, unlike the
+// toggles above — this fires from the <select>'s own onchange, and a
+// disruptive re-render right as someone's picking an option would be
+// worse than just leaving it as a quiet save+toast.
+function setColumnChecklistAssignee(colId, username, event) {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find(c => c.id === colId);
+  if (!col) return;
+  col.checklistAssigneeOverride = username || '';
+  saveBoardColumns();
+  const label = username ? displayNameForUsername(username) : 'Auto (card\'s Foreman/PM)';
+  logActivity('set board "' + col.label + '" checklist action-item assignee to ' + label);
+  showToast('Checklist assignee updated', 'success');
 }
 
 // Drives the auto-fill in renderFixedTaskGrid's startInput handler — setting
