@@ -3087,7 +3087,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.30';
+const APP_VERSION = '2026-08-28.31';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6792,6 +6792,83 @@ function handleCalSwipeMove(e) {
   targets.forEach(function(el) { el.style.transform = 'translateX(' + deltaX + 'px)'; });
 }
 
+// Slides the outgoing month/day out and the incoming one in as ONE
+// continuous motion, rather than finishing the exit before even starting
+// the entrance (the old approach: animate the live element to outX, wait
+// for that transition to end, THEN swap its content and animate it back
+// in from the opposite edge — two chained transitions back to back read
+// as a pause in the middle instead of a single seamless slide).
+//
+// The live element can't play both halves at once (it only holds one
+// month's content at a time), so a throwaway "ghost" — a snapshot clone
+// of the CURRENT (outgoing) content, pinned via position:fixed exactly
+// over the live element's on-screen rect — plays the exit while the live
+// element is immediately repointed to the new month/day and plays the
+// entrance. Both transitions are started in the same synchronous block,
+// so they run in lockstep and cross paths mid-slide instead of queuing.
+//
+//   targets        - the live elements (calSwipeTargets()) to swap/slide
+//   startTransform - translateX (px) the ghost continues FROM; 0 for a
+//                    fresh/at-rest trigger (wheel), or the drag's own
+//                    live deltaX to pick up exactly where a finger left it
+//   outX           - the far edge (±width) both the ghost's exit and the
+//                    live element's entrance are measured against
+//   goNext         - true = next month/day, false = previous
+//   duration       - CSS transition duration string, e.g. '0.2s'
+function slideCalendarTargets(targets, startTransform, outX, goNext, duration) {
+  if (!targets.length) { if (goNext) calendarNext(); else calendarPrev(); return; }
+
+  const ghosts = targets.map(function(el) {
+    const rect = el.getBoundingClientRect();
+    const ghost = el.cloneNode(true);
+    ghost.removeAttribute('id');
+    ghost.querySelectorAll('[id]').forEach(function(child) { child.removeAttribute('id'); });
+    ghost.style.position = 'fixed';
+    ghost.style.top = rect.top + 'px';
+    ghost.style.left = rect.left + 'px';
+    ghost.style.width = rect.width + 'px';
+    ghost.style.height = rect.height + 'px';
+    ghost.style.margin = '0';
+    ghost.style.zIndex = '400';
+    ghost.style.pointerEvents = 'none';
+    ghost.style.transition = 'none';
+    ghost.style.transform = 'translateX(' + startTransform + 'px)';
+    document.body.appendChild(ghost);
+    return ghost;
+  });
+
+  if (goNext) calendarNext(); else calendarPrev();
+  // calendarNext()/calendarPrev() re-render the same live element(s)'
+  // contents in place — re-query rather than reusing `targets` in case
+  // day mode's own element set changed (e.g. #weekHourSection).
+  const freshTargets = calSwipeTargets();
+  const freshDaysEl = freshTargets[0];
+  if (!freshDaysEl) { ghosts.forEach(function(g) { g.remove(); }); return; }
+
+  // Jump the now-new-content live element out to the opposite edge with
+  // no transition (invisible — the ghost, opaque and higher z-index,
+  // still covers this same spot until the animation below starts), then
+  // let it and the ghost animate toward their final positions together.
+  freshTargets.forEach(function(el) {
+    el.style.transition = 'none';
+    el.style.transform = 'translateX(' + (-outX) + 'px)';
+  });
+  void freshDaysEl.offsetHeight; // force layout so the jump above lands before the transitions below start
+  freshTargets.forEach(function(el) {
+    el.style.transition = 'transform ' + duration + ' ease';
+    el.style.transform = 'translateX(0)';
+  });
+  ghosts.forEach(function(g) {
+    g.style.transition = 'transform ' + duration + ' ease';
+    g.style.transform = 'translateX(' + outX + 'px)';
+  });
+
+  freshDaysEl.addEventListener('transitionend', function cleanup() {
+    freshDaysEl.removeEventListener('transitionend', cleanup);
+    ghosts.forEach(function(g) { g.remove(); });
+  });
+}
+
 function handleCalSwipeEnd(e) {
   const wasTracking = calSwipeTracking;
   calSwipeTracking = false;
@@ -6808,7 +6885,7 @@ function handleCalSwipeEnd(e) {
 
   const targets = calSwipeTargets();
   if (!targets.length) return;
-  const daysEl = targets[0]; // drives the completion timing for all targets below
+  const daysEl = targets[0];
 
   if (Math.abs(deltaX) < CAL_SWIPE_THRESHOLD) {
     // Didn't clear the threshold — spring back to where it started, no
@@ -6820,47 +6897,15 @@ function handleCalSwipeEnd(e) {
     return;
   }
 
-  // Finish sliding the current month/day the rest of the way off-screen in
-  // the SAME direction it was already moving (a past bug derived this
-  // from a separate "dir" flag that ended up with the opposite sign of
-  // deltaX, so the grid — already sitting at a negative transform after
-  // following a leftward drag — snapped back positive right as you let
-  // go, instead of continuing left), then swap to the next/prev month or
-  // day (calendarNext()/calendarPrev() — see their calendarViewMode
-  // branches) and slide that in from the opposite edge. In day mode this
-  // moves in lockstep with the hourly grid below it (see
-  // calSwipeTargets()), not just the all-day list.
+  // Continue in the SAME direction the drag was already moving (a past
+  // bug derived this from a separate "dir" flag that ended up with the
+  // opposite sign of deltaX, so the grid — already sitting at a negative
+  // transform after following a leftward drag — snapped back positive
+  // right as you let go, instead of continuing left).
   const width = daysEl.getBoundingClientRect().width || window.innerWidth;
   const outX = deltaX < 0 ? -width : width;
   const goNext = deltaX < 0; // swiping left continues left — next month/day
-  targets.forEach(function(el) {
-    el.style.transition = 'transform 0.2s ease';
-    el.style.transform = 'translateX(' + outX + 'px)';
-  });
-
-  const finishSwipe = function() {
-    daysEl.removeEventListener('transitionend', finishSwipe);
-    if (goNext) calendarNext(); else calendarPrev();
-    // calendarNext()/calendarPrev() re-render these same elements'
-    // contents in place, but the outgoing transform from above is still
-    // sitting on them — jump them out to the opposite edge with no
-    // transition (so this is invisible), then animate back to 0 so the
-    // new month/day visibly slides in from the side the old one exited
-    // toward.
-    const freshTargets = calSwipeTargets();
-    const freshDaysEl = freshTargets[0];
-    if (!freshDaysEl) return;
-    freshTargets.forEach(function(el) {
-      el.style.transition = 'none';
-      el.style.transform = 'translateX(' + (-outX) + 'px)';
-    });
-    void freshDaysEl.offsetHeight; // force layout so the jump above lands before the transition re-enables
-    freshTargets.forEach(function(el) {
-      el.style.transition = 'transform 0.2s ease';
-      el.style.transform = 'translateX(0)';
-    });
-  };
-  daysEl.addEventListener('transitionend', finishSwipe);
+  slideCalendarTargets(targets, deltaX, outX, goNext, '0.2s');
 }
 
 // Same slide-out/slide-in feel as the touch swipe above, but starting
@@ -6873,27 +6918,7 @@ function animateCalendarWheelChange(goNext) {
   const daysEl = targets[0];
   const width = daysEl.getBoundingClientRect().width || window.innerWidth;
   const outX = goNext ? -width : width;
-  targets.forEach(function(el) {
-    el.style.transition = 'transform 0.18s ease';
-    el.style.transform = 'translateX(' + outX + 'px)';
-  });
-  const finish = function() {
-    daysEl.removeEventListener('transitionend', finish);
-    if (goNext) calendarNext(); else calendarPrev();
-    const freshTargets = calSwipeTargets();
-    const freshDaysEl = freshTargets[0];
-    if (!freshDaysEl) return;
-    freshTargets.forEach(function(el) {
-      el.style.transition = 'none';
-      el.style.transform = 'translateX(' + (-outX) + 'px)';
-    });
-    void freshDaysEl.offsetHeight; // force layout so the jump above lands before the transition re-enables
-    freshTargets.forEach(function(el) {
-      el.style.transition = 'transform 0.18s ease';
-      el.style.transform = 'translateX(0)';
-    });
-  };
-  daysEl.addEventListener('transitionend', finish);
+  slideCalendarTargets(targets, 0, outX, goNext, '0.18s');
 }
 
 // Desktop equivalent of the mobile touch-swipe (handleCalSwipeStart/Move/
