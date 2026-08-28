@@ -3042,7 +3042,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.16';
+const APP_VERSION = '2026-08-28.17';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -12619,16 +12619,66 @@ function closeWorkflowItemsModal() {
 
 function renderWorkflowItemsBody() {
   const container = document.getElementById('workflowItemsBody');
-  const chips = WORKFLOW_ITEMS.map(function(item) {
-    return '<span class="manage-field-chip"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + item.color + ';margin-right:5px;"></span>' + escapeHtml(item.label) +
-      '<button onclick="removeWorkflowItem(\'' + item.id + '\')">×</button></span>';
+  // Row layout (not the chip pattern Default Checklist/Custom Fields
+  // use elsewhere) since each item needs room for an expandable color
+  // picker underneath — reuses the board column ⋮ menu's own color-
+  // toggle/panel/grid CSS classes verbatim (same swatch palette,
+  // COLOR_PRESETS, same click-to-expand interaction), just scoped to
+  // #workflowItemsBody instead of a column dropdown.
+  const rows = WORKFLOW_ITEMS.map(function(item) {
+    const swatches = COLOR_PRESETS.map(function(c) {
+      return '<div class="board-col-color-option' + (item.color === c ? ' selected' : '') + '" style="background:' + c + ';" onclick="changeWorkflowItemColor(\'' + item.id + '\', \'' + c + '\', event)"></div>';
+    }).join('');
+    return '<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden;">' +
+      '<div class="board-col-color-toggle" onclick="toggleWorkflowItemColorPanel(\'' + item.id + '\', event)">' +
+        '<span style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+          '<span class="col-color-swatch" id="wfi-swatch-' + item.id + '" style="background:' + item.color + ';flex-shrink:0;"></span>' +
+          escapeHtml(item.label) +
+        '</span>' +
+        '<span style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' +
+          '<span class="col-color-arrow" id="wfi-arrow-' + item.id + '">▾</span>' +
+          '<button onclick="event.stopPropagation(); removeWorkflowItem(\'' + item.id + '\');" style="border:none;background:none;color:var(--text-light);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;">×</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="board-col-color-panel" id="wfi-panel-' + item.id + '">' +
+        '<div class="board-col-color-grid">' + swatches + '</div>' +
+      '</div>' +
+    '</div>';
   }).join('');
   container.innerHTML = '<div class="manage-field-group">' +
-    '<div class="manage-field-chips">' + (chips || '<span style="font-size:11px;color:#999;">No workflow items yet</span>') + '</div>' +
+    (rows || '<span style="font-size:11px;color:#999;">No workflow items yet</span>') +
     '<div class="manage-field-add-row">' +
     '<input type="text" id="wfi_new_item" placeholder="Add workflow item..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addWorkflowItem();}">' +
     '<button class="btn btn-secondary" onclick="addWorkflowItem()">Add</button>' +
     '</div></div>';
+}
+
+// Mirrors toggleColColorPanel() (board column ⋮ menu) exactly, scoped
+// to this modal instead of a column dropdown so opening one item's
+// picker closes any other item's still-open one, not a board's.
+function toggleWorkflowItemColorPanel(itemId, event) {
+  event.stopPropagation();
+  const panel = document.getElementById('wfi-panel-' + itemId);
+  const toggle = event.currentTarget;
+  const open = !panel.classList.contains('open');
+  document.querySelectorAll('#workflowItemsBody .board-col-color-panel').forEach(function(p) { p.classList.remove('open'); });
+  document.querySelectorAll('#workflowItemsBody .board-col-color-toggle').forEach(function(t) { t.classList.remove('open'); });
+  if (open) {
+    panel.classList.add('open');
+    toggle.classList.add('open');
+  }
+}
+
+function changeWorkflowItemColor(itemId, color, event) {
+  event.stopPropagation();
+  const item = WORKFLOW_ITEMS.find(function(i) { return i.id === itemId; });
+  if (!item) return;
+  item.color = color;
+  saveWorkflowItems();
+  logActivity('changed workflow item "' + item.label + '" color');
+  renderWorkflowItemsBody();
+  renderBoard();
+  showToast('Color updated', 'success');
 }
 
 function addWorkflowItem() {
