@@ -3037,7 +3037,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.21';
+const APP_VERSION = '2026-08-28.22';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13454,7 +13454,10 @@ function buildHomeTodayScheduleRows() {
         const label = job.name + (phaseName ? ' — ' + phaseName : '');
         rows.push({
           job: job, phaseId: phase.id, taskName: task.name || 'Untitled task',
-          label: label, phaseName: phaseName, pct: Math.min(100, Math.max(0, pct))
+          label: label, phaseName: phaseName, pct: Math.min(100, Math.max(0, pct)),
+          // Same fallback chain the Gantt bars themselves use (task's
+          // own color, else its job's, else the app default).
+          taskColor: task.color || job.color || '#3949ab'
         });
       });
     });
@@ -13580,7 +13583,7 @@ function renderHomeTodayScheduleWidget(rows) {
         '<span class="home-today-task">' + escapeHtml(row.taskName) + '</span>' +
         '<span class="home-today-job"><span class="my-checklist-job-bubble" style="background:' + jobColor + ';">' + escapeHtml(row.job.name) + '</span>' + phaseSuffix + '</span>' +
       '</div>' +
-      '<span class="home-bar-track"><span class="home-bar-fill" style="width:' + row.pct + '%;"></span></span>' +
+      '<span class="home-bar-track"><span class="home-bar-fill" style="width:' + row.pct + '%; background:' + row.taskColor + ';"></span></span>' +
     '</div>';
   }).join('');
 }
