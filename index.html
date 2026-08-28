@@ -199,10 +199,19 @@
   .rail-tab svg { flex-shrink: 0; }
   .rail-tab:active { transform: translateY(1px); }
   .rail-tab-label, .rail-tab .badge { display: none; }
-  .rail-tab.active, .rail-tab:hover, .settings-menu-wrap:hover {
+  .rail-tab.active, .rail-tab:hover,
+  /* Scoped to .rail-tab-row specifically (the desktop trigger's own
+     container) rather than the bare .settings-menu-wrap class, which the
+     mobile view-switcher's trigger now ALSO carries (see its own markup
+     comment) — a plain .settings-menu-wrap:hover would match that one
+     too, and touch taps on many mobile browsers apply :hover on tap
+     without ever clearing it afterward (no mouse to move away and
+     un-hover), which is exactly what looked like the settings icon
+     staying highlighted after closing the menu. */
+  .rail-tab-row .settings-menu-wrap:hover {
     background: var(--primary-light); color: white;
   }
-  .settings-menu-wrap:hover .settings-dots-btn { color: white; }
+  .rail-tab-row .settings-menu-wrap:hover .settings-dots-btn { color: white; }
   /* Only Gantt/the settings dots happen to use the exact --primary-light
      indigo as their own hardcoded fill — those two specifically need
      forcing to white on active/hover or they'd vanish against the active
@@ -215,7 +224,7 @@
      tab represents it anymore, see #tab-home's own removal note further
      down.) */
   #tab-gantt.active svg, #tab-gantt:hover svg,
-  .settings-menu-wrap:hover svg { filter: brightness(0) invert(1); }
+  .rail-tab-row .settings-menu-wrap:hover svg { filter: brightness(0) invert(1); }
   .manager-sidebar-header .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; margin-left: 2px; }
 
   .tab-panel { display: none; height: 100%; overflow: hidden; }
@@ -3247,7 +3256,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.39';
+const APP_VERSION = '2026-08-28.40';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
