@@ -1152,7 +1152,7 @@
      adjacent boards genuinely stretches across both. Bracket shape and
      arrow direction: Karl's explicit design direction, iterated against
      a published mockup before this was built. */
-  .board-workflow-strip { position: relative; overflow: hidden; height: 52px; border-bottom: 1px solid var(--border); background: var(--card); flex-shrink: 0; }
+  .board-workflow-strip { position: relative; overflow: hidden; height: 52px; background: var(--card); flex-shrink: 0; }
   .wf-track { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
   .wf-seg { position: absolute; top: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
   .wf-seg-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; }
@@ -3042,7 +3042,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.13';
+const APP_VERSION = '2026-08-28.14';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
