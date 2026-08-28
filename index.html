@@ -499,7 +499,15 @@
   .grid-line.weekend-line { background: #e0e0e0; }
   .grid-line.today-line-bg {
     background: rgba(229,57,53,0.06) !important;
-    width: 100% !important;
+    /* Meant to tint from today's column to the actual right edge of the
+       grid — width:100% on an absolutely-positioned element with a
+       non-zero `left` instead extends `left + 100%` PAST that edge (a
+       real, non-rubber-band overflow: it was inflating #timelineBody's
+       scrollWidth by exactly that `left` offset, letting the Gantt
+       scroll into genuinely empty space past the last rendered day).
+       right:0 with no explicit width computes the correct span instead. */
+    right: 0 !important;
+    width: auto !important;
     z-index: 1;
   }
 
@@ -2984,7 +2992,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.5';
+const APP_VERSION = '2026-08-28.6';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -7567,7 +7575,9 @@ function renderGantt() {
       const todayBg = document.createElement('div');
       todayBg.className = 'grid-line today-line-bg';
       todayBg.style.left = dayLeft + 'px';
-      todayBg.style.width = dayWidth + 'px';
+      // No width set here — .today-line-bg's own CSS spans it from `left`
+      // to the grid's real right edge via right:0 (see that rule's
+      // comment).
       grid.appendChild(todayBg);
     }
 
