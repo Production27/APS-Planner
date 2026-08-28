@@ -401,7 +401,7 @@
   }
   .left-header .col { padding: 8px 10px; display: flex; align-items: center; border-right: 1px solid #e9ecef; }
   .left-header .col-start { width: 88px; } .left-header .col-finish { width: 88px; } .left-header .col-jobs { flex: 1; border-right: none; }
-  .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
+  .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; overscroll-behavior: contain; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
   /* 40px — kept in sync with GANTT_ROW_H (see its declaration near
@@ -488,7 +488,12 @@
      ways unlike the calendar grid) hands a 2-finger pinch straight to JS
      (see handleGanttTouchMove()) instead of the browser's own page-zoom
      fighting over it. */
-  .timeline-body { flex: 1; overflow: auto; position: relative; background: rgba(255,255,255,0.8); touch-action: pan-x pan-y; }
+  /* overscroll-behavior: contain — without it, scrolling/trackpad momentum
+     past the last day column (or the top/bottom of the row list) rubber-
+     bands past the real edge before snapping back, and can also chain the
+     scroll into the page behind it. This stops both: the container just
+     stops dead at its real content boundary instead of overscrolling. */
+  .timeline-body { flex: 1; overflow: auto; overscroll-behavior: contain; position: relative; background: rgba(255,255,255,0.8); touch-action: pan-x pan-y; }
   .timeline-body::-webkit-scrollbar { width: 8px; height: 8px; }
   .timeline-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
   .timeline-grid { position: relative; min-height: 100%; }
@@ -2984,7 +2989,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.3';
+const APP_VERSION = '2026-08-28.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
