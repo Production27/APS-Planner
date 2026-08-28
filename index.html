@@ -1510,7 +1510,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-bar-track { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
   body.dark-mode .home-bar-track { background: rgba(255,255,255,0.08); }
   .home-bar-fill { display: block; height: 100%; background: var(--primary-light); border-radius: 4px; min-width: 3px; transition: width .2s; }
-  .home-bar-fill.done { background: var(--success); }
   .home-bar-count { width: 20px; text-align: right; color: var(--text-light); font-weight: 700; flex-shrink: 0; }
   /* Today's Schedule — every Gantt task active today, each with its own
      mini progress bar (reusing .home-bar-track/.home-bar-fill) showing
@@ -3042,7 +3041,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.19';
+const APP_VERSION = '2026-08-28.20';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13574,9 +13573,14 @@ function renderHomeStageSummaryWidget(groups) {
   const max = Math.max.apply(null, groups.map(function(g) { return g.count; }).concat([1]));
   return groups.map(function(g) {
     const pct = Math.round((g.count / max) * 100);
+    // Same color logic as the bracket above each group on Board
+    // (renderBoardWorkflowStrip()) — the item's own color if assigned,
+    // or the same neutral gray fallback an unassigned board's bracket
+    // gets — so a bar and its bracket always read as the same color.
+    const fillColor = g.color || 'var(--text-light)';
     return '<div class="home-bar-row" onclick="switchTab(\'board\'); scrollToBoardColumn(\'' + g.firstColId + '\');">' +
       '<span class="home-bar-label">' + escapeHtml(g.label) + '</span>' +
-      '<span class="home-bar-track"><span class="home-bar-fill' + (g.finished ? ' done' : '') + '" style="width:' + pct + '%;"></span></span>' +
+      '<span class="home-bar-track"><span class="home-bar-fill" style="width:' + pct + '%; background:' + fillColor + ';"></span></span>' +
       '<span class="home-bar-count">' + g.count + '</span>' +
     '</div>';
   }).join('');
