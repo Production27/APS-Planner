@@ -1135,8 +1135,43 @@
   body.dark-mode .job-list-add-btn:hover { border-color: var(--primary-light); background: rgba(57,73,171,0.15); }
 
   /* ===== TRELLO-STYLE BOARD ===== */
-  .board-wrapper { height: 100%; overflow-x: auto; overflow-y: hidden; display: flex; gap: 16px; padding: 18px 24px; background: var(--bg); align-items: flex-start; }
+  /* flex:1/min-height:0 only matter now that #panel-board.active is a
+     flex column (board-workflow-strip below sits above this as the
+     other child) — harmless no-ops otherwise. */
+  .board-wrapper { height: 100%; flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; display: flex; gap: 16px; padding: 18px 24px; background: var(--bg); align-items: flex-start; }
   .board-wrapper::-webkit-scrollbar { height: 8px; }
+  #panel-board.active { display: flex; flex-direction: column; }
+
+  /* ===== BOARD WORKFLOW STRIP ===== a compact, always-visible summary
+     of the board's own column order sitting directly above it — not a
+     second board, doesn't repeat each column's full card list or color
+     scheme (that's the board itself, one row down), just a count and a
+     status dot per stage, connected by a thin chevron. Deliberately not
+     scroll-synced to .board-wrapper's own horizontal scroll (added
+     complexity for little payoff on a strip whose whole point is a
+     single glance) — wraps to a second line on a narrow window instead.
+     See renderBoardWorkflowStrip(). Design approved by Karl against a
+     mockup before this was built — see that conversation for why boxes/
+     a separate tab were rejected first. */
+  .board-workflow-strip {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
+    padding: 11px 22px; background: var(--card); border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .wf-stage {
+    display: flex; align-items: center; gap: 7px; padding: 5px 8px 5px 10px;
+    border-radius: 20px; cursor: pointer; transition: background 0.15s;
+  }
+  .wf-stage:hover { background: rgba(57,73,171,0.08); }
+  body.dark-mode .wf-stage:hover { background: rgba(57,73,171,0.22); }
+  .wf-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--border); }
+  .wf-dot.finished { background: var(--success); }
+  .wf-dot.stalled { background: var(--warning); }
+  .wf-label { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .wf-count { background: var(--primary-light); color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .wf-stalled-flag { display: flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: #a8641c; background: rgba(240,173,78,0.18); padding: 2px 7px; border-radius: 10px; }
+  body.dark-mode .wf-stalled-flag { color: #f0ad4e; background: rgba(240,173,78,0.16); }
+  .wf-connector { color: var(--text-light); opacity: 0.45; flex-shrink: 0; display: flex; margin: 0 1px; }
   .board-wrapper::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
   .board-column { width: 245px; min-width: 245px; background: #eceef4; border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; box-shadow: 0 6px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.04); transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
   .board-column.dragging-col { opacity: 0.35; transform: scale(0.98); cursor: grabbing; }
@@ -2670,6 +2705,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
     <!-- BOARD TAB -->
     <div class="tab-panel" id="panel-board">
+      <div class="board-workflow-strip" id="boardWorkflowStrip"></div>
       <div class="board-wrapper" id="boardWrapper"></div>
     </div>
   </div>
@@ -2996,7 +3032,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.11';
+const APP_VERSION = '2026-08-28.12';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -11450,6 +11486,7 @@ function renderBoard() {
   // renderAll()'s call (harmless — this is a cheap, idempotent DOM sweep)
   // but is what actually closes the gap for every other call site.
   applyPermissionGating();
+  renderBoardWorkflowStrip();
 
   // PM/Foreman lines on card faces resolve a username to a display name
   // via displayNameForUsername() — if the roster hasn't loaded yet, that
@@ -12093,6 +12130,7 @@ function setColumnStalledThreshold(colId, value, event) {
   if (event && event.target) event.target.value = col.stalledAfterDays;
   logActivity('set board "' + col.label + '" stalled-after threshold to ' + col.stalledAfterDays + ' day' + (col.stalledAfterDays === 1 ? '' : 's'));
   renderHomeDashboard();
+  renderBoardWorkflowStrip();
   showToast('Stalled threshold updated', 'success');
 }
 
@@ -13437,12 +13475,10 @@ function updateHomeBadge(count) {
   badge.textContent = typeof count === 'number' ? count : buildMyChecklistRows().length;
 }
 
-// Per-stage data for a workflow pipeline visual — not yet rendered
-// anywhere (the first standalone-tab attempt at this was pulled; a
-// redesigned version embedded directly on the Board page is planned
-// separately). Kept here since the data side (reusing
-// buildHomeStageSummary()'s counts and buildHomeStalledRows()) is
-// independent of wherever it ends up being rendered.
+// Per-stage data backing the Board Workflow Strip (renderBoardWorkflowStrip()
+// below) — reuses buildHomeStageSummary()'s counts (identical numbers to
+// Home's own Board Summary bar chart) and buildHomeStalledRows() rather
+// than recomputing either.
 function buildWorkflowStageData() {
   const stageCounts = buildHomeStageSummary(); // [{id, label, count}], BOARD_COLUMNS order
   const stalledCountByCol = {};
@@ -13460,6 +13496,37 @@ function buildWorkflowStageData() {
       stalledCount: stalledCountByCol[stage.id] || 0
     };
   });
+}
+
+// The slim pipeline strip above the board itself (see .board-workflow-strip
+// CSS) — one segment per BOARD_COLUMNS entry, connected by a thin chevron.
+// Deliberately not a box/card per stage and not its own tab — see that
+// CSS rule's comment for why. Called from renderBoard() so it always
+// reflects the same data the board it sits above is currently showing.
+function renderBoardWorkflowStrip() {
+  const strip = document.getElementById('boardWorkflowStrip');
+  if (!strip) return;
+  const stages = buildWorkflowStageData();
+  const chevron = '<span class="wf-connector"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M9 5l6 7-6 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+  strip.innerHTML = stages.map(function(stage, i) {
+    const dotClass = stage.finished ? ' finished' : (stage.stalledCount ? ' stalled' : '');
+    const stalledFlag = stage.stalledCount
+      ? '<span class="wf-stalled-flag"><svg viewBox="0 0 24 24" width="10" height="10" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 9v4l2.5 1.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>' + stage.stalledCount + '</span>'
+      : '';
+    const title = stage.count + ' job' + (stage.count === 1 ? '' : 's') + ' in ' + stage.label + (stage.stalledCount ? ', ' + stage.stalledCount + ' stalled' : '');
+    const seg = '<div class="wf-stage" onclick="scrollToBoardColumn(\'' + stage.id + '\')" title="' + escapeHtml(title) + '">' +
+      '<span class="wf-dot' + dotClass + '"></span>' +
+      '<span class="wf-label">' + escapeHtml(stage.label) + '</span>' +
+      '<span class="wf-count">' + stage.count + '</span>' +
+      stalledFlag +
+    '</div>';
+    return seg + (i < stages.length - 1 ? chevron : '');
+  }).join('');
+}
+
+function scrollToBoardColumn(colId) {
+  const el = document.querySelector('.board-column[data-column="' + colId + '"]');
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 }
 
 // ----- Open / save / delete card -----
