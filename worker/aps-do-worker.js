@@ -577,6 +577,32 @@ async function resolveIdentity(env, username, password, fallbackName) {
   return { username: user.username, displayName: user.displayName, role: user.role, assignedProjectId: user.assignedProjectId || null };
 }
 
+// Resolves identity from a signed room token (see signRoomToken/
+// verifyRoomToken above) instead of re-verifying a password against KV.
+// Returns the same shape as resolveIdentity() so every downstream call
+// site is agnostic to which path produced it.
+async function resolveIdentityFromToken(env, token) {
+  const payload = await verifyRoomToken(env.ROOM_TOKEN_SECRET, token);
+  if (!payload || !payload.username) return null;
+  return { username: payload.username, displayName: payload.displayName, role: payload.role, assignedProjectId: payload.assignedProjectId || null };
+}
+
+// Single entry point every authenticated JSON-body endpoint below should
+// use: token preferred, raw username+password accepted as a transition
+// fallback for clients that haven't picked up the token-based client yet.
+// TODO(remove after legacy-password rollout confirmed): once no more
+// clients are sending body.username/body.password (the app's own
+// "reload for latest" version banner naturally pushes everyone off the
+// old client within a normal usage window), drop the fallback branch
+// here and the equivalent X-Aps-Username/X-Aps-Password and
+// ?username=&password= fallbacks inline in handleAttachmentUpload()/
+// handleAttachmentDownload() below, and make handleAuth() the only
+// remaining password-verification path.
+async function resolveCaller(env, body) {
+  if (body && body.token) return resolveIdentityFromToken(env, body.token);
+  return resolveIdentity(env, body && body.username, body && body.password);
+}
+
 // --- 5. AUTH HANDLER — now mints a signed room token instead of calling
 // Liveblocks. Credential checking (resolveIdentity, above) is completely
 // unchanged; only what happens after a successful check is different.
@@ -614,7 +640,7 @@ async function handleAuth(request, env, corsHeaders) {
 async function handleUsersList(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const caller = await resolveIdentity(env, body.username, body.password);
+  const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
   if (caller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
   const users = await listAllUsers(env);
@@ -629,7 +655,7 @@ async function handleUsersList(request, env, corsHeaders) {
 async function handleUsersRoster(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const caller = await resolveIdentity(env, body.username, body.password);
+  const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
   const users = await listAllUsers(env);
   return jsonResponse({ users: users.map(function(u) { return { username: u.username, displayName: u.displayName, isLead: !!u.isLead }; }) }, 200, corsHeaders);
@@ -638,9 +664,13 @@ async function handleUsersRoster(request, env, corsHeaders) {
 async function handleUsersAdd(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const caller = await resolveIdentity(env, body.username, body.password);
+  const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
-  if (caller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
+  // Re-checked fresh from KV rather than trusted off the token: this
+  // endpoint grants power, so a caller demoted after their token was
+  // minted must lose access immediately, not after the token's TTL.
+  const freshCaller = await getUser(env, caller.username);
+  if (!freshCaller || freshCaller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
 
   const newUsername = normalizeUsername(body.newUsername);
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
@@ -685,9 +715,10 @@ async function handleUsersAdd(request, env, corsHeaders) {
 async function handleUsersUpdate(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const caller = await resolveIdentity(env, body.username, body.password);
+  const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
-  if (caller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
+  const freshCaller = await getUser(env, caller.username);
+  if (!freshCaller || freshCaller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
 
   const targetUsername = normalizeUsername(body.targetUsername);
   const target = await getUser(env, targetUsername);
@@ -719,9 +750,10 @@ async function handleUsersUpdate(request, env, corsHeaders) {
 async function handleUsersRemove(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const caller = await resolveIdentity(env, body.username, body.password);
+  const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
-  if (caller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
+  const freshCaller = await getUser(env, caller.username);
+  if (!freshCaller || freshCaller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
 
   const targetUsername = normalizeUsername(body.targetUsername);
   const target = await getUser(env, targetUsername);
@@ -742,7 +774,7 @@ async function handleUsersRemove(request, env, corsHeaders) {
 async function handleUsersResetPassword(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const caller = await resolveIdentity(env, body.username, body.password);
+  const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
 
   const targetUsername = normalizeUsername(body.targetUsername);
@@ -778,7 +810,10 @@ async function handleAttachmentUpload(request, env, corsHeaders, url) {
   // body to put them in the way every other POST endpoint does, and a
   // query string would land in Worker access logs like the backup
   // endpoints used to.
-  const identity = await resolveIdentity(env, request.headers.get("X-Aps-Username"), request.headers.get("X-Aps-Password"));
+  const token = request.headers.get("X-Aps-Token");
+  const identity = token
+    ? await resolveIdentityFromToken(env, token)
+    : await resolveIdentity(env, request.headers.get("X-Aps-Username"), request.headers.get("X-Aps-Password"));
   if (!identity) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
 
   const name = url.searchParams.get("name") || "file";
@@ -792,7 +827,10 @@ async function handleAttachmentUpload(request, env, corsHeaders, url) {
 }
 
 async function handleAttachmentDownload(request, env, corsHeaders, url) {
-  const identity = await resolveIdentity(env, url.searchParams.get("username"), url.searchParams.get("password"));
+  const qToken = url.searchParams.get("token");
+  const identity = qToken
+    ? await resolveIdentityFromToken(env, qToken)
+    : await resolveIdentity(env, url.searchParams.get("username"), url.searchParams.get("password"));
   if (!identity) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 
   const key = url.searchParams.get("key") || "";
@@ -811,7 +849,7 @@ async function handleAttachmentDownload(request, env, corsHeaders, url) {
 async function handleAttachmentDelete(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const identity = await resolveIdentity(env, body.username, body.password);
+  const identity = await resolveCaller(env, body);
   if (!identity) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
 
   const key = body.key || "";
@@ -837,7 +875,7 @@ function jsonResponse(data, status, corsHeaders) {
 async function checkAdminAuth(request, env) {
   try {
     const body = await request.clone().json();
-    const caller = await resolveIdentity(env, body.username, body.password);
+    const caller = await resolveCaller(env, body);
     return !!(caller && caller.role === "admin");
   } catch (e) {
     return false;
@@ -855,11 +893,12 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-      // X-Aps-Username/X-Aps-Password — attachment upload sends credentials
-      // as headers instead of query params (its POST body is the raw file
-      // bytes, not JSON, so there's no body field to put them in) — see
-      // handleAttachmentUpload().
-      "Access-Control-Allow-Headers": "Content-Type, X-Aps-Username, X-Aps-Password",
+      // X-Aps-Token (preferred) / X-Aps-Username+X-Aps-Password (legacy
+      // fallback, see resolveCaller()'s TODO) — attachment upload sends
+      // credentials as headers instead of query params (its POST body is
+      // the raw file bytes, not JSON, so there's no body field to put them
+      // in) — see handleAttachmentUpload().
+      "Access-Control-Allow-Headers": "Content-Type, X-Aps-Token, X-Aps-Username, X-Aps-Password",
       "Cache-Control": "no-store",
     };
 
@@ -916,7 +955,7 @@ export default {
     if (url.pathname === "/download-backup" && request.method === "POST") {
       let body;
       try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-      const dlCaller = await resolveIdentity(env, body.username, body.password);
+      const dlCaller = await resolveCaller(env, body);
       if (!dlCaller || dlCaller.role !== "admin") {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
@@ -940,7 +979,7 @@ export default {
     if (url.pathname === "/restore-backup" && request.method === "POST") {
       let body;
       try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-      const restoreCaller = await resolveIdentity(env, body.username, body.password);
+      const restoreCaller = await resolveCaller(env, body);
       if (!restoreCaller || restoreCaller.role !== "admin") {
         return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
       }
