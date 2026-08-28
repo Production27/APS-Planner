@@ -1035,6 +1035,17 @@
   .job-comment-reply-input-row textarea:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
   @media (max-width: 1440px) {
     .job-edit-row { flex-direction: column; max-width: 460px; }
+    /* Column direction flips align-items:flex-start (set on .job-edit-row
+       for the wide row layout) onto the cross axis, which is now width —
+       fit-content instead of a stretch, so .form-container was sizing to
+       whatever its content naturally wanted (mainly the Tasks grid's
+       fixed-px date/duration columns, ~360px) rather than the row's own
+       width. Harmless on a wide phone/window where that happens to be
+       narrower than the viewport, but overflowed horizontally on any
+       screen narrower than ~374px (most Android phones). .job-comments-
+       panel already gets this same override just below for the same
+       reason. */
+    .form-container { width: 100%; }
     /* The job form grew a lot (description/custom fields/checklist/
        attachments) — stacked below all of that, Comments would sit off the
        bottom of a very long form and look like it disappeared. Put it right
@@ -3068,7 +3079,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.25';
+const APP_VERSION = '2026-08-28.26';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
