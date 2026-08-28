@@ -67,7 +67,7 @@ function blankProject(name) {
     header: { title: name || 'Untitled', subtitle: '', theme: { c1: '#1a237e', c2: '#3949ab' } },
     activityLog: [],
     rev: 0,
-    fieldRevisions: { boardColumns: 0, fieldOptions: 0, header: 0 }
+    fieldRevisions: { boardColumns: 0, fieldOptions: 0, header: 0, workflowItems: 0 }
   };
 }
 
@@ -268,6 +268,7 @@ function applyMessage(state, msg) {
     case 'setBoardColumns': result = handleSetWholeField(project, msg, 'boardColumns'); break;
     case 'setFieldOptions': result = handleSetWholeField(project, msg, 'fieldOptions'); break;
     case 'setHeader': result = handleSetWholeField(project, msg, 'header'); break;
+    case 'setWorkflowItems': result = handleSetWholeField(project, msg, 'workflowItems'); break;
     case 'deleteFromMap': result = handleDeleteFromMap(project, msg); break;
     case 'recordTombstone': result = handleRecordTombstone(project, msg); break;
     case 'logActivity': result = handleLogActivity(project, msg); break;
@@ -405,7 +406,7 @@ function appFormatToRoomState(appData) {
       header: proj.header || { title: proj.name || 'Untitled', subtitle: '', theme: { c1: '#1a237e', c2: '#3949ab' } },
       activityLog: [],
       rev: 0,
-      fieldRevisions: { boardColumns: 0, fieldOptions: 0, header: 0 }
+      fieldRevisions: { boardColumns: 0, fieldOptions: 0, header: 0, workflowItems: 0 }
     };
   }
   return { projects };
