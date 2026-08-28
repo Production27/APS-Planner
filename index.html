@@ -1146,6 +1146,32 @@
   .board-column-header-title { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
   .board-column-header-title span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* ===== WORKFLOW VIEW ===== read-only pipeline diagram of BOARD_COLUMNS
+     — a dedicated tab rather than a Home widget so it has room to be
+     genuinely interactive (click a stage to jump to it on Board) instead
+     of fighting Home's already-dense widget grid for space. flex-wrap
+     lets it reflow into multiple rows on a narrow screen instead of
+     requiring horizontal scroll, unlike the Gantt/Board grids which need
+     to stay strictly linear. */
+  .workflow-wrapper { padding: 20px; overflow-y: auto; height: 100%; }
+  .workflow-intro { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
+  .workflow-pipeline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .workflow-stage {
+    min-width: 170px; max-width: 210px; background: var(--card);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s;
+  }
+  .workflow-stage:hover { box-shadow: var(--shadow-hover); border-color: var(--primary-light); }
+  .workflow-stage.has-stalled { background: #fef3e2; border-color: #f0ad4e; }
+  body.dark-mode .workflow-stage.has-stalled { background: rgba(240,173,78,0.15); }
+  .workflow-stage-label { font-size: 13px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-stage-count { font-size: 22px; font-weight: 700; color: var(--primary); margin-top: 2px; }
+  .workflow-stage-count small { font-size: 11px; font-weight: 400; color: var(--text-secondary); }
+  .workflow-stage-badges { display: flex; align-items: center; gap: 6px; margin-top: 6px; min-height: 15px; }
+  .workflow-stage-stalled-note { font-size: 11px; color: #c0741c; font-weight: 600; margin-top: 4px; }
+  body.dark-mode .workflow-stage-stalled-note { color: #f0ad4e; }
+  .workflow-arrow { flex-shrink: 0; color: var(--text-light); opacity: 0.6; }
+
   .board-add-column { width: 270px; min-width: 270px; flex-shrink: 0; }
   .board-add-column-btn { width: 100%; height: 46px; border: 2px dashed #c7cbe0; border-radius: var(--radius); background: rgba(255,255,255,0.4); color: var(--text-light); 
 
@@ -2390,6 +2416,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <button class="rail-tab" onclick="switchTab('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
       <button class="rail-tab" onclick="switchTab('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
       <button class="rail-tab" onclick="switchTab('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
+      <button class="rail-tab" onclick="switchTab('workflow')" id="tab-workflow" title="Workflow"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="9" width="6" height="6" rx="1.5" fill="#3949ab"/><rect x="9.5" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.75"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.5"/><path d="M8 12h1.5M15.5 12H17" stroke="#3949ab" stroke-width="1.6"/></svg><span class="rail-tab-label">Workflow</span></button>
     </div>
     <!-- The header's own icon IS the toggle now — no separate row. Click
          it closed (icon-only) to open the Jobs search/list below (and
@@ -2671,6 +2698,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <!-- BOARD TAB -->
     <div class="tab-panel" id="panel-board">
       <div class="board-wrapper" id="boardWrapper"></div>
+    </div>
+    <div class="tab-panel" id="panel-workflow">
+      <div class="workflow-wrapper" id="workflowWrapper"></div>
     </div>
   </div>
 
@@ -2996,7 +3026,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.9';
+const APP_VERSION = '2026-08-28.10';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5747,6 +5777,7 @@ function switchTab(tab) {
   if (tab === 'home') { renderHomeDashboard(); }
   else if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
   else if (tab === 'board') { renderBoard(); }
+  else if (tab === 'workflow') { renderWorkflowView(); }
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
   else if (tab === 'checklist') { renderMyChecklist(); }
   sendPresenceUpdate();
@@ -13435,6 +13466,80 @@ function updateHomeBadge(count) {
   const badge = document.getElementById('homeCount');
   if (!badge) return;
   badge.textContent = typeof count === 'number' ? count : buildMyChecklistRows().length;
+}
+
+// ===== WORKFLOW VIEW =====
+// Read-only pipeline diagram of BOARD_COLUMNS (switchTab('workflow')) —
+// not more automation, just a way to actually SEE the process as a
+// connected sequence instead of inferring it from the board's column
+// order. Reuses buildHomeStageSummary()'s per-stage counts (identical
+// numbers to Home's own Board Summary bar chart, just re-rendered as a
+// connected pipeline) and buildHomeStalledRows() (this session's
+// stalled-job tracking) rather than recomputing either.
+function buildWorkflowStageData() {
+  const stageCounts = buildHomeStageSummary(); // [{id, label, count}], BOARD_COLUMNS order
+  const stalledCountByCol = {};
+  buildHomeStalledRows().forEach(function(row) {
+    stalledCountByCol[row.card.column] = (stalledCountByCol[row.card.column] || 0) + 1;
+  });
+  return stageCounts.map(function(stage) {
+    const col = BOARD_COLUMNS.find(function(c) { return c.id === stage.id; });
+    return {
+      id: stage.id,
+      label: stage.label,
+      count: stage.count,
+      finished: isFinishedColumn(col),
+      scheduleDisconnected: !!(col && col.scheduleDisconnected),
+      stalledCount: stalledCountByCol[stage.id] || 0
+    };
+  });
+}
+
+function renderWorkflowView() {
+  const wrapper = document.getElementById('workflowWrapper');
+  if (!wrapper) return;
+  const stages = buildWorkflowStageData();
+  const stageHtml = stages.map(function(stage, i) {
+    const badges = [];
+    if (stage.finished) {
+      // Same checkmark glyph as the Finished Trigger toggle in the
+      // board's own ⋮ menu (toggleColumnFinishedTrigger()).
+      badges.push('<span title="Finished trigger — jobs here count as done"><svg viewBox="0 0 24 24" width="14" height="14" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>');
+    }
+    if (stage.scheduleDisconnected) {
+      // Same broken-link glyph renderBoard() already shows in this
+      // column's own header (toggleColumnScheduleSync()).
+      badges.push('<span title="Disconnected from schedule"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg></span>');
+    }
+    const stalledNote = stage.stalledCount
+      ? '<div class="workflow-stage-stalled-note">' + stage.stalledCount + ' stalled</div>'
+      : '';
+    const box = '<div class="workflow-stage' + (stage.stalledCount ? ' has-stalled' : '') + '" onclick="workflowGoToStage(\'' + stage.id + '\')" title="Go to ' + escapeHtml(stage.label) + ' on Board">' +
+      '<div class="workflow-stage-label">' + escapeHtml(stage.label) + '</div>' +
+      '<div class="workflow-stage-count">' + stage.count + ' <small>job' + (stage.count === 1 ? '' : 's') + '</small></div>' +
+      '<div class="workflow-stage-badges">' + badges.join('') + '</div>' +
+      stalledNote +
+    '</div>';
+    const arrow = i < stages.length - 1
+      ? '<span class="workflow-arrow"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M4 12h14m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'
+      : '';
+    return box + arrow;
+  }).join('');
+  wrapper.innerHTML =
+    '<div class="workflow-intro">Jobs flow left to right through these boards, in the same order as Board. Click a stage to jump to it.</div>' +
+    '<div class="workflow-pipeline">' + (stageHtml || '<div class="home-widget-empty">No boards yet.</div>') + '</div>';
+}
+
+// homeWidgetGoTo() (not switchTab() directly) for the same smooth
+// view-transition Home's own widget headers already use when jumping
+// tabs. The scrollIntoView needs a moment after that transition/render
+// actually lands the Board column elements in the DOM.
+function workflowGoToStage(colId) {
+  homeWidgetGoTo('board');
+  setTimeout(function() {
+    const el = document.querySelector('.board-column[data-column="' + colId + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, 60);
 }
 
 // ----- Open / save / delete card -----
