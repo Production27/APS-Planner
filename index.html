@@ -3256,7 +3256,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.41';
+const APP_VERSION = '2026-08-28.42';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13835,22 +13835,34 @@ function buildHomeTodayScheduleRows() {
     if (!isJobVisibleToMe(job)) return;
     const phases = getJobPhases(job);
     phases.forEach(function(phase) {
-      (phase.tasks || []).forEach(function(task) {
-        if (!task.start || !task.finish) return;
-        const start = new Date(task.start + 'T00:00:00');
-        const finish = new Date(task.finish + 'T00:00:00');
-        if (isNaN(start.getTime()) || isNaN(finish.getTime())) return;
-        if (todayMidnight < start || todayMidnight > finish) return;
-        const totalMs = finish - start;
-        const pct = totalMs > 0 ? Math.round(((todayMidnight - start) / totalMs) * 100) : 100;
-        const phaseName = phases.length > 1 && !phase.isDefault ? phase.name : '';
-        const label = job.name + (phaseName ? ' — ' + phaseName : '');
-        rows.push({
-          job: job, phaseId: phase.id, taskName: task.name || 'Untitled task',
-          label: label, phaseName: phaseName, pct: Math.min(100, Math.max(0, pct)),
-          // Same fallback chain the Gantt bars themselves use (task's
-          // own color, else its job's, else the app default).
-          taskColor: task.color || job.color || '#3949ab'
+      // getPhaseSubUnits(), not phase.tasks directly — once a phase is
+      // split into sub-phases, its real tasks live in
+      // phase.subPhases[i].tasks and phase.tasks itself goes stale/empty
+      // (see getPhaseSubUnits()'s own comment: every Gantt/Calendar
+      // render path already goes through this same seam instead of
+      // reading phase.tasks directly). Reading phase.tasks here meant
+      // any task inside an actual sub-phase silently never showed up in
+      // this widget at all, regardless of its dates.
+      getPhaseSubUnits(phase).forEach(function(subUnit) {
+        (subUnit.tasks || []).forEach(function(task) {
+          if (!task.start || !task.finish) return;
+          const start = new Date(task.start + 'T00:00:00');
+          const finish = new Date(task.finish + 'T00:00:00');
+          if (isNaN(start.getTime()) || isNaN(finish.getTime())) return;
+          if (todayMidnight < start || todayMidnight > finish) return;
+          const totalMs = finish - start;
+          const pct = totalMs > 0 ? Math.round(((todayMidnight - start) / totalMs) * 100) : 100;
+          const phaseName = phases.length > 1 && !phase.isDefault ? phase.name : '';
+          const subPhaseName = !subUnit.isDefault ? subUnit.name : '';
+          const nameParts = [phaseName, subPhaseName].filter(Boolean);
+          const label = job.name + (nameParts.length ? ' — ' + nameParts.join(' — ') : '');
+          rows.push({
+            job: job, phaseId: phase.id, subPhaseId: subUnit.id, taskName: task.name || 'Untitled task',
+            label: label, phaseName: nameParts.join(' — '), pct: Math.min(100, Math.max(0, pct)),
+            // Same fallback chain the Gantt bars themselves use (task's
+            // own color, else its job's, else the app default).
+            taskColor: task.color || job.color || '#3949ab'
+          });
         });
       });
     });
@@ -14020,7 +14032,14 @@ function renderHomeTodayScheduleWidget(rows) {
   return rows.map(function(row) {
     const jobColor = row.job.color || '#3949ab';
     const phaseSuffix = row.phaseName ? ' <span class="home-today-phase">— ' + escapeHtml(row.phaseName) + '</span>' : '';
-    return '<div class="home-today-row" onclick="editJob(\'' + row.job.id + '\'' + (row.phaseId ? ', \'' + row.phaseId + '\'' : '') + ')">' +
+    // subPhaseId only ever shows up alongside a real phaseId (sub-phases
+    // can only exist on a real phase, never on the synthetic no-phases
+    // default — see getJobPhases()/getPhaseSubUnits()), so there's no
+    // "subPhaseId but no phaseId" case to special-case here.
+    const editArgs = ["'" + row.job.id + "'"];
+    if (row.phaseId) editArgs.push("'" + row.phaseId + "'");
+    if (row.subPhaseId) editArgs.push("'" + row.subPhaseId + "'");
+    return '<div class="home-today-row" onclick="editJob(' + editArgs.join(', ') + ')">' +
       '<div class="home-today-row-top">' +
         '<span class="home-today-task">' + escapeHtml(row.taskName) + '</span>' +
         '<span class="home-today-job"><span class="my-checklist-job-bubble" style="background:' + jobColor + ';">' + escapeHtml(row.job.name) + '</span>' + phaseSuffix + '</span>' +
