@@ -1525,7 +1525,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .wsm-bracket-wrap { width: calc(100% - 10px); height: 8px; }
   .wsm-bracket-wrap svg { display: block; }
   .wsm-bars-wrap { display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 2px 0; }
-  .wsm-bar-col { display: flex; flex-direction: column; align-items: center; width: 46px; flex-shrink: 0; cursor: pointer; }
+  /* flex:1 0 46px — stretches to fill the widget's width when there's
+     room (few boards), same as real board columns filling their row,
+     but never shrinks below a legible 46px; more boards than fit at
+     that width overflow into .wsm-bars-wrap's own horizontal scroll
+     instead of continuing to shrink. */
+  .wsm-bar-col { display: flex; flex-direction: column; align-items: center; flex: 1 0 46px; cursor: pointer; }
   .wsm-bar-count { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
   /* Hangs down from the label, like a board column hangs below its own
      header — the whole row's bars share the same top edge (.wsm-bars-wrap's
@@ -3063,7 +3068,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.24';
+const APP_VERSION = '2026-08-28.25';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
