@@ -1989,6 +1989,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .mobile-collapsible .mobile-field-body { display: none; }
     .mobile-collapsible.expanded .mobile-field-body { display: block; margin-top: 8px; }
 
+    /* ===== MY CHECKLIST ===== */
+    /* .ci-assignee's base rule (flex-shrink:0) is fine on desktop, where
+       a checklist row always has room — on a narrow phone, a row with a
+       job bubble + stage tag already close to using up the card's width
+       left this dropdown nothing to give, so it kept its full preferred
+       size and pushed the row (and itself) past the card's right edge
+       instead of shrinking. The toggle's own label span already has
+       overflow:hidden/ellipsis (see the base rule) — it just never
+       engaged because this element never actually got smaller than its
+       own content wanted. Letting it shrink, with a floor short enough
+       to keep truncating gracefully instead of disappearing, fixes that. */
+    .checklist-item .ci-assignee { flex-shrink: 1; min-width: 46px; }
+
     /* ===== BOARD ===== */
     /* One column at a time instead of a 270px-wide strip with the next
        column half-peeking in — scroll-snap makes swiping between columns
@@ -3087,7 +3100,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.31';
+const APP_VERSION = '2026-08-28.32';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
