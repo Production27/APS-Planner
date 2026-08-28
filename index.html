@@ -2497,7 +2497,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      gets a one-off briefcase here instead). See setMobileView(). -->
 <div class="mobile-view-switcher" id="mobileViewSwitcher">
   <button class="mobile-view-btn active" data-view="jobs" title="Jobs" onclick="setMobileView('jobs')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
-  <button class="mobile-view-btn" data-view="home" title="Home" onclick="setMobileView('home')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 7.5h-2.5V20a1 1 0 01-1 1h-4v-6h-3v6h-4a1 1 0 01-1-1v-9.5H3L12 3z" fill="#3949ab"/></svg></button>
+  <!-- No Home button here either (see setMobileView()'s own comment) —
+       same "turn off the tab you're in" gesture as desktop: tapping
+       whichever view is already active switches to Home instead of
+       re-selecting it. -->
   <button class="mobile-view-btn" data-view="checklist" title="Checklist" onclick="setMobileView('checklist')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   <button class="mobile-view-btn" data-view="calendar" title="Calendar" onclick="setMobileView('calendar')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></button>
   <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" onclick="setMobileView('gantt')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></button>
@@ -3210,7 +3213,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.36';
+const APP_VERSION = '2026-08-28.37';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6075,12 +6078,18 @@ function toggleJobRail() {
   }
 }
 
-// Mobile-only Jobs/Home/Checklist/Calendar/Gantt/Board toggle — see
-// .mobile-view-switcher and the body[data-mobile-view] rules under
+// Mobile-only Jobs/Checklist/Calendar/Gantt/Board toggle (Home has no
+// button of its own — see .mobile-view-switcher's own markup comment) —
+// see .mobile-view-switcher and the body[data-mobile-view] rules under
 // @media (max-width:480px).
 // Each of these takes the full screen on a phone, so there's no "both
 // visible" state to preserve here the way switchTab() does on desktop.
+// Tapping whichever view is ALREADY active goes to Home instead of
+// re-selecting it — same "turn off the tab you're in" gesture
+// switchTabMorphed() uses on desktop, just without that function's
+// shared-element morph (mobile never had that animation to begin with).
 function setMobileView(view) {
+  if (view === document.body.dataset.mobileView && view !== 'home') view = 'home';
   document.body.dataset.mobileView = view;
   document.querySelectorAll('.mobile-view-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.view === view);
