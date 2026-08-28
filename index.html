@@ -1500,17 +1500,36 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-overdue-row.overdue { border-left-color: var(--danger); }
   .home-more-link { display: block; font-size: 12px; color: var(--primary-light); cursor: pointer; padding: 6px 0 0; }
   .home-more-link:hover { text-decoration: underline; }
-  /* Stage summary — a real single-hue magnitude bar per stage (length =
-     count relative to the busiest stage), not a plain number list. Done
-     stages (complete/invoiced) render in --success instead of the
-     default --primary-light fill, same status-color convention
-     .mini-badge.checklist-complete already uses elsewhere in this file. */
+  /* .home-bar-row/-label/-track/-fill/-count: originally Workflow
+     Summary's own row-per-stage layout, now just Today's Schedule's
+     (see below) — Workflow Summary moved to the mini-board layout,
+     .wsm-*, further down. */
   .home-bar-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; cursor: pointer; font-size: 12px; }
   .home-bar-label { width: 76px; flex-shrink: 0; color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .home-bar-track { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
   body.dark-mode .home-bar-track { background: rgba(255,255,255,0.08); }
   .home-bar-fill { display: block; height: 100%; background: var(--primary-light); border-radius: 4px; min-width: 3px; transition: width .2s; }
   .home-bar-count { width: 20px; text-align: right; color: var(--text-light); font-weight: 700; flex-shrink: 0; }
+  /* ===== WORKFLOW SUMMARY MINI-BOARD ===== a small version of the real
+     Board Workflow Strip — same bracket-over-columns idea, just with a
+     vertical bar standing in for each board instead of a full column of
+     cards, so the whole thing fits in a Home widget. See
+     renderHomeWorkflowMiniBoard(). Same measure-the-real-elements +
+     scroll-sync approach as .board-workflow-strip's own — see that
+     rule's comment — just measuring .wsm-bar-col elements instead of
+     .board-column ones. */
+  .wsm-bracket-band { position: relative; overflow: hidden; height: 30px; }
+  .wsm-bracket-track { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
+  .wsm-seg { position: absolute; top: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; padding-bottom: 2px; }
+  .wsm-seg-label { font-size: 10.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 2px; }
+  .wsm-bracket-wrap { width: calc(100% - 10px); height: 8px; }
+  .wsm-bracket-wrap svg { display: block; }
+  .wsm-bars-wrap { display: flex; align-items: flex-end; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 2px 0; }
+  .wsm-bar-col { display: flex; flex-direction: column; align-items: center; width: 46px; flex-shrink: 0; cursor: pointer; }
+  .wsm-bar-count { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+  .wsm-bar { width: 100%; border-radius: 6px 6px 3px 3px; min-height: 4px; transition: height 0.2s; }
+  .wsm-bar-label { font-size: 9.5px; color: var(--text-light); font-weight: 600; margin-top: 5px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .wsm-bar-col:hover .wsm-bar-label { color: var(--primary); }
   /* Today's Schedule — every Gantt task active today, each with its own
      mini progress bar (reusing .home-bar-track/.home-bar-fill) showing
      how far through its start->finish window today falls. */
@@ -2459,7 +2478,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           </div>
           <div class="home-widget">
             <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Workflow Summary</div>
-            <div class="home-widget-body" id="homeStageBody"></div>
+            <div class="home-widget-body" id="homeStageBody">
+              <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
+              <div class="wsm-bars-wrap" id="wsmBarsWrap"></div>
+            </div>
           </div>
           <div class="home-widget">
             <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Today's Schedule</div>
@@ -3037,7 +3059,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.22';
+const APP_VERSION = '2026-08-28.23';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13543,31 +13565,80 @@ function renderHomeOverdueWidget(rows) {
   }).join('');
 }
 
-// A real magnitude bar per stage (length = count relative to the busiest
-// stage) rather than a plain number list — see the .home-bar-* CSS.
-// Takes buildWorkflowStageData()'s groups now (one row per workflow
-// item, or per standalone board where nothing's been assigned), not
-// one row per individual board column — Karl's ask: the Home widget
-// should actually summarize the workflow, same grouping the Board
-// Workflow Strip already does, not just be relabeled while still
-// listing every board.
-function renderHomeStageSummaryWidget(groups) {
-  const total = groups.reduce(function(n, g) { return n + g.count; }, 0);
-  if (!total) return '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><div>No cards on the board yet.</div></div>';
-  const max = Math.max.apply(null, groups.map(function(g) { return g.count; }).concat([1]));
-  return groups.map(function(g) {
-    const pct = Math.round((g.count / max) * 100);
-    // Same color logic as the bracket above each group on Board
-    // (renderBoardWorkflowStrip()) — the item's own color if assigned,
-    // or the same neutral gray fallback an unassigned board's bracket
-    // gets — so a bar and its bracket always read as the same color.
-    const fillColor = g.color || 'var(--text-light)';
-    return '<div class="home-bar-row" onclick="switchTab(\'board\'); scrollToBoardColumn(\'' + g.firstColId + '\');">' +
-      '<span class="home-bar-label">' + escapeHtml(g.label) + '</span>' +
-      '<span class="home-bar-track"><span class="home-bar-fill" style="width:' + pct + '%; background:' + fillColor + ';"></span></span>' +
-      '<span class="home-bar-count">' + g.count + '</span>' +
+// A mini version of the real Board Workflow Strip: one vertical bar per
+// BOARD_COLUMNS entry (not merged by item — Karl's ask, "have the bars
+// be vertical underneath them to represent the boards"), height scaled
+// to its card count, with the same bracket-over-columns band on top
+// (buildWorkflowStageData()'s grouping — an item spanning several
+// adjacent boards still stretches its bracket across their bars).
+// Called from renderHomeDashboard(); unlike the real strip it isn't
+// re-triggered on window resize — this widget's own width is stable
+// once Home is on screen, no board-column drag/reorder to react to.
+function renderHomeWorkflowMiniBoard() {
+  const barsWrap = document.getElementById('wsmBarsWrap');
+  const track = document.getElementById('wsmBracketTrack');
+  if (!barsWrap || !track) return;
+
+  const perColumnCounts = {};
+  buildHomeStageSummary().forEach(function(s) { perColumnCounts[s.id] = s.count; });
+  const total = Object.keys(perColumnCounts).reduce(function(n, id) { return n + perColumnCounts[id]; }, 0);
+
+  if (!total) {
+    barsWrap.innerHTML = '<div class="home-widget-empty" style="width:100%;"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><div>No cards on the board yet.</div></div>';
+    track.innerHTML = '';
+    return;
+  }
+
+  const MAX_BAR_H = 80;
+  const max = Math.max.apply(null, BOARD_COLUMNS.map(function(c) { return perColumnCounts[c.id] || 0; }).concat([1]));
+
+  barsWrap.innerHTML = BOARD_COLUMNS.map(function(col) {
+    const count = perColumnCounts[col.id] || 0;
+    // Bar color: same logic as the real bracket — the board's own
+    // workflow item color if it has one, else the neutral fallback —
+    // so a bar always matches the bracket segment sitting above it.
+    const item = col.workflowItemId ? WORKFLOW_ITEMS.find(function(i) { return i.id === col.workflowItemId; }) : null;
+    const color = item ? item.color : 'var(--text-light)';
+    const h = Math.max(4, Math.round((count / max) * MAX_BAR_H));
+    const title = count + ' job' + (count === 1 ? '' : 's') + ' in ' + col.label;
+    return '<div class="wsm-bar-col" data-column="' + col.id + '" onclick="switchTab(\'board\'); scrollToBoardColumn(\'' + col.id + '\');" title="' + escapeHtml(title) + '">' +
+      '<span class="wsm-bar-count">' + count + '</span>' +
+      '<span class="wsm-bar" style="height:' + h + 'px; background:' + color + ';"></span>' +
+      '<span class="wsm-bar-label">' + escapeHtml(col.label) + '</span>' +
     '</div>';
   }).join('');
+
+  // Bracket band — same grouping (buildWorkflowStageData()) and same
+  // measure-the-real-elements technique renderBoardWorkflowStrip() uses,
+  // just measured against these .wsm-bar-col elements instead of real
+  // .board-column ones, and scaled down.
+  const wrapperRect = barsWrap.getBoundingClientRect();
+  const measured = buildWorkflowStageData().map(function(g) {
+    const firstEl = barsWrap.querySelector('.wsm-bar-col[data-column="' + g.firstColId + '"]');
+    const lastEl = barsWrap.querySelector('.wsm-bar-col[data-column="' + g.lastColId + '"]');
+    if (!firstEl || !lastEl) return null;
+    const left = firstEl.getBoundingClientRect().left - wrapperRect.left + barsWrap.scrollLeft;
+    const right = lastEl.getBoundingClientRect().right - wrapperRect.left + barsWrap.scrollLeft;
+    return Object.assign({}, g, { left: left, right: right });
+  }).filter(Boolean);
+
+  track.innerHTML = measured.map(function(g) {
+    const width = g.right - g.left;
+    const bw = Math.max(width - 10, 16);
+    const inset = 2, flare = 5;
+    const path = 'M' + inset + ',8 L' + (inset + flare) + ',2 L' + (bw - inset - flare) + ',2 L' + (bw - inset) + ',8';
+    const bracketStyle = g.color ? ('color:' + g.color + ';') : 'color:var(--text-light);opacity:0.6;';
+    return '<div class="wsm-seg" style="left:' + g.left + 'px; width:' + width + 'px;">' +
+      '<div class="wsm-seg-label">' + escapeHtml(g.label) + '</div>' +
+      '<div class="wsm-bracket-wrap" style="' + bracketStyle + '"><svg width="' + bw + '" height="8" viewBox="0 0 ' + bw + ' 8">' +
+        '<path d="' + path + '" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg></div>' +
+    '</div>';
+  }).join('');
+
+  barsWrap.onscroll = function() {
+    track.style.transform = 'translateX(-' + barsWrap.scrollLeft + 'px)';
+  };
 }
 
 // Click reuses editJob() directly — the same handler Calendar's own job
@@ -13601,8 +13672,7 @@ function renderHomeDashboard() {
   if (checklistBody) checklistBody.innerHTML = renderHomeChecklistWidget(checklistRows);
   const overdueBody = document.getElementById('homeOverdueBody');
   if (overdueBody) overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
-  const stageBody = document.getElementById('homeStageBody');
-  if (stageBody) stageBody.innerHTML = renderHomeStageSummaryWidget(buildWorkflowStageData());
+  if (document.getElementById('homeStageBody')) renderHomeWorkflowMiniBoard();
   const todayBody = document.getElementById('homeTodayBody');
   if (todayBody) todayBody.innerHTML = renderHomeTodayScheduleWidget(buildHomeTodayScheduleRows());
   updateHomeBadge(checklistRows.length);
@@ -13650,11 +13720,7 @@ function buildWorkflowStageData() {
       color: item ? item.color : null,
       isItem: !!item,
       count: run.colIds.reduce(function(n, id) { return n + (perColumnCounts[id] || 0); }, 0),
-      stalledCount: run.colIds.reduce(function(n, id) { return n + (stalledCountByCol[id] || 0); }, 0),
-      // Every board in this group counts as a finished trigger — used
-      // by renderHomeStageSummaryWidget()'s "done stage" bar styling,
-      // same meaning isFinishedColumnId() already carries per-column.
-      finished: run.colIds.every(function(id) { return isFinishedColumnId(id); })
+      stalledCount: run.colIds.reduce(function(n, id) { return n + (stalledCountByCol[id] || 0); }, 0)
     };
   });
 }
