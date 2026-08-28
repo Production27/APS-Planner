@@ -2095,7 +2095,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      layout has nowhere near enough width here. */
   @media (max-height: 480px) and (orientation: landscape) {
     body {
-      display: grid; grid-template-columns: 130px 1fr; grid-template-rows: auto 1fr;
+      display: grid; grid-template-columns: 64px 1fr; grid-template-rows: auto 1fr;
       grid-template-areas: "header shell" "tabs shell";
     }
     /* .app-header itself no longer occupies the "header" grid area at
@@ -2103,18 +2103,25 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        row simply collapses to 0 height since nothing occupies it.
        .rail-tab-row (settings + the view-switcher tabs) lives inside
        .manager-sidebar, which sits in the wide "shell" area here, not
-       the cramped 130px "tabs" column — it gets the same icon-only
+       the cramped 64px "tabs" column — it gets the same icon-only
        column collapse as desktop's narrow rail in this landscape-phone
-       case, nothing landscape-specific needed for it. */
+       case, nothing landscape-specific needed for it. 64px matches that
+       same desktop collapsed-rail width (see body:not(.job-rail-open)
+       .manager-sidebar) rather than an arbitrary new value — icon-only,
+       no label, so there's nothing here that needs more than that. */
     .mobile-view-switcher {
-      grid-area: tabs; display: flex; flex-direction: column; width: 130px;
+      grid-area: tabs; display: flex; flex-direction: column; width: 64px;
       border-bottom: none; border-right: 1px solid var(--border);
     }
     /* Left-edge indicator instead of the portrait bar's underline — this
        is a vertical list here, not a horizontal row, so a left border
-       reads as "selected" the way the underline did there. */
+       reads as "selected" the way the underline did there. Centered
+       (not flex-start) now that the column is icon-only width (64px,
+       same as the desktop .rail-tab it's matching) — flex-start's own
+       left-hugging padding was the leftover from when this column was
+       130px wide and had that much empty space to fill. */
     .mobile-view-btn {
-      justify-content: flex-start; padding: 10px;
+      justify-content: center; padding: 10px 0;
       border-bottom: none; border-left: 3px solid transparent;
     }
     .mobile-view-btn.active { border-left-color: var(--primary); border-bottom-color: transparent; }
@@ -2141,25 +2148,25 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        (it's a left column instead — see body's grid-template-areas).
        top:0 alone would still leave the drawer sliding in from behind
        that column (left:0), just partly hidden under it since the
-       header keeps its higher z-index — left:130px starts the drawer
+       header keeps its higher z-index — left:64px starts the drawer
        after the header/tabs column instead, with the width caps
-       adjusted to subtract that same 130px so it doesn't then overshoot
+       adjusted to subtract that same 64px so it doesn't then overshoot
        the right edge of the screen. */
-    .manager-form-area { top: 0; left: 130px; width: min(888px, calc(100vw - 130px)); }
-    .manager-form-area.comments-collapsed { width: min(592px, calc(100vw - 130px)); }
+    .manager-form-area { top: 0; left: 64px; width: min(888px, calc(100vw - 64px)); }
+    .manager-form-area.comments-collapsed { width: min(592px, calc(100vw - 64px)); }
     /* The CLOSED-state transform (see .manager-form-area's base rule) is
        translateX(-100%) — a shift measured against the drawer's OWN
        width, which only fully clears the viewport when left:0. With
-       left:130px above, that same -100% shift lands the drawer's right
-       edge exactly at x=130 instead of off-screen — permanently covering
+       left:64px above, that same -100% shift lands the drawer's right
+       edge exactly at x=64 instead of off-screen — permanently covering
        the header/tabs column with the drawer's own (visually blank,
        same-as-background) closed panel, even though nothing is "open".
-       The extra "- 130px" makes up exactly that gap regardless of the
+       The extra "- 64px" makes up exactly that gap regardless of the
        drawer's own (viewport-dependent) width. .open's translateX(0)
        (see the base rule, specificity 0,2,0) already outranks this plain
        .manager-form-area override (0,1,0) unconditionally, so it doesn't
        need repeating here for the open state to still work. */
-    .manager-form-area { transform: translateX(calc(-100% - 130px)); }
+    .manager-form-area { transform: translateX(calc(-100% - 64px)); }
 
     /* Comments panel restored to sitting beside the form (the base/
        desktop layout) instead of the @media(max-width:1440px) block's
@@ -3092,7 +3099,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.28';
+const APP_VERSION = '2026-08-28.29';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
