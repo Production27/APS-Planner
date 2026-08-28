@@ -3042,7 +3042,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.18';
+const APP_VERSION = '2026-08-28.19';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13562,17 +13562,22 @@ function renderHomeStalledWidget(rows) {
 
 // A real magnitude bar per stage (length = count relative to the busiest
 // stage) rather than a plain number list — see the .home-bar-* CSS.
-function renderHomeStageSummaryWidget(counts) {
-  const total = counts.reduce(function(n, c) { return n + c.count; }, 0);
+// Takes buildWorkflowStageData()'s groups now (one row per workflow
+// item, or per standalone board where nothing's been assigned), not
+// one row per individual board column — Karl's ask: the Home widget
+// should actually summarize the workflow, same grouping the Board
+// Workflow Strip already does, not just be relabeled while still
+// listing every board.
+function renderHomeStageSummaryWidget(groups) {
+  const total = groups.reduce(function(n, g) { return n + g.count; }, 0);
   if (!total) return '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><div>No cards on the board yet.</div></div>';
-  const max = Math.max.apply(null, counts.map(function(c) { return c.count; }).concat([1]));
-  return counts.map(function(col) {
-    const isDoneStage = isFinishedColumnId(col.id);
-    const pct = Math.round((col.count / max) * 100);
-    return '<div class="home-bar-row" onclick="switchTab(\'board\')">' +
-      '<span class="home-bar-label">' + escapeHtml(col.label) + '</span>' +
-      '<span class="home-bar-track"><span class="home-bar-fill' + (isDoneStage ? ' done' : '') + '" style="width:' + pct + '%;"></span></span>' +
-      '<span class="home-bar-count">' + col.count + '</span>' +
+  const max = Math.max.apply(null, groups.map(function(g) { return g.count; }).concat([1]));
+  return groups.map(function(g) {
+    const pct = Math.round((g.count / max) * 100);
+    return '<div class="home-bar-row" onclick="switchTab(\'board\'); scrollToBoardColumn(\'' + g.firstColId + '\');">' +
+      '<span class="home-bar-label">' + escapeHtml(g.label) + '</span>' +
+      '<span class="home-bar-track"><span class="home-bar-fill' + (g.finished ? ' done' : '') + '" style="width:' + pct + '%;"></span></span>' +
+      '<span class="home-bar-count">' + g.count + '</span>' +
     '</div>';
   }).join('');
 }
@@ -13611,7 +13616,7 @@ function renderHomeDashboard() {
   const stalledBody = document.getElementById('homeStalledBody');
   if (stalledBody) stalledBody.innerHTML = renderHomeStalledWidget(buildHomeStalledRows());
   const stageBody = document.getElementById('homeStageBody');
-  if (stageBody) stageBody.innerHTML = renderHomeStageSummaryWidget(buildHomeStageSummary());
+  if (stageBody) stageBody.innerHTML = renderHomeStageSummaryWidget(buildWorkflowStageData());
   const todayBody = document.getElementById('homeTodayBody');
   if (todayBody) todayBody.innerHTML = renderHomeTodayScheduleWidget(buildHomeTodayScheduleRows());
   updateHomeBadge(checklistRows.length);
@@ -13659,7 +13664,11 @@ function buildWorkflowStageData() {
       color: item ? item.color : null,
       isItem: !!item,
       count: run.colIds.reduce(function(n, id) { return n + (perColumnCounts[id] || 0); }, 0),
-      stalledCount: run.colIds.reduce(function(n, id) { return n + (stalledCountByCol[id] || 0); }, 0)
+      stalledCount: run.colIds.reduce(function(n, id) { return n + (stalledCountByCol[id] || 0); }, 0),
+      // Every board in this group counts as a finished trigger — used
+      // by renderHomeStageSummaryWidget()'s "done stage" bar styling,
+      // same meaning isFinishedColumnId() already carries per-column.
+      finished: run.colIds.every(function(id) { return isFinishedColumnId(id); })
     };
   });
 }
