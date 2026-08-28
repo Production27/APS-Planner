@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.1';
+const APP_VERSION = '2026-08-28.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -10740,7 +10740,7 @@ async function downloadBackupFile(key) {
     });
     if (res.status === 401) {
       setStoredSessionToken(null);
-      token = await reauthenticate(true);
+      token = await reauthenticateOnce(true);
       res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -10805,7 +10805,7 @@ async function postUsersEndpoint(path, extraBody) {
   });
   if (res.status === 401) {
     setStoredSessionToken(null);
-    token = await reauthenticate(true);
+    token = await reauthenticateOnce(true);
     res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -12092,7 +12092,7 @@ async function uploadAttachmentFile(file) {
   let res = await fetch(url, { method: 'POST', headers: { 'X-Aps-Token': token }, body: file });
   if (res.status === 401) {
     setStoredSessionToken(null);
-    token = await reauthenticate(true);
+    token = await reauthenticateOnce(true);
     res = await fetch(url, { method: 'POST', headers: { 'X-Aps-Token': token }, body: file });
   }
   if (!res.ok) throw new Error('Upload failed: ' + res.status);
@@ -13566,10 +13566,25 @@ async function reauthenticate(forceReprompt) {
 // mints a fresh one via reauthenticate() (which only prompts when there's
 // no cached username, or when forced). Every authenticated call in this
 // file goes through this instead of ever touching a stored password.
+//
+// Several independent things can all discover they need a token within
+// the same tick at boot (the WebSocket connection, the user roster
+// fetch, ...) — without the dedup below, each would independently see no
+// cached token yet and call reauthenticate() on its own, prompting for
+// the password once per caller instead of once total. inFlightAuthPromise
+// makes every concurrent caller (forced or not) share the one request
+// already in progress rather than starting their own.
+let inFlightAuthPromise = null;
+function reauthenticateOnce(forceReprompt) {
+  if (!inFlightAuthPromise) {
+    inFlightAuthPromise = reauthenticate(forceReprompt).finally(function() { inFlightAuthPromise = null; });
+  }
+  return inFlightAuthPromise;
+}
 async function getSessionToken() {
   const cached = getStoredSessionToken();
   if (isSessionTokenUsable(cached)) return cached;
-  return await reauthenticate(false);
+  return await reauthenticateOnce(false);
 }
 
 // ---- Connection state ----
