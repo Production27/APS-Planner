@@ -1138,7 +1138,7 @@
   /* flex:1/min-height:0 only matter now that #panel-board.active is a
      flex column (board-workflow-strip below sits above this as the
      other child) — harmless no-ops otherwise. */
-  .board-wrapper { height: 100%; flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; display: flex; gap: 16px; padding: 18px 24px; background: var(--bg); align-items: flex-start; }
+  .board-wrapper { height: 100%; flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; display: flex; gap: 16px; padding: 8px 24px 18px; background: var(--bg); align-items: flex-start; }
   .board-wrapper::-webkit-scrollbar { height: 8px; }
   #panel-board.active { display: flex; flex-direction: column; }
 
@@ -3042,7 +3042,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.15';
+const APP_VERSION = '2026-08-28.16';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
