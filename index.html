@@ -2984,7 +2984,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-27.10';
+const APP_VERSION = '2026-08-28.1';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -10661,12 +10661,9 @@ function closeDeleteJobModal() {
 
 // ===== BACKUPS (shared room, via the Cloudflare Worker) =====
 // Used to be gated by a separate shared team password, unrelated to
-// individual accounts. Now uses the caller's own logged-in credentials —
-// same as every other authenticated action (see getMyCredentials()) — and
+// individual accounts. Now uses the caller's own logged-in session token —
+// same as every other authenticated action (see getSessionToken()) — and
 // the Worker itself additionally requires that account be Admin-tier.
-function getBackupsAuthCredentials() {
-  return getMyCredentials();
-}
 
 function openBackupsModal() {
   openModal('backupsModal');
@@ -10734,13 +10731,22 @@ async function loadBackupsList() {
 // ourselves and handing the browser the resulting blob instead of letting
 // it navigate directly.
 async function downloadBackupFile(key) {
-  const { username, password } = getBackupsAuthCredentials();
   try {
-    const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', {
+    let token = await getSessionToken();
+    let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: username, password: password, key: key })
+      body: JSON.stringify({ token: token, key: key })
     });
+    if (res.status === 401) {
+      setStoredSessionToken(null);
+      token = await reauthenticate(true);
+      res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token, key: key })
+      });
+    }
     if (!res.ok) {
       const data = await res.json().catch(function() { return {}; });
       throw new Error(data.error || ('Download failed: ' + res.status));
@@ -10787,20 +10793,25 @@ async function restoreBackupFile(key, dateLabel) {
 }
 
 // ===== USER ACCOUNTS (Manage Users, via the Cloudflare Worker) =====
-// Every call sends the CURRENTLY logged-in user's own cached credentials
-// (see ensureUserCredentials()) — the Worker re-verifies them, and their
-// role, on every single request; nothing here is trusted client-side.
-function getMyCredentials() {
-  return ensureUserCredentials(false);
-}
-
+// Every call sends the CURRENTLY logged-in user's own session token (see
+// getSessionToken()) — the Worker re-verifies it, and the caller's role,
+// on every single request; nothing here is trusted client-side.
 async function postUsersEndpoint(path, extraBody) {
-  const { username, password } = getMyCredentials();
-  const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + path, {
+  let token = await getSessionToken();
+  let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(Object.assign({ username: username, password: password }, extraBody || {}))
+    body: JSON.stringify(Object.assign({ token: token }, extraBody || {}))
   });
+  if (res.status === 401) {
+    setStoredSessionToken(null);
+    token = await reauthenticate(true);
+    res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ token: token }, extraBody || {}))
+    });
+  }
   const data = await res.json().catch(function() { return {}; });
   if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
   return data;
@@ -11027,13 +11038,25 @@ async function removeUserUI(username, displayName) {
 // Self-service — works for any logged-in user resetting their OWN account,
 // not just admins (the worker's reset-password endpoint allows that).
 async function changeMyPasswordUI() {
-  const { username } = getMyCredentials();
+  const username = getStoredUsername();
   const newPassword = window.prompt('New password (at least 6 characters):');
   if (newPassword === null) { showToast('Cancelled — password not changed', 'info'); return; }
   if (!newPassword) { showToast('Cancelled — no password entered', 'info'); return; }
   try {
     await postUsersEndpoint('users/reset-password', { targetUsername: username, newPassword: newPassword });
-    localStorage.setItem(USER_PASSWORD_KEY, newPassword);
+    // The existing session token stays valid regardless (it doesn't encode
+    // the password) — but mint a fresh one against the new password right
+    // away rather than leaving that to happen naturally on next expiry,
+    // using newPassword while it's still in memory here (never persisted).
+    try {
+      const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username, password: newPassword, name: username })
+      });
+      const data = await res.json().catch(function() { return {}; });
+      if (res.ok && data && data.token) setStoredSessionToken(data.token);
+    } catch (e) { /* best-effort refresh — the old token still works until it naturally expires */ }
     showToast('Password changed', 'success');
   } catch (err) {
     showToast('Could not change password: ' + err.message, 'error');
@@ -12043,41 +12066,51 @@ function canAssignChecklistStages() {
 // attached silently breaks.
 const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25MB — was 3MB when attachments lived inline in localStorage; R2 has no such pressure
 
+// Synchronous, so it can be dropped straight into a rendered href/src
+// attribute — reads whatever session token is already cached rather than
+// minting/refreshing one (that needs a network round-trip, which a
+// synchronous render can't wait on). By the time attachments are being
+// rendered at all, a valid token is essentially always already cached
+// from login/the room connection; a missing or expired one just makes the
+// resulting link 401 when clicked, same failure mode as a stale link
+// would show anyway.
 function attachmentDownloadUrl(key) {
-  const { username, password } = ensureUserCredentials(false);
-  return LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/download?username=' + encodeURIComponent(username) +
-    '&password=' + encodeURIComponent(password) + '&key=' + encodeURIComponent(key);
+  const token = getStoredSessionToken();
+  return LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/download?token=' + encodeURIComponent(token) + '&key=' + encodeURIComponent(key);
 }
 function attachmentSrc(att) {
   return att.key ? attachmentDownloadUrl(att.key) : (att.dataUrl || '');
 }
 
 async function uploadAttachmentFile(file) {
-  const { username, password } = ensureUserCredentials(false);
-  // Credentials as headers, not query params — this request's body IS the
-  // raw file, so there's no JSON body to put them in the way every other
-  // POST endpoint does (matches the Worker's handleAttachmentUpload()).
+  // Token as a header, not a query param — this request's body IS the raw
+  // file, so there's no JSON body to put it in the way every other POST
+  // endpoint does (matches the Worker's handleAttachmentUpload()).
   const url = LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/upload?name=' + encodeURIComponent(file.name) +
     '&type=' + encodeURIComponent(file.type || 'application/octet-stream');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'X-Aps-Username': username, 'X-Aps-Password': password },
-    body: file
-  });
+  let token = await getSessionToken();
+  let res = await fetch(url, { method: 'POST', headers: { 'X-Aps-Token': token }, body: file });
+  if (res.status === 401) {
+    setStoredSessionToken(null);
+    token = await reauthenticate(true);
+    res = await fetch(url, { method: 'POST', headers: { 'X-Aps-Token': token }, body: file });
+  }
   if (!res.ok) throw new Error('Upload failed: ' + res.status);
   return res.json(); // { key, name }
 }
 
 // Best-effort, fire-and-forget — a failed cleanup leaves an orphaned R2
 // object (harmless, just unused storage) rather than blocking the user's
-// actual intent (removing the attachment from the job/card).
+// actual intent (removing the attachment from the job/card). Uses
+// whatever token is already cached, same reasoning as attachmentDownloadUrl()
+// above — not worth minting a fresh one for a call this disposable.
 function deleteAttachmentFile(key) {
   if (!key) return;
-  const { username, password } = ensureUserCredentials(false);
+  const token = getStoredSessionToken();
   fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username, password: password, key: key })
+    body: JSON.stringify({ token: token, key: key })
   }).catch(function(err) { console.error('Failed to delete attachment file ' + key, err); });
 }
 
@@ -13344,10 +13377,11 @@ document.getElementById('headerSubtitle').addEventListener('paste', function(e) 
 // LIVEBLOCKS_AUTH_ENDPOINT (still named after the service it used to
 // front — renaming it would touch the several other call sites in this
 // file that also use it for backups/user-management, not worth the extra
-// diff on top of everything else changing here) with a per-user
-// username+password (see ensureUserCredentials()), gets back a short-
-// lived signed token (not a Liveblocks token anymore), and uses it to
-// open a WebSocket to the Worker's Durable Object.
+// diff on top of everything else changing here) once with a per-user
+// username+password (see reauthenticate()) to get back a short-lived
+// signed token (not a Liveblocks token anymore, and — unlike the
+// password — cached and reused across calls, see getSessionToken()), and
+// uses it to open a WebSocket to the Worker's Durable Object.
 const LIVEBLOCKS_AUTH_ENDPOINT = "https://aps-planner-staging.production-db3.workers.dev/";
 
 // How long a delete tombstone (see recordTombstone()/deleteFromSharedMap())
@@ -13369,7 +13403,16 @@ function mergeTombstones(a, b) {
 
 const DISPLAY_NAME_KEY = "gantt_display_name_v1";
 const USERNAME_KEY = "gantt_username_v1";
+// Retired: used to hold the raw password in localStorage indefinitely.
+// Kept only as a key name to scrub (see the boot-time cleanup below) —
+// nothing writes to it anymore.
 const USER_PASSWORD_KEY = "gantt_user_password_v1";
+// Holds the signed room token (see signRoomToken/verifyRoomToken in the
+// Worker) returned by /auth — this, not a password, is what every
+// authenticated request now sends. The raw password only ever exists
+// transiently in memory between a login prompt and the /auth call that
+// consumes it.
+const SESSION_TOKEN_KEY = "gantt_session_token_v1";
 
 function getStoredDisplayName() {
   return localStorage.getItem(DISPLAY_NAME_KEY) || "";
@@ -13377,9 +13420,22 @@ function getStoredDisplayName() {
 function getStoredUsername() {
   return localStorage.getItem(USERNAME_KEY) || "";
 }
-function getStoredUserPassword() {
-  return localStorage.getItem(USER_PASSWORD_KEY) || "";
+function getStoredSessionToken() {
+  return localStorage.getItem(SESSION_TOKEN_KEY) || "";
 }
+function setStoredSessionToken(token) {
+  if (token) localStorage.setItem(SESSION_TOKEN_KEY, token);
+  else localStorage.removeItem(SESSION_TOKEN_KEY);
+}
+
+// One-time cleanup for browsers that logged in before this file switched
+// to token-based auth: scrubs the raw password sitting in localStorage
+// from before, regardless of whether a fresh token has been minted yet.
+(function scrubLegacyStoredPassword() {
+  if (localStorage.getItem(USER_PASSWORD_KEY)) {
+    localStorage.removeItem(USER_PASSWORD_KEY);
+  }
+})();
 
 // Set from the Worker's confirmed identity after a successful login — see
 // fetchRoomToken() below. One of PERMISSION_TIERS below, or null before the
@@ -13433,13 +13489,52 @@ function hasMinTier(tier) {
   return mine >= need;
 }
 
+// Decodes a signed room token's JSON payload WITHOUT verifying its
+// signature — safe to do purely to read exp/role/etc. client-side, since
+// the Worker independently re-verifies the real signature on every actual
+// request. Only ever used to decide whether a cached token is worth
+// reusing and to re-apply its identity claims without a network round-
+// trip. Returns null for anything missing/malformed.
+function decodeSessionTokenPayload(token) {
+  if (typeof token !== 'string' || token.indexOf('.') === -1) return null;
+  try {
+    const bodyB64 = token.slice(0, token.lastIndexOf('.'));
+    const padded = bodyB64.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((bodyB64.length + 3) % 4);
+    return JSON.parse(atob(padded));
+  } catch (e) { return null; }
+}
+// 60s safety margin so a token that's about to expire isn't treated as
+// still usable, sent, and rejected by the Worker a moment later.
+function isSessionTokenUsable(token) {
+  const payload = decodeSessionTokenPayload(token);
+  return !!(payload && typeof payload.exp === 'number' && Date.now() < payload.exp - 60000);
+}
+
+// Applies the identity side effects a token's payload implies — shared by
+// both a brand-new /auth response and a reused cached token, so gating/
+// scoping/toggle state gets (re)asserted from whichever token is actually
+// in play, not just at the moments a network call happens to mint one.
+function applyIdentityFromTokenPayload(payload) {
+  if (!payload) return;
+  if (payload.displayName) localStorage.setItem(DISPLAY_NAME_KEY, payload.displayName);
+  currentUserRole = payload.role || null;
+  currentAssignedProjectId = payload.assignedProjectId || null;
+  roleConfirmed = true;
+  enforceProjectScopeForRole();
+  applyPermissionGating();
+  updateProjectToggle();
+}
+
 // Prompts once per missing field (native prompt, matching how project
-// rename/create already ask for input elsewhere in this app) and caches
-// the answers so people aren't asked again every visit. Re-prompts for
+// rename/create already ask for input elsewhere in this app), caching
+// only the username so people aren't asked for it again every visit — the
+// password is used here purely in-memory to mint a token and is never
+// written to localStorage (see SESSION_TOKEN_KEY above). Re-prompts for
 // both specifically if the worker rejects them (wrong/removed account).
 // The shared team password no longer exists as a fallback — every login
-// now needs a real individual account.
-function ensureUserCredentials(forceReprompt) {
+// now needs a real individual account. This is now the ONLY place a
+// password crosses the wire; everything else uses the token this mints.
+async function reauthenticate(forceReprompt) {
   let username = getStoredUsername();
   if (!username || forceReprompt) {
     username = (window.prompt(
@@ -13447,14 +13542,34 @@ function ensureUserCredentials(forceReprompt) {
     ) || "").trim();
     localStorage.setItem(USERNAME_KEY, username);
   }
-  let password = getStoredUserPassword();
-  if (!password || forceReprompt) {
-    password = window.prompt(
-      forceReprompt ? "Enter your password again:" : "Password:"
-    ) || "";
-    localStorage.setItem(USER_PASSWORD_KEY, password);
-  }
-  return { username, password };
+  const password = window.prompt(
+    forceReprompt ? "Enter your password again:" : "Password:"
+  ) || "";
+
+  // `name` is vestigial now that resolveIdentity() has no team-password
+  // fallback path left to use it for — harmless to keep sending, not worth
+  // a change just to remove an unused field.
+  const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username, password: password, name: username })
+  });
+  if (!res.ok) throw new Error('Room auth failed: ' + res.status);
+  const data = await res.json();
+  if (!data || !data.token) throw new Error('Room auth response missing token');
+  setStoredSessionToken(data.token);
+  return data.token;
+}
+
+// Returns a usable session token: the cached one if it's still valid
+// (checked locally via isSessionTokenUsable(), no network call), otherwise
+// mints a fresh one via reauthenticate() (which only prompts when there's
+// no cached username, or when forced). Every authenticated call in this
+// file goes through this instead of ever touching a stored password.
+async function getSessionToken() {
+  const cached = getStoredSessionToken();
+  if (isSessionTokenUsable(cached)) return cached;
+  return await reauthenticate(false);
 }
 
 // ---- Connection state ----
@@ -13602,14 +13717,21 @@ function flushPendingSync() {
   flushCardAutosave();
   flushPendingRoomPush();
   if (pendingWrites.size > 0) {
-    const creds = { username: getStoredUsername(), password: getStoredUserPassword() };
+    // NOTE: room-fallback-write has no matching route in the Worker
+    // (pre-existing, unrelated to the token-auth switch here) — this
+    // still 404s today. Left as-is; whether to wire up the route or drop
+    // this fallback entirely is a separate decision. Uses whatever token
+    // is already cached (synchronous, no minting — a pagehide handler
+    // can't usefully await a network round-trip anyway), matching this
+    // whole path's existing best-effort framing.
+    const token = getStoredSessionToken();
     pendingWrites.forEach(function(entry) {
       try {
         fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'room-fallback-write', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           keepalive: true,
-          body: JSON.stringify(Object.assign({ username: creds.username, password: creds.password }, entry.msg))
+          body: JSON.stringify(Object.assign({ token: token }, entry.msg))
         });
       } catch (e) { /* best-effort only */ }
     });
@@ -13655,50 +13777,22 @@ function clearPendingWrite(msgId) {
   }
 }
 
+// Runs on every WebSocket (re)connect attempt (see buildRoomWsUrl() below,
+// called fresh by ReconnectingWebSocket each try) — re-asserts project
+// scoping/gating from whatever token ends up in play every time, in case
+// an admin changed this account's tier/project assignment since the last
+// connection. Only hits the network (via getSessionToken()) when there's
+// no still-valid cached token; a valid one is reused and its claims
+// re-decoded locally, rather than re-authenticating from scratch on every
+// single reconnect the way this used to. That does mean a role/project
+// change now takes up to the token's TTL to be reflected here if the
+// connection stays up the whole time without a single reconnect — an
+// accepted tradeoff for a small trusted-team tool (see the token-
+// revocation reasoning near resolveCaller() in the Worker).
 async function fetchRoomToken() {
-  const { username, password } = ensureUserCredentials(false);
-  // `name` is vestigial now that resolveIdentity() has no team-password
-  // fallback path left to use it for — harmless to keep sending, not worth
-  // a change just to remove an unused field.
-  let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username, password: password, name: username })
-  });
-
-  if (res.status === 401) {
-    localStorage.removeItem(USERNAME_KEY);
-    localStorage.removeItem(USER_PASSWORD_KEY);
-    const retry = ensureUserCredentials(true);
-    res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: retry.username, password: retry.password, name: retry.username })
-    });
-  }
-
-  if (!res.ok) throw new Error('Room auth failed: ' + res.status);
-  const data = await res.json();
-  if (data && data.user) {
-    if (data.user.displayName) localStorage.setItem(DISPLAY_NAME_KEY, data.user.displayName);
-    currentUserRole = data.user.role || null;
-    currentAssignedProjectId = data.user.assignedProjectId || null;
-    roleConfirmed = true;
-    // fetchRoomToken() runs on every (re)connect (see buildRoomWsUrl() below,
-    // not just once at initial load) — re-assert project scoping and gating
-    // every time in case an admin changed this account's tier/project
-    // assignment since the last connection. updateProjectToggle() is called
-    // explicitly here too (not just via enforceProjectScopeForRole()'s own
-    // conditional renderAll()) — if the account's already sitting on its
-    // newly-assigned project, that condition never fires, and the toggle
-    // button would otherwise be stuck showing whatever pre-confirmation
-    // state it rendered in (hidden, per its own fail-closed default) forever.
-    enforceProjectScopeForRole();
-    applyPermissionGating();
-    updateProjectToggle();
-  }
-  if (!data || !data.token) throw new Error('Room auth response missing token');
-  return data.token;
+  const token = await getSessionToken();
+  applyIdentityFromTokenPayload(decodeSessionTokenPayload(token));
+  return token;
 }
 
 // Called fresh by ReconnectingWebSocket on every (re)connect attempt, not
