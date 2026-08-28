@@ -1142,36 +1142,33 @@
   .board-wrapper::-webkit-scrollbar { height: 8px; }
   #panel-board.active { display: flex; flex-direction: column; }
 
-  /* ===== BOARD WORKFLOW STRIP ===== a compact, always-visible summary
-     of the board's own column order sitting directly above it — not a
-     second board, doesn't repeat each column's full card list or color
-     scheme (that's the board itself, one row down), just a count and a
-     status dot per stage, connected by a thin chevron. Deliberately not
-     scroll-synced to .board-wrapper's own horizontal scroll (added
-     complexity for little payoff on a strip whose whole point is a
-     single glance) — wraps to a second line on a narrow window instead.
-     See renderBoardWorkflowStrip(). Design approved by Karl against a
-     mockup before this was built — see that conversation for why boxes/
-     a separate tab were rejected first. */
-  .board-workflow-strip {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
-    padding: 11px 22px; background: var(--card); border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .wf-stage {
-    display: flex; align-items: center; gap: 7px; padding: 5px 8px 5px 10px;
-    border-radius: 20px; cursor: pointer; transition: background 0.15s;
-  }
-  .wf-stage:hover { background: rgba(57,73,171,0.08); }
-  body.dark-mode .wf-stage:hover { background: rgba(57,73,171,0.22); }
-  .wf-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--border); }
-  .wf-dot.finished { background: var(--success); }
-  .wf-dot.stalled { background: var(--warning); }
-  .wf-label { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
-  .wf-count { background: var(--primary-light); color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .wf-stalled-flag { display: flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: #a8641c; background: rgba(240,173,78,0.18); padding: 2px 7px; border-radius: 10px; }
-  body.dark-mode .wf-stalled-flag { color: #f0ad4e; background: rgba(240,173,78,0.16); }
-  .wf-connector { color: var(--text-light); opacity: 0.45; flex-shrink: 0; display: flex; margin: 0 1px; }
+  /* ===== BOARD WORKFLOW STRIP ===== a "stacked header" band directly
+     above the board, position-synced to .board-wrapper's own horizontal
+     scroll (transform:translateX(-scrollLeft), the same mechanism the
+     Gantt's own date header already uses — see setHeaderScroll() — not
+     a second independent scrollbar that could drift out of alignment).
+     Segments are measured against the real rendered column positions
+     (see renderBoardWorkflowStrip()), so a workflow item spanning two+
+     adjacent boards genuinely stretches across both. Bracket shape and
+     arrow direction: Karl's explicit design direction, iterated against
+     a published mockup before this was built. */
+  .board-workflow-strip { position: relative; overflow: hidden; height: 52px; border-bottom: 1px solid var(--border); background: var(--card); flex-shrink: 0; }
+  .wf-track { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
+  .wf-seg { position: absolute; top: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
+  .wf-seg-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; }
+  .wf-seg.unassigned .wf-seg-label { color: var(--text-light); font-weight: 600; }
+  .wf-count { background: rgba(0,0,0,0.06); color: var(--text-light); font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  body.dark-mode .wf-count { background: rgba(255,255,255,0.08); }
+  .wf-stalled { color: var(--warning); font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 2px; }
+  /* the bracket — an explicit drawn path (angled ticks flaring outward,
+     not a squared-off corner), not a border/pseudo-element trick, so
+     the angle reads crisply at any segment width. Drawn over every
+     board now, single-column or not — an unassigned one just gets it
+     in a neutral currentColor/text-light instead of an item's color. */
+  .wf-bracket-wrap { width: calc(100% - 16px); height: 10px; }
+  .wf-bracket-wrap svg { display: block; }
+  /* one per real gap between adjacent groups, above the bracket line */
+  .wf-flow-arrow { position: absolute; top: 4px; transform: translateX(-50%); color: var(--text-light); opacity: 0.7; display: flex; pointer-events: none; }
   .board-wrapper::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
   .board-column { width: 245px; min-width: 245px; background: #eceef4; border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; box-shadow: 0 6px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.04); transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
   .board-column.dragging-col { opacity: 0.35; transform: scale(0.98); cursor: grabbing; }
@@ -2413,6 +2410,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             <span class="mini-toggle" id="darkModeToggle"></span>
           </div>
           <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openThemeModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Theme Color</div>
+          <div class="settings-dropdown-item" data-min-tier="projectAdmin" onclick="closeSettingsMenu(); openWorkflowItemsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="9" width="6" height="6" rx="1.5" fill="#3949ab"/><rect x="9.5" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.75"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.5"/></svg> Workflow Items</div>
           <div class="settings-dropdown-divider"></div>
           <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
           <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
@@ -2705,7 +2703,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
     <!-- BOARD TAB -->
     <div class="tab-panel" id="panel-board">
-      <div class="board-workflow-strip" id="boardWorkflowStrip"></div>
+      <div class="board-workflow-strip" id="boardWorkflowStrip"><div class="wf-track" id="wfTrack"></div></div>
       <div class="board-wrapper" id="boardWrapper"></div>
     </div>
   </div>
@@ -3004,6 +3002,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   </div>
 </div>
 
+<!-- WORKFLOW ITEMS MODAL -->
+<div class="modal-overlay" id="workflowItemsModal">
+  <div class="modal-box manage-fields-box">
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="9" width="6" height="6" rx="1.5" fill="#3949ab"/><rect x="9.5" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.75"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.5"/></svg> Workflow Items</h4>
+    <p>Named groups boards can be assigned to, independent of any board's own name — see the "Workflow Item" picker in each board's own ⋮ menu.</p>
+    <div id="workflowItemsBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeWorkflowItemsModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOOLTIP -->
 <div class="tooltip" id="tooltip"></div>
 <!-- LEGEND -->
@@ -3032,7 +3042,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.12';
+const APP_VERSION = '2026-08-28.13';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -4445,6 +4455,16 @@ const DEFAULT_BOARD_COLUMNS = [
   { id: 'invoiced', label: 'Invoiced' }
 ];
 let BOARD_COLUMNS = [];
+// Named groups a board can be assigned to (col.workflowItemId, see the
+// ⋮ menu's "Workflow Item" picker) — deliberately independent of any
+// column's own label, so the same item can span several adjacently-
+// ordered boards. See renderBoardWorkflowStrip() for where this
+// actually renders. Managed from the ⚙ settings menu's "Workflow
+// Items" entry (openWorkflowItemsModal()) rather than per-column like
+// most other board settings — but still stored per-project
+// (p.workflowItems, same as BOARD_COLUMNS), since two projects'
+// boards can reasonably want a different breakdown.
+let WORKFLOW_ITEMS = [];
 
 // A column counts as a "finished" trigger — cards sitting in it are done,
 // excluded from Home's overdue/due-soon/active-jobs widgets and the
@@ -5013,6 +5033,7 @@ function loadActiveProjectData() {
   }
   jobs = ensureJobAndTaskIds(p.jobs || []);
   BOARD_COLUMNS = p.boardColumns || JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS));
+  WORKFLOW_ITEMS = p.workflowItems || [];
   boardCards = ensureCardIds(p.boardCards || []);
   calendarEvents = ensureCalendarEventIds(p.calendarEvents || []);
   fieldOptions = p.fieldOptions || {};
@@ -5050,6 +5071,7 @@ function saveActiveProject() {
 
   p.jobs = jobs;
   p.boardColumns = BOARD_COLUMNS;
+  p.workflowItems = WORKFLOW_ITEMS;
   p.boardCards = boardCards;
   p.calendarEvents = calendarEvents;
   p.fieldOptions = fieldOptions;
@@ -5289,6 +5311,7 @@ function isJobFinished(job) {
 // pushBoardColumnsToShared()/pushFieldOptionsToShared() for why routine
 // saves must never touch these two fields.
 function saveBoardColumns() { saveActiveProject(); pushBoardColumnsToShared(activeProjectId); }
+function saveWorkflowItems() { saveActiveProject(); pushWorkflowItemsToShared(activeProjectId); }
 function saveBoardCards() { ensureCardIds(boardCards); saveActiveProject(); queueSharedSync(); }
 function saveCalendarEvents() { ensureCalendarEventIds(calendarEvents); saveActiveProject(); queueSharedSync(); }
 function saveFieldOptions() { saveActiveProject(); pushFieldOptionsToShared(activeProjectId); }
@@ -11370,6 +11393,15 @@ function renderBoard() {
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Finished Trigger</span>' +
               '<span class="board-col-gantt-switch' + (isFinishedColumn(col) ? ' on' : '') + '"><span class="knob"></span></span>' +
             '</div>' +
+            '<div class="board-col-duration-row" title="Groups this board under a named item in the strip above Board, independent of this board\'s own name — see ⚙ Settings → Workflow Items to add more.">' +
+              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="9" width="6" height="6" rx="1.5" fill="#3949ab"/><rect x="9.5" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.75"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.5"/></svg> Workflow Item</span>' +
+              '<select class="board-col-duration-input" style="width:auto;flex:1;" onclick="event.stopPropagation()" onchange="setColumnWorkflowItem(\'' + col.id + '\', this.value, event)">' +
+                '<option value="">None</option>' +
+                WORKFLOW_ITEMS.map(function(item) {
+                  return '<option value="' + item.id + '"' + (item.id === col.workflowItemId ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+                }).join('') +
+              '</select>' +
+            '</div>' +
             '<div class="board-col-gantt-toggle" onclick="toggleColumnAutoAssignChecklist(\'' + col.id + '\', event)" title="The moment a card lands here, this board\'s Default Checklist is created on it (not just left as a template) and assigned to the picked person below, so it shows up as a real action item in their My Checklist right away.">' +
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#f0ad4e"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="6" r="4" fill="#3949ab" stroke="#fff" stroke-width="1"/></svg> Send Checklist Action Item</span>' +
               '<span class="board-col-gantt-switch' + (col.autoAssignChecklist ? ' on' : '') + '"><span class="knob"></span></span>' +
@@ -12064,6 +12096,23 @@ function toggleColumnFinishedTrigger(colId, event) {
   closeAllColSettings();
 }
 
+// Not itself a toggle, same reasoning as setColumnChecklistAssignee()
+// below — fires from the <select>'s own onchange, so no re-render/close
+// here (renderBoardWorkflowStrip() below picks up the change on its own
+// next natural render, e.g. the next card move/edit; a full renderBoard()
+// here would just close the dropdown mid-pick for no benefit).
+function setColumnWorkflowItem(colId, itemId, event) {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find(c => c.id === colId);
+  if (!col) return;
+  col.workflowItemId = itemId || null;
+  saveBoardColumns();
+  const item = WORKFLOW_ITEMS.find(function(i) { return i.id === itemId; });
+  logActivity('set board "' + col.label + '" workflow item to ' + (item ? item.label : 'None'));
+  renderBoardWorkflowStrip();
+  showToast('Workflow item updated', 'success');
+}
+
 // See runColumnEntryActions() for what this actually does when a card
 // lands here — materializes the column's Default Checklist onto the
 // card immediately (rather than lazily, the first time someone happens
@@ -12557,6 +12606,56 @@ function removeColumnChecklistDefaultItem(itemId) {
   col.defaultChecklist = (col.defaultChecklist || []).filter(function(i) { return i.id !== itemId; });
   saveBoardColumns();
   renderManageColumnChecklistBody();
+}
+
+// ===== WORKFLOW ITEMS (global — see WORKFLOW_ITEMS above) =====
+function openWorkflowItemsModal() {
+  renderWorkflowItemsBody();
+  openModal('workflowItemsModal');
+}
+function closeWorkflowItemsModal() {
+  closeModal('workflowItemsModal');
+}
+
+function renderWorkflowItemsBody() {
+  const container = document.getElementById('workflowItemsBody');
+  const chips = WORKFLOW_ITEMS.map(function(item) {
+    return '<span class="manage-field-chip"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + item.color + ';margin-right:5px;"></span>' + escapeHtml(item.label) +
+      '<button onclick="removeWorkflowItem(\'' + item.id + '\')">×</button></span>';
+  }).join('');
+  container.innerHTML = '<div class="manage-field-group">' +
+    '<div class="manage-field-chips">' + (chips || '<span style="font-size:11px;color:#999;">No workflow items yet</span>') + '</div>' +
+    '<div class="manage-field-add-row">' +
+    '<input type="text" id="wfi_new_item" placeholder="Add workflow item..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addWorkflowItem();}">' +
+    '<button class="btn btn-secondary" onclick="addWorkflowItem()">Add</button>' +
+    '</div></div>';
+}
+
+function addWorkflowItem() {
+  const input = document.getElementById('wfi_new_item');
+  const text = input.value.trim();
+  if (!text) return;
+  // Cycles through the same swatch palette job/board colors already
+  // draw from, rather than a separate color picker — one less decision
+  // for something that'll usually be picked a handful of times total.
+  const color = COLOR_PRESETS[WORKFLOW_ITEMS.length % COLOR_PRESETS.length];
+  WORKFLOW_ITEMS.push({ id: genId(), label: text, color: color });
+  input.value = '';
+  saveWorkflowItems();
+  renderWorkflowItemsBody();
+  renderBoard();
+}
+
+function removeWorkflowItem(itemId) {
+  WORKFLOW_ITEMS = WORKFLOW_ITEMS.filter(function(i) { return i.id !== itemId; });
+  // Boards that were grouped under the deleted item fall back to
+  // showing their own name again — same as any board that was never
+  // assigned one.
+  BOARD_COLUMNS.forEach(function(col) { if (col.workflowItemId === itemId) col.workflowItemId = null; });
+  saveWorkflowItems();
+  saveBoardColumns();
+  renderWorkflowItemsBody();
+  renderBoard();
 }
 
 function addFieldOption(key) {
@@ -13475,54 +13574,122 @@ function updateHomeBadge(count) {
   badge.textContent = typeof count === 'number' ? count : buildMyChecklistRows().length;
 }
 
-// Per-stage data backing the Board Workflow Strip (renderBoardWorkflowStrip()
-// below) — reuses buildHomeStageSummary()'s counts (identical numbers to
-// Home's own Board Summary bar chart) and buildHomeStalledRows() rather
-// than recomputing either.
+// Groups BOARD_COLUMNS into contiguous runs sharing the same
+// workflowItemId — an unassigned column never merges with an adjacent
+// unassigned one (each keeps its own board name; only columns actually
+// assigned to the SAME item merge into one span, per Karl's spec: "a
+// workflow item with more than one board would stretch above both
+// boards if they are next to each other"). Reuses
+// buildHomeStageSummary()'s counts and buildHomeStalledRows() rather
+// than recomputing either. See renderBoardWorkflowStrip() for the
+// position-measuring/rendering half.
 function buildWorkflowStageData() {
-  const stageCounts = buildHomeStageSummary(); // [{id, label, count}], BOARD_COLUMNS order
+  const perColumnCounts = {};
+  buildHomeStageSummary().forEach(function(s) { perColumnCounts[s.id] = s.count; });
   const stalledCountByCol = {};
   buildHomeStalledRows().forEach(function(row) {
     stalledCountByCol[row.card.column] = (stalledCountByCol[row.card.column] || 0) + 1;
   });
-  return stageCounts.map(function(stage) {
-    const col = BOARD_COLUMNS.find(function(c) { return c.id === stage.id; });
+
+  const runs = [];
+  BOARD_COLUMNS.forEach(function(col) {
+    const key = col.workflowItemId || ('__col__' + col.id);
+    const prevRun = runs[runs.length - 1];
+    if (prevRun && prevRun.key === key) prevRun.colIds.push(col.id);
+    else runs.push({ key: key, workflowItemId: col.workflowItemId || null, colIds: [col.id] });
+  });
+
+  return runs.map(function(run) {
+    const item = run.workflowItemId ? WORKFLOW_ITEMS.find(function(i) { return i.id === run.workflowItemId; }) : null;
+    const firstCol = BOARD_COLUMNS.find(function(c) { return c.id === run.colIds[0]; });
     return {
-      id: stage.id,
-      label: stage.label,
-      count: stage.count,
-      finished: isFinishedColumn(col),
-      scheduleDisconnected: !!(col && col.scheduleDisconnected),
-      stalledCount: stalledCountByCol[stage.id] || 0
+      firstColId: run.colIds[0],
+      lastColId: run.colIds[run.colIds.length - 1],
+      label: item ? item.label : (firstCol ? firstCol.label : ''),
+      color: item ? item.color : null,
+      isItem: !!item,
+      count: run.colIds.reduce(function(n, id) { return n + (perColumnCounts[id] || 0); }, 0),
+      stalledCount: run.colIds.reduce(function(n, id) { return n + (stalledCountByCol[id] || 0); }, 0)
     };
   });
 }
 
-// The slim pipeline strip above the board itself (see .board-workflow-strip
-// CSS) — one segment per BOARD_COLUMNS entry, connected by a thin chevron.
-// Deliberately not a box/card per stage and not its own tab — see that
-// CSS rule's comment for why. Called from renderBoard() so it always
-// reflects the same data the board it sits above is currently showing.
+// The stacked-header band above the board itself (see
+// .board-workflow-strip CSS for the full design rationale). Measures
+// each group's real left/right edge against the actual rendered
+// .board-column elements — not computed from fixed widths, so it stays
+// correct whether desktop (245px columns) or mobile (calc(100vw-48px))
+// — then draws an angled bracket per group and a flow arrow in each
+// real gap between adjacent groups. Called from renderBoard() so it
+// always reflects the same data/column positions currently on screen.
 function renderBoardWorkflowStrip() {
-  const strip = document.getElementById('boardWorkflowStrip');
-  if (!strip) return;
-  const stages = buildWorkflowStageData();
-  const chevron = '<span class="wf-connector"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M9 5l6 7-6 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
-  strip.innerHTML = stages.map(function(stage, i) {
-    const dotClass = stage.finished ? ' finished' : (stage.stalledCount ? ' stalled' : '');
-    const stalledFlag = stage.stalledCount
-      ? '<span class="wf-stalled-flag"><svg viewBox="0 0 24 24" width="10" height="10" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 9v4l2.5 1.7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>' + stage.stalledCount + '</span>'
-      : '';
-    const title = stage.count + ' job' + (stage.count === 1 ? '' : 's') + ' in ' + stage.label + (stage.stalledCount ? ', ' + stage.stalledCount + ' stalled' : '');
-    const seg = '<div class="wf-stage" onclick="scrollToBoardColumn(\'' + stage.id + '\')" title="' + escapeHtml(title) + '">' +
-      '<span class="wf-dot' + dotClass + '"></span>' +
-      '<span class="wf-label">' + escapeHtml(stage.label) + '</span>' +
-      '<span class="wf-count">' + stage.count + '</span>' +
-      stalledFlag +
+  const wrapper = document.getElementById('boardWrapper');
+  const track = document.getElementById('wfTrack');
+  if (!wrapper || !track) return;
+  const wrapperRect = wrapper.getBoundingClientRect();
+
+  const measured = buildWorkflowStageData().map(function(g) {
+    const firstEl = wrapper.querySelector('.board-column[data-column="' + g.firstColId + '"]');
+    const lastEl = wrapper.querySelector('.board-column[data-column="' + g.lastColId + '"]');
+    if (!firstEl || !lastEl) return null;
+    const left = firstEl.getBoundingClientRect().left - wrapperRect.left + wrapper.scrollLeft;
+    const right = lastEl.getBoundingClientRect().right - wrapperRect.left + wrapper.scrollLeft;
+    return Object.assign({}, g, { left: left, right: right });
+  }).filter(Boolean);
+
+  const segmentsHtml = measured.map(function(g) {
+    const width = g.right - g.left;
+    const isUnassigned = !g.isItem;
+    const style = 'left:' + g.left + 'px; width:' + width + 'px;';
+    const stalledHtml = g.stalledCount ? '<span class="wf-stalled">⚠ ' + g.stalledCount + '</span>' : '';
+    const labelRow = '<div class="wf-seg-label">' + escapeHtml(g.label) +
+      (isUnassigned ? '' : '<span class="wf-count">' + g.count + '</span>') +
+      stalledHtml +
     '</div>';
-    return seg + (i < stages.length - 1 ? chevron : '');
+    // Angled ticks (a trapezoid: narrower at the top bar, flaring
+    // outward toward the boards) rather than a squared-off corner, per
+    // Karl's direction — drawn over every group, single-column or not.
+    const bw = Math.max(width - 16, 20);
+    const inset = 2.5, flare = 7;
+    const path = 'M' + inset + ',10 L' + (inset + flare) + ',2.5 L' + (bw - inset - flare) + ',2.5 L' + (bw - inset) + ',10';
+    const bracketStyle = g.color ? ('color:' + g.color + ';') : 'color:var(--text-light);opacity:0.6;';
+    const bracket = '<div class="wf-bracket-wrap" style="' + bracketStyle + '"><svg width="' + bw + '" height="10" viewBox="0 0 ' + bw + ' 10">' +
+      '<path d="' + path + '" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg></div>';
+    const title = g.count + ' job' + (g.count === 1 ? '' : 's') + ' in ' + g.label + (g.stalledCount ? ', ' + g.stalledCount + ' stalled' : '');
+    return '<div class="wf-seg' + (isUnassigned ? ' unassigned' : '') + '" style="' + style + '" onclick="scrollToBoardColumn(\'' + g.firstColId + '\')" title="' + escapeHtml(title) + '">' + labelRow + bracket + '</div>';
   }).join('');
+
+  // One arrow per real gap between adjacent groups — flow direction
+  // between workflow items, not just within one.
+  const arrowsHtml = measured.slice(0, -1).map(function(g, i) {
+    const next = measured[i + 1];
+    const midX = (g.right + next.left) / 2;
+    return '<div class="wf-flow-arrow" style="left:' + midX + 'px;">' +
+      '<svg width="32" height="32" viewBox="0 0 24 24"><path d="M4 12h14m0 0l-5.5-5.5m5.5 5.5l-5.5 5.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+    '</div>';
+  }).join('');
+
+  track.innerHTML = segmentsHtml + arrowsHtml;
+
+  // Keeps the band locked to the board's own horizontal scroll — same
+  // mechanism the Gantt's date header already uses (setHeaderScroll()),
+  // not a second independent scrollbar that could drift out of
+  // alignment. Property assignment, not addEventListener, so re-running
+  // this on every renderBoard() doesn't stack up duplicate listeners
+  // the way repeated addEventListener calls would.
+  wrapper.onscroll = function() {
+    track.style.transform = 'translateX(-' + wrapper.scrollLeft + 'px)';
+  };
 }
+// Recomputes on resize (e.g. rotating a tablet, resizing the window)
+// since the band's segment positions are measured in real pixels, not
+// derived from a fixed formula — only while Board is actually the
+// visible tab, to avoid needless work on every other view.
+window.addEventListener('resize', function() {
+  const panel = document.getElementById('panel-board');
+  if (panel && panel.classList.contains('active')) renderBoardWorkflowStrip();
+});
 
 function scrollToBoardColumn(colId) {
   const el = document.querySelector('.board-column[data-column="' + colId + '"]');
@@ -14550,6 +14717,7 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
     const remoteCards = entry.boardCards || {};
     const remoteCalEvents = entry.calendarEvents || {};
     const remoteColumns = entry.boardColumns;
+    const remoteWorkflowItems = entry.workflowItems;
     const remoteFieldOpts = entry.fieldOptions;
     const remoteHeader = entry.header;
     const remoteDeletedIds = entry.deletedIds;
@@ -14571,6 +14739,7 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
           name: remoteName || 'Untitled Project',
           jobs: [],
           boardColumns: JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS)),
+          workflowItems: [],
           boardCards: [],
           calendarEvents: [],
           deletedIds: {},
@@ -14616,6 +14785,12 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
       // ── columns ──
       if (Array.isArray(remoteColumns) && remoteColumns.length) local.boardColumns = remoteColumns;
 
+      // ── workflow items ── unlike boardColumns above, an empty array is a
+      // legitimate real state (no items defined yet) rather than "hasn't
+      // loaded" — the length check boardColumns uses would otherwise make
+      // deleting the very last item unsyncable.
+      if (Array.isArray(remoteWorkflowItems)) local.workflowItems = remoteWorkflowItems;
+
       // ── cards ──
       if (!projectSyncPending) {
         const c = Object.values(remoteCards).filter(function(card) { return !local.deletedIds[String(card.id)]; });
@@ -14651,7 +14826,7 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
       // baseFieldRevision next time it changes boardColumns/fieldOptions/
       // header, so the server can tell a stale write from a current one.
       // See aps-room-state.js's handleSetWholeField().
-      local.fieldRevisions = remoteFieldRevisions || local.fieldRevisions || { boardColumns: 0, fieldOptions: 0, header: 0 };
+      local.fieldRevisions = remoteFieldRevisions || local.fieldRevisions || { boardColumns: 0, fieldOptions: 0, header: 0, workflowItems: 0 };
     }
 
     resolveLocalProject();
@@ -14849,7 +15024,7 @@ function recordTombstone(projectId, id) {
 function pushFieldToShared(projectId, fieldKey, value) {
   const proj = projects[projectId];
   if (!proj) return;
-  const typeByField = { boardColumns: 'setBoardColumns', fieldOptions: 'setFieldOptions', header: 'setHeader' };
+  const typeByField = { boardColumns: 'setBoardColumns', fieldOptions: 'setFieldOptions', header: 'setHeader', workflowItems: 'setWorkflowItems' };
   const msgType = typeByField[fieldKey];
   if (!msgType) return;
   const baseFieldRevision = (proj.fieldRevisions && proj.fieldRevisions[fieldKey]) || 0;
@@ -14858,7 +15033,7 @@ function pushFieldToShared(projectId, fieldKey, value) {
   // the ack lands still sends a plausible baseFieldRevision rather than
   // the same now-stale one twice — if this guess is wrong the server's
   // rejection (and the snapshot that immediately follows it) corrects it.
-  if (!proj.fieldRevisions) proj.fieldRevisions = { boardColumns: 0, fieldOptions: 0, header: 0 };
+  if (!proj.fieldRevisions) proj.fieldRevisions = { boardColumns: 0, fieldOptions: 0, header: 0, workflowItems: 0 };
   proj.fieldRevisions[fieldKey] = baseFieldRevision + 1;
 }
 function pushBoardColumnsToShared(projectId) {
@@ -14868,6 +15043,10 @@ function pushBoardColumnsToShared(projectId) {
 function pushFieldOptionsToShared(projectId) {
   const proj = projects[projectId];
   if (proj) pushFieldToShared(projectId, 'fieldOptions', proj.fieldOptions);
+}
+function pushWorkflowItemsToShared(projectId) {
+  const proj = projects[projectId];
+  if (proj) pushFieldToShared(projectId, 'workflowItems', proj.workflowItems);
 }
 function pushHeaderToShared(projectId) {
   const proj = projects[projectId];
