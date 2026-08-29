@@ -190,40 +190,58 @@
      identification via native tooltip, same as any icon-rail sidebar (VS
      Code's activity bar, Slack's app rail, etc). */
   .rail-tab-row { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border); background: #fafafa; }
+  /* Pressed-button treatment (Karl's own pick, approved via mockup) — off
+     looks subtly raised (soft outer shadow + a faint inset highlight
+     along the top edge, like an unpressed key), on looks physically
+     pushed in (inset shadow, filled color, nudged down half a pixel).
+     Reads as a real toggle you press, not just a recolored icon. */
   .rail-tab {
     display: flex; align-items: center; justify-content: center; overflow: hidden;
     flex: 0 0 34px; height: 34px; padding: 0; border: none; border-radius: 8px;
-    background: transparent; color: var(--text-light); cursor: pointer;
-    white-space: nowrap; transition: background 0.2s ease, color 0.2s ease;
+    background: var(--card); color: var(--text-light); cursor: pointer;
+    white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.12), 0 1px 1px rgba(255,255,255,0.6) inset;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   }
+  body.dark-mode .rail-tab { box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
   .rail-tab svg { flex-shrink: 0; }
+  /* Hover deepens the raised shadow a little (an "about to press" cue)
+     rather than swapping in the active color — that color is reserved
+     for the real pressed/on state, so hover doesn't get confused with it. */
+  .rail-tab:hover { box-shadow: 0 2px 4px rgba(0,0,0,0.16), 0 1px 1px rgba(255,255,255,0.6) inset; }
+  body.dark-mode .rail-tab:hover { box-shadow: 0 2px 4px rgba(0,0,0,0.38); }
   .rail-tab:active { transform: translateY(1px); }
   .rail-tab-label, .rail-tab .badge { display: none; }
-  .rail-tab.active, .rail-tab:hover,
-  /* Scoped to .rail-tab-row specifically (the desktop trigger's own
-     container) rather than the bare .settings-menu-wrap class, which the
-     mobile view-switcher's trigger now ALSO carries (see its own markup
-     comment) — a plain .settings-menu-wrap:hover would match that one
-     too, and touch taps on many mobile browsers apply :hover on tap
-     without ever clearing it afterward (no mouse to move away and
-     un-hover), which is exactly what looked like the settings icon
-     staying highlighted after closing the menu. */
+  .rail-tab.active {
+    background: var(--primary-light); color: white;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+    transform: translateY(0.5px);
+  }
+  /* Settings keeps its own separate, unchanged hover treatment (it opens
+     a dropdown, not a persistent on/off view, so the pressed-button
+     language above doesn't apply to it) — scoped to .rail-tab-row
+     specifically (the desktop trigger's own container) rather than the
+     bare .settings-menu-wrap class, which the mobile view-switcher's
+     trigger now ALSO carries (see its own markup comment): a plain
+     .settings-menu-wrap:hover would match that one too, and touch taps
+     on many mobile browsers apply :hover on tap without ever clearing it
+     afterward (no mouse to move away and un-hover), which is exactly
+     what looked like the settings icon staying highlighted after closing
+     the menu. */
   .rail-tab-row .settings-menu-wrap:hover {
     background: var(--primary-light); color: white;
   }
   .rail-tab-row .settings-menu-wrap:hover .settings-dots-btn { color: white; }
-  /* Only Gantt/the settings dots happen to use the exact --primary-light
-     indigo as their own hardcoded fill — those two specifically need
-     forcing to white on active/hover or they'd vanish against the active
-     background of that same color. A blanket filter on every tab would
-     "fix" that but wreck the two-tone ones instead (Checklist's
-     green+white check, Calendar's white+red cells already contrast fine
-     on their own) — inverting the whole icon turns a two-color glyph
-     into an undifferentiated white blob, since both of its colors end up
-     mapped to the same white. (Home used to be in this list too — no
-     tab represents it anymore, see #tab-home's own removal note further
-     down.) */
-  #tab-gantt.active svg, #tab-gantt:hover svg,
+  /* Gantt happens to use the exact --primary-light indigo as its own
+     hardcoded fill — needs forcing to white when its own background
+     becomes that same color (only true once pressed/active now — hover
+     no longer swaps to a colored background, so it's dropped from this
+     list) or the icon would vanish against it. A blanket filter on every
+     tab would "fix" that but wreck the two-tone ones instead
+     (Checklist's green+white check, Calendar's white+red cells already
+     contrast fine on their own) — inverting the whole icon turns a
+     two-color glyph into an undifferentiated white blob, since both of
+     its colors end up mapped to the same white. */
+  #tab-gantt.active svg,
   .rail-tab-row .settings-menu-wrap:hover svg { filter: brightness(0) invert(1); }
   .manager-sidebar-header .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; margin-left: 2px; }
 
@@ -2062,21 +2080,28 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     }
     /* Dimmed at rest, full strength when active — with the caption gone,
        a thin underline alone read as too subtle a selection cue next to 5
-       other equally-bold icons. A colored pill behind the icon instead —
-       same visual language as the desktop rail-tab's own
-       .rail-tab.active background — reads unambiguously as "this one's
-       on" rather than a slight color shift. Sized/centered via ::before
-       (fixed 34px square) rather than just backgrounding the button
-       itself, since the button's own flex:1 click target spans the
-       whole column width and a background that wide would look like a
-       solid stripe, not a toggle. */
+       other equally-bold icons. Same pressed-button treatment as the
+       desktop rail-tab now (Karl's own pick, approved via mockup): off
+       looks subtly raised (soft shadow + a faint inset top highlight),
+       on looks physically pushed in (inset shadow, filled color, nudged
+       down half a pixel). Sized/centered via ::before (fixed 34px
+       square) rather than just backgrounding the button itself, since
+       the button's own flex:1 click target spans the whole column width
+       and a background that wide would look like a solid stripe, not a
+       button. */
     .mobile-view-btn svg { flex-shrink: 0; opacity: 0.5; position: relative; z-index: 1; }
     .mobile-view-btn::before {
       content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 34px; height: 34px; border-radius: 10px; background: var(--primary-light);
-      opacity: 0; transition: opacity 0.15s ease;
+      width: 34px; height: 34px; border-radius: 9px; background: var(--card);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12), 0 1px 1px rgba(255,255,255,0.6) inset;
+      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
     }
-    .mobile-view-btn.active::before { opacity: 1; }
+    body.dark-mode .mobile-view-btn::before { box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+    .mobile-view-btn.active::before {
+      background: var(--primary-light);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+      transform: translate(-50%, calc(-50% + 0.5px));
+    }
     .mobile-view-btn.active svg { opacity: 1; }
     /* Jobs' briefcase and Gantt's bars both happen to use the exact
        --primary-light indigo as their own hardcoded fill (same reason
@@ -3310,7 +3335,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-29.3';
+const APP_VERSION = '2026-08-29.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
