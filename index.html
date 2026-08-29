@@ -230,18 +230,42 @@
   .tab-panel { display: none; height: 100%; overflow: hidden; }
     .tab-panel.active { display: block; }
 
-  /* Morph transition for homeWidgetGoTo() — the browser's View
-     Transitions API screenshots the page before/after switchTab() runs
-     inside document.startViewTransition() and cross-fades between them
-     by default; these override that default cross-fade with a subtle
-     zoom so it reads as one view morphing into the next rather than a
-     plain fade. Root-scoped (there's only ever one tab visible at a
-     time), so this fires for the whole panel swap, not a per-element
-     animation. */
-  ::view-transition-old(root) { animation: homeMorphOut 0.32s cubic-bezier(.4,0,.2,1) both; }
-  ::view-transition-new(root) { animation: homeMorphIn 0.32s cubic-bezier(.4,0,.2,1) both; }
-  @keyframes homeMorphOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.04); } }
-  @keyframes homeMorphIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+  /* Morph transition for homeWidgetGoTo()/switchTabMorphed() — the
+     browser's View Transitions API screenshots the page before/after
+     switchTab() runs inside document.startViewTransition() and
+     cross-fades between them by default. Root here only ever covers
+     whatever's LEFT once the sidebar and the hero widget/panel (both
+     below) are pulled into their own named layers — Home's greeting
+     banner/stats/other widgets on the way out, essentially nothing on
+     the way in (the destination tab's entire visible content IS the
+     hero). A plain, fast fade — no competing zoom — so the only motion
+     the eye actually tracks is the hero's own grow/shrink; a second,
+     independently-timed scale on top of that read as two different
+     things happening at once instead of one smooth motion. */
+  ::view-transition-old(root) { animation: aps-root-fade-out 0.2s ease both; }
+  ::view-transition-new(root) { animation: aps-root-fade-in 0.28s ease 0.06s both; }
+  @keyframes aps-root-fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes aps-root-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  /* Kept in its own named layer so it's pulled OUT of the root capture
+     — without this it would still cross-fade/scale right along with
+     root the way it used to (Karl's own report: "the jobs sidebar
+     changes... I don't want it to look like it's part of the
+     transition"), even though nothing about the sidebar itself actually
+     changes across a Home <-> tab switch. A REAL animation that just
+     holds opacity:1 throughout, not animation:none — a pseudo-element
+     with no animation at all never fires a defined end, and Chrome
+     leaves that one snapshot's old/new pair stuck on screen forever
+     instead of tearing it down when the rest of the transition finishes
+     (confirmed: the real DOM/.active state updates correctly the whole
+     time, only the rendered pixels got stuck — a pure paint leftover,
+     not a logic bug). Same duration as the hero group so nothing here
+     finishes earlier or later than everything else. */
+  .manager-sidebar { view-transition-name: aps-sidebar; }
+  ::view-transition-old(aps-sidebar), ::view-transition-new(aps-sidebar) {
+    animation: aps-sidebar-hold 0.38s linear both;
+  }
+  @keyframes aps-sidebar-hold { from, to { opacity: 1; } }
 
   /* Shared-element half of the same transition — see switchTabMorphed()
      in the script below, which is what actually assigns/clears this name
@@ -251,8 +275,7 @@
      An element carrying this name is pulled OUT of the root capture
      above into its own layer, so it grows/shrinks between the widget's
      on-screen rect and the full panel instead of just cross-fading in
-     place with everything else — the rest of the page still does the
-     subtle root zoom around it. Only one duration/easing needed (not
+     place with everything else. Only one duration/easing needed (not
      separate forward/reverse ones) since the browser interpolates
      between whatever the "old" and "new" rects actually are each time,
      symmetric either direction. */
@@ -260,6 +283,22 @@
     animation-duration: 0.38s;
     animation-timing-function: cubic-bezier(.4,0,.2,1);
   }
+  /* The browser's own default here is a straight 50/50 cross-fade
+     between the old (small, widget-shaped) and new (full panel)
+     snapshots — since those two images look nothing alike, a 50/50 blend
+     spends its whole middle stretch visibly double-exposed, which is
+     what actually read as "one page fading away while the other opens"
+     rather than a single smooth motion. Staggering it instead — old
+     content gone by 45% (while the container's still mostly
+     widget-sized, so there's less of it to look ghostly), new content
+     held back until 55% (by which point the container's mostly at full
+     size, so it reads as the destination REVEALING rather than
+     bleeding through the original) — leaves only a brief, mostly-empty
+     gap in between with nothing to visibly cross-dissolve. */
+  ::view-transition-old(aps-home-tab-morph) { animation: aps-hero-fade-out 0.38s cubic-bezier(.4,0,.2,1) both; }
+  ::view-transition-new(aps-home-tab-morph) { animation: aps-hero-fade-in 0.38s cubic-bezier(.4,0,.2,1) both; }
+  @keyframes aps-hero-fade-out { 0% { opacity: 1; } 45%, 100% { opacity: 0; } }
+  @keyframes aps-hero-fade-in { 0%, 55% { opacity: 0; } 100% { opacity: 1; } }
 
   /* ===== CALENDAR TAB ===== */
   .calendar-wrapper { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
@@ -3256,7 +3295,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-28.42';
+const APP_VERSION = '2026-08-29.1';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
