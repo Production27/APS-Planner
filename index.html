@@ -297,22 +297,23 @@
     animation-duration: 0.38s;
     animation-timing-function: cubic-bezier(.4,0,.2,1);
   }
-  /* The browser's own default here is a straight 50/50 cross-fade
-     between the old (small, widget-shaped) and new (full panel)
-     snapshots — since those two images look nothing alike, a 50/50 blend
-     spends its whole middle stretch visibly double-exposed, which is
-     what actually read as "one page fading away while the other opens"
-     rather than a single smooth motion. Staggering it instead — old
-     content gone by 45% (while the container's still mostly
-     widget-sized, so there's less of it to look ghostly), new content
-     held back until 55% (by which point the container's mostly at full
-     size, so it reads as the destination REVEALING rather than
-     bleeding through the original) — leaves only a brief, mostly-empty
-     gap in between with nothing to visibly cross-dissolve. */
-  ::view-transition-old(aps-home-tab-morph) { animation: aps-hero-fade-out 0.38s cubic-bezier(.4,0,.2,1) both; }
-  ::view-transition-new(aps-home-tab-morph) { animation: aps-hero-fade-in 0.38s cubic-bezier(.4,0,.2,1) both; }
-  @keyframes aps-hero-fade-out { 0% { opacity: 1; } 45%, 100% { opacity: 0; } }
-  @keyframes aps-hero-fade-in { 0%, 55% { opacity: 0; } 100% { opacity: 1; } }
+  /* The browser's own default here is a cross-fade between the old
+     (small, widget-shaped) and new (full panel) snapshots — even
+     staggered (a brief version of this used to fade old out a little
+     before fading new in), any blending between two images that look
+     nothing alike still reads as "a fade," not as the actual page
+     getting bigger. A hard cut instead — old fully visible, then
+     instantly gone; new fully invisible, then instantly there — exactly
+     at the halfway point of the container's own continuous grow/shrink
+     (the group animation just above keeps running the whole time,
+     unaffected by this). With no blending to see, the only thing left
+     to watch IS the container resizing, which is what makes it read as
+     one continuous piece of content getting bigger instead of one page
+     fading as another arrives. */
+  ::view-transition-old(aps-home-tab-morph) { animation: aps-hero-swap-out 0.38s linear both; }
+  ::view-transition-new(aps-home-tab-morph) { animation: aps-hero-swap-in 0.38s linear both; }
+  @keyframes aps-hero-swap-out { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+  @keyframes aps-hero-swap-in { 0%, 50% { opacity: 0; } 50.01%, 100% { opacity: 1; } }
 
   /* ===== CALENDAR TAB ===== */
   .calendar-wrapper { height: 100%; display: flex; flex-direction: column; padding: 16px 20px; overflow: hidden; }
@@ -3309,7 +3310,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-29.2';
+const APP_VERSION = '2026-08-29.3';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
