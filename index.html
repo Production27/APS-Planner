@@ -236,16 +236,30 @@
      cross-fades between them by default. Root here only ever covers
      whatever's LEFT once the sidebar and the hero widget/panel (both
      below) are pulled into their own named layers — Home's greeting
-     banner/stats/other widgets on the way out, essentially nothing on
-     the way in (the destination tab's entire visible content IS the
-     hero). A plain, fast fade — no competing zoom — so the only motion
-     the eye actually tracks is the hero's own grow/shrink; a second,
-     independently-timed scale on top of that read as two different
-     things happening at once instead of one smooth motion. */
-  ::view-transition-old(root) { animation: aps-root-fade-out 0.2s ease both; }
-  ::view-transition-new(root) { animation: aps-root-fade-in 0.28s ease 0.06s both; }
-  @keyframes aps-root-fade-out { from { opacity: 1; } to { opacity: 0; } }
-  @keyframes aps-root-fade-in { from { opacity: 0; } to { opacity: 1; } }
+     banner/stats/other widgets on the way out (root-old), essentially
+     nothing on the way in (root-new — the destination tab's entire
+     visible content IS the hero, not root).
+     OLD stays fully visible the whole time rather than fading — Karl's
+     own report: fading root out made Home look like it disappeared
+     first and the new panel arrived after, instead of the panel
+     visibly expanding OVER a Home page that was still sitting right
+     there. The hero group already paints above root by default (it's a
+     later sibling in the view-transition pseudo-tree), so leaving OLD
+     alone is what actually produces "growing window over the
+     homepage" — Home stays put and simply gets covered by the hero's
+     own growing rect, same as a real window opening over a desktop.
+     NEW can't ALSO just hold at opacity:1 the same way, though, even
+     though it's "empty" — ::view-transition-new paints ABOVE old, so a
+     new snapshot sitting at opacity:1 for the full duration is a fully
+     opaque (if content-less) rectangle permanently blanking OLD out
+     from frame one, which is worse than fading — nothing of Home would
+     ever show. Held invisible until right before the pseudo-element
+     tree tears down instead, then ramped up fast so the handoff to the
+     real (already-correct) DOM underneath doesn't visibly pop. */
+  ::view-transition-old(root) { animation: aps-root-stay 0.38s linear both; }
+  ::view-transition-new(root) { animation: aps-root-reveal-late 0.38s linear both; }
+  @keyframes aps-root-stay { from, to { opacity: 1; } }
+  @keyframes aps-root-reveal-late { 0%, 85% { opacity: 0; } 100% { opacity: 1; } }
 
   /* Kept in its own named layer so it's pulled OUT of the root capture
      — without this it would still cross-fade/scale right along with
@@ -3295,7 +3309,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-29.1';
+const APP_VERSION = '2026-08-29.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
