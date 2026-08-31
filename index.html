@@ -1554,14 +1554,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   }
   .home-greeting-text { font-size: 19px; font-weight: 700; }
   .home-greeting-date { font-size: 13px; opacity: 0.85; margin-top: 2px; }
-  .home-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-  @media (max-width: 900px) { .home-stats { grid-template-columns: repeat(2, 1fr); } }
-  .home-stat-tile {
-    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 14px 16px; text-align: center; box-shadow: var(--shadow);
-  }
-  .home-stat-value { font-size: 26px; font-weight: 800; line-height: 1.1; }
-  .home-stat-label { font-size: 11px; color: var(--text-light); font-weight: 700; margin-top: 4px; text-transform: uppercase; letter-spacing: .03em; }
   /* Three columns, not two — Job Chat (.home-widget-center below) takes
      the middle one as a tall span across both rows, so it sits BETWEEN
      the other four vertically (two stacked on its left, two stacked on
@@ -2780,7 +2772,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="tab-panel active" id="panel-home">
       <div class="home-wrapper">
         <div class="home-greeting-banner" id="homeGreeting"></div>
-        <div class="home-stats" id="homeStats"></div>
         <div class="home-grid">
           <div class="home-widget" id="homeWidgetChecklist">
             <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span></div>
@@ -3392,7 +3383,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.13';
+const APP_VERSION = '2026-08-31.14';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13877,8 +13868,8 @@ function buildHomeOverdueRows() {
     if (!isOverdue && !isDueSoon) return;
     // Splits the "due soon" half into its own today/later tiers for the
     // widget's own alert (see renderHomeOverdueWidget()) — unused by
-    // anything that only cared about isOverdue before this (buildHomeStats()
-    // included), so adding it here is additive, not a shape change.
+    // anything that only cared about isOverdue before this, so adding it
+    // here is additive, not a shape change.
     const isToday = !isOverdue && dueDate.getTime() === todayMidnight.getTime();
     const phases = getJobPhases(job);
     const phase = phases.find(function(p) { return (p.id || null) === (card.phaseId || null); });
@@ -14051,24 +14042,6 @@ function buildHomeGanttUnclosedRows() {
 // Feeds the stat-tile row — takes the already-built checklist/overdue
 // rows rather than recomputing them, since renderHomeDashboard() needs
 // both anyway for their own widgets.
-function buildHomeStats(checklistRows, overdueRows) {
-  const overdueCount = overdueRows.filter(function(r) { return r.isOverdue; }).length;
-  const activeJobIds = {};
-  boardCards.forEach(function(card) {
-    if (!card.column || isFinishedColumnId(card.column)) return;
-    const found = findJob(card.jobId);
-    if (!found || found.job.archived) return;
-    if (!isJobVisibleToMe(found.job)) return;
-    activeJobIds[card.jobId] = true;
-  });
-  return {
-    openItems: checklistRows.length,
-    overdue: overdueCount,
-    dueSoon: overdueRows.length - overdueCount,
-    activeJobs: Object.keys(activeJobIds).length
-  };
-}
-
 function homeGreetingPhrase() {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -14081,18 +14054,6 @@ function renderHomeGreeting() {
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   return '<div class="home-greeting-text">' + homeGreetingPhrase() + ', ' + escapeHtml(name) + '</div>' +
     '<div class="home-greeting-date">' + dateStr + '</div>';
-}
-
-function renderHomeStatsWidget(stats) {
-  const tiles = [
-    { value: stats.openItems, label: 'Open Items', color: 'var(--primary-light)' },
-    { value: stats.overdue, label: 'Overdue', color: 'var(--danger)' },
-    { value: stats.dueSoon, label: 'Due Soon', color: 'var(--warning)' },
-    { value: stats.activeJobs, label: 'Active Jobs', color: 'var(--success)' }
-  ];
-  return tiles.map(function(t) {
-    return '<div class="home-stat-tile"><div class="home-stat-value" style="color:' + t.color + ';">' + t.value + '</div><div class="home-stat-label">' + t.label + '</div></div>';
-  }).join('');
 }
 
 function renderHomeChecklistWidget(rows) {
@@ -14434,8 +14395,6 @@ function renderHomeDashboard() {
   const overdueRows = buildHomeOverdueRows();
   const greetingEl = document.getElementById('homeGreeting');
   if (greetingEl) greetingEl.innerHTML = renderHomeGreeting();
-  const statsEl = document.getElementById('homeStats');
-  if (statsEl) statsEl.innerHTML = renderHomeStatsWidget(buildHomeStats(checklistRows, overdueRows));
   const checklistBody = document.getElementById('homeChecklistBody');
   if (checklistBody) checklistBody.innerHTML = renderHomeChecklistWidget(checklistRows);
   const overdueBody = document.getElementById('homeOverdueBody');
