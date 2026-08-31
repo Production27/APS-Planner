@@ -193,19 +193,19 @@
   /* Outline Ring (Option F — Karl's pick after trying Option D live,
      same "which switch design" evaluation the pressed-button mockup
      went through). Quietest of the set on purpose: no background or
-     shadow ever, on either state — off is a bare dim icon, on gets a
-     colored ring around it, like a focus outline. */
+     shadow ever, on either state — the ring around it is the only thing
+     that changes; icons stay full-strength always (Karl's own call —
+     the original mockup dimmed the icon at rest too, he didn't want
+     that part). */
   .rail-tab {
     display: flex; align-items: center; justify-content: center; overflow: hidden;
     flex: 0 0 34px; height: 34px; padding: 0; border: 2px solid transparent; border-radius: 8px;
     background: transparent; color: var(--text-light); cursor: pointer;
     white-space: nowrap; transition: border-color 0.18s ease;
   }
-  .rail-tab svg { flex-shrink: 0; opacity: 0.5; transition: opacity 0.15s ease; }
-  .rail-tab:hover svg { opacity: 0.8; }
+  .rail-tab svg { flex-shrink: 0; }
   .rail-tab-label, .rail-tab .badge { display: none; }
   .rail-tab.active { border-color: var(--primary-light); }
-  .rail-tab.active svg { opacity: 1; }
   /* Settings keeps its own separate, unchanged hover treatment (it opens
      a dropdown, not a persistent on/off view, so the ring language above
      doesn't apply to it) — scoped to .rail-tab-row specifically (the
@@ -2060,24 +2060,24 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .mobile-view-switcher { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
     /* Outline Ring (Option F — same quiet, background-free treatment as
        desktop's .rail-tab now, see that rule's own comment for the full
-       rationale): off is a bare dim icon, on gets a colored ring around
-       it. Sized/centered via a fixed 34px square border box rather than
-       just bordering the button itself, since the button's own flex:1
-       click target spans the whole column width and a ring that wide
-       would look like an underline, not a ring. */
+       rationale): a colored ring appears around the active icon; icons
+       stay full-strength always, no dimming at rest (Karl's own call).
+       Sized/centered via a fixed 34px square border box rather than just
+       bordering the button itself, since the button's own flex:1 click
+       target spans the whole column width and a ring that wide would
+       look like an underline, not a ring. */
     .mobile-view-btn {
       flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
       padding: 11px 2px; border: none; background: transparent;
       cursor: pointer; position: relative;
     }
-    .mobile-view-btn svg { flex-shrink: 0; opacity: 0.5; position: relative; z-index: 1; transition: opacity 0.15s ease; }
+    .mobile-view-btn svg { flex-shrink: 0; position: relative; z-index: 1; }
     .mobile-view-btn::before {
       content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 34px; height: 34px; border-radius: 8px; border: 2px solid transparent;
       transition: border-color 0.18s ease;
     }
     .mobile-view-btn.active::before { border-color: var(--primary-light); }
-    .mobile-view-btn.active svg { opacity: 1; }
 
     /* NOT display:none — the job drawer (#formArea) lives inside
        .app-shell-main too, and display:none on an ancestor hides a
@@ -3301,7 +3301,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.2';
+const APP_VERSION = '2026-08-31.3';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
