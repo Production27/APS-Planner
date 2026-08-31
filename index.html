@@ -1681,6 +1681,26 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      a click that does nothing. */
   .home-widget-header.no-nav { cursor: default; }
   .home-widget-body { padding: 6px 14px 12px; max-height: 260px; overflow-y: auto; }
+  /* Sits as the first thing inside a widget's own body (see
+     renderHomeWidgetAlert()) — only for widgets where something GENUINE
+     is already tracked as urgent (Calendar's overdue count, Board's
+     stalled-card count), never a "you have open items" nag just because
+     a widget has content, which is what it always shows anyway.
+     Dismissible per its own exact signature (see dismissHomeWidgetAlert())
+     — dismissing "3 overdue" only silences that exact set of jobs; if the
+     overdue set changes at all (even back to the same count later, from
+     different jobs), it reads as a new alert and shows again. */
+  .home-widget-alert {
+    display: flex; align-items: center; gap: 8px; background: #fdecea; color: var(--danger);
+    font-size: 11.5px; font-weight: 600; padding: 7px 8px 7px 10px; border-radius: 6px; margin-bottom: 8px;
+  }
+  body.dark-mode .home-widget-alert { background: rgba(220,53,69,0.22); color: #ff8a80; }
+  .home-widget-alert-text { flex: 1; }
+  .home-widget-alert-dismiss {
+    background: none; border: none; color: inherit; font-size: 16px; line-height: 1; cursor: pointer;
+    padding: 0 2px; opacity: 0.55; flex-shrink: 0; font-family: inherit;
+  }
+  .home-widget-alert-dismiss:hover { opacity: 1; }
   /* Same treatment as .my-checklist-empty — each widget's icon reused
      here (larger, faded) instead of a bare line of gray text, so an
      empty widget still looks finished rather than broken. */
@@ -2784,6 +2804,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
           <div class="home-widget" id="homeWidgetWorkflow">
             <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span></div>
             <div class="home-widget-body" id="homeStageBody">
+              <div id="homeStageAlert"></div>
               <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
               <div class="wsm-bars-wrap" id="wsmBarsWrap"></div>
             </div>
@@ -3362,7 +3383,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.9';
+const APP_VERSION = '2026-08-31.10';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -14023,12 +14044,56 @@ function renderHomeChecklistWidget(rows) {
   return html + more;
 }
 
+// ===== HOME WIDGET ALERTS =====
+// A dismissible "this needs you" strip inside a widget's own body — only
+// ever built for a widget where something is ALREADY tracked as genuinely
+// urgent (Calendar's overdue jobs, Board's stalled cards), never invented
+// just because a widget has content, since every one of these widgets
+// always shows something whenever there's anything to show at all.
+// Dismissal is keyed to the exact SET of items behind the alert (job/card
+// ids, not just a count) so it behaves the way "get rid of it" should:
+// dismissing "3 overdue" silences those specific 3 jobs; the moment even
+// one of them changes — resolved, or a different job goes overdue instead
+// — the signature changes and the alert reads as new again, even if the
+// count happens to land back on 3. Persisted to localStorage (not just
+// this session) since a dismissal that came back on next reload would
+// defeat the point of dismissing it.
+const HOME_ALERT_DISMISS_KEY = 'gantt_home_widget_alerts_dismissed_v1';
+function getDismissedHomeWidgetAlerts() {
+  try { return JSON.parse(localStorage.getItem(HOME_ALERT_DISMISS_KEY) || '{}'); } catch (e) { return {}; }
+}
+function isHomeWidgetAlertDismissed(alertId, signature) {
+  return getDismissedHomeWidgetAlerts()[alertId] === signature;
+}
+function dismissHomeWidgetAlert(event, alertId, signature) {
+  event.stopPropagation();
+  const dismissed = getDismissedHomeWidgetAlerts();
+  dismissed[alertId] = signature;
+  localStorage.setItem(HOME_ALERT_DISMISS_KEY, JSON.stringify(dismissed));
+  const el = document.getElementById('homeAlert-' + alertId);
+  if (el) el.remove();
+}
+// ids: the real job/card ids behind this alert, used ONLY to build its
+// dismiss signature (see the block comment above) — never rendered.
+function renderHomeWidgetAlert(alertId, ids, text) {
+  if (!ids.length) return '';
+  const signature = ids.slice().sort().join(',');
+  if (isHomeWidgetAlertDismissed(alertId, signature)) return '';
+  return '<div class="home-widget-alert" id="homeAlert-' + alertId + '">' +
+    '<span class="home-widget-alert-text">' + escapeHtml(text) + '</span>' +
+    '<button type="button" class="home-widget-alert-dismiss" onclick="dismissHomeWidgetAlert(event, \'' + alertId + '\', \'' + signature.replace(/'/g, "\\'") + '\')" title="Dismiss">&times;</button>' +
+  '</div>';
+}
+
 // Row click reuses openMyChecklistItem() directly — despite the name,
 // that function is already generic (cross-project switch +
 // openEditCard()), nothing checklist-item-specific about it.
 function renderHomeOverdueWidget(rows) {
-  if (!rows.length) return '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><div>No overdue or upcoming jobs.</div></div>';
-  return rows.map(function(row) {
+  const overdueRows = rows.filter(function(r) { return r.isOverdue; });
+  const alertHtml = renderHomeWidgetAlert('calendar', overdueRows.map(function(r) { return r.card.id; }),
+    overdueRows.length + (overdueRows.length === 1 ? ' job overdue' : ' jobs overdue'));
+  if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><div>No overdue or upcoming jobs.</div></div>';
+  return alertHtml + rows.map(function(row) {
     const dueLabel = row.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     return '<div class="home-row home-overdue-row' + (row.isOverdue ? ' overdue' : '') + '">' +
       '<span class="home-row-dot" style="background:' + (row.job.color || '#3949ab') + ';"></span>' +
@@ -14051,6 +14116,13 @@ function renderHomeWorkflowMiniBoard() {
   const barsWrap = document.getElementById('wsmBarsWrap');
   const track = document.getElementById('wsmBracketTrack');
   if (!barsWrap || !track) return;
+
+  const alertEl = document.getElementById('homeStageAlert');
+  if (alertEl) {
+    const stalledRows = buildHomeStalledRows();
+    alertEl.innerHTML = renderHomeWidgetAlert('board', stalledRows.map(function(r) { return r.card.id; }),
+      stalledRows.length + (stalledRows.length === 1 ? ' card stalled' : ' cards stalled'));
+  }
 
   const perColumnCounts = {};
   buildHomeStageSummary().forEach(function(s) { perColumnCounts[s.id] = s.count; });
