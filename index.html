@@ -1738,16 +1738,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-more-link { display: block; font-size: 12px; color: var(--primary-light); cursor: pointer; padding: 6px 0 0; }
   body.dark-mode .home-more-link { color: var(--primary-ondark); }
   .home-more-link:hover { text-decoration: underline; }
-  /* .home-bar-row/-label/-track/-fill/-count: originally Workflow
-     Summary's own row-per-stage layout, now just Today's Schedule's
-     (see below) — Workflow Summary moved to the mini-board layout,
-     .wsm-*, further down. */
-  .home-bar-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; cursor: pointer; font-size: 12px; }
-  .home-bar-label { width: 76px; flex-shrink: 0; color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .home-bar-track { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
-  body.dark-mode .home-bar-track { background: rgba(255,255,255,0.08); }
-  .home-bar-fill { display: block; height: 100%; background: var(--primary-light); border-radius: 4px; min-width: 3px; transition: width .2s; }
-  .home-bar-count { width: 20px; text-align: right; color: var(--text-light); font-weight: 700; flex-shrink: 0; }
   /* ===== WORKFLOW SUMMARY MINI-BOARD ===== a small version of the real
      Board Workflow Strip — same bracket-over-columns idea, just with a
      vertical bar standing in for each board instead of a full column of
@@ -1778,23 +1768,58 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .wsm-bar-label { font-size: 9.5px; color: var(--text-light); font-weight: 600; margin-bottom: 4px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .wsm-bar-col:hover .wsm-bar-label { color: var(--primary); }
   body.dark-mode .wsm-bar-col:hover .wsm-bar-label { color: var(--primary-ondark); }
-  /* Today's Schedule — every Gantt task active today, each with its own
-     mini progress bar (reusing .home-bar-track/.home-bar-fill) showing
-     how far through its start->finish window today falls. */
-  .home-today-row { padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
-  .home-today-row:last-child { border-bottom: none; }
-  .home-today-row-top { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
-  .home-today-task { font-weight: 600; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .home-today-row:hover .home-today-task { color: var(--primary); }
-  body.dark-mode .home-today-row:hover .home-today-task { color: var(--primary-ondark); }
-  .home-today-job { display: flex; align-items: center; gap: 5px; flex-shrink: 0; max-width: 45%; overflow: hidden; }
-  .home-today-job .my-checklist-job-bubble { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-  .home-today-phase { font-size: 11px; color: var(--text-light); flex-shrink: 0; white-space: nowrap; }
-  /* .home-bar-track normally sizes via flex:1 inside .home-bar-row's flex
-     context (Board Summary); here it sits directly under a plain block
-     row instead, so flex:1 has nothing to size against and the inline
-     <span> collapses to 0 width without an explicit display/width. */
-  .home-today-row .home-bar-track { display: block; width: 100%; height: 6px; }
+  /* ===== TODAY'S SCHEDULE MINI-GANTT ===== a small version of the real
+     Gantt chart — a real (tiny) week strip (today ± a few days, see
+     HOME_MINI_GANTT_WINDOW_DAYS) with each active task's own bar
+     positioned/sized against those same days, not just an isolated 0-100%
+     fill of its own span. The bar itself is styled exactly like a real
+     .task-bar (softened fill in the task's color, solid border in the
+     job's color) with the job name riding inside it in a
+     .task-bar-job-tag-style pill — same visual language as the real
+     chart, just shrunk down, per Karl's own ask. See
+     renderHomeTodayScheduleWidget(). */
+  .home-mini-gantt { position: relative; }
+  .home-mini-gantt-days, .home-mini-gantt-row {
+    display: grid; grid-template-columns: 56px repeat(7, 1fr); gap: 2px; align-items: center;
+  }
+  .home-mini-gantt-days { margin-bottom: 6px; }
+  .home-mini-gantt-day { text-align: center; font-size: 9.5px; color: var(--text-light); font-weight: 600; padding-bottom: 4px; border-bottom: 2px solid transparent; }
+  .home-mini-gantt-day.today { color: var(--primary-light); border-bottom-color: var(--primary-light); }
+  body.dark-mode .home-mini-gantt-day.today { color: var(--primary-ondark); border-bottom-color: var(--primary-ondark); }
+  .home-mini-gantt-dow { display: block; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
+  .home-mini-gantt-num { display: block; font-size: 12px; margin-top: 1px; color: var(--text); }
+  .home-mini-gantt-row { height: 30px; cursor: pointer; }
+  .home-mini-gantt-label {
+    font-size: 11px; font-weight: 600; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px;
+  }
+  .home-mini-gantt-row:hover .home-mini-gantt-label { color: var(--primary); }
+  body.dark-mode .home-mini-gantt-row:hover .home-mini-gantt-label { color: var(--primary-ondark); }
+  .home-mini-gantt-track {
+    grid-column: 2 / span 7; position: relative; height: 18px; border-radius: 4px;
+    background: repeating-linear-gradient(90deg, transparent, transparent calc(14.28% - 1px), var(--border) calc(14.28% - 1px), var(--border) 14.28%);
+  }
+  .home-mini-gantt-bar {
+    position: absolute; top: 1px; bottom: 1px; min-width: 6px; border-radius: 4px; box-sizing: border-box;
+    border: 2px solid; display: flex; align-items: center; padding: 0 4px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .home-mini-gantt-pill {
+    font-size: 8.5px; font-weight: 700; color: #fff; line-height: 1.5;
+    padding: 1px 6px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
+    max-width: 100%; pointer-events: none;
+  }
+  /* Spans every row's own height (top/bottom auto-resolve against
+     .home-mini-gantt's own content height, which its other in-flow
+     children — the day strip and the rows — already establish) rather
+     than being drawn once per row, so it reads as one continuous line
+     down the widget the way the real Gantt's today line does. */
+  .home-mini-gantt-today-line {
+    position: absolute; top: 26px; bottom: 0; width: 1px;
+    background: var(--primary-light); opacity: 0.5; pointer-events: none;
+  }
+  body.dark-mode .home-mini-gantt-today-line { background: var(--primary-ondark); }
   /* Permission gating — see applyPermissionGating(). Elements tagged
      data-min-tier get this toggled on when the current account's tier is
      below what the element requires. */
@@ -3400,7 +3425,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.15';
+const APP_VERSION = '2026-08-31.16';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13983,15 +14008,13 @@ function buildHomeTodayScheduleRows() {
           const finish = new Date(task.finish + 'T00:00:00');
           if (isNaN(start.getTime()) || isNaN(finish.getTime())) return;
           if (todayMidnight < start || todayMidnight > finish) return;
-          const totalMs = finish - start;
-          const pct = totalMs > 0 ? Math.round(((todayMidnight - start) / totalMs) * 100) : 100;
           const phaseName = phases.length > 1 && !phase.isDefault ? phase.name : '';
           const subPhaseName = !subUnit.isDefault ? subUnit.name : '';
           const nameParts = [phaseName, subPhaseName].filter(Boolean);
           const label = job.name + (nameParts.length ? ' — ' + nameParts.join(' — ') : '');
           rows.push({
             job: job, phaseId: phase.id, subPhaseId: subUnit.id, taskName: task.name || 'Untitled task',
-            label: label, phaseName: nameParts.join(' — '), pct: Math.min(100, Math.max(0, pct)),
+            label: label, phaseName: nameParts.join(' — '), start: start, finish: finish,
             // Same fallback chain the Gantt bars themselves use (task's
             // own color, else its job's, else the app default).
             taskColor: task.color || job.color || '#3949ab'
@@ -14248,14 +14271,47 @@ function renderHomeWorkflowMiniBoard() {
 // Click reuses editJob() directly — the same handler Calendar's own job
 // clicks forward to, so this behaves exactly like clicking that task
 // anywhere else in the app.
+// Window width for the mini-Gantt strip below — must stay in sync with
+// the "repeat(7, 1fr)" hardcoded into .home-mini-gantt-days/-row's own
+// CSS grid-template-columns (not driven from this constant; there's no
+// dynamic stylesheet here to keep it in sync automatically, just this
+// comment). Odd on purpose so today lands exactly in the middle column
+// rather than off-center.
+const HOME_MINI_GANTT_WINDOW_DAYS = 7;
 function renderHomeTodayScheduleWidget(rows) {
   const unclosedRows = buildHomeGanttUnclosedRows();
   const alertHtml = renderHomeWidgetAlert('gantt-unclosed', unclosedRows.map(function(r) { return r.card.id; }),
     unclosedRows.length + (unclosedRows.length === 1 ? ' job finished, not closed out' : ' jobs finished, not closed out'));
   if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><div>Nothing scheduled today.</div></div>';
-  return alertHtml + rows.map(function(row) {
+
+  // A real (tiny) week strip — today ± a few days, positioned/sized bars
+  // like the actual Gantt uses, rather than each task's own isolated 0-100%
+  // fill — see .home-mini-gantt's own CSS comment for the full rationale.
+  const todayMidnight = new Date(new Date().toDateString());
+  const halfWindow = Math.floor(HOME_MINI_GANTT_WINDOW_DAYS / 2);
+  const windowStart = new Date(todayMidnight.getTime() - halfWindow * 86400000);
+  const windowEnd = new Date(windowStart.getTime() + HOME_MINI_GANTT_WINDOW_DAYS * 86400000);
+  const todayLeftPct = (halfWindow / HOME_MINI_GANTT_WINDOW_DAYS) * 100;
+
+  const dayCellsHtml = [];
+  for (let i = 0; i < HOME_MINI_GANTT_WINDOW_DAYS; i++) {
+    const d = new Date(windowStart.getTime() + i * 86400000);
+    dayCellsHtml.push('<div class="home-mini-gantt-day' + (i === halfWindow ? ' today' : '') + '">' +
+      '<span class="home-mini-gantt-dow">' + d.toLocaleDateString('en-US', { weekday: 'short' }) + '</span>' +
+      '<span class="home-mini-gantt-num">' + d.getDate() + '</span>' +
+    '</div>');
+  }
+
+  const rowsHtml = rows.map(function(row) {
+    // Clip each bar to the visible window, same as the real Gantt's own
+    // bars do at the scrolled-off edges of its timeline — a task that
+    // started before the window or finishes after it still shows, just
+    // flush against that edge instead of vanishing or overflowing.
+    const clippedStart = row.start < windowStart ? windowStart : row.start;
+    const clippedFinishExclusive = row.finish >= windowEnd ? windowEnd : new Date(row.finish.getTime() + 86400000);
+    const leftPct = (getDaysDiff(windowStart, clippedStart) / HOME_MINI_GANTT_WINDOW_DAYS) * 100;
+    const widthPct = Math.max((getDaysDiff(clippedStart, clippedFinishExclusive) / HOME_MINI_GANTT_WINDOW_DAYS) * 100, 6);
     const jobColor = row.job.color || '#3949ab';
-    const phaseSuffix = row.phaseName ? ' <span class="home-today-phase">— ' + escapeHtml(row.phaseName) + '</span>' : '';
     // subPhaseId only ever shows up alongside a real phaseId (sub-phases
     // can only exist on a real phase, never on the synthetic no-phases
     // default — see getJobPhases()/getPhaseSubUnits()), so there's no
@@ -14263,14 +14319,23 @@ function renderHomeTodayScheduleWidget(rows) {
     const editArgs = ["'" + row.job.id + "'"];
     if (row.phaseId) editArgs.push("'" + row.phaseId + "'");
     if (row.subPhaseId) editArgs.push("'" + row.subPhaseId + "'");
-    return '<div class="home-today-row" onclick="editJob(' + editArgs.join(', ') + ')">' +
-      '<div class="home-today-row-top">' +
-        '<span class="home-today-task">' + escapeHtml(row.taskName) + '</span>' +
-        '<span class="home-today-job"><span class="my-checklist-job-bubble" style="background:' + jobColor + ';">' + escapeHtml(row.job.name) + '</span>' + phaseSuffix + '</span>' +
+    const titleText = row.label + (row.phaseName ? ' — ' + row.phaseName : '');
+    return '<div class="home-mini-gantt-row" onclick="editJob(' + editArgs.join(', ') + ')" title="' + escapeHtml(titleText) + '">' +
+      '<div class="home-mini-gantt-label">' + escapeHtml(row.taskName) + '</div>' +
+      '<div class="home-mini-gantt-track">' +
+        '<div class="home-mini-gantt-bar" style="left:' + leftPct + '%; width:' + widthPct + '%; background:' + softenColor(row.taskColor) + '; border-color:' + jobColor + ';">' +
+          '<span class="home-mini-gantt-pill" style="background:' + jobColor + ';">' + escapeHtml(row.job.name) + '</span>' +
+        '</div>' +
       '</div>' +
-      '<span class="home-bar-track"><span class="home-bar-fill" style="width:' + row.pct + '%; background:' + row.taskColor + ';"></span></span>' +
     '</div>';
   }).join('');
+
+  return alertHtml +
+    '<div class="home-mini-gantt">' +
+      '<div class="home-mini-gantt-days">' + dayCellsHtml.join('') + '</div>' +
+      '<div class="home-mini-gantt-today-line" style="left:calc(56px + (100% - 56px) * ' + (todayLeftPct / 100) + ');"></div>' +
+      rowsHtml +
+    '</div>';
 }
 
 // ===== HOME JOB CHAT WIDGET =====
