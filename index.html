@@ -3392,7 +3392,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.11';
+const APP_VERSION = '2026-08-31.12';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13996,6 +13996,47 @@ function buildHomeTodayScheduleRows() {
   return rows;
 }
 
+// Feeds the Gantt widget's own "needs attention" alert (see
+// renderHomeTodayScheduleWidget()) — a genuinely different question from
+// buildHomeTodayScheduleRows() above (which tasks are active TODAY) —
+// this asks which tasks are behind schedule at all. There's no done/
+// complete flag anywhere on a Gantt task (nothing in the data model
+// tracks that), so date is the only real signal available: its finish
+// date has already passed. A task that never got a finish date at all
+// falls back to its start date instead of being skipped outright (Karl's
+// own call — the last date it DOES have is still a real date something
+// was planned against, better than silently ignoring it).
+function buildHomeGanttOverdueRows() {
+  const todayMidnight = new Date(new Date().toDateString());
+  const rows = [];
+  jobs.forEach(function(job) {
+    if (job.archived) return;
+    if (!isJobVisibleToMe(job)) return;
+    const phases = getJobPhases(job);
+    phases.forEach(function(phase) {
+      getPhaseSubUnits(phase).forEach(function(subUnit) {
+        (subUnit.tasks || []).forEach(function(task) {
+          const dueStr = task.finish || task.start;
+          if (!dueStr) return;
+          const dueDate = new Date(dueStr + 'T00:00:00');
+          if (isNaN(dueDate.getTime()) || dueDate >= todayMidnight) return;
+          const phaseName = phases.length > 1 && !phase.isDefault ? phase.name : '';
+          const subPhaseName = !subUnit.isDefault ? subUnit.name : '';
+          const nameParts = [phaseName, subPhaseName].filter(Boolean);
+          const label = job.name + (nameParts.length ? ' — ' + nameParts.join(' — ') : '');
+          // rowKey (not task.id — a phase/sub-phase task isn't guaranteed
+          // to have one; only the flat job.tasks migration assigns those,
+          // see its own "if (!task.id) task.id = genId()" comment) is what
+          // renderHomeTodayScheduleWidget() dismisses this alert by.
+          rows.push({ job: job, task: task, label: label, dueDate: dueDate, rowKey: job.id + '|' + label + '|' + dueStr });
+        });
+      });
+    });
+  });
+  rows.sort(function(a, b) { return a.dueDate - b.dueDate; });
+  return rows;
+}
+
 // Feeds the stat-tile row — takes the already-built checklist/overdue
 // rows rather than recomputing them, since renderHomeDashboard() needs
 // both anyway for their own widgets.
@@ -14219,8 +14260,11 @@ function renderHomeWorkflowMiniBoard() {
 // clicks forward to, so this behaves exactly like clicking that task
 // anywhere else in the app.
 function renderHomeTodayScheduleWidget(rows) {
-  if (!rows.length) return '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><div>Nothing scheduled today.</div></div>';
-  return rows.map(function(row) {
+  const overdueRows = buildHomeGanttOverdueRows();
+  const alertHtml = renderHomeWidgetAlert('gantt-overdue', overdueRows.map(function(r) { return r.rowKey; }),
+    overdueRows.length + (overdueRows.length === 1 ? ' task behind schedule' : ' tasks behind schedule'));
+  if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><div>Nothing scheduled today.</div></div>';
+  return alertHtml + rows.map(function(row) {
     const jobColor = row.job.color || '#3949ab';
     const phaseSuffix = row.phaseName ? ' <span class="home-today-phase">— ' + escapeHtml(row.phaseName) + '</span>' : '';
     // subPhaseId only ever shows up alongside a real phaseId (sub-phases
