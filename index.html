@@ -1632,10 +1632,24 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-widget-header {
     font-size: 13px; font-weight: 700; color: var(--text); padding: 12px 14px;
     border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0;
-    cursor: pointer; transition: background 0.15s;
+    cursor: pointer; transition: background 0.15s, color 0.15s, transform 0.15s;
   }
-  .home-widget-header:hover { background: rgba(0,0,0,0.03); }
-  body.dark-mode .home-widget-header:hover { background: rgba(255,255,255,0.04); }
+  /* Stronger than the outer card's own hover (box-shadow only, further
+     up) since this header — not the card as a whole — is the actual
+     click target (see homeWidgetGoTo()'s call sites, only ever on this
+     div). Text recolors to the app's standard link-hover blue (same
+     language as .home-row-text:hover, .job-comment-reply-btn, etc.
+     elsewhere) on top of a deeper tint and a small lift, so it reads as
+     a real button, not just a slightly-darker strip. Only the page-name
+     text picks up the color change — .home-widget-subtitle sets its own
+     explicit color, which wins over inheriting this one, so the "— My
+     Open Items" half stays visually secondary even while hovering. */
+  .home-widget-header:hover { background: rgba(57,73,171,0.09); color: var(--primary); transform: translateY(-1px); }
+  body.dark-mode .home-widget-header:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
+  /* Job Chat's header isn't a link (see its own .no-nav rule further
+     down) — undoes all three of the above so it doesn't imply a click
+     that does nothing. */
+  .home-widget-header.no-nav:hover { background: none; color: var(--text); transform: none; }
   /* Header text is now "<page it links to> — <what this widget itself
      shows>" (Karl's own call — the page name up front makes it obvious
      which tab homeWidgetGoTo() lands on, since these two rarely matched
@@ -1661,10 +1675,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-widget-icon.tint-purple { background: #f1e9fb; }
   body.dark-mode .home-widget-icon.tint-purple { background: rgba(126,87,194,0.22); }
   /* Job Chat's own header isn't a homeWidgetGoTo() link (no single tab
-     "is" the comment feed) — undoes the base rule's pointer cursor and
-     hover tint so it doesn't visually promise a click that does nothing. */
+     "is" the comment feed) — undoes the base rule's pointer cursor (its
+     :hover undo lives up with the rest of the hover rules it's undoing,
+     see .home-widget-header.no-nav:hover) so it doesn't visually promise
+     a click that does nothing. */
   .home-widget-header.no-nav { cursor: default; }
-  .home-widget-header.no-nav:hover { background: none; }
   .home-widget-body { padding: 6px 14px 12px; max-height: 260px; overflow-y: auto; }
   /* Same treatment as .my-checklist-empty — each widget's icon reused
      here (larger, faded) instead of a bare line of gray text, so an
@@ -3347,7 +3362,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.8';
+const APP_VERSION = '2026-08-31.9';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
