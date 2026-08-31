@@ -190,45 +190,28 @@
      identification via native tooltip, same as any icon-rail sidebar (VS
      Code's activity bar, Slack's app rail, etc). */
   .rail-tab-row { display: flex; align-items: center; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border); background: #fafafa; }
-  /* Sliding Segmented Control (Option D — Karl asked to trial this one
-     live in place of the Pressed Button treatment, same "which switch
-     design" evaluation the pressed-button mockup went through). A single
-     shared thumb (.rail-tab-thumb) slides to sit behind whichever tab is
-     active, iOS-segmented-control style, instead of each button
-     individually recoloring itself. Which button is active can't be
-     selected in pure CSS, so the thumb's position is set in JS from the
-     active button's real getBoundingClientRect() — see
-     positionSlidingThumb(), called from switchTab(). */
-  .rail-tab-track { position: relative; display: flex; gap: 4px; background: rgba(0,0,0,0.05); border-radius: 10px; padding: 3px; }
-  body.dark-mode .rail-tab-track { background: rgba(0,0,0,0.25); }
-  .rail-tab-thumb {
-    position: absolute; top: 3px; left: 3px; width: 34px; height: 34px;
-    background: var(--card); border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.22), 0 1px 1px rgba(255,255,255,0.5) inset;
-    transition: transform 0.22s cubic-bezier(.4,0,.2,1);
-    pointer-events: none; z-index: 0;
-  }
-  body.dark-mode .rail-tab-thumb { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+  /* Outline Ring (Option F — Karl's pick after trying Option D live,
+     same "which switch design" evaluation the pressed-button mockup
+     went through). Quietest of the set on purpose: no background or
+     shadow ever, on either state — off is a bare dim icon, on gets a
+     colored ring around it, like a focus outline. */
   .rail-tab {
-    position: relative; z-index: 1;
     display: flex; align-items: center; justify-content: center; overflow: hidden;
-    flex: 0 0 34px; height: 34px; padding: 0; border: none; border-radius: 8px;
+    flex: 0 0 34px; height: 34px; padding: 0; border: 2px solid transparent; border-radius: 8px;
     background: transparent; color: var(--text-light); cursor: pointer;
-    white-space: nowrap;
+    white-space: nowrap; transition: border-color 0.18s ease;
   }
-  /* Icon dims at rest, full strength once the thumb slides under it —
-     the thumb itself (not a per-button background swap) is what reads
-     as "selected" now. */
-  .rail-tab svg { flex-shrink: 0; opacity: 0.55; transition: opacity 0.15s ease; }
+  .rail-tab svg { flex-shrink: 0; opacity: 0.5; transition: opacity 0.15s ease; }
   .rail-tab:hover svg { opacity: 0.8; }
   .rail-tab-label, .rail-tab .badge { display: none; }
+  .rail-tab.active { border-color: var(--primary-light); }
   .rail-tab.active svg { opacity: 1; }
   /* Settings keeps its own separate, unchanged hover treatment (it opens
-     a dropdown, not a persistent on/off view, so the pressed-button
-     language above doesn't apply to it) — scoped to .rail-tab-row
-     specifically (the desktop trigger's own container) rather than the
-     bare .settings-menu-wrap class, which the mobile view-switcher's
-     trigger now ALSO carries (see its own markup comment): a plain
+     a dropdown, not a persistent on/off view, so the ring language above
+     doesn't apply to it) — scoped to .rail-tab-row specifically (the
+     desktop trigger's own container) rather than the bare
+     .settings-menu-wrap class, which the mobile view-switcher's trigger
+     now ALSO carries (see its own markup comment): a plain
      .settings-menu-wrap:hover would match that one too, and touch taps
      on many mobile browsers apply :hover on tap without ever clearing it
      afterward (no mouse to move away and un-hover), which is exactly
@@ -238,11 +221,12 @@
     background: var(--primary-light); color: white;
   }
   .rail-tab-row .settings-menu-wrap:hover .settings-dots-btn { color: white; }
-  /* Settings' own hover background is still the solid --primary-light
-     indigo (unchanged, see comment above) — Gantt's matching indigo icon
-     no longer needs this treatment now that its "active" state is just
-     the neutral .rail-tab-thumb sliding in behind it, not a same-color
-     background swap. */
+  /* Settings' own hover fills its background solid indigo, the exact
+     --primary-light Gantt already uses as its own hardcoded icon color,
+     so it needs forcing to white there or it'd vanish against it — the
+     Outline Ring's own active state never fills a background (a border
+     only), so no equivalent case exists for the rail-tab icons
+     themselves. */
   .rail-tab-row .settings-menu-wrap:hover svg { filter: brightness(0) invert(1); }
   .manager-sidebar-header .badge { background: var(--primary-light); color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; margin-left: 2px; }
 
@@ -929,14 +913,6 @@
      now, see .rail-tab's own base rules further up.) */
   body:not(.job-rail-open) .rail-tab-row {
     flex-direction: column; align-items: stretch; flex-wrap: nowrap;
-  }
-  /* .rail-tab-track flips to match — it's a nested flex container inside
-     .rail-tab-row, not one of the row's own directly-stacked children,
-     so the column switch above doesn't reach it on its own. The thumb's
-     position is re-queried in JS after this (see toggleJobRail()), same
-     as the landscape-phone .mobile-view-track column flip. */
-  body:not(.job-rail-open) .rail-tab-track {
-    flex-direction: column;
   }
   @media (min-width: 1101px) {
     body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
@@ -2081,36 +2057,27 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        each view already has on the desktop rail-tab-row, so it's the
        same visual language, not a new one just for mobile — title=""
        carries the name for anyone using an accessibility tree. */
-    .mobile-view-switcher { display: flex; align-items: center; gap: 4px; padding: 4px; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    /* Sliding Segmented Control (Option D — same treatment as desktop's
-       .rail-tab-track/.rail-tab-thumb, see that rule's own comment for
-       the full rationale). Settings sits outside the track (own on/off
-       state doesn't apply to it — it opens a dropdown, not a persistent
-       view), sized back down to its own fixed 34px square since it no
-       longer shares the track's flex:1 split. */
-    .mobile-view-switcher .settings-menu-wrap { flex: 0 0 34px; height: 34px; }
-    .mobile-view-track { position: relative; display: flex; flex: 1 1 auto; min-width: 0; background: rgba(0,0,0,0.05); border-radius: 10px; padding: 3px; }
-    body.dark-mode .mobile-view-track { background: rgba(0,0,0,0.25); }
-    .mobile-view-thumb {
-      position: absolute; top: 3px; left: 3px; width: 34px; height: 34px;
-      background: var(--card); border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.22), 0 1px 1px rgba(255,255,255,0.5) inset;
-      transition: transform 0.22s cubic-bezier(.4,0,.2,1);
-      pointer-events: none; z-index: 0;
-    }
-    body.dark-mode .mobile-view-thumb { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    .mobile-view-switcher { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    /* Outline Ring (Option F — same quiet, background-free treatment as
+       desktop's .rail-tab now, see that rule's own comment for the full
+       rationale): off is a bare dim icon, on gets a colored ring around
+       it. Sized/centered via a fixed 34px square border box rather than
+       just bordering the button itself, since the button's own flex:1
+       click target spans the whole column width and a ring that wide
+       would look like an underline, not a ring. */
     .mobile-view-btn {
-      position: relative; z-index: 1;
       flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
       padding: 11px 2px; border: none; background: transparent;
-      cursor: pointer;
+      cursor: pointer; position: relative;
     }
-    /* Dimmed at rest, full strength once the thumb slides under it —
-       scoped to the track's own buttons so Settings (outside the track,
-       never "active") stays undimmed, matching its unchanged desktop
-       treatment. */
-    .mobile-view-track .mobile-view-btn svg { flex-shrink: 0; opacity: 0.5; transition: opacity 0.15s ease; }
-    .mobile-view-track .mobile-view-btn.active svg { opacity: 1; }
+    .mobile-view-btn svg { flex-shrink: 0; opacity: 0.5; position: relative; z-index: 1; transition: opacity 0.15s ease; }
+    .mobile-view-btn::before {
+      content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 34px; height: 34px; border-radius: 8px; border: 2px solid transparent;
+      transition: border-color 0.18s ease;
+    }
+    .mobile-view-btn.active::before { border-color: var(--primary-light); }
+    .mobile-view-btn.active svg { opacity: 1; }
 
     /* NOT display:none — the job drawer (#formArea) lives inside
        .app-shell-main too, and display:none on an ancestor hides a
@@ -2309,15 +2276,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       grid-area: tabs; display: flex; flex-direction: column; width: 64px;
       border-bottom: none; border-right: 1px solid var(--border);
     }
-    /* Track (and its thumb) flip to a vertical stack here too — the
-       thumb's position is still computed fresh off getBoundingClientRect()
-       in JS (see positionSlidingThumb()), so it needs no changes of its
-       own to follow whichever axis the track is actually laid out on. */
-    .mobile-view-track { flex-direction: column; }
     /* Centered (not flex-start) now that the column is icon-only width
        (64px, same as the desktop .rail-tab it's matching) — flex-start's
        own left-hugging padding was the leftover from when this column
-       was 130px wide and had that much empty space to fill. */
+       was 130px wide and had that much empty space to fill. The ring
+       (::before, base rule above) needs no changes here — it's centered
+       on the button itself regardless of the switcher's own row/column
+       direction, so it already works unmodified in this vertical layout
+       too. */
     .mobile-view-btn { justify-content: center; padding: 10px 0; }
 
     .app-shell { grid-area: shell; height: 100%; min-height: 0; }
@@ -2612,23 +2578,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        when it used to live there — was unreachable from any other
        mobile view). -->
   <button class="mobile-view-btn settings-menu-wrap" onclick="toggleSettingsMenu()" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg></button>
-  <!-- The 5 view buttons live in their own track (mirrors desktop's
-       .rail-tab-track — see that markup comment) so the sliding thumb
-       (see positionSlidingThumb() in the script below) has a
-       positioning context scoped to just these — Settings, above, never
-       participates in the on/off segmented-control language. -->
-  <div class="mobile-view-track" id="mobileViewTrack">
-    <div class="mobile-view-thumb" id="mobileViewThumb"></div>
-    <button class="mobile-view-btn active" data-view="jobs" title="Jobs" onclick="setMobileView('jobs')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
-    <!-- No Home button here either (see setMobileView()'s own comment) —
-         same "turn off the tab you're in" gesture as desktop: tapping
-         whichever view is already active switches to Home instead of
-         re-selecting it. -->
-    <button class="mobile-view-btn" data-view="checklist" title="Checklist" onclick="setMobileView('checklist')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    <button class="mobile-view-btn" data-view="calendar" title="Calendar" onclick="setMobileView('calendar')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></button>
-    <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" onclick="setMobileView('gantt')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></button>
-    <button class="mobile-view-btn" data-view="board" title="Board" onclick="setMobileView('board')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></button>
-  </div>
+  <button class="mobile-view-btn active" data-view="jobs" title="Jobs" onclick="setMobileView('jobs')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
+  <!-- No Home button here either (see setMobileView()'s own comment) —
+       same "turn off the tab you're in" gesture as desktop: tapping
+       whichever view is already active switches to Home instead of
+       re-selecting it. -->
+  <button class="mobile-view-btn" data-view="checklist" title="Checklist" onclick="setMobileView('checklist')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="mobile-view-btn" data-view="calendar" title="Calendar" onclick="setMobileView('calendar')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></button>
+  <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" onclick="setMobileView('gantt')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></button>
+  <button class="mobile-view-btn" data-view="board" title="Board" onclick="setMobileView('board')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></button>
 </div>
 
 <!-- Shared by both the desktop rail-tab-row's settings trigger and the
@@ -2701,19 +2659,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
            back to Home is done by toggling off whichever tab is
            currently active (clicking it again), same gesture either way,
            rather than a dedicated button for it. -->
-      <!-- Wrapped in their own track (not direct children of
-           .rail-tab-row, alongside settings) so the sliding thumb (see
-           positionSlidingThumb() in the script below) has a positioning
-           context scoped to just these four — settings never
-           participates in the on/off segmented-control language, it
-           opens a dropdown, not a persistent view. -->
-      <div class="rail-tab-track" id="railTabTrack">
-        <div class="rail-tab-thumb" id="railTabThumb"></div>
-        <button class="rail-tab" onclick="switchTabMorphed('checklist')" id="tab-checklist" title="My Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">My Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
-        <button class="rail-tab" onclick="switchTabMorphed('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
-        <button class="rail-tab" onclick="switchTabMorphed('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
-        <button class="rail-tab" onclick="switchTabMorphed('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
-      </div>
+      <button class="rail-tab" onclick="switchTabMorphed('checklist')" id="tab-checklist" title="My Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">My Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
+      <button class="rail-tab" onclick="switchTabMorphed('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
+      <button class="rail-tab" onclick="switchTabMorphed('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
+      <button class="rail-tab" onclick="switchTabMorphed('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
     </div>
     <!-- The header's own icon IS the toggle now — no separate row. Click
          it closed (icon-only) to open the Jobs search/list below (and
@@ -3352,7 +3301,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.1';
+const APP_VERSION = '2026-08-31.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6209,35 +6158,6 @@ function homeWidgetGoTo(tab) {
   switchTabMorphed(tab);
 }
 
-// Sliding Segmented Control (Option D) — positions whichever thumb
-// element sits behind the currently-active button in a track, using the
-// button's own real getBoundingClientRect() rather than any CSS nth-child
-// math, so it works unmodified across all three contexts these tracks
-// appear in (desktop row, mobile-portrait row, mobile-landscape column)
-// without special-casing which axis is "the" sliding axis — one of
-// left/top is naturally ~0 relative to the track's own origin depending
-// on which way that particular track's flex-direction runs. offsetParent
-// is null for elements not currently rendered (e.g. the desktop track
-// while mobile's own switcher is what's on screen) — skipped rather than
-// producing a bogus 0,0 position that would show up next time it becomes
-// visible again.
-function positionSlidingThumb(trackId, thumbId) {
-  const track = document.getElementById(trackId);
-  const thumb = document.getElementById(thumbId);
-  if (!track || !thumb || track.offsetParent === null) return;
-  const activeBtn = track.querySelector('.active');
-  if (!activeBtn) { thumb.style.opacity = '0'; return; }
-  const trackRect = track.getBoundingClientRect();
-  const btnRect = activeBtn.getBoundingClientRect();
-  thumb.style.opacity = '1';
-  thumb.style.transform = 'translate(' + (btnRect.left - trackRect.left) + 'px, ' + (btnRect.top - trackRect.top) + 'px)';
-}
-function positionAllSlidingThumbs() {
-  positionSlidingThumb('railTabTrack', 'railTabThumb');
-  positionSlidingThumb('mobileViewTrack', 'mobileViewThumb');
-}
-window.addEventListener('resize', positionAllSlidingThumbs);
-
 function switchTab(tab) {
   // Switching to a different view closes the job drawer if it's open —
   // cancelEdit() also flushes any debounced edit first, same safety net
@@ -6252,7 +6172,6 @@ function switchTab(tab) {
   const tabBtn = document.getElementById('tab-' + tab);
   if (tabBtn) tabBtn.classList.add('active');
   document.getElementById('panel-' + tab).classList.add('active');
-  positionSlidingThumb('railTabTrack', 'railTabThumb');
   if (tab === 'home') { renderHomeDashboard(); }
   else if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }
   else if (tab === 'board') { renderBoard(); }
@@ -6275,13 +6194,6 @@ function toggleJobRail() {
     btn.classList.toggle('active', open);
     btn.title = open ? 'Hide Jobs list' : 'Show Jobs list';
   }
-  // .rail-tab-track flips between row/column here too (see its own CSS
-  // comment) — reposition the thumb once immediately (covers the common
-  // case) and again after .manager-sidebar's own 0.15s width transition
-  // finishes, since the mid-transition rect a same-tick query would read
-  // is only the sidebar's STARTING width, not where it ends up.
-  positionSlidingThumb('railTabTrack', 'railTabThumb');
-  setTimeout(function() { positionSlidingThumb('railTabTrack', 'railTabThumb'); }, 180);
 }
 
 // Mobile-only Jobs/Checklist/Calendar/Gantt/Board toggle (Home has no
@@ -6300,7 +6212,6 @@ function setMobileView(view) {
   document.querySelectorAll('.mobile-view-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.view === view);
   });
-  positionSlidingThumb('mobileViewTrack', 'mobileViewThumb');
   if (view === 'home') {
     switchTab('home');
   } else if (view === 'checklist') {
@@ -15917,12 +15828,6 @@ document.addEventListener('focusout', function() {
 // Initialize
 init();
 initCalendarDragHandlers();
-// Covers the mobile view-switcher's default "Jobs" active state, which
-// is hardcoded straight into the markup (see mobileViewTrack's own
-// comment) rather than ever going through setMobileView() on a fresh
-// load — deferred a tick so layout has settled before the first
-// getBoundingClientRect() read.
-setTimeout(positionAllSlidingThumbs, 0);
 setupLiveblocksSync();
 </script>
 </body>
