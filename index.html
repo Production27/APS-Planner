@@ -2707,7 +2707,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
            back to Home is done by toggling off whichever tab is
            currently active (clicking it again), same gesture either way,
            rather than a dedicated button for it. -->
-      <button class="rail-tab" onclick="switchTabMorphed('checklist')" id="tab-checklist" title="My Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">My Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
+      <button class="rail-tab" onclick="switchTabMorphed('checklist')" id="tab-checklist" title="Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
       <button class="rail-tab" onclick="switchTabMorphed('calendar')" id="tab-calendar" title="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
       <button class="rail-tab" onclick="switchTabMorphed('gantt')" id="tab-gantt" title="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
       <button class="rail-tab" onclick="switchTabMorphed('board')" id="tab-board" title="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
@@ -2739,7 +2739,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="home-stats" id="homeStats"></div>
         <div class="home-grid">
           <div class="home-widget" id="homeWidgetChecklist">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to My Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> My Checklist <span class="home-widget-subtitle">My Open Items</span></div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span></div>
             <div class="home-widget-body" id="homeChecklistBody"></div>
           </div>
           <div class="home-widget" id="homeWidgetCalendar">
@@ -3347,7 +3347,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.7';
+const APP_VERSION = '2026-08-31.8';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -11866,7 +11866,7 @@ function renderBoard() {
                 }).join('') +
               '</select>' +
             '</div>' +
-            '<div class="board-col-gantt-toggle" onclick="toggleColumnAutoAssignChecklist(\'' + col.id + '\', event)" title="The moment a card lands here, this board\'s Default Checklist is created on it (not just left as a template) and assigned to the picked person below, so it shows up as a real action item in their My Checklist right away.">' +
+            '<div class="board-col-gantt-toggle" onclick="toggleColumnAutoAssignChecklist(\'' + col.id + '\', event)" title="The moment a card lands here, this board\'s Default Checklist is created on it (not just left as a template) and assigned to the picked person below, so it shows up as a real action item in their Checklist right away.">' +
               '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#f0ad4e"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="6" r="4" fill="#3949ab" stroke="#fff" stroke-width="1"/></svg> Send Checklist Action Item</span>' +
               '<span class="board-col-gantt-switch' + (col.autoAssignChecklist ? ' on' : '') + '"><span class="knob"></span></span>' +
             '</div>' +
@@ -14004,7 +14004,7 @@ function renderHomeChecklistWidget(rows) {
       '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';">' + escapeHtml(row.job.name) + '</span>' +
     '</div>';
   }).join('');
-  const more = rows.length > shown.length ? '<div class="home-more-link" onclick="switchTabMorphed(\'checklist\')">+' + (rows.length - shown.length) + ' more — go to My Checklist</div>' : '';
+  const more = rows.length > shown.length ? '<div class="home-more-link" onclick="switchTabMorphed(\'checklist\')">+' + (rows.length - shown.length) + ' more — go to Checklist</div>' : '';
   return html + more;
 }
 
