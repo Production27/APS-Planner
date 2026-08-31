@@ -1022,12 +1022,11 @@
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), width 0.2s ease;
     /* Above every z-index used by whatever tab it's overlaying (the Gantt
-       chart's condensed-bar overlays go up to 80, the floating legend sits
-       at 90) — #panelsContainer doesn't establish its own stacking context,
-       so this drawer and that tab content are compared directly against
-       each other, not scoped separately. Still comfortably under
-       tooltip/toast/modal (1000+), which should stay on top of the drawer
-       too. */
+       chart's condensed-bar overlays go up to 80) — #panelsContainer
+       doesn't establish its own stacking context, so this drawer and that
+       tab content are compared directly against each other, not scoped
+       separately. Still comfortably under tooltip/toast/modal (1000+),
+       which should stay on top of the drawer too. */
     z-index: 95; box-shadow: 6px 0 20px rgba(0,0,0,0.1);
   }
   /* Kept in sync with #jobCommentsPanel's own .collapsed (see
@@ -1886,13 +1885,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .tooltip .tt-value { color: #fff; font-weight: 500; }
   .tooltip .tt-notes { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.15); font-style: italic; color: #ddd; font-size: 11px; }
 
-  /* ===== LEGEND ===== */
-  .legend-float { position: fixed; bottom: 16px; right: 16px; background: white; border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 14px 18px; font-size: 11px; max-width: 260px; max-height: 220px; overflow-y: auto; z-index: 90; border: 1px solid var(--border); }
-  .legend-float-title { font-weight: 700; margin-bottom: 10px; color: #333; font-size: 12px; }
-  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-  .legend-color { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.08); }
-  .legend-text { color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
   /* ===== TOAST ===== */
   .toast-container { position: fixed; top: 70px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
   .toast { background: white; border-radius: 8px; padding: 12px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; animation: slideIn 0.3s ease; border-left: 4px solid var(--success); }
@@ -2010,16 +2002,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      instant the phone turns sideways. Same threshold as the portrait
      case, just checked on whichever axis is currently the narrow one. */
   @media (max-width: 480px), (max-height: 480px) {
-    /* .legend-float lives outside .app-shell-main (it's a top-level fixed
-       element, not nested in the Gantt panel), so hiding that panel alone
-       doesn't hide it — it needs its own rule or it's left floating over
-       the job list with nothing on-screen for it to be a legend of. */
     /* The whole row hides here now, settings-menu-wrap included — mobile
        has its own separate Jobs/Board nav (.mobile-view-switcher) so
        switchTab()'s tabs are redundant, and Settings now has its own
        entry point leading THAT row instead (see its markup), so nothing
        in .rail-tab-row still needs to stay reachable from here. */
-    .rail-tab-row, .activity-sidebar, #activityToggleBtn, .legend-float { display: none; }
+    .rail-tab-row, .activity-sidebar, #activityToggleBtn { display: none; }
     /* Mobile has its own separate "Jobs" nav mode (.mobile-view-switcher
        below) where the job list is always what's showing — the desktop
        open/closed toggle (see toggleJobRail()) doesn't apply here at
@@ -2408,7 +2396,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .date-popover,
   body.dark-mode .job-card,
   body.dark-mode .board-card,
-  body.dark-mode .legend-float,
   body.dark-mode .toast,
   body.dark-mode .modal-box {
     background: var(--card);
@@ -2536,8 +2523,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   body.dark-mode .settings-dropdown-item:hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
   body.dark-mode .settings-dropdown-divider { background: var(--border); }
-  body.dark-mode .legend-float-title { color: var(--text); }
-  body.dark-mode .legend-text { color: var(--text-light); }
   body.dark-mode .modal-box p { color: var(--text-light); }
 
   /* Wider text-label sibling to .gantt-toolbar button's fixed 26px icon
@@ -3328,8 +3313,6 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
 <!-- TOOLTIP -->
 <div class="tooltip" id="tooltip"></div>
-<!-- LEGEND -->
-<div class="legend-float" id="legend"></div>
 <!-- TOASTS -->
 <div class="toast-container" id="toastContainer"></div>
 <!-- DELETE MODAL -->
@@ -3354,7 +3337,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.4';
+const APP_VERSION = '2026-08-31.6';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -8879,7 +8862,6 @@ function renderGantt() {
   renderTimelineBars();
   drawConnectorLines();
   restoreScrollPosition();
-  buildLegend();
 }
 
 // ===== GANTT BAR RESIZE & MOVE (drag edges to resize, drag body to move) =====
@@ -9507,21 +9489,6 @@ function fitToView() {
   const totalDays = getDaysDiff(startDate, endDate) + 1;
   dayWidth = Math.max(Math.floor(containerWidth / totalDays), 14);
   renderGantt();
-}
-
-function buildLegend() {
-  const legend = document.getElementById('legend');
-  let html;
-  const jobColors = {};
-  getVisibleJobs().forEach(job => {
-    if (job.archived) return;
-    jobColors[job.name] = job.color;
-  });
-  html = '<div class="legend-float-title">Jobs</div>';
-  Object.entries(jobColors).sort().forEach(([name, color]) => {
-    html += '<div class="legend-item"><div class="legend-color" style="background:' + color + ';"></div><div class="legend-text">' + escapeHtml(name) + '</div></div>';
-  });
-  legend.innerHTML = html;
 }
 
 // ===== DATE POPOVER =====
