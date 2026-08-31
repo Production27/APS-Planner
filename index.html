@@ -1695,6 +1695,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     font-size: 11.5px; font-weight: 600; padding: 7px 8px 7px 10px; border-radius: 6px; margin-bottom: 8px;
   }
   body.dark-mode .home-widget-alert { background: rgba(220,53,69,0.22); color: #ff8a80; }
+  /* Severity tiers (see renderHomeWidgetAlert()'s own tier param) — same
+     red/amber/blue split the first "Needs Attention" mockup used for
+     overdue/today/due-soon. Base rule above is the overdue tier's own
+     color (unmodified, unclassed) since it shipped first; these two are
+     later additions layered on top of it. */
+  .home-widget-alert.tier-today { background: #fef3e2; color: #a0620c; }
+  body.dark-mode .home-widget-alert.tier-today { background: rgba(240,173,78,0.2); color: var(--warning); }
+  .home-widget-alert.tier-soon { background: #eef1fa; color: var(--primary-light); }
+  body.dark-mode .home-widget-alert.tier-soon { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
   .home-widget-alert-text { flex: 1; }
   .home-widget-alert-dismiss {
     background: none; border: none; color: inherit; font-size: 16px; line-height: 1; cursor: pointer;
@@ -3383,7 +3392,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.10';
+const APP_VERSION = '2026-08-31.11';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13866,10 +13875,15 @@ function buildHomeOverdueRows() {
     const isOverdue = dueDate < todayMidnight;
     const isDueSoon = !isOverdue && dueDate <= dueSoonCutoff;
     if (!isOverdue && !isDueSoon) return;
+    // Splits the "due soon" half into its own today/later tiers for the
+    // widget's own alert (see renderHomeOverdueWidget()) — unused by
+    // anything that only cared about isOverdue before this (buildHomeStats()
+    // included), so adding it here is additive, not a shape change.
+    const isToday = !isOverdue && dueDate.getTime() === todayMidnight.getTime();
     const phases = getJobPhases(job);
     const phase = phases.find(function(p) { return (p.id || null) === (card.phaseId || null); });
     const label = job.name + (phases.length > 1 && phase && !phase.isDefault ? ' — ' + phase.name : '');
-    rows.push({ job: job, card: card, label: label, dueDate: dueDate, isOverdue: isOverdue });
+    rows.push({ job: job, card: card, label: label, dueDate: dueDate, isOverdue: isOverdue, isToday: isToday });
   });
   rows.sort(function(a, b) {
     if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
@@ -14075,11 +14089,15 @@ function dismissHomeWidgetAlert(event, alertId, signature) {
 }
 // ids: the real job/card ids behind this alert, used ONLY to build its
 // dismiss signature (see the block comment above) — never rendered.
-function renderHomeWidgetAlert(alertId, ids, text) {
+// tier: 'overdue' (default, red), 'today' (amber), or 'soon' (blue) — see
+// the .tier-today/.tier-soon CSS. Severity color, not urgency filtering;
+// whether something qualifies at all is still entirely up to the caller.
+function renderHomeWidgetAlert(alertId, ids, text, tier) {
   if (!ids.length) return '';
   const signature = ids.slice().sort().join(',');
   if (isHomeWidgetAlertDismissed(alertId, signature)) return '';
-  return '<div class="home-widget-alert" id="homeAlert-' + alertId + '">' +
+  const tierClass = tier && tier !== 'overdue' ? ' tier-' + tier : '';
+  return '<div class="home-widget-alert' + tierClass + '" id="homeAlert-' + alertId + '">' +
     '<span class="home-widget-alert-text">' + escapeHtml(text) + '</span>' +
     '<button type="button" class="home-widget-alert-dismiss" onclick="dismissHomeWidgetAlert(event, \'' + alertId + '\', \'' + signature.replace(/'/g, "\\'") + '\')" title="Dismiss">&times;</button>' +
   '</div>';
@@ -14089,9 +14107,20 @@ function renderHomeWidgetAlert(alertId, ids, text) {
 // that function is already generic (cross-project switch +
 // openEditCard()), nothing checklist-item-specific about it.
 function renderHomeOverdueWidget(rows) {
+  // Three severity tiers, worst first — same split the very first "Needs
+  // Attention" mockup used (overdue red / today amber / later-this-week
+  // blue), just as three independently-dismissible alerts on Calendar's
+  // own widget instead of one merged cross-widget panel.
   const overdueRows = rows.filter(function(r) { return r.isOverdue; });
-  const alertHtml = renderHomeWidgetAlert('calendar', overdueRows.map(function(r) { return r.card.id; }),
-    overdueRows.length + (overdueRows.length === 1 ? ' job overdue' : ' jobs overdue'));
+  const todayRows = rows.filter(function(r) { return !r.isOverdue && r.isToday; });
+  const soonRows = rows.filter(function(r) { return !r.isOverdue && !r.isToday; });
+  const alertHtml =
+    renderHomeWidgetAlert('calendar-overdue', overdueRows.map(function(r) { return r.card.id; }),
+      overdueRows.length + (overdueRows.length === 1 ? ' job overdue' : ' jobs overdue')) +
+    renderHomeWidgetAlert('calendar-today', todayRows.map(function(r) { return r.card.id; }),
+      todayRows.length + (todayRows.length === 1 ? ' job due today' : ' jobs due today'), 'today') +
+    renderHomeWidgetAlert('calendar-soon', soonRows.map(function(r) { return r.card.id; }),
+      soonRows.length + (soonRows.length === 1 ? ' job due soon' : ' jobs due soon'), 'soon');
   if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><div>No overdue or upcoming jobs.</div></div>';
   return alertHtml + rows.map(function(row) {
     const dueLabel = row.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
