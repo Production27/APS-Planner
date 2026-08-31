@@ -1733,11 +1733,40 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-row .home-row-text:hover { color: var(--primary); text-decoration: underline; }
   body.dark-mode .home-row .home-row-text:hover { color: var(--primary-ondark); }
   .home-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .home-overdue-row { border-left: 3px solid var(--warning); padding-left: 8px; margin-left: -8px; }
-  .home-overdue-row.overdue { border-left-color: var(--danger); }
   .home-more-link { display: block; font-size: 12px; color: var(--primary-light); cursor: pointer; padding: 6px 0 0; }
   body.dark-mode .home-more-link { color: var(--primary-ondark); }
   .home-more-link:hover { text-decoration: underline; }
+  /* ===== OVERDUE & DUE SOON MINI CALENDAR ===== a small version of the
+     real Calendar month view — see renderHomeCalendarMiniMonth(). Each
+     day with something due gets a thin bar in that job's own color
+     (capped at 3, deduped per job) instead of a generic dot, same
+     "colored strip per event" idiom month-view calendars generally use;
+     a day with an actual overdue job also gets a thin red top edge, so
+     severity and job identity stay two separate signals rather than the
+     bar color having to carry both. */
+  .home-mini-cal-head { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .home-mini-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .home-mini-cal-dow { text-align: center; font-size: 9px; font-weight: 700; color: var(--text-light); text-transform: uppercase; padding-bottom: 4px; }
+  .home-mini-cal-day {
+    min-height: 34px; display: flex; flex-direction: column; align-items: center;
+    padding-top: 3px; border-radius: 6px; font-size: 10.5px; color: var(--text);
+    position: relative; cursor: pointer; gap: 2px; transition: background 0.15s;
+  }
+  .home-mini-cal-day:hover { background: rgba(57,73,171,0.08); }
+  body.dark-mode .home-mini-cal-day:hover { background: rgba(255,255,255,0.06); }
+  .home-mini-cal-day.other-month { color: var(--border); }
+  .home-mini-cal-day.today { background: rgba(57,73,171,0.12); }
+  .home-mini-cal-day.today .home-mini-cal-num { color: var(--primary-light); font-weight: 700; }
+  body.dark-mode .home-mini-cal-day.today .home-mini-cal-num { color: var(--primary-ondark); }
+  /* ::before, not box-shadow — an inset shadow at this cell size read as
+     a full outline once border-radius rounded its corners, not the
+     clean top-edge-only accent intended. */
+  .home-mini-cal-day.has-overdue::before {
+    content: ''; position: absolute; top: 0; left: 2px; right: 2px; height: 2px;
+    border-radius: 2px; background: var(--danger);
+  }
+  .home-mini-cal-bars { display: flex; flex-direction: column; gap: 1.5px; width: 100%; padding: 0 4px; }
+  .home-mini-cal-bar { height: 3px; border-radius: 2px; width: 100%; }
   /* ===== WORKFLOW SUMMARY MINI-BOARD ===== a small version of the real
      Board Workflow Strip — same bracket-over-columns idea, just with a
      vertical bar standing in for each board instead of a full column of
@@ -3425,7 +3454,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.16';
+const APP_VERSION = '2026-08-31.17';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -14175,14 +14204,62 @@ function renderHomeOverdueWidget(rows) {
     renderHomeWidgetAlert('calendar-soon', soonRows.map(function(r) { return r.card.id; }),
       soonRows.length + (soonRows.length === 1 ? ' job due soon' : ' jobs due soon'), 'soon');
   if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><div>No overdue or upcoming jobs.</div></div>';
-  return alertHtml + rows.map(function(row) {
-    const dueLabel = row.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return '<div class="home-row home-overdue-row' + (row.isOverdue ? ' overdue' : '') + '">' +
-      '<span class="home-row-dot" style="background:' + (row.job.color || '#3949ab') + ';"></span>' +
-      '<span class="home-row-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(row.label) + '</span>' +
-      '<span class="board-card-due' + (row.isOverdue ? ' overdue' : '') + '">' + escapeHtml(dueLabel) + '</span>' +
+  return alertHtml + renderHomeCalendarMiniMonth(rows);
+}
+
+// A real (tiny) month grid — today's month, leading/trailing days from
+// the adjacent months filled in to complete each week row, same shape
+// the real Calendar's own month view uses. Each day that has an overdue
+// or due-soon job gets a thin bar in that job's own color (deduped —
+// two cards for the same job on the same day still draw just one bar),
+// capped at 3 so a genuinely packed day doesn't blow out the cell. A day
+// with an actual overdue job also gets a thin red top edge, so severity
+// and job identity stay two separate signals instead of the bar color
+// having to carry both. Every cell is clickable — jumps the real
+// Calendar to that day's month, not just switching tabs blind.
+function renderHomeCalendarMiniMonth(rows) {
+  const today = new Date(new Date().toDateString());
+  const year = today.getFullYear(), month = today.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const gridStart = new Date(year, month, 1 - firstOfMonth.getDay());
+  const totalCells = Math.ceil((firstOfMonth.getDay() + daysInMonth) / 7) * 7;
+
+  const byDate = {};
+  rows.forEach(function(row) {
+    const key = toIsoDate(row.dueDate);
+    (byDate[key] || (byDate[key] = [])).push(row);
+  });
+
+  let html = '<div class="home-mini-cal-head">' + firstOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</div>';
+  html += '<div class="home-mini-cal-grid">';
+  ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(function(d) { html += '<div class="home-mini-cal-dow">' + d + '</div>'; });
+  for (let i = 0; i < totalCells; i++) {
+    const cellDate = new Date(gridStart.getTime() + i * 86400000);
+    const dayRows = byDate[toIsoDate(cellDate)] || [];
+    const hasOverdue = dayRows.some(function(r) { return r.isOverdue; });
+    const seenJobIds = {};
+    const barColors = [];
+    dayRows.forEach(function(r) {
+      if (seenJobIds[r.job.id]) return;
+      seenJobIds[r.job.id] = true;
+      barColors.push(r.job.color || '#3949ab');
+    });
+    const barsHtml = barColors.slice(0, 3).map(function(c) {
+      return '<span class="home-mini-cal-bar" style="background:' + c + ';"></span>';
+    }).join('');
+    const onclick = 'calendarViewDate=new Date(' + cellDate.getFullYear() + ',' + cellDate.getMonth() + ',' + cellDate.getDate() + ');calendarViewMode=\'month\';switchTabMorphed(\'calendar\')';
+    html += '<div class="home-mini-cal-day' +
+      (cellDate.getMonth() !== month ? ' other-month' : '') +
+      (cellDate.getTime() === today.getTime() ? ' today' : '') +
+      (hasOverdue ? ' has-overdue' : '') +
+      '" onclick="' + onclick + '">' +
+      '<span class="home-mini-cal-num">' + cellDate.getDate() + '</span>' +
+      (barsHtml ? '<span class="home-mini-cal-bars">' + barsHtml + '</span>' : '') +
     '</div>';
-  }).join('');
+  }
+  html += '</div>';
+  return html;
 }
 
 // A mini version of the real Board Workflow Strip: one vertical bar per
