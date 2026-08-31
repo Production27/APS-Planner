@@ -1636,6 +1636,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   }
   .home-widget-header:hover { background: rgba(0,0,0,0.03); }
   body.dark-mode .home-widget-header:hover { background: rgba(255,255,255,0.04); }
+  /* Header text is now "<page it links to> — <what this widget itself
+     shows>" (Karl's own call — the page name up front makes it obvious
+     which tab homeWidgetGoTo() lands on, since these two rarely matched
+     word-for-word) rather than just the widget's own title alone. The
+     subtitle half is lighter/un-bolded to keep the page name the more
+     prominent of the two. Job Chat's header (.no-nav) skips this
+     entirely — it isn't tied to any single tab, so there's no page name
+     to lead with. */
+  .home-widget-subtitle { font-weight: 500; color: var(--text-light); }
+  .home-widget-subtitle::before { content: '\2014\00a0'; }
   .home-widget-icon { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .home-widget-icon.tint-green { background: #e6f4ea; }
   .home-widget-icon.tint-red { background: #fdecea; }
@@ -2729,11 +2739,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="home-stats" id="homeStats"></div>
         <div class="home-grid">
           <div class="home-widget" id="homeWidgetChecklist">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to My Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> My Open Items</div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to My Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> My Checklist <span class="home-widget-subtitle">My Open Items</span></div>
             <div class="home-widget-body" id="homeChecklistBody"></div>
           </div>
           <div class="home-widget" id="homeWidgetCalendar">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Overdue &amp; Due Soon</div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span></div>
             <div class="home-widget-body" id="homeOverdueBody"></div>
           </div>
           <!-- Middle column, spanning both rows — sits vertically between
@@ -2757,14 +2767,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             </div>
           </div>
           <div class="home-widget" id="homeWidgetWorkflow">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Workflow Summary</div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span></div>
             <div class="home-widget-body" id="homeStageBody">
               <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
               <div class="wsm-bars-wrap" id="wsmBarsWrap"></div>
             </div>
           </div>
           <div class="home-widget" id="homeWidgetToday">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Today's Schedule</div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span></div>
             <div class="home-widget-body" id="homeTodayBody"></div>
           </div>
         </div>
@@ -3337,7 +3347,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.6';
+const APP_VERSION = '2026-08-31.7';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
