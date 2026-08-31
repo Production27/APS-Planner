@@ -885,26 +885,17 @@
      mobile) so this never fights either of those — see their own rules
      further down. The header itself stays visible (just its label/badge/
      add-button/search collapse away, see the icon-only rules below) since
-     its icon is now the only way to reopen the rail.
-     Every "collapsed" rule below is also gated on :not(.job-rail-peek) —
-     hovering the collapsed rail (see startJobRailPeek()/endJobRailPeek())
-     adds that class to preview the full list without a click, reusing
-     this exact same expanded appearance rather than a separate floating
-     copy of it. It's deliberately a real (if temporary) width change,
-     same mechanism as the pinned-open state, not a non-reflowing overlay
-     — simpler and fewer edge cases than duplicating the job list into a
-     second positioned element, at the cost of the content to its right
-     shifting a little for as long as the peek is showing. */
-  body:not(.job-rail-open):not(.job-rail-peek) .manager-sidebar-header {
+     its icon is now the only way to reopen the rail. */
+  body:not(.job-rail-open) .manager-sidebar-header {
     padding: 8px;
   }
-  body:not(.job-rail-open):not(.job-rail-peek) .manager-sidebar-header h2 {
+  body:not(.job-rail-open) .manager-sidebar-header h2 {
     margin-bottom: 0; justify-content: center;
   }
-  body:not(.job-rail-open):not(.job-rail-peek) .job-rail-header-label,
-  body:not(.job-rail-open):not(.job-rail-peek) .job-rail-add-btn,
-  body:not(.job-rail-open):not(.job-rail-peek) .presence-avatars,
-  body:not(.job-rail-open):not(.job-rail-peek) .search-box {
+  body:not(.job-rail-open) .job-rail-header-label,
+  body:not(.job-rail-open) .job-rail-add-btn,
+  body:not(.job-rail-open) .presence-avatars,
+  body:not(.job-rail-open) .search-box {
     display: none;
   }
   /* Clipping alone (.manager-sidebar's overflow:hidden + .job-list's own
@@ -914,7 +905,7 @@
      while closed keeps the width-driven slide (the whole point of the
      fixed-width/clip approach) but means there's really nothing to see
      until it's actually opening. */
-  body:not(.job-rail-open):not(.job-rail-peek) .job-list { opacity: 0; pointer-events: none; }
+  body:not(.job-rail-open) .job-list { opacity: 0; pointer-events: none; }
   /* This row goes from a horizontal row to a vertical column — a row of
      6 icons (5 tabs + settings) needs real width even at their fixed
      icon-only size, which is what actually capped how narrow the sidebar
@@ -922,16 +913,11 @@
      (The tabs/settings themselves no longer need their own closed-rail
      sizing/label/filter overrides here — they're icon-only unconditionally
      now, see .rail-tab's own base rules further up.) */
-  body:not(.job-rail-open):not(.job-rail-peek) .rail-tab-row {
+  body:not(.job-rail-open) .rail-tab-row {
     flex-direction: column; align-items: stretch; flex-wrap: nowrap;
   }
-  /* A little extra lift while peeking (on top of the base rule's own
-     shadow-less flat edge) — a visual cue that this width is temporary/
-     hovering rather than the same committed state a click produces. */
-  body.job-rail-peek .manager-sidebar { box-shadow: 4px 0 20px rgba(0,0,0,0.18); }
-  body.dark-mode.job-rail-peek .manager-sidebar { box-shadow: 4px 0 24px rgba(0,0,0,0.5); }
   @media (min-width: 1101px) {
-    body:not(.job-rail-open):not(.job-rail-peek) .manager-sidebar { width: 64px; min-width: 64px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
   }
   .manager-sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafafa; transition: padding 0.15s ease; }
   .manager-sidebar-header h2 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; transition: margin 0.15s ease, justify-content 0.15s ease; }
@@ -2007,7 +1993,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      .job-rail-open at all, since it doesn't use this toggle) even
      though the mobile block's own rule is meant to be the final word. */
   @media (max-width: 1100px) and (min-width: 481px) {
-    body:not(.job-rail-open):not(.job-rail-peek) .manager-sidebar { width: 64px; min-width: 64px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
   }
 
   /* ===== MOBILE (phone-width) =====
@@ -2697,7 +2683,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        of Gantt/Board/Calendar is active on the right. Clicking a job opens
        the slide-out drawer (#formArea, inside panelsContainer) over
        whichever panel is showing. -->
-  <div class="manager-sidebar" id="jobRail" onmouseenter="startJobRailPeek()" onmouseleave="endJobRailPeek()">
+  <div class="manager-sidebar" id="jobRail">
     <!-- Formerly the top app-header's contents — moved here so the
          gradient title bar could go away entirely (see .app-header
          { display:none }) without losing these controls. Order/IDs/
@@ -3368,7 +3354,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.5';
+const APP_VERSION = '2026-08-31.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6261,40 +6247,6 @@ function toggleJobRail() {
     btn.classList.toggle('active', open);
     btn.title = open ? 'Hide Jobs list' : 'Show Jobs list';
   }
-  // A click always means "commit" — cancel any pending peek timer and
-  // drop the peek class so its own box-shadow doesn't linger once
-  // .job-rail-open's real expanded state takes over (harmless either
-  // way, since every CSS rule already treats the two as equivalent, but
-  // this keeps only one of them ever actually set at a time).
-  clearTimeout(jobRailPeekTimer);
-  document.body.classList.remove('job-rail-peek');
-}
-
-// Hover-to-peek on the collapsed icon rail — see .manager-sidebar's own
-// CSS comment for why this reuses the real expanded layout (a temporary
-// version of .job-rail-open) rather than a separate floating copy of the
-// job list. One shared timer handles both directions: a short delay
-// before opening (so a mouse just passing over the rail on its way
-// elsewhere doesn't trigger it) and a slightly longer one before closing
-// (so moving from the icon rail into the now-visible job list itself
-// doesn't immediately slam it shut again — mousing out of .manager-sidebar
-// briefly as you cross its own edge is normal, not a "leave" the user
-// meant). Does nothing while already pinned open (.job-rail-open) —
-// nothing to peek, it's already showing.
-let jobRailPeekTimer = null;
-function startJobRailPeek() {
-  if (document.body.classList.contains('job-rail-open')) return;
-  clearTimeout(jobRailPeekTimer);
-  jobRailPeekTimer = setTimeout(function() {
-    document.body.classList.add('job-rail-peek');
-  }, 350);
-}
-function endJobRailPeek() {
-  clearTimeout(jobRailPeekTimer);
-  if (document.body.classList.contains('job-rail-open')) return;
-  jobRailPeekTimer = setTimeout(function() {
-    document.body.classList.remove('job-rail-peek');
-  }, 250);
 }
 
 // Mobile-only Jobs/Checklist/Calendar/Gantt/Board toggle (Home has no
