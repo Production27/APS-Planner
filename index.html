@@ -390,6 +390,7 @@
   body.dark-mode .cal-day.cal-today { background: rgba(57,73,171,0.18); }
   .cal-day-num { font-size: 13px; font-weight: 700; color: var(--text-light); margin-bottom: 4px; flex-shrink: 0; text-align: center; }
   .cal-day.cal-today .cal-day-num { color: var(--primary); }
+  body.dark-mode .cal-day.cal-today .cal-day-num { color: var(--primary-ondark); }
   .calendar-days { position: relative; align-content: start; }
   .cal-bars-layer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
   .cal-event-bar {
@@ -834,7 +835,7 @@
     border-radius: 12px; background: var(--primary-light); color: #fff; border: none;
   }
   .gantt-job-focus-banner button:hover { filter: brightness(1.1); background: var(--primary-light); color: #fff; transform: none; box-shadow: none; }
-  body.dark-mode .gantt-job-focus-banner b { color: var(--primary-light); }
+  body.dark-mode .gantt-job-focus-banner b { color: var(--primary-ondark); }
   .gantt-job-focus-hint { font-weight: 500; font-style: italic; color: var(--text-light); }
 
   /* ===== DATE POPOVER ===== */
@@ -846,6 +847,7 @@
   }
   .date-popover.show { display: block; }
   .date-popover h5 { font-size: 12px; margin-bottom: 6px; color: var(--primary); }
+  body.dark-mode .date-popover h5 { color: var(--primary-ondark); }
   .date-popover .dp-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
   .date-popover .dp-label { color: #888; }
   .date-popover .dp-value { font-weight: 600; }
@@ -1002,6 +1004,7 @@
   .job-phase-chip-placeholder { font-style: italic; opacity: 0.6; font-weight: 500; }
   .job-phase-strip-btn { padding: 5px 10px; border-radius: 14px; background: transparent; border: 1.5px dashed #c5cae9; color: var(--text-light); font-size: 12px; font-weight: 600; cursor: pointer; }
   .job-phase-strip-btn:hover { border-color: var(--primary-light); color: var(--primary-light); }
+  body.dark-mode .job-phase-strip-btn:hover { border-color: var(--primary-ondark); color: var(--primary-ondark); }
   .job-subphase-strip { margin: 6px 0 0 20px; padding-left: 10px; border-left: 2px solid #dcdfe6; }
   body.dark-mode .job-subphase-strip { border-left-color: rgba(255,255,255,0.15); }
   .job-subphase-strip .job-phase-chip { font-size: 11px; padding: 4px 9px; }
@@ -1088,12 +1091,13 @@
     display: flex; align-items: center; justify-content: center; padding: 0 5px;
   }
   body.dark-mode .job-comments-panel.collapsed:hover { background: rgba(57,73,171,0.18); }
-  body.dark-mode .job-comments-collapse-btn:hover { background: rgba(57,73,171,0.18); }
+  body.dark-mode .job-comments-collapse-btn:hover { background: rgba(57,73,171,0.18); color: var(--primary-ondark); }
   .job-comments-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; min-height: 60px; }
   .job-comments-empty { font-size: 12px; color: var(--text-light); text-align: center; padding: 24px 0; }
   .job-comment-item { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
   .job-comment-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
   .job-comment-author { font-size: 12px; font-weight: 700; color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  body.dark-mode .job-comment-author { color: var(--primary-ondark); }
   .job-comment-when { font-size: 11px; color: var(--text-light); flex-shrink: 0; }
   .job-comment-text { font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
   .job-comment-delete { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
@@ -1110,6 +1114,7 @@
   .job-comment-important-check input[type="checkbox"] { accent-color: var(--danger); cursor: pointer; }
   .job-comment-important-badge { color: var(--danger); font-size: 9px; margin-right: 5px; }
   .job-comment-reply-btn { background: none; border: none; color: var(--primary); font-size: 11px; font-weight: 700; cursor: pointer; padding: 4px 0 0; }
+  body.dark-mode .job-comment-reply-btn { color: var(--primary-ondark); }
   .job-comment-reply-btn:hover { text-decoration: underline; }
   .job-comment-replies { margin-top: 8px; padding-left: 12px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
   .job-comment-reply-item { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
@@ -1180,7 +1185,7 @@
   .task-fixed-date-display:hover { border-color: var(--primary-light); background: #e1e5f5; color: var(--primary); }
   .task-fixed-date-display.empty { color: var(--text-light); }
   .task-fixed-date-display.empty:hover { color: var(--primary); }
-  body.dark-mode .task-fixed-date-display:hover { background: rgba(57,73,171,0.22); }
+  body.dark-mode .task-fixed-date-display:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
   .task-fixed-date-wrap input[type="date"] {
     position: absolute; inset: 0; width: 100%; height: 100%;
     opacity: 0; border: none; padding: 0; margin: 0;
@@ -1230,7 +1235,7 @@
   .job-list-add-btn { width: 100%; height: 46px; margin-top: 4px; border: 2px dashed #c7cbe0; border-radius: var(--radius); background: rgba(255,255,255,0.4); color: var(--text-light); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; font-family: inherit; }
   .job-list-add-btn:hover { border-color: var(--primary-light); color: var(--primary); background: white; }
   body.dark-mode .job-list-add-btn { border-color: #3a3f4d; background: rgba(255,255,255,0.03); color: var(--text-light); }
-  body.dark-mode .job-list-add-btn:hover { border-color: var(--primary-light); background: rgba(57,73,171,0.15); }
+  body.dark-mode .job-list-add-btn:hover { border-color: var(--primary-light); background: rgba(57,73,171,0.15); color: var(--primary-ondark); }
 
   /* ===== TRELLO-STYLE BOARD ===== */
   /* flex:1/min-height:0 only matter now that #panel-board.active is a
@@ -1282,7 +1287,7 @@
 font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-add-column-btn:hover { border-color: var(--primary-light); color: var(--primary); background: white; }
   body.dark-mode .board-add-column-btn { border-color: #3a3f4d; background: rgba(255,255,255,0.03); color: var(--text-light); }
-  body.dark-mode .board-add-column-btn:hover { border-color: var(--primary-light); background: rgba(57,73,171,0.15); }
+  body.dark-mode .board-add-column-btn:hover { border-color: var(--primary-light); background: rgba(57,73,171,0.15); color: var(--primary-ondark); }
   .board-add-column-form {
     display: none;
     background: #eceef4;
@@ -1405,6 +1410,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .ms-dropdown.open .ms-dropdown-panel { display: block; }
   .ms-dropdown-actions { display: flex; gap: 12px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
   .ms-dropdown-actions button { background: none; border: none; color: var(--primary-light); font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; }
+  body.dark-mode .ms-dropdown-actions button { color: var(--primary-ondark); }
   .ms-dropdown-actions button:hover { text-decoration: underline; }
   .ms-dropdown-panel .cf-multiselect { border: none; padding: 0; background: none; }
 
@@ -1502,6 +1508,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .my-checklist-visibility .ms-dropdown-panel { width: 220px; left: auto; right: 0; }
   .my-checklist-item .ci-text { cursor: pointer; }
   .my-checklist-item .ci-text:hover { color: var(--primary); text-decoration: underline; }
+  body.dark-mode .my-checklist-item .ci-text:hover { color: var(--primary-ondark); }
   .my-checklist-empty {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 10px; padding: 44px 20px; font-size: 13px; color: var(--text-light); text-align: center;
@@ -1608,6 +1615,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     padding: 2px 8px 2px 6px; border-radius: 10px; margin-right: 8px; flex-shrink: 0; cursor: pointer;
   }
   .job-chat-source:hover { border-color: var(--primary-light); color: var(--primary); }
+  body.dark-mode .job-chat-source:hover { color: var(--primary-ondark); }
   .job-chat-source-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   /* Taller than the other widgets' 260px cap (.home-widget-body's base
      rule) — a chat feed is the one widget here people plausibly want to
@@ -1661,10 +1669,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-row:last-child { border-bottom: none; }
   .home-row .home-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
   .home-row .home-row-text:hover { color: var(--primary); text-decoration: underline; }
+  body.dark-mode .home-row .home-row-text:hover { color: var(--primary-ondark); }
   .home-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .home-overdue-row { border-left: 3px solid var(--warning); padding-left: 8px; margin-left: -8px; }
   .home-overdue-row.overdue { border-left-color: var(--danger); }
   .home-more-link { display: block; font-size: 12px; color: var(--primary-light); cursor: pointer; padding: 6px 0 0; }
+  body.dark-mode .home-more-link { color: var(--primary-ondark); }
   .home-more-link:hover { text-decoration: underline; }
   /* .home-bar-row/-label/-track/-fill/-count: originally Workflow
      Summary's own row-per-stage layout, now just Today's Schedule's
@@ -1705,6 +1715,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .wsm-bar { width: 100%; border-radius: 3px 3px 6px 6px; min-height: 4px; transition: height 0.2s; }
   .wsm-bar-label { font-size: 9.5px; color: var(--text-light); font-weight: 600; margin-bottom: 4px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .wsm-bar-col:hover .wsm-bar-label { color: var(--primary); }
+  body.dark-mode .wsm-bar-col:hover .wsm-bar-label { color: var(--primary-ondark); }
   /* Today's Schedule — every Gantt task active today, each with its own
      mini progress bar (reusing .home-bar-track/.home-bar-fill) showing
      how far through its start->finish window today falls. */
@@ -1713,6 +1724,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-today-row-top { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
   .home-today-task { font-weight: 600; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .home-today-row:hover .home-today-task { color: var(--primary); }
+  body.dark-mode .home-today-row:hover .home-today-task { color: var(--primary-ondark); }
   .home-today-job { display: flex; align-items: center; gap: 5px; flex-shrink: 0; max-width: 45%; overflow: hidden; }
   .home-today-job .my-checklist-job-bubble { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .home-today-phase { font-size: 11px; color: var(--text-light); flex-shrink: 0; white-space: nowrap; }
@@ -1763,6 +1775,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     display: flex; align-items: center; justify-content: center;
   }
   .board-col-settings-btn:hover { color: var(--primary); background: rgba(57,73,171,0.10); }
+  body.dark-mode .board-col-settings-btn:hover { color: var(--primary-ondark); }
   .board-col-settings-btn:active { transform: translateY(1px); }
   .board-col-settings-dropdown {
     position: absolute; top: calc(100% + 6px); right: 0; background: white;
@@ -1838,7 +1851,14 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   /* Dark mode */
   body.dark-mode .board-col-settings-dropdown { background: var(--card); }
-  body.dark-mode .board-col-settings-item:hover { background: rgba(220,53,69,0.15); }
+  /* Was rgba(220,53,69,...) — the .danger variant's own red, copy-pasted
+     onto the plain (non-danger) hover by mistake; every other item in
+     this menu hovers blue, not red. :not(.danger) here (missing before)
+     keeps this from also overriding .danger:hover's own unconditional
+     #ffebee/var(--danger) rule above, which needs to stay red — a plain
+     .board-col-settings-item:hover selector matches danger items too,
+     since it doesn't exclude them on its own. */
+  body.dark-mode .board-col-settings-item:not(.danger):hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
 
   /* ===== CROSS-PROJECT LINKED JOB REFERENCE =====
      A linked reference is a real, precisely-positioned row (not a
@@ -1910,6 +1930,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .activity-log-item:last-child { border-bottom:none; }
   .activity-log-time { color:var(--text-light); font-size:11px; white-space:nowrap; min-width:70px; text-align:right; flex-shrink:0; }
   .activity-log-who { font-weight:700; color:var(--primary-light); }
+  body.dark-mode .activity-log-who { color: var(--primary-ondark); }
   .activity-log-what { color:var(--text); }
   .activity-log-empty { padding:20px; text-align:center; color:#999; font-size:13px; }
   body.dark-mode .activity-log-item { border-bottom-color:var(--border); }
@@ -2350,11 +2371,38 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode {
     --bg: #14161c; --card: #1c1f27; --border: #323744;
     --text: #e7e9ee; --text-light: #98a0ae;
+    /* --primary/--primary-light stay the SAME navy as light mode on
+       purpose — they're also used as solid-fill button/badge
+       backgrounds with white text on top (e.g. .badge, .job-rail-add-btn),
+       which still reads fine at that navy. What doesn't read fine is
+       that same navy used as TEXT color directly against this dark
+       background/card — --primary-ondark is a lighter, more saturated
+       blue for exactly that case (see the [fill="#3949ab"]/
+       [stroke="#3949ab"] icon override and the handful of :hover rules
+       below that had been left stranded on it — background swapped to a
+       dark tint for dark mode, but the navy text/icon color never got
+       its own override, so it all but disappeared). */
+    --primary-ondark: #8b9df5;
     --shadow: 0 2px 12px rgba(0,0,0,0.45);
     --shadow-hover: 0 4px 24px rgba(0,0,0,0.6);
     background: linear-gradient(165deg, #1c1f2a 0%, #14161c 45%, #1a1d27 100%);
   }
   body.dark-mode ::-webkit-scrollbar-thumb { background: #404656 !important; }
+  /* Every hardcoded navy icon fill/stroke in the app's static chrome
+     (Settings' three dots, Jobs' briefcase, Gantt's bars, the project-
+     toggle/backups/refresh icons, etc.) uses this exact literal hex
+     rather than a CSS variable, so a root-token change alone can't reach
+     them — this attribute selector catches all of them in one rule
+     without touching the markup itself. Presentation attributes like
+     fill/stroke always lose to a real CSS declaration regardless of
+     selector specificity, so a plain type/attribute selector is enough
+     to win here, no !important needed. Deliberately scoped to just this
+     one exact value — job/task colors that happen to default to the
+     same navy (see DEFAULT_THEME_COLOR) are set via inline style, not
+     this attribute, so a user's own color choice is never silently
+     overridden by this. */
+  body.dark-mode [fill="#3949ab"] { fill: var(--primary-ondark); }
+  body.dark-mode [stroke="#3949ab"] { stroke: var(--primary-ondark); }
 
   body.dark-mode .settings-dropdown,
   body.dark-mode .date-popover,
@@ -2390,6 +2438,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     background: #1a1d25;
   }
   body.dark-mode .left-header { color: var(--text-light); }
+  /* .week-header's own base rule (further up) colors its label text
+     var(--primary-light) — fine against its light-mode #f8f9fa
+     background, unreadable against the dark #1a1d25 it gets right above
+     in dark mode, and never had its own override until now. */
+  body.dark-mode .timeline-header .week-header { color: var(--primary-ondark); }
   body.dark-mode .left-header .col { border-right-color: var(--border); }
   body.dark-mode .gantt-top-row { background: #1a1d25; border-bottom-color: var(--border); }
   body.dark-mode .timeline-header .week-header:hover { background: rgba(57,73,171,0.28); }
@@ -2424,7 +2477,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .job-card .delete-btn:hover { background: rgba(220,53,69,0.18); }
   body.dark-mode .job-comment-delete:hover { background: rgba(220,53,69,0.18); }
   body.dark-mode .job-card .copy-btn:hover,
-  body.dark-mode .duplicate-job-btn:hover { background: rgba(57,73,171,0.22); }
+  body.dark-mode .duplicate-job-btn:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
 
   body.dark-mode .form-group label { color: var(--text-light); }
   body.dark-mode .form-group input,
@@ -2477,11 +2530,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   }
   body.dark-mode .board-col-settings-divider { background: var(--border); }
   body.dark-mode .board-col-color-option { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
-  body.dark-mode .board-col-color-toggle:hover { background: rgba(57,73,171,0.2); }
+  body.dark-mode .board-col-color-toggle:hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
   body.dark-mode .att-thumb { background: #2d3140; }
   body.dark-mode .color-toggle-row:hover { background: rgba(255,255,255,0.05); }
 
-  body.dark-mode .settings-dropdown-item:hover { background: rgba(57,73,171,0.2); }
+  body.dark-mode .settings-dropdown-item:hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
   body.dark-mode .settings-dropdown-divider { background: var(--border); }
   body.dark-mode .legend-float-title { color: var(--text); }
   body.dark-mode .legend-text { color: var(--text-light); }
@@ -3301,7 +3354,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-08-31.3';
+const APP_VERSION = '2026-08-31.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
