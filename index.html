@@ -3475,7 +3475,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-01.1';
+const APP_VERSION = '2026-09-01.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6806,6 +6806,19 @@ const CAL_BAR_GAP = 3;
 const CAL_DAYNUM_H = 26;
 
 function renderCalendar() {
+  // Exposed on <body> so mobile CSS can key off it — see the
+  // body[data-calendar-mode="week"] #weekHourSection rule, which day mode
+  // must NOT be caught by since it reuses that same element. Set BEFORE
+  // the render calls below, not after — renderWeekCalendar() measures
+  // real cell offsetLeft positions (see its own "left = startCell.
+  // offsetLeft" comment) to place the multi-day job bars, and the week-
+  // only #calendarDays/#calendarWeekdays padding-left:48px that keeps
+  // those columns aligned with the hourly grid (see that rule's own
+  // comment) is keyed off this same attribute — measuring before it was
+  // set left the bars computed against the un-padded (pre-shift) column
+  // positions, so they landed 48px left of where the columns actually
+  // ended up once the padding kicked in.
+  document.body.dataset.calendarMode = calendarViewMode;
   if (calendarViewMode === 'week') {
     renderWeekCalendar();
   } else if (calendarViewMode === 'day') {
@@ -6813,10 +6826,6 @@ function renderCalendar() {
   } else {
     renderMonthCalendar();
   }
-  // Exposed on <body> so mobile CSS can key off it — see the
-  // body[data-calendar-mode="week"] #weekHourSection rule, which day mode
-  // must NOT be caught by since it reuses that same element.
-  document.body.dataset.calendarMode = calendarViewMode;
   // Update view toggle buttons
   const monthBtn = document.getElementById('calViewMonth');
   const weekBtn = document.getElementById('calViewWeek');
