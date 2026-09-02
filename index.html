@@ -12,7 +12,7 @@
      costs nothing real elsewhere while being the standard, necessary
      precondition for a custom in-app pinch gesture to work at all. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>APS Production | Live Gantt + Job Manager</title>
+<title>TeamSync | Live Gantt + Job Manager</title>
 <style>
   :root {
     --primary: #1a237e; --primary-light: #3949ab; --accent: #e53935;
@@ -2042,6 +2042,47 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   #freshLoadOverlay .msg { font-size: 15px; font-weight: 500; letter-spacing: 0.2px; }
   @keyframes freshLoadSpin { to { transform: rotate(360deg); } }
 
+  /* LOGIN OVERLAY — replaces the old window.prompt()-based reauthenticate()
+     flow. Shown at boot before any app content when there's no valid
+     cached session, and reused for any later forced reprompt (e.g. an
+     expired token mid-session) — see reauthenticate()/showLoginOverlay().
+     z-index sits above #freshLoadOverlay's 9999 since login always gates
+     everything else. */
+  #loginOverlay { position: fixed; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; padding: 24px; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); }
+  #loginOverlay.show { display: flex; }
+  .login-card { width: 100%; max-width: 380px; background: var(--card); color: var(--text); border-radius: var(--radius); box-shadow: 0 12px 40px rgba(0,0,0,0.25), var(--shadow); padding: 36px 32px 30px; }
+  .login-brand { display: flex; flex-direction: column; align-items: center; margin-bottom: 26px; }
+  .login-mark { width: 46px; height: 46px; border-radius: 12px; margin-bottom: 14px; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 17px; letter-spacing: 0.5px; }
+  .login-title { font-size: 21px; font-weight: 700; letter-spacing: 0.1px; text-align: center; }
+  .login-sub { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+  .login-field { margin-bottom: 16px; }
+  .login-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .login-input-wrap { position: relative; }
+  .login-input { width: 100%; padding: 11px 13px; font-size: 15px; font-family: inherit; color: var(--text); background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; outline: none; transition: border-color 0.15s, background 0.15s; }
+  .login-input::placeholder { color: var(--text-light); opacity: 0.7; }
+  .login-input:focus { border-color: var(--primary-light); background: var(--card); }
+  .login-field.has-error .login-input { border-color: var(--danger); }
+  #loginPassword { padding-right: 42px; }
+  .pw-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border: none; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--text-light); }
+  .pw-toggle:hover { background: var(--border); color: var(--text); }
+  .pw-toggle svg.eye-off { display: none; }
+  .pw-toggle.showing svg.eye { display: none; }
+  .pw-toggle.showing svg.eye-off { display: block; }
+  .login-submit { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; font-family: inherit; color: #fff; border: none; border-radius: 8px; cursor: pointer; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; gap: 9px; transition: filter 0.15s, transform 0.05s; margin-top: 4px; }
+  .login-submit:hover { filter: brightness(1.06); }
+  .login-submit:active { transform: translateY(1px); }
+  .login-submit:disabled { cursor: default; filter: none; opacity: 0.85; }
+  .login-spinner { display: none; width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; animation: freshLoadSpin 0.7s linear infinite; }
+  .login-submit.loading .login-spinner { display: inline-block; }
+  .login-submit.loading .login-submit-label { opacity: 0.85; }
+  @media (prefers-reduced-motion: reduce) { .login-spinner { animation: none; } }
+  .login-banner { display: none; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.45; padding: 10px 12px; border-radius: 8px; margin-bottom: 18px; }
+  .login-banner.show { display: flex; }
+  .login-banner svg { flex-shrink: 0; margin-top: 1px; }
+  .login-banner.err { background: rgba(220,53,69,0.1); color: var(--danger); border: 1px solid rgba(220,53,69,0.3); }
+  .login-banner.lockout { background: rgba(240,173,78,0.15); color: #8a5a00; border: 1px solid rgba(240,173,78,0.4); }
+  body.dark-mode .login-banner.lockout { color: var(--warning); }
+
   /* ===== SYNC INDICATOR ===== */
   /* Element itself is built in JS (initSyncIndicator/setSyncIndicator) —
      only the pulse animation needs to live in an actual stylesheet. */
@@ -2714,6 +2755,46 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   <div class="msg">Loading your projects…</div>
 </div>
 
+<!-- LOGIN OVERLAY — replaces the old window.prompt()-based flow. Shown at
+     boot before any app content when there's no valid cached session, and
+     reused for a later forced reprompt (e.g. a token that expired mid-
+     session) — see reauthenticate()/showLoginOverlay() in the script. -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-mark" aria-hidden="true">TS</div>
+      <div class="login-title">TeamSync</div>
+      <div class="login-sub">Sign in to continue</div>
+    </div>
+    <div class="login-banner" id="loginBanner">
+      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.15"/><path d="M12 7v6M12 16.5v.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      <span id="loginBannerText"></span>
+    </div>
+    <form id="loginForm" autocomplete="off">
+      <div class="login-field" id="loginFieldUser">
+        <label class="login-label" for="loginUsername">Username</label>
+        <div class="login-input-wrap">
+          <input class="login-input" id="loginUsername" type="text" autocomplete="username">
+        </div>
+      </div>
+      <div class="login-field" id="loginFieldPass">
+        <label class="login-label" for="loginPassword">Password</label>
+        <div class="login-input-wrap">
+          <input class="login-input" id="loginPassword" type="password" autocomplete="current-password">
+          <button type="button" class="pw-toggle" id="loginPwToggle" aria-label="Show password">
+            <svg class="eye" width="18" height="18" viewBox="0 0 24 24"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12z" stroke="currentColor" stroke-width="1.7" fill="none"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.7" fill="none"/></svg>
+            <svg class="eye-off" width="18" height="18" viewBox="0 0 24 24"><path d="M3 3l18 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M10.6 5.2A10.9 10.9 0 0112 5c7 0 10.5 7 10.5 7a15.6 15.6 0 01-3.4 4.3M6.6 6.6C3.4 8.6 1.5 12 1.5 12s3.5 7 10.5 7c1.3 0 2.5-.2 3.6-.6" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M9.5 10a3 3 0 004.2 4.2" stroke="currentColor" stroke-width="1.7" fill="none"/></svg>
+          </button>
+        </div>
+      </div>
+      <button type="submit" class="login-submit" id="loginSubmit">
+        <span class="login-spinner"></span>
+        <span class="login-submit-label">Sign In</span>
+      </button>
+    </form>
+  </div>
+</div>
+
 <!-- NEW VERSION BANNER — see checkForNewerVersion(); stale-cache guard -->
 <div class="new-version-banner" id="newVersionBanner">
   <span>A newer version of this app is available — reload to get the latest fixes and avoid working on outdated data.</span>
@@ -2724,7 +2805,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      rail starts right under it rather than extending up alongside it. -->
 <div class="app-header">
   <div class="header-text">
-    <h1 id="headerTitle">APS Production</h1>
+    <h1 id="headerTitle">TeamSync</h1>
     <div class="subtitle" contenteditable="true" id="headerSubtitle" onblur="saveHeader()"></div>
   </div>
 </div>
@@ -3476,7 +3557,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-02.1';
+const APP_VERSION = '2026-09-02.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5240,7 +5321,7 @@ function migrateFromLegacy() {
       incentivePeriod: ['Q1', 'Q2', 'Q3', 'Q4']
     },
     header: {
-      title: oldTitle || 'APS Production',
+      title: oldTitle || 'TeamSync',
       subtitle: oldSub || '',
       theme: oldTheme || DEFAULT_THEME_COLOR,
       bgPhoto: oldBg || null,
@@ -5471,7 +5552,7 @@ function loadActiveProjectData() {
   boardCards = ensureCardIds(p.boardCards || []);
   calendarEvents = ensureCalendarEventIds(p.calendarEvents || []);
   fieldOptions = p.fieldOptions || {};
-  document.getElementById('headerTitle').textContent = p.header.title || 'APS Production';
+  document.getElementById('headerTitle').textContent = p.header.title || 'TeamSync';
   document.getElementById('headerSubtitle').textContent = p.header.subtitle || '';
   if (p.header.theme) localStorage.setItem('gantt_theme_color_v1', normalizeThemeColor(p.header.theme));
   if (p.header.bgPhoto) localStorage.setItem('gantt_header_bg_photo_v1', p.header.bgPhoto);
@@ -15071,66 +15152,149 @@ function applyIdentityFromTokenPayload(payload) {
   updateProjectToggle();
 }
 
-// Prompts once per missing field (native prompt, matching how project
-// rename/create already ask for input elsewhere in this app), caching
-// only the username so people aren't asked for it again every visit — the
-// password is used here purely in-memory to mint a token and is never
-// written to localStorage (see SESSION_TOKEN_KEY above). Re-prompts for
-// both specifically if the worker rejects them (wrong/removed account).
-// The shared team password no longer exists as a fallback — every login
-// now needs a real individual account. This is now the ONLY place a
-// password crosses the wire; everything else uses the token this mints.
+// ---- Login overlay (#loginOverlay in the markup) ----
+// Replaces the old window.prompt()-pair flow. showLoginOverlay() displays
+// it and waitForLoginSubmit() resolves once the form is submitted;
+// reauthenticate() below drives the two in a retry loop so a wrong
+// password or a rate-limit lockout just re-shows the form with an inline
+// message instead of throwing back up to the caller — there's no cancel
+// affordance by design, matching blocking the whole app until a valid
+// session exists (see the docs for why, further down).
+let loginFormSubmit = null;
+function showLoginOverlay(prefillUsername) {
+  const userInput = document.getElementById('loginUsername');
+  const passInput = document.getElementById('loginPassword');
+  document.getElementById('loginOverlay').classList.add('show');
+  userInput.value = prefillUsername || '';
+  passInput.value = '';
+  passInput.type = 'password';
+  document.getElementById('loginPwToggle').classList.remove('showing');
+  setLoginBusy(false);
+  (prefillUsername ? passInput : userInput).focus();
+}
+function hideLoginOverlay() {
+  document.getElementById('loginOverlay').classList.remove('show');
+}
+function setLoginBanner(message, tone) {
+  const banner = document.getElementById('loginBanner');
+  document.getElementById('loginFieldUser').classList.toggle('has-error', tone === 'err');
+  document.getElementById('loginFieldPass').classList.toggle('has-error', tone === 'err');
+  if (!message) { banner.classList.remove('show', 'err', 'lockout'); return; }
+  document.getElementById('loginBannerText').textContent = message;
+  banner.classList.add('show');
+  banner.classList.toggle('err', tone === 'err');
+  banner.classList.toggle('lockout', tone === 'lockout');
+}
+function setLoginBusy(busy) {
+  const btn = document.getElementById('loginSubmit');
+  btn.classList.toggle('loading', busy);
+  btn.disabled = busy;
+}
+function waitForLoginSubmit() {
+  return new Promise(function(resolve) {
+    loginFormSubmit = function() {
+      resolve({
+        username: document.getElementById('loginUsername').value.trim(),
+        password: document.getElementById('loginPassword').value
+      });
+    };
+  });
+}
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  if (loginFormSubmit) loginFormSubmit();
+});
+document.getElementById('loginPwToggle').addEventListener('click', function() {
+  const passInput = document.getElementById('loginPassword');
+  const showing = this.classList.toggle('showing');
+  passInput.type = showing ? 'text' : 'password';
+  this.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+});
+
+// Shows the login overlay and loops on it until a real token is minted —
+// caches only the username so people aren't asked for it again every visit
+// (the password is used here purely in-memory to mint a token and is never
+// written to localStorage; see SESSION_TOKEN_KEY above). forceReprompt is
+// true for a later reprompt (e.g. a token that stopped being accepted
+// mid-session, not just the very first boot) and just changes the initial
+// banner text. The shared team password no longer exists as a fallback —
+// every login now needs a real individual account. This is the ONLY place
+// a password crosses the wire; everything else uses the token this mints.
+// Deliberately never throws for a credential/lockout failure (unlike the
+// old prompt()-based version) — the overlay has no cancel button, so the
+// only way out of this loop is a successful login, which is also what
+// lets this same function gate app boot (see the bottom of this file).
 async function reauthenticate(forceReprompt) {
   let username = getStoredUsername();
-  if (!username || forceReprompt) {
-    username = (window.prompt(
-      forceReprompt ? "Username or password incorrect — enter your username again:" : "Username:"
-    ) || "").trim();
-    localStorage.setItem(USERNAME_KEY, username);
-  }
-  const password = window.prompt(
-    forceReprompt ? "Enter your password again:" : "Password:"
-  ) || "";
+  showLoginOverlay(username);
+  if (forceReprompt) setLoginBanner('Your session ended — please sign in again.', 'err');
 
-  // `name` is vestigial now that resolveIdentity() has no team-password
-  // fallback path left to use it for — harmless to keep sending, not worth
-  // a change just to remove an unused field.
-  const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username, password: password, name: username })
-  });
-  if (res.status === 429) {
-    // The Worker's login rate limiter tripped — this is not a bad
-    // credential, so (unlike the generic failure path below) the cached
-    // username must NOT be cleared: the account is fine, it's just
-    // temporarily locked out. Surface the Worker's own message rather
-    // than a raw status code.
-    let lockoutMessage = 'Too many attempts — try again in a few minutes.';
+  while (true) {
+    const creds = await waitForLoginSubmit();
+    username = creds.username;
+    const password = creds.password;
+    localStorage.setItem(USERNAME_KEY, username);
+    setLoginBusy(true);
+
+    let res;
     try {
-      const data = await res.json();
-      if (data && data.error) lockoutMessage = data.error;
-    } catch (e) { /* fall back to the default message above */ }
-    throw new Error(lockoutMessage);
+      // `name` is vestigial now that resolveIdentity() has no team-password
+      // fallback path left to use it for — harmless to keep sending, not
+      // worth a change just to remove an unused field.
+      res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username, password: password, name: username })
+      });
+    } catch (networkErr) {
+      setLoginBusy(false);
+      setLoginBanner('Could not reach the server — check your connection and try again.', 'err');
+      continue;
+    }
+
+    if (res.status === 429) {
+      // The Worker's login rate limiter tripped — this is not a bad
+      // credential, so (unlike the block below) the cached username must
+      // NOT be cleared: the account is fine, it's just temporarily locked
+      // out. Surface the Worker's own message rather than a raw status code.
+      let lockoutMessage = 'Too many attempts — try again in a few minutes.';
+      try {
+        const data = await res.json();
+        if (data && data.error) lockoutMessage = data.error;
+      } catch (e) { /* fall back to the default message above */ }
+      setLoginBusy(false);
+      setLoginBanner(lockoutMessage, 'lockout');
+      document.getElementById('loginPassword').focus();
+      continue;
+    }
+    if (!res.ok) {
+      // A rejected login (wrong username OR wrong password — the Worker's
+      // handleAuth() doesn't distinguish which) must not leave a bad
+      // username cached or displayed: every later attempt with no valid
+      // token reuses getStoredUsername() as-is (see reauthenticateOnce()/
+      // getSessionToken()), so a typo on the very first attempt would
+      // otherwise keep getting silently reused forever. Clearing both here
+      // means the next attempt starts fresh on both fields.
+      localStorage.removeItem(USERNAME_KEY);
+      document.getElementById('loginUsername').value = '';
+      document.getElementById('loginPassword').value = '';
+      setLoginBusy(false);
+      setLoginBanner('Incorrect username or password.', 'err');
+      document.getElementById('loginUsername').focus();
+      continue;
+    }
+
+    const data = await res.json();
+    if (!data || !data.token) {
+      setLoginBusy(false);
+      setLoginBanner('Unexpected error — please try again.', 'err');
+      continue;
+    }
+    setStoredSessionToken(data.token);
+    setLoginBusy(false);
+    hideLoginOverlay();
+    return data.token;
   }
-  if (!res.ok) {
-    // A rejected login (wrong username OR wrong password — the Worker's
-    // handleAuth() doesn't distinguish which) must not leave a bad
-    // username cached: every later caller with no valid token reuses
-    // getStoredUsername() as-is (see reauthenticateOnce()/the !username
-    // check above), so a typo on the very first attempt would otherwise
-    // keep getting silently reused forever — every retry re-prompting
-    // for password only, with no way to fix the username that was
-    // actually wrong. This is the bug behind "it doesn't even ask for a
-    // username" — clearing the cache here means the very next attempt,
-    // from anywhere, naturally re-prompts for both again.
-    localStorage.removeItem(USERNAME_KEY);
-    throw new Error('Room auth failed: ' + res.status);
-  }
-  const data = await res.json();
-  if (!data || !data.token) throw new Error('Room auth response missing token');
-  setStoredSessionToken(data.token);
-  return data.token;
 }
 
 // Returns a usable session token: the cached one if it's still valid
@@ -15335,7 +15499,7 @@ window.addEventListener('pagehide', flushPendingSync);
 // proven fresh-boot path is safer than hand-rolling a teardown that has to
 // remember every one of them.
 function logout() {
-  if (!window.confirm('Log out of APS Planner?')) return;
+  if (!window.confirm('Log out of TeamSync?')) return;
   flushPendingSync();
   if (roomSocket) { try { roomSocket.close(); } catch (e) {} }
   setStoredSessionToken(null);
@@ -16203,10 +16367,21 @@ document.addEventListener('focusout', function() {
   }, 0);
 });
 
-// Initialize
-init();
-initCalendarDragHandlers();
-setupLiveblocksSync();
+// Initialize — gated behind a valid session first. Previously the app
+// rendered immediately from whatever project data was cached locally while
+// auth happened lazily in the background (the login prompt only appeared
+// once something, usually the WebSocket connect, actually needed a token),
+// so a logged-out visitor briefly saw the full app shell before ever being
+// asked to sign in. getSessionToken() returns instantly if a still-valid
+// token is already cached (no visible interruption for a returning,
+// already-logged-in user) or awaits the login overlay otherwise.
+(async function boot() {
+  const token = await getSessionToken();
+  applyIdentityFromTokenPayload(decodeSessionTokenPayload(token));
+  init();
+  initCalendarDragHandlers();
+  setupLiveblocksSync();
+})();
 </script>
 </body>
 </html>
