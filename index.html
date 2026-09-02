@@ -2796,6 +2796,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openBackupsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
   <div class="settings-dropdown-item" data-min-tier="admin" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
   <div class="settings-dropdown-item" onclick="closeSettingsMenu(); changeMyPasswordUI();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</div>
+  <div class="settings-dropdown-item" onclick="closeSettingsMenu(); logout();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H5a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 005 20h4" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11 12h10m0 0l-3.5-3.5M21 12l-3.5 3.5" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Log Out</div>
   <div class="settings-dropdown-item" onclick="closeSettingsMenu(); openArchivedJobsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</div>
 </div>
 
@@ -3475,7 +3476,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-01.2';
+const APP_VERSION = '2026-09-02.1';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -15099,6 +15100,19 @@ async function reauthenticate(forceReprompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: username, password: password, name: username })
   });
+  if (res.status === 429) {
+    // The Worker's login rate limiter tripped — this is not a bad
+    // credential, so (unlike the generic failure path below) the cached
+    // username must NOT be cleared: the account is fine, it's just
+    // temporarily locked out. Surface the Worker's own message rather
+    // than a raw status code.
+    let lockoutMessage = 'Too many attempts — try again in a few minutes.';
+    try {
+      const data = await res.json();
+      if (data && data.error) lockoutMessage = data.error;
+    } catch (e) { /* fall back to the default message above */ }
+    throw new Error(lockoutMessage);
+  }
   if (!res.ok) {
     // A rejected login (wrong username OR wrong password — the Worker's
     // handleAuth() doesn't distinguish which) must not leave a bad
@@ -15314,6 +15328,21 @@ document.addEventListener('visibilitychange', function() {
   if (document.visibilityState === 'hidden') flushPendingSync();
 });
 window.addEventListener('pagehide', flushPendingSync);
+
+// A full reload rather than a manual in-place reset of every module-level
+// global (currentUserRole, currentAssignedProjectId, roomSocket,
+// pendingWrites, activeProjectId, ...) — reusing the app's own already-
+// proven fresh-boot path is safer than hand-rolling a teardown that has to
+// remember every one of them.
+function logout() {
+  if (!window.confirm('Log out of APS Planner?')) return;
+  flushPendingSync();
+  if (roomSocket) { try { roomSocket.close(); } catch (e) {} }
+  setStoredSessionToken(null);
+  localStorage.removeItem(USERNAME_KEY);
+  localStorage.removeItem(DISPLAY_NAME_KEY);
+  window.location.reload();
+}
 
 // ---- Outbound: send a message, track it until acked ----
 function sendRoomMessage(msg) {
