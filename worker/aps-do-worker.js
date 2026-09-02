@@ -193,6 +193,77 @@ function handleUpsertProjectBatch(project, msg) {
   return { project: next, changed: true };
 }
 
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null) return a === b;
+  if (typeof a !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) { if (!deepEqual(a[i], b[i])) return false; }
+    return true;
+  }
+  const aKeys = Object.keys(a), bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (!deepEqual(a[k], b[k])) return false;
+  }
+  return true;
+}
+
+function fieldsChangedExcluding(a, b, ignoreKeys) {
+  const aKeys = Object.keys(a).filter(function (k) { return ignoreKeys.indexOf(k) === -1; });
+  const bKeys = Object.keys(b).filter(function (k) { return ignoreKeys.indexOf(k) === -1; });
+  if (aKeys.length !== bKeys.length) return true;
+  for (const k of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return true;
+    if (!deepEqual(a[k], b[k])) return true;
+  }
+  return false;
+}
+
+// pushProjectToShared() (index.html) always sends the ENTIRE project's
+// jobs/boardCards/calendarEvents/name/header on every save, not a diff —
+// every job gets a freshly stamped updatedAt on every push regardless of
+// whether it actually changed. So "is this field present in the message"
+// can't tell a real edit from routine re-transmission; each item here is
+// compared against what's actually stored (roomState, loaded fresh above
+// in webSocketMessage()) to find out. Runs AFTER the message-type/project
+// floor in webSocketMessage() has already confirmed the caller is at
+// least 'commenter' — this only narrows further, per-item, so a commenter
+// can't smuggle a non-comment edit and an editor can't smuggle a
+// brand-new job/card/event past the type-level floor above.
+function filterUpsertProjectBatchByTier(msg, storedProject, role) {
+  const stored = storedProject || { jobs: {}, boardCards: {}, calendarEvents: {}, name: null, header: null };
+
+  function filterMap(items, storedMap, extraIgnoreKeys) {
+    return (items || []).filter(function (item) {
+      if (!item || !item.id) return false;
+      const existing = storedMap[item.id];
+      if (!existing) return tierAtLeast(role, 'projectAdmin');
+      const realChange = fieldsChangedExcluding(item, existing, ['updatedAt'].concat(extraIgnoreKeys || []));
+      if (!realChange) return tierAtLeast(role, 'commenter');
+      return tierAtLeast(role, 'editor');
+    });
+  }
+
+  const out = Object.assign({}, msg, {
+    jobs: filterMap(msg.jobs, stored.jobs || {}, ['comments']),
+    boardCards: filterMap(msg.boardCards, stored.boardCards || {}, []),
+    calendarEvents: filterMap(msg.calendarEvents, stored.calendarEvents || {}, [])
+  });
+
+  if (typeof out.name === 'string' && (out.name === stored.name || !tierAtLeast(role, 'projectAdmin'))) {
+    delete out.name;
+  }
+  if (out.header && typeof out.header === 'object' && (deepEqual(out.header, stored.header) || !tierAtLeast(role, 'projectAdmin'))) {
+    delete out.header;
+  }
+
+  return out;
+}
+
 function handleSetWholeField(project, msg, fieldName) {
   const currentRev = project.fieldRevisions[fieldName] || 0;
   const baseRev = typeof msg.baseFieldRevision === 'number' ? msg.baseFieldRevision : -1;
@@ -235,6 +306,30 @@ function handleLogActivity(project, msg) {
   next.rev++;
   return { project: next, changed: true };
 }
+
+// Minimum tier required to send each WebSocket message type — enforced in
+// webSocketMessage() below, BEFORE applyMessage() ever runs, so an
+// unauthorized write is rejected rather than applied and broadcast. Floors
+// mirror what the client's own hasMinTier()/data-min-tier gating already
+// treats as the minimum for the equivalent UI action. Types with no entry
+// here (setPresence is short-circuited earlier; anything unrecognized)
+// fall through unchanged to applyMessage()'s own 'unknown message type'
+// error — this table only ever narrows, never grants new capability.
+const MESSAGE_TIER_REQUIREMENTS = {
+  upsertProjectBatch: 'commenter',
+  logActivity: 'commenter',
+  upsertJob: 'editor',
+  upsertCard: 'editor',
+  upsertCalendarEvent: 'editor',
+  deleteFromMap: 'editor',
+  recordTombstone: 'editor',
+  setBoardColumns: 'projectAdmin',
+  setFieldOptions: 'projectAdmin',
+  setHeader: 'projectAdmin',
+  setWorkflowItems: 'projectAdmin',
+  renameProject: 'projectAdmin',
+  removeProject: 'admin'
+};
 
 function applyMessage(state, msg) {
   if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') {
@@ -514,11 +609,16 @@ function normalizeUsername(username) {
   return (typeof username === "string" ? username : "").trim().toLowerCase();
 }
 
-// Permission tiers, highest to lowest — see PERMISSION_TIERS in index.html
-// for the client-side mirror of this same ordering (enforcement is
-// client-side only; this list exists server-side just to validate incoming
-// role values in handleUsersAdd/handleUsersUpdate below).
-const VALID_TIERS = ["admin", "projectAdmin", "editor", "commenter", "viewer"];
+// Permission tiers, lowest to highest — matches PERMISSION_TIERS in
+// index.html. Used both to validate incoming role values in
+// handleUsersAdd/handleUsersUpdate below, and (via tierAtLeast()) to
+// enforce content-write permissions in webSocketMessage() below.
+const VALID_TIERS = ["viewer", "commenter", "editor", "projectAdmin", "admin"];
+function tierAtLeast(role, minTier) {
+  const mine = VALID_TIERS.indexOf(role);
+  const need = VALID_TIERS.indexOf(minTier);
+  return mine !== -1 && need !== -1 && mine >= need;
+}
 
 // Lazy migration: pre-tier accounts stored role:"member" (the old binary
 // scheme) — coerced to "editor" (the closest match to what an unrestricted
@@ -597,10 +697,33 @@ async function resolveCaller(env, body) {
   return resolveIdentityFromToken(env, body && body.token);
 }
 
+// Login rate limiting (KV-backed, reuses USERS_KV — no new binding). Per-
+// username lockout is the primary defense (protects an individual account
+// even when a small team shares one office IP); per-IP is a blunter
+// secondary layer against a spray across many usernames from one source,
+// deliberately looser so it doesn't lock out the whole team over one
+// person's typos. KV's own expirationTtl handles cleanup — no cron job.
+// Both "wrong password" and "unknown username" charge the same counter —
+// only charging the former would let someone enumerate valid usernames
+// for free by noticing which attempts don't count against the limit.
+const AUTH_LOCKOUT_WINDOW_SECONDS = 900; // 15 minutes
+const AUTH_MAX_FAILURES_PER_USERNAME = 10;
+const AUTH_MAX_FAILURES_PER_IP = 30;
+
+async function getAuthFailureCount(env, key) {
+  const raw = await env.USERS_KV.get(key);
+  const n = raw ? parseInt(raw, 10) : 0;
+  return isNaN(n) ? 0 : n;
+}
+async function bumpAuthFailure(env, key) {
+  const n = (await getAuthFailureCount(env, key)) + 1;
+  await env.USERS_KV.put(key, String(n), { expirationTtl: AUTH_LOCKOUT_WINDOW_SECONDS });
+}
+
 // --- 5. AUTH HANDLER — now mints a signed room token instead of calling
 // Liveblocks. Credential checking (resolveIdentity, above) is completely
 // unchanged; only what happens after a successful check is different.
-async function handleAuth(request, env, corsHeaders) {
+async function handleAuth(request, env, corsHeaders, ctx) {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
   }
@@ -612,10 +735,25 @@ async function handleAuth(request, env, corsHeaders) {
     return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
   }
 
+  const usernameFailKey = "authfail:" + normalizeUsername(body.username);
+  const ipFailKey = "authfail-ip:" + (request.headers.get("CF-Connecting-IP") || "unknown");
+  const [userFailures, ipFailures] = await Promise.all([
+    getAuthFailureCount(env, usernameFailKey),
+    getAuthFailureCount(env, ipFailKey)
+  ]);
+  if (userFailures >= AUTH_MAX_FAILURES_PER_USERNAME || ipFailures >= AUTH_MAX_FAILURES_PER_IP) {
+    // Skips resolveIdentity()/the PBKDF2 hash entirely once locked out.
+    return jsonResponse({ error: "Too many attempts — try again in a few minutes." }, 429, corsHeaders);
+  }
+
   const identity = await resolveIdentity(env, body.username, body.password, body.name);
   if (!identity) {
+    const bump = Promise.all([bumpAuthFailure(env, usernameFailKey), bumpAuthFailure(env, ipFailKey)]);
+    if (ctx) ctx.waitUntil(bump); else await bump;
     return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
   }
+  const clearUserFailures = env.USERS_KV.delete(usernameFailKey);
+  if (ctx) ctx.waitUntil(clearUserFailures); else await clearUserFailures;
 
   const token = await signRoomToken(env.ROOM_TOKEN_SECRET, {
     username: identity.username,
@@ -902,7 +1040,7 @@ export default {
     }
 
     if (url.pathname === "/" || url.pathname === "/auth") {
-      return handleAuth(request, env, corsHeaders);
+      return handleAuth(request, env, corsHeaders, ctx);
     }
 
     if (url.pathname === "/trigger-backup" && request.method === "POST") {
@@ -1170,6 +1308,28 @@ export class ApsRoom {
     }
 
     const roomState = await this.loadRoomState();
+
+    // Content-write authorization: the token was already verified at
+    // connect time (handleWebSocketUpgrade()) and its role/assignedProjectId
+    // captured in the WebSocket's own attachment, so no per-message KV
+    // round-trip is needed — this file's own resolveCaller() already accepts
+    // up-to-token-TTL staleness for the same reason. A message with no
+    // matching attachment (shouldn't happen post-upgrade, but don't trust it
+    // blindly) is treated as unauthorized.
+    const attachment = ws.deserializeAttachment();
+    const requiredTier = msg && MESSAGE_TIER_REQUIREMENTS[msg.type];
+    if (requiredTier && (!attachment || !tierAtLeast(attachment.role, requiredTier))) {
+      ws.send(JSON.stringify({ type: 'error', msgId: msg && msg.msgId, message: 'Forbidden: requires ' + requiredTier + ' or higher' }));
+      return;
+    }
+    if (msg && msg.projectId && attachment && attachment.assignedProjectId && msg.projectId !== attachment.assignedProjectId) {
+      ws.send(JSON.stringify({ type: 'error', msgId: msg.msgId, message: 'Forbidden: outside your assigned project' }));
+      return;
+    }
+    if (msg && msg.type === 'upsertProjectBatch' && attachment) {
+      msg = filterUpsertProjectBatchByTier(msg, roomState.projects[msg.projectId], attachment.role);
+    }
+
     const result = applyMessage(roomState, msg);
 
     if (result.error) {
