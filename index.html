@@ -3557,7 +3557,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-02.3';
+const APP_VERSION = '2026-09-02.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6068,7 +6068,7 @@ function closeSettingsMenu() {
 // harmless. Touch taps don't fire mouseenter/mouseleave the same way a real
 // pointer does, so this is effectively inert on mobile — tap-to-toggle and
 // the existing click-outside-closes handler below are unaffected.
-const SETTINGS_MENU_AUTOCLOSE_MS = 3000;
+const SETTINGS_MENU_AUTOCLOSE_MS = 2000;
 let settingsMenuCloseTimer = null;
 function armSettingsMenuAutoClose() {
   clearTimeout(settingsMenuCloseTimer);
