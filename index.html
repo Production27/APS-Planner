@@ -3557,7 +3557,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-02.2';
+const APP_VERSION = '2026-09-02.3';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6052,11 +6052,42 @@ function toggleSettingsMenu() {
   const opening = !dropdown.classList.contains('show');
   if (opening) positionSettingsMenu();
   dropdown.classList.toggle('show', opening);
+  cancelSettingsMenuAutoClose();
 }
 
 function closeSettingsMenu() {
   document.getElementById('settingsDropdown').classList.remove('show');
+  cancelSettingsMenuAutoClose();
 }
+
+// Auto-closes a few seconds after the mouse leaves BOTH the trigger and the
+// dropdown itself — armed only while open, and cancelled the moment the
+// mouse re-enters either one, so lingering on either piece keeps it open
+// indefinitely. Two triggers share this dropdown (see positionSettingsMenu()'s
+// own comment); only one is ever visible at a time, but listening on both is
+// harmless. Touch taps don't fire mouseenter/mouseleave the same way a real
+// pointer does, so this is effectively inert on mobile — tap-to-toggle and
+// the existing click-outside-closes handler below are unaffected.
+const SETTINGS_MENU_AUTOCLOSE_MS = 3000;
+let settingsMenuCloseTimer = null;
+function armSettingsMenuAutoClose() {
+  clearTimeout(settingsMenuCloseTimer);
+  settingsMenuCloseTimer = setTimeout(closeSettingsMenu, SETTINGS_MENU_AUTOCLOSE_MS);
+}
+function cancelSettingsMenuAutoClose() {
+  clearTimeout(settingsMenuCloseTimer);
+  settingsMenuCloseTimer = null;
+}
+document.querySelectorAll('.settings-menu-wrap').forEach(function(el) {
+  el.addEventListener('mouseenter', cancelSettingsMenuAutoClose);
+  el.addEventListener('mouseleave', function() {
+    if (document.getElementById('settingsDropdown').classList.contains('show')) armSettingsMenuAutoClose();
+  });
+});
+document.getElementById('settingsDropdown').addEventListener('mouseenter', cancelSettingsMenuAutoClose);
+document.getElementById('settingsDropdown').addEventListener('mouseleave', function() {
+  if (document.getElementById('settingsDropdown').classList.contains('show')) armSettingsMenuAutoClose();
+});
 
 // Snapshot before the click's own handlers run (mousedown fires first),
 // so the outside-click-closes-the-drawer check below can tell "this click
