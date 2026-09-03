@@ -3558,7 +3558,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.1';
+const APP_VERSION = '2026-09-03.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -8293,8 +8293,15 @@ function renderGantt() {
     getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
       if (job.archived) return;
       // See ganttFocusedJobId/toggleGanttJobFocus() — isolates the chart to
-      // one job's rows when set, Tasks view only.
-      if (ganttFocusedJobId && job.id !== ganttFocusedJobId) return;
+      // one job's rows when set, Tasks view only. Whichever side of a
+      // linked pair is isolated, the other side stays visible too — a
+      // job's .link.jobId only ever points at its actual linked
+      // counterpart (linkJobs() always pairs across the two fixed
+      // projects), so this can't accidentally match an unrelated job.
+      if (ganttFocusedJobId && job.id !== ganttFocusedJobId) {
+        const isLinkedCounterpart = job.link && job.link.jobId === ganttFocusedJobId;
+        if (!isLinkedCounterpart) return;
+      }
       getJobPhases(job).forEach(function(phase) {
         const phaseName = phase.isDefault ? null : phase.name;
         const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
