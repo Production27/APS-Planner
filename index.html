@@ -2012,6 +2012,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .job-span-name-wrap.linked-ref .task-bar-job-tag,
   .task-bar.linked-ref .task-bar-job-tag { opacity: 0.85; }
   .job-span-border.linked-ref { border-style: dashed; }
+  .job-span-due-marker.linked-ref { filter: saturate(0.55); cursor: pointer; }
   .cal-event-bar.linked-ref { filter: saturate(0.55); border: 1px dashed rgba(0,0,0,0.3); cursor: pointer; }
 
   /* ===== TOOLTIP ===== */
@@ -3557,7 +3558,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-02.5';
+const APP_VERSION = '2026-09-03.1';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -8741,11 +8742,24 @@ function renderGantt() {
           dueEl.addEventListener('mouseenter', function(e) { showTooltip(e, job, dueTask); });
           dueEl.addEventListener('mouseleave', hideTooltip);
           dueEl.addEventListener('mousemove', moveTooltip);
-          dueEl.addEventListener('mousedown', function(e) { startBarMove(e, job.id, DUE_MARKER_TASK_ID, dueEl, false, phaseId); });
-          dueEl.addEventListener('click', function() {
-            if (dueEl.dataset.dragged === 'true') { dueEl.dataset.dragged = 'false'; return; }
-            editJob(job.id, phaseId);
-          });
+          // Read-only, same as the span's own bar/border just above — a
+          // linked reference job's real data lives in its home project, so
+          // this must jump there (like the bar) instead of calling editJob()
+          // straight against job.id, which belongs to the OTHER project's
+          // jobs array and would just silently no-op here. No mousedown/
+          // startBarMove wiring either — dragging isn't offered for a
+          // linked reference's bar, so its due marker shouldn't be
+          // draggable on its own either.
+          if (job.isLinkedReference) {
+            dueEl.classList.add('linked-ref');
+            dueEl.addEventListener('click', function() { jumpToLinkedJobReference(job); });
+          } else {
+            dueEl.addEventListener('mousedown', function(e) { startBarMove(e, job.id, DUE_MARKER_TASK_ID, dueEl, false, phaseId); });
+            dueEl.addEventListener('click', function() {
+              if (dueEl.dataset.dragged === 'true') { dueEl.dataset.dragged = 'false'; return; }
+              editJob(job.id, phaseId);
+            });
+          }
           grid.appendChild(dueEl);
 
           let lineLeft = null, lineWidth = 0;
