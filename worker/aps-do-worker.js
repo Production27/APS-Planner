@@ -1322,7 +1322,16 @@ export class ApsRoom {
       ws.send(JSON.stringify({ type: 'error', msgId: msg && msg.msgId, message: 'Forbidden: requires ' + requiredTier + ' or higher' }));
       return;
     }
-    if (msg && msg.projectId && attachment && attachment.assignedProjectId && msg.projectId !== attachment.assignedProjectId) {
+    // 'admin' always bypasses project scoping, same as every other project-
+    // restriction check in this app (see switchProject()/
+    // enforceProjectScopeForRole() in index.html) — an admin account can
+    // have a stored assignedProjectId left over from before being promoted
+    // (the client already ignores it for role==='admin'), and this check
+    // was missing that same exemption, incorrectly blocking an unrestricted
+    // admin's own cross-project writes (e.g. linking a job to the other
+    // project — see linkJobs() in index.html, which deliberately writes to
+    // BOTH fixed projects for exactly this feature).
+    if (msg && msg.projectId && attachment && attachment.role !== 'admin' && attachment.assignedProjectId && msg.projectId !== attachment.assignedProjectId) {
       ws.send(JSON.stringify({ type: 'error', msgId: msg.msgId, message: 'Forbidden: outside your assigned project' }));
       return;
     }
