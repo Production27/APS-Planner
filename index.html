@@ -1808,12 +1808,18 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   }
   .home-mini-cal-bars { display: flex; flex-direction: column; gap: 1.5px; width: 100%; padding: 0 4px; }
   .home-mini-cal-bar { height: 3px; border-radius: 2px; width: 100%; }
-  /* Expanded state gets the same grid/data, just more room per day —
-     renderHomeCalendarMiniMonth() itself is already the real month view,
-     nothing to swap out, so this is pure CSS. */
-  .home-widget.is-expanded .home-mini-cal-grid { grid-auto-rows: 1fr; flex: 1; min-height: 0; }
-  .home-widget.is-expanded .home-mini-cal-day { min-height: 64px; }
+  /* Expanded Calendar (see renderHomeCalendarExpanded()) swaps entirely
+     to a real month grid with real job bars — the compact widget's due-
+     date-only mini month (above) has no bars to just "give more room to"
+     the way Job Chat/Board do, so #homeOverdueBody's whole content
+     changes shape instead. Reuses .calendar-grid/.cal-day/.cal-event-bar
+     etc. (the real Calendar tab's own global, unscoped classes) for
+     pixel-identical bar/cell styling — only .cal-weekday needed a local
+     copy (home-cal-weekday) since the real one is scoped to
+     #calendarWeekdays specifically. */
   .home-widget.is-expanded #homeOverdueBody { display: flex; flex-direction: column; }
+  .home-cal-weekday-row { flex-shrink: 0; margin-bottom: 6px; }
+  .home-cal-weekday { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; padding: 4px 0; }
   /* ===== WORKFLOW SUMMARY MINI-BOARD ===== a small version of the real
      Board Workflow Strip — same bracket-over-columns idea, just with a
      vertical bar standing in for each board instead of a full column of
@@ -3612,7 +3618,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.6';
+const APP_VERSION = '2026-09-03.7';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -14589,6 +14595,145 @@ function renderHomeOverdueWidget(rows) {
   return alertHtml + renderHomeCalendarMiniMonth(rows);
 }
 
+// Expanded-in-place Calendar (see toggleHomeWidgetExpand()) — a real
+// month grid with real job bars, NOT the compact widget above at a
+// bigger size: renderHomeCalendarMiniMonth() only marks due dates (a
+// thin strip per day), it has no bar layout to just give more room to.
+// This instead ports renderMonthCalendar()'s own data/lane-packing (the
+// real Calendar tab, month view) — buildCalendarJobRows(getVisibleJobs())
+// for job task spans plus flattenCalendarEventsForRange() for standalone
+// events, laid out with the identical per-week lane-packing pass — so a
+// job's actual scheduled date range shows as a real multi-day bar, same
+// as the real page. Reuses buildCalBarHtml() itself for the bar markup
+// (identical visual fidelity: softened fill, job-color border, cluster
+// hatching), but NOT the real Calendar tab's #calendarDays element or
+// its delegated mousedown/drag listener (attached only to that specific
+// element — see renderCalendar()'s own "daysEl.addEventListener"), so
+// reusing the bar HTML alone would leave every bar inert here. Click-to-
+// open is wired directly per bar below instead, and drag handles (which
+// come along in buildCalBarHtml()'s markup for free but have nothing
+// listening for them in this context) are stripped so they don't sit
+// there as dead affordances.
+function renderHomeCalendarExpanded(rows, containerEl) {
+  const overdueRows = rows.filter(function(r) { return r.isOverdue; });
+  const todayRows = rows.filter(function(r) { return !r.isOverdue && r.isToday; });
+  const soonRows = rows.filter(function(r) { return !r.isOverdue && !r.isToday; });
+  const alertHtml =
+    renderHomeWidgetAlert('calendar-overdue', overdueRows.map(function(r) { return r.card.id; }),
+      overdueRows.length + (overdueRows.length === 1 ? ' job overdue' : ' jobs overdue')) +
+    renderHomeWidgetAlert('calendar-today', todayRows.map(function(r) { return r.card.id; }),
+      todayRows.length + (todayRows.length === 1 ? ' job due today' : ' jobs due today'), 'today') +
+    renderHomeWidgetAlert('calendar-soon', soonRows.map(function(r) { return r.card.id; }),
+      soonRows.length + (soonRows.length === 1 ? ' job due soon' : ' jobs due soon'), 'soon');
+
+  const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const year = today.getFullYear(), month = today.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setDate(gridStart.getDate() - firstOfMonth.getDay());
+  const cellDates = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    d.setHours(0, 0, 0, 0);
+    cellDates.push(d);
+  }
+
+  const flatRows = buildCalendarJobRows(getVisibleJobs());
+  const allJobs = flatRows.map(function(row, flatIdx) {
+    return {
+      flatIdx: flatIdx, job: row.job, task: row.task,
+      start: new Date(row.task.start + 'T00:00:00'), finish: new Date(row.task.finish + 'T00:00:00'),
+      phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName
+    };
+  });
+  flattenCalendarEventsForRange(cellDates[0], cellDates[41]).forEach(function(row, i) {
+    allJobs.push({ flatIdx: 'ce-' + i, job: row.job, task: row.task, start: row.start, finish: row.finish });
+  });
+
+  const numRows = 6;
+  const rowLanes = [], rowSegments = [];
+  for (let row = 0; row < numRows; row++) {
+    const rowStart = cellDates[row * 7], rowEnd = cellDates[row * 7 + 6];
+    const segs = allJobs.filter(function(j) { return j.finish >= rowStart && j.start <= rowEnd; })
+      .map(function(j) {
+        const clampedStart = j.start < rowStart ? rowStart : j.start;
+        const clampedFinish = j.finish > rowEnd ? rowEnd : j.finish;
+        return {
+          job: j.job, task: j.task, phaseId: j.phaseId, phaseName: j.phaseName, subPhaseId: j.subPhaseId, subPhaseName: j.subPhaseName,
+          colStart: Math.round((clampedStart - rowStart) / 86400000),
+          colEnd: Math.round((clampedFinish - rowStart) / 86400000),
+          isTrueStart: j.start.getTime() === clampedStart.getTime(),
+          isTrueEnd: j.finish.getTime() === clampedFinish.getTime(),
+          spanWindowOffset: Math.round((clampedStart - j.start) / 86400000),
+          lane: 0
+        };
+      })
+      .sort(function(a, b) { return a.colStart - b.colStart || (a.colEnd - a.colStart) - (b.colEnd - b.colStart); });
+    const laneEndCols = [];
+    segs.forEach(function(seg) {
+      let lane = laneEndCols.findIndex(function(endCol) { return endCol < seg.colStart; });
+      if (lane === -1) { lane = laneEndCols.length; laneEndCols.push(seg.colEnd); }
+      else { laneEndCols[lane] = seg.colEnd; }
+      seg.lane = lane;
+    });
+    rowLanes.push(laneEndCols.length);
+    rowSegments.push(segs);
+  }
+
+  let daysHtml = '';
+  for (let row = 0; row < numRows; row++) {
+    const minH = CAL_DAYNUM_H + Math.max(rowLanes[row], 1) * (CAL_BAR_H + CAL_BAR_GAP) + 10;
+    for (let col = 0; col < 7; col++) {
+      const cellDate = cellDates[row * 7 + col];
+      const isOutside = cellDate.getMonth() !== month;
+      const isToday = cellDate.getTime() === today.getTime();
+      daysHtml += '<div class="cal-day' + (isOutside ? ' cal-outside' : '') + (isToday ? ' cal-today' : '') +
+        '" style="min-height:' + minH + 'px;"><div class="cal-day-num">' + cellDate.getDate() + '</div></div>';
+    }
+  }
+
+  containerEl.innerHTML = alertHtml +
+    '<div class="calendar-grid home-cal-weekday-row">' + WEEKDAY_NAMES.map(function(d) { return '<div class="home-cal-weekday">' + d + '</div>'; }).join('') + '</div>' +
+    '<div class="calendar-grid calendar-days" id="homeCalDaysGrid">' + daysHtml + '</div>';
+
+  const daysGrid = containerEl.querySelector('#homeCalDaysGrid');
+  const cellEls = daysGrid.querySelectorAll('.cal-day');
+  const getCell = function(row, col) { return cellEls[row * 7 + col]; };
+
+  const barsLayer = document.createElement('div');
+  barsLayer.className = 'cal-bars-layer';
+  daysGrid.appendChild(barsLayer);
+
+  for (let row = 0; row < numRows; row++) {
+    rowSegments[row].forEach(function(seg) {
+      const startCell = getCell(row, seg.colStart);
+      const endCell = getCell(row, seg.colEnd);
+      const left = startCell.offsetLeft;
+      const width = (endCell.offsetLeft + endCell.offsetWidth) - left;
+      const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
+      const wrap = document.createElement('div');
+      wrap.innerHTML = buildCalBarHtml(seg, left, top, width);
+      const barEl = wrap.firstElementChild;
+      barEl.style.cursor = 'pointer';
+      barEl.querySelectorAll('[data-drag]').forEach(function(h) { h.remove(); });
+      barEl.addEventListener('click', function() {
+        if (isCalendarEventTaskId(seg.task.id)) {
+          const parsed = parseCalendarEventTaskId(seg.task.id);
+          openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
+        } else if (seg.job.isLinkedReference) {
+          jumpToLinkedJobReference(seg.job);
+        } else {
+          calendarOpenJob(seg.job.id, seg.task.id, seg.phaseId);
+        }
+      });
+      barsLayer.appendChild(barEl);
+    });
+  }
+}
+
 // A real (tiny) month grid — today's month, leading/trailing days from
 // the adjacent months filled in to complete each week row, same shape
 // the real Calendar's own month view uses. Each day that has an overdue
@@ -14973,7 +15118,10 @@ function renderHomeDashboard() {
   const checklistBody = document.getElementById('homeChecklistBody');
   if (checklistBody) checklistBody.innerHTML = homeExpandedWidgetId === 'checklist' ? renderHomeChecklistWidgetExpanded(checklistRows) : renderHomeChecklistWidget(checklistRows);
   const overdueBody = document.getElementById('homeOverdueBody');
-  if (overdueBody) overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
+  if (overdueBody) {
+    if (homeExpandedWidgetId === 'calendar') renderHomeCalendarExpanded(overdueRows, overdueBody);
+    else overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
+  }
   if (document.getElementById('homeStageBody')) {
     renderHomeWorkflowMiniBoard();
     if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
