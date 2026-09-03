@@ -3629,7 +3629,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.11';
+const APP_VERSION = '2026-09-03.12';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -14938,6 +14938,16 @@ function renderHomeWorkflowExpandedBoard() {
     const colEl = document.createElement('div');
     colEl.className = 'home-board-col';
     colEl.innerHTML = '<div class="home-board-col-head"><span>' + escapeHtml(col.label) + '</span><span class="home-board-col-count">' + cards.length + '</span></div>';
+    // Same treatment renderBoard() gives the real .board-column when a
+    // board has its own color set (BOARD_COLOR_PRESETS, via ⋮ Settings →
+    // Color) — the whole column, not just its header, so it reads the
+    // same way here as it does on the real Board tab.
+    if (col.color) {
+      colEl.style.background = col.color;
+      const dark = isDarkColor(col.color);
+      const head = colEl.querySelector('.home-board-col-head');
+      head.style.color = dark ? '#fff' : darkenColor(col.color, 0.6);
+    }
     const cardsWrap = document.createElement('div');
     cardsWrap.className = 'home-board-cards';
     if (!cards.length) {
