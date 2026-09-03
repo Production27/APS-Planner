@@ -3558,7 +3558,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.3';
+const APP_VERSION = '2026-09-03.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -9697,7 +9697,20 @@ function setGanttDayWidthAnchored(newDayWidth, anchorClientX) {
   const dayPos = (timelineBody.scrollLeft + anchorOffset) / dayWidth;
   dayWidth = clamped;
   renderGantt();
-  timelineBody.scrollLeft = dayPos * dayWidth - anchorOffset;
+  // renderGantt() ends by calling restoreScrollPosition(), which restores
+  // the PRE-zoom scrollLeft but only on the next animation frame (see its
+  // own comment) — asserting the anchored scrollLeft synchronously here
+  // would just get clobbered a frame later, snapping back to the old
+  // position (visibly "zooming toward the left edge" on a single click,
+  // since there's no follow-up frame to mask it the way a continuous
+  // wheel/pinch gesture's rapid re-zooms do). Scheduling this in its own
+  // rAF — registered after renderGantt()'s already-pending one — runs it
+  // afterward instead, so this is the value that actually sticks.
+  requestAnimationFrame(function() {
+    const newScrollLeft = dayPos * dayWidth - anchorOffset;
+    timelineBody.scrollLeft = newScrollLeft;
+    setHeaderScroll(newScrollLeft);
+  });
 }
 
 // Wheel/trackpad path only — a wheel event has no persistent "original
