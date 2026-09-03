@@ -3748,7 +3748,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.18';
+const APP_VERSION = '2026-09-03.19';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -7026,6 +7026,25 @@ function toggleHomeWidgetExpand(key, event) {
   const stageBody = document.getElementById('homeStageBody');
   if (stageBody) stageBody.classList.toggle('is-expanded-view', homeExpandedWidgetId === 'board');
   renderHomeDashboard();
+  // renderHomeWorkflowMiniBoard()'s bracket band measures real
+  // .wsm-bar-col elements via getBoundingClientRect() — correct for the
+  // FINAL layout, but Board's own column is one of the ones .home-grid's
+  // .45s width transition is actively animating right in this same
+  // tick, so that first measurement lands mid-flight and the bracket
+  // ends up misaligned with the bars underneath it (Karl's own report:
+  // "the workflow summary gets screwed up"). This isn't just Board's own
+  // toggle either — Checklist shares its column, so expanding/collapsing
+  // Checklist resizes Board's width too. Re-measure once the transition
+  // actually settles, whichever widget triggered it.
+  const gridEl = document.querySelector('#panel-home .home-grid');
+  if (gridEl) {
+    const onSettled = function(e) {
+      if (e.target !== gridEl) return;
+      gridEl.removeEventListener('transitionend', onSettled);
+      renderHomeWorkflowMiniBoard();
+    };
+    gridEl.addEventListener('transitionend', onSettled);
+  }
 }
 
 window.addEventListener('resize', function() {
