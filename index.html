@@ -3748,7 +3748,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.19';
+const APP_VERSION = '2026-09-03.20';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -16474,35 +16474,11 @@ function flushPendingRoomPush() {
 // A page close/refresh within that 300ms window used to lose the edit
 // entirely (a bug fixed earlier, kept fixed here): saved to localStorage
 // synchronously, but the debounced push never fires. Flush any pending
-// push the moment the tab is hidden or about to unload. A plain
-// WebSocket.send() during pagehide has no delivery guarantee the way the
-// old SDK's transport handling did, so this also fires a best-effort
-// fetch(..., {keepalive:true}) fallback straight to the Worker (which
-// forwards it into the room) for specifically this one path.
+// push the moment the tab is hidden or about to unload.
 function flushPendingSync() {
   flushAutoSaveJobForm();
   flushCardAutosave();
   flushPendingRoomPush();
-  if (pendingWrites.size > 0) {
-    // NOTE: room-fallback-write has no matching route in the Worker
-    // (pre-existing, unrelated to the token-auth switch here) — this
-    // still 404s today. Left as-is; whether to wire up the route or drop
-    // this fallback entirely is a separate decision. Uses whatever token
-    // is already cached (synchronous, no minting — a pagehide handler
-    // can't usefully await a network round-trip anyway), matching this
-    // whole path's existing best-effort framing.
-    const token = getStoredSessionToken();
-    pendingWrites.forEach(function(entry) {
-      try {
-        fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'room-fallback-write', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          keepalive: true,
-          body: JSON.stringify(Object.assign({ token: token }, entry.msg))
-        });
-      } catch (e) { /* best-effort only */ }
-    });
-  }
 }
 document.addEventListener('visibilitychange', function() {
   if (document.visibilityState === 'hidden') flushPendingSync();
