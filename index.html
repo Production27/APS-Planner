@@ -1597,7 +1597,27 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      .home-widget's own row height then comes from its GRID CELL, not its
      content, with .home-widget-body's flex:1 (see its own rule) filling
      whatever's left inside each card after the header/alert. */
-  .home-grid { display: grid; grid-template-columns: 1fr 0.8fr 1fr; gap: 16px; }
+  .home-grid { display: grid; grid-template-columns: 1fr 0.8fr 1fr; gap: 16px; transition: grid-template-columns .45s cubic-bezier(.22,.61,.36,1), grid-template-rows .45s cubic-bezier(.22,.61,.36,1); }
+  @media (prefers-reduced-motion: reduce) { .home-grid { transition: none; } }
+  /* One widget can be "expanded in place" (see toggleHomeWidgetExpand()) —
+     its own grid row/column grows via an inline style JS sets on
+     .home-grid itself (HOME_REFLOW_TRACK), everyone else just gets
+     smaller, nobody leaves the grid. Desktop-only (>900px) — see
+     .home-widget-expand-btn's own media-query hide below; below that the
+     grid is already a single stacked column where "expand and shove
+     siblings aside" doesn't mean anything. */
+  .home-widget-expand-btn {
+    appearance: none; border: none; background: none; color: var(--text-light); cursor: pointer;
+    width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-left: auto; transition: background .15s, color .15s;
+  }
+  .home-widget-expand-btn:hover { background: rgba(57,73,171,0.12); color: var(--primary); }
+  body.dark-mode .home-widget-expand-btn:hover { background: rgba(139,157,245,0.18); color: var(--primary-ondark); }
+  .home-widget.is-expanded .home-widget-expand-btn { color: var(--primary-light); transform: rotate(180deg); }
+  body.dark-mode .home-widget.is-expanded .home-widget-expand-btn { color: var(--primary-ondark); }
+  .home-widget.is-expanded { box-shadow: var(--shadow-hover); }
+  .home-widget.is-expanded .job-chat-feed { max-height: none; }
+  @media (max-width: 900px) { .home-widget-expand-btn { display: none; } }
   @media (min-width: 901px) {
     .home-grid { flex: 1; min-height: 0; grid-template-rows: 1fr 1fr; }
   }
@@ -1788,6 +1808,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   }
   .home-mini-cal-bars { display: flex; flex-direction: column; gap: 1.5px; width: 100%; padding: 0 4px; }
   .home-mini-cal-bar { height: 3px; border-radius: 2px; width: 100%; }
+  /* Expanded state gets the same grid/data, just more room per day —
+     renderHomeCalendarMiniMonth() itself is already the real month view,
+     nothing to swap out, so this is pure CSS. */
+  .home-widget.is-expanded .home-mini-cal-grid { grid-auto-rows: 1fr; flex: 1; min-height: 0; }
+  .home-widget.is-expanded .home-mini-cal-day { min-height: 64px; }
+  .home-widget.is-expanded #homeOverdueBody { display: flex; flex-direction: column; }
   /* ===== WORKFLOW SUMMARY MINI-BOARD ===== a small version of the real
      Board Workflow Strip — same bracket-over-columns idea, just with a
      vertical bar standing in for each board instead of a full column of
@@ -1818,6 +1844,25 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .wsm-bar-label { font-size: 9.5px; color: var(--text-light); font-weight: 600; margin-bottom: 4px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .wsm-bar-col:hover .wsm-bar-label { color: var(--primary); }
   body.dark-mode .wsm-bar-col:hover .wsm-bar-label { color: var(--primary-ondark); }
+  /* ===== EXPANDED BOARD (Home widget, in-place) ===== real kanban
+     columns built from buildCardEl() — the exact same card element the
+     real Board tab uses (click-to-edit, drag handle, checklist/due
+     badges all included for free) — just laid out narrower. Hidden
+     unless #homeStageBody carries .is-expanded-view (see
+     renderHomeDashboard()); the bar-chart summary above hides in the
+     same state instead of being replaced, so toggling back to compact
+     doesn't need to rebuild it. */
+  .home-board-expanded { display: none; }
+  #homeStageBody.is-expanded-view .wsm-bracket-band,
+  #homeStageBody.is-expanded-view .wsm-bars-wrap { display: none; }
+  #homeStageBody.is-expanded-view .home-board-expanded { display: flex; }
+  #homeStageBody.is-expanded-view { display: flex; flex-direction: column; }
+  .home-board-expanded { flex: 1; min-height: 0; gap: 10px; overflow-x: auto; padding-top: 4px; }
+  .home-board-col { flex: 0 0 180px; display: flex; flex-direction: column; min-height: 0; background: var(--bg); border-radius: 8px; padding: 8px; }
+  .home-board-col-head { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; flex-shrink: 0; }
+  .home-board-col-count { font-size: 10.5px; font-weight: 700; color: var(--text-light); background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
+  .home-board-cards { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .home-board-col-empty { font-size: 11px; color: var(--text-light); text-align: center; padding: 10px 0; }
   /* ===== TODAY'S SCHEDULE MINI-GANTT ===== a small version of the real
      Gantt chart — a real (tiny) week strip (today ± a few days, see
      HOME_MINI_GANTT_WINDOW_DAYS) with each active task's own bar
@@ -1828,9 +1873,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      .task-bar-job-tag-style pill — same visual language as the real
      chart, just shrunk down, per Karl's own ask. See
      renderHomeTodayScheduleWidget(). */
+  /* --home-gantt-days (default 7) is normally left at the stylesheet's
+     own default and only ever set as an inline style on #homeWidgetToday
+     when the widget is expanded in place (see toggleHomeWidgetExpand()) —
+     widens the strip to show more days around today instead of just
+     more task rows, since buildHomeUpcomingScheduleRows() (unlike the
+     compact widget's "must include today" filter) already returns every
+     task whose span touches the window, regardless of width. */
   .home-mini-gantt { position: relative; }
   .home-mini-gantt-days, .home-mini-gantt-row {
-    display: grid; grid-template-columns: 56px repeat(7, 1fr); gap: 2px; align-items: center;
+    display: grid; grid-template-columns: 56px repeat(var(--home-gantt-days, 7), 1fr); gap: 2px; align-items: center;
   }
   .home-mini-gantt-days { margin-bottom: 6px; }
   .home-mini-gantt-day { text-align: center; font-size: 9.5px; color: var(--text-light); font-weight: 600; padding-bottom: 4px; border-bottom: 2px solid transparent; }
@@ -1846,8 +1898,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-mini-gantt-row:hover .home-mini-gantt-label { color: var(--primary); }
   body.dark-mode .home-mini-gantt-row:hover .home-mini-gantt-label { color: var(--primary-ondark); }
   .home-mini-gantt-track {
-    grid-column: 2 / span 7; position: relative; height: 18px; border-radius: 4px;
-    background: repeating-linear-gradient(90deg, transparent, transparent calc(14.28% - 1px), var(--border) calc(14.28% - 1px), var(--border) 14.28%);
+    grid-column: 2 / span var(--home-gantt-days, 7); position: relative; height: 18px; border-radius: 4px;
+    background: repeating-linear-gradient(90deg, transparent, transparent calc(100% / var(--home-gantt-days, 7) - 1px), var(--border) calc(100% / var(--home-gantt-days, 7) - 1px), var(--border) calc(100% / var(--home-gantt-days, 7)));
   }
   .home-mini-gantt-bar {
     position: absolute; top: 1px; bottom: 1px; min-width: 6px; border-radius: 4px; box-sizing: border-box;
@@ -2949,11 +3001,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
         <div class="home-greeting-banner" id="homeGreeting"></div>
         <div class="home-grid">
           <div class="home-widget" id="homeWidgetChecklist">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span></div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('checklist', event)" title="Expand" aria-label="Expand Checklist"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
             <div class="home-widget-body" id="homeChecklistBody"></div>
           </div>
           <div class="home-widget" id="homeWidgetCalendar">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span></div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('calendar', event)" title="Expand" aria-label="Expand Calendar"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
             <div class="home-widget-body" id="homeOverdueBody"></div>
           </div>
           <!-- Middle column, spanning both rows — sits vertically between
@@ -2963,9 +3015,10 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
                plain DOM order). Reordered to last on the single-column
                mobile layout instead — "last is fine" on mobile was a
                separate call from "center" on desktop. -->
-          <div class="home-widget home-widget-center">
+          <div class="home-widget home-widget-center" id="homeWidgetJobChat">
             <div class="home-widget-header no-nav" title="Comments across every job you can see">
               <span class="home-widget-icon tint-purple"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#7e57c2"/></svg></span> Job Chat
+              <button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('jobchat', event)" title="Expand" aria-label="Expand Job Chat"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="home-widget-body">
               <div class="job-chat-compose">
@@ -2977,15 +3030,16 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
             </div>
           </div>
           <div class="home-widget" id="homeWidgetWorkflow">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span></div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('board', event)" title="Expand" aria-label="Expand Board"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
             <div class="home-widget-body" id="homeStageBody">
               <div id="homeStageAlert"></div>
               <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
               <div class="wsm-bars-wrap" id="wsmBarsWrap"></div>
+              <div class="home-board-expanded" id="homeBoardExpanded"></div>
             </div>
           </div>
           <div class="home-widget" id="homeWidgetToday">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span></div>
+            <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('gantt', event)" title="Expand" aria-label="Expand Gantt Chart"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
             <div class="home-widget-body" id="homeTodayBody"></div>
           </div>
         </div>
@@ -3558,7 +3612,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.5';
+const APP_VERSION = '2026-09-03.6';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6445,6 +6499,81 @@ function switchTabMorphed(targetTab) {
 function homeWidgetGoTo(tab) {
   switchTabMorphed(tab);
 }
+
+// ===== HOME WIDGET "EXPAND IN PLACE" =====
+// A widget's own ⤢ button (separate from its header's homeWidgetGoTo()
+// click, which still navigates away) grows it right there on the Home
+// grid instead — see .home-grid's own CSS comment for the mechanism.
+// Includes Job Chat (jobchat), which has no tab of its own and so isn't
+// in HOME_WIDGET_FOR_TAB above.
+const HOME_EXPAND_WIDGET_ID = {
+  checklist: 'homeWidgetChecklist',
+  calendar: 'homeWidgetCalendar',
+  jobchat: 'homeWidgetJobChat',
+  board: 'homeWidgetWorkflow',
+  gantt: 'homeWidgetToday'
+};
+// [col, row] each widget's cell sits in on the desktop 3x2 home grid.
+// NOT simply DOM order read top-to-bottom — only .home-widget-center has
+// an explicit grid-column/grid-row; the other four are auto-placed, and
+// auto-placement resolves around that explicit claim on column 2 before
+// walking the remaining DOM order, which lands Calendar top-RIGHT and
+// Board bottom-LEFT (not the top-left/bottom-right their own DOM order
+// would suggest) — verified against getBoundingClientRect(), not assumed.
+// Job Chat's row is null: it already spans both rows, so expanding it
+// never needs a row change.
+const HOME_REFLOW_TRACK = {
+  checklist: [0, 0], calendar: [2, 0], jobchat: [1, null], board: [0, 1], gantt: [2, 1]
+};
+let homeExpandedWidgetId = null;
+
+function applyHomeReflowTracks() {
+  const grid = document.querySelector('#panel-home .home-grid');
+  if (!grid) return;
+  let cols = [1, 0.8, 1], rows = [1, 1];
+  const track = homeExpandedWidgetId && HOME_REFLOW_TRACK[homeExpandedWidgetId];
+  if (track) {
+    cols = [0.4, 0.4, 0.4];
+    cols[track[0]] = 4.5;
+    if (track[1] !== null) {
+      rows = [0.4, 0.4];
+      rows[track[1]] = 4.5;
+    }
+  }
+  grid.style.gridTemplateColumns = cols.map(function(v) { return v + 'fr'; }).join(' ');
+  grid.style.gridTemplateRows = rows.map(function(v) { return v + 'fr'; }).join(' ');
+}
+
+// Desktop-only (see .home-widget-expand-btn's own max-width:900px rule
+// hiding the button itself) — .home-grid collapses to a single stacked
+// column below that width via its own media query, and an inline
+// grid-template-columns/rows here would silently outrank that rule
+// (inline style beats a stylesheet media query regardless of specificity),
+// wrecking the mobile layout. Guarded again on resize below.
+function toggleHomeWidgetExpand(key, event) {
+  if (event) event.stopPropagation();
+  if (window.innerWidth <= 900) return;
+  homeExpandedWidgetId = (homeExpandedWidgetId === key) ? null : key;
+  applyHomeReflowTracks();
+  Object.keys(HOME_EXPAND_WIDGET_ID).forEach(function(k) {
+    const el = document.getElementById(HOME_EXPAND_WIDGET_ID[k]);
+    if (el) el.classList.toggle('is-expanded', k === homeExpandedWidgetId);
+  });
+  const stageBody = document.getElementById('homeStageBody');
+  if (stageBody) stageBody.classList.toggle('is-expanded-view', homeExpandedWidgetId === 'board');
+  renderHomeDashboard();
+}
+
+window.addEventListener('resize', function() {
+  if (homeExpandedWidgetId && window.innerWidth <= 900) {
+    homeExpandedWidgetId = null;
+    applyHomeReflowTracks();
+    document.querySelectorAll('.home-widget.is-expanded').forEach(function(el) { el.classList.remove('is-expanded'); });
+    const stageBody = document.getElementById('homeStageBody');
+    if (stageBody) stageBody.classList.remove('is-expanded-view');
+    renderHomeDashboard();
+  }
+});
 
 function switchTab(tab) {
   // Switching to a different view closes the job drawer if it's open —
@@ -14241,6 +14370,43 @@ function buildHomeTodayScheduleRows() {
   return rows;
 }
 
+// Same shape/traversal as buildHomeTodayScheduleRows() above, but for the
+// expanded-in-place widget's wider window (see toggleHomeWidgetExpand()):
+// any task whose span overlaps [windowStart, windowEnd) at all, not just
+// ones covering today specifically — the compact widget's narrower
+// "must include today" filter would otherwise leave the wider strip
+// mostly empty on either side of the middle column.
+function buildHomeUpcomingScheduleRows(windowStart, windowEnd) {
+  const rows = [];
+  jobs.forEach(function(job) {
+    if (job.archived) return;
+    if (!isJobVisibleToMe(job)) return;
+    const phases = getJobPhases(job);
+    phases.forEach(function(phase) {
+      getPhaseSubUnits(phase).forEach(function(subUnit) {
+        (subUnit.tasks || []).forEach(function(task) {
+          if (!task.start || !task.finish) return;
+          const start = new Date(task.start + 'T00:00:00');
+          const finish = new Date(task.finish + 'T00:00:00');
+          if (isNaN(start.getTime()) || isNaN(finish.getTime())) return;
+          if (finish < windowStart || start >= windowEnd) return;
+          const phaseName = phases.length > 1 && !phase.isDefault ? phase.name : '';
+          const subPhaseName = !subUnit.isDefault ? subUnit.name : '';
+          const nameParts = [phaseName, subPhaseName].filter(Boolean);
+          const label = job.name + (nameParts.length ? ' — ' + nameParts.join(' — ') : '');
+          rows.push({
+            job: job, phaseId: phase.id, subPhaseId: subUnit.id, taskName: task.name || 'Untitled task',
+            label: label, phaseName: nameParts.join(' — '), start: start, finish: finish,
+            taskColor: task.color || job.color || '#3949ab'
+          });
+        });
+      });
+    });
+  });
+  rows.sort(function(a, b) { return a.start - b.start || a.label.localeCompare(b.label); });
+  return rows;
+}
+
 // Feeds the Gantt widget's own "needs attention" alert (see
 // renderHomeTodayScheduleWidget()) — NOT "any task is behind schedule"
 // (that read as noisy — a single slipped task is normal mid-job), but
@@ -14323,6 +14489,37 @@ function renderHomeChecklistWidget(rows) {
   }).join('');
   const more = rows.length > shown.length ? '<div class="home-more-link" onclick="switchTabMorphed(\'checklist\')">+' + (rows.length - shown.length) + ' more — go to Checklist</div>' : '';
   return html + more;
+}
+
+// Expanded-in-place version of the widget above (see
+// toggleHomeWidgetExpand()) — every row instead of 6, grouped by job like
+// the real Checklist tab's own renderMyChecklistList(groupByJob=true).
+// Deliberately NOT a call to renderMyChecklistList() itself: that
+// function's per-item assignee dropdown (myChecklistMsDropdownHtml())
+// stamps DOM ids keyed only by card+item id, and the real Checklist tab's
+// panel can still be sitting in the DOM (just display:none — .tab-panel
+// content isn't torn down on switch) with that same row already rendered
+// there from an earlier visit. Reusing it here would risk two elements
+// sharing one id. So: real data, real grouping, real primary actions
+// (check off, open), just without that one sub-widget.
+function renderHomeChecklistWidgetExpanded(rows) {
+  if (!rows.length) return renderHomeChecklistWidget(rows);
+  let lastJobId = null;
+  return rows.map(function(row) {
+    let groupHeader = '';
+    if (row.job.id !== lastJobId) {
+      lastJobId = row.job.id;
+      groupHeader = '<div class="my-checklist-group-header"><span class="home-row-dot" style="background:' + (row.job.color || '#3949ab') + ';"></span>' + escapeHtml(row.job.name) + '</div>';
+    }
+    const item = row.item;
+    return groupHeader + '<div class="checklist-item my-checklist-item">' +
+      '<input type="checkbox" onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
+      (item.required ? '<span class="ci-required is-required" title="Required">★</span>' : '') +
+      '<span class="ci-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
+      '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(row.job.name) + '</span>' +
+      '<span class="my-checklist-stage-tag">' + escapeHtml(row.columnLabel) + '</span>' +
+    '</div>';
+  }).join('');
 }
 
 // ===== HOME WIDGET ALERTS =====
@@ -14530,33 +14727,67 @@ function renderHomeWorkflowMiniBoard() {
   };
 }
 
+// Expanded-in-place Board (see toggleHomeWidgetExpand()) — real kanban
+// columns built from the exact same buildCardEl() the real Board tab
+// uses, so cards here are fully real: click opens the real edit modal
+// (openEditCard()), badges/checklist-progress/due-date all match. Safe
+// to reuse directly (unlike the Checklist expansion's own reuse
+// decision, see renderHomeChecklistWidgetExpanded()'s comment) because
+// buildCardEl() keys everything off el.dataset.id, never a DOM id, so
+// two copies of the same card existing at once (one here, one on the
+// real Board tab's own possibly-still-rendered-but-hidden panel) can't
+// collide. Column order/labels come straight from BOARD_COLUMNS, same
+// as the real board and the mini bar-chart summary above.
+function renderHomeWorkflowExpandedBoard() {
+  const container = document.getElementById('homeBoardExpanded');
+  if (!container) return;
+  container.innerHTML = '';
+  BOARD_COLUMNS.forEach(function(col) {
+    const cards = boardCards.filter(function(c) { return c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c); });
+    const colEl = document.createElement('div');
+    colEl.className = 'home-board-col';
+    colEl.innerHTML = '<div class="home-board-col-head"><span>' + escapeHtml(col.label) + '</span><span class="home-board-col-count">' + cards.length + '</span></div>';
+    const cardsWrap = document.createElement('div');
+    cardsWrap.className = 'home-board-cards';
+    if (!cards.length) {
+      cardsWrap.innerHTML = '<div class="home-board-col-empty">No cards</div>';
+    } else {
+      cards.forEach(function(card) { cardsWrap.appendChild(buildCardEl(card)); });
+    }
+    colEl.appendChild(cardsWrap);
+    container.appendChild(colEl);
+  });
+}
+
 // Click reuses editJob() directly — the same handler Calendar's own job
 // clicks forward to, so this behaves exactly like clicking that task
 // anywhere else in the app.
-// Window width for the mini-Gantt strip below — must stay in sync with
-// the "repeat(7, 1fr)" hardcoded into .home-mini-gantt-days/-row's own
-// CSS grid-template-columns (not driven from this constant; there's no
-// dynamic stylesheet here to keep it in sync automatically, just this
-// comment). Odd on purpose so today lands exactly in the middle column
-// rather than off-center.
+// Window width for the mini-Gantt strip below (compact default; the
+// expanded-in-place widget passes a wider windowDays instead — see
+// toggleHomeWidgetExpand()) — the CSS itself reads this count from
+// --home-gantt-days (default 7, see .home-mini-gantt-days/-row/-track),
+// which renderHomeDashboard() sets to match whatever's passed here. Odd
+// on purpose so today lands exactly in the middle column rather than
+// off-center.
 const HOME_MINI_GANTT_WINDOW_DAYS = 7;
-function renderHomeTodayScheduleWidget(rows) {
+function renderHomeTodayScheduleWidget(rows, windowDays, emptyLabel) {
+  windowDays = windowDays || HOME_MINI_GANTT_WINDOW_DAYS;
   const unclosedRows = buildHomeGanttUnclosedRows();
   const alertHtml = renderHomeWidgetAlert('gantt-unclosed', unclosedRows.map(function(r) { return r.card.id; }),
     unclosedRows.length + (unclosedRows.length === 1 ? ' job finished, not closed out' : ' jobs finished, not closed out'));
-  if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><div>Nothing scheduled today.</div></div>';
+  if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><div>' + (emptyLabel || 'Nothing scheduled today.') + '</div></div>';
 
   // A real (tiny) week strip — today ± a few days, positioned/sized bars
   // like the actual Gantt uses, rather than each task's own isolated 0-100%
   // fill — see .home-mini-gantt's own CSS comment for the full rationale.
   const todayMidnight = new Date(new Date().toDateString());
-  const halfWindow = Math.floor(HOME_MINI_GANTT_WINDOW_DAYS / 2);
+  const halfWindow = Math.floor(windowDays / 2);
   const windowStart = new Date(todayMidnight.getTime() - halfWindow * 86400000);
-  const windowEnd = new Date(windowStart.getTime() + HOME_MINI_GANTT_WINDOW_DAYS * 86400000);
-  const todayLeftPct = (halfWindow / HOME_MINI_GANTT_WINDOW_DAYS) * 100;
+  const windowEnd = new Date(windowStart.getTime() + windowDays * 86400000);
+  const todayLeftPct = (halfWindow / windowDays) * 100;
 
   const dayCellsHtml = [];
-  for (let i = 0; i < HOME_MINI_GANTT_WINDOW_DAYS; i++) {
+  for (let i = 0; i < windowDays; i++) {
     const d = new Date(windowStart.getTime() + i * 86400000);
     dayCellsHtml.push('<div class="home-mini-gantt-day' + (i === halfWindow ? ' today' : '') + '">' +
       '<span class="home-mini-gantt-dow">' + d.toLocaleDateString('en-US', { weekday: 'short' }) + '</span>' +
@@ -14571,8 +14802,8 @@ function renderHomeTodayScheduleWidget(rows) {
     // flush against that edge instead of vanishing or overflowing.
     const clippedStart = row.start < windowStart ? windowStart : row.start;
     const clippedFinishExclusive = row.finish >= windowEnd ? windowEnd : new Date(row.finish.getTime() + 86400000);
-    const leftPct = (getDaysDiff(windowStart, clippedStart) / HOME_MINI_GANTT_WINDOW_DAYS) * 100;
-    const widthPct = Math.max((getDaysDiff(clippedStart, clippedFinishExclusive) / HOME_MINI_GANTT_WINDOW_DAYS) * 100, 6);
+    const leftPct = (getDaysDiff(windowStart, clippedStart) / windowDays) * 100;
+    const widthPct = Math.max((getDaysDiff(clippedStart, clippedFinishExclusive) / windowDays) * 100, 6);
     const jobColor = row.job.color || '#3949ab';
     // subPhaseId only ever shows up alongside a real phaseId (sub-phases
     // can only exist on a real phase, never on the synthetic no-phases
@@ -14740,12 +14971,31 @@ function renderHomeDashboard() {
   const greetingEl = document.getElementById('homeGreeting');
   if (greetingEl) greetingEl.innerHTML = renderHomeGreeting();
   const checklistBody = document.getElementById('homeChecklistBody');
-  if (checklistBody) checklistBody.innerHTML = renderHomeChecklistWidget(checklistRows);
+  if (checklistBody) checklistBody.innerHTML = homeExpandedWidgetId === 'checklist' ? renderHomeChecklistWidgetExpanded(checklistRows) : renderHomeChecklistWidget(checklistRows);
   const overdueBody = document.getElementById('homeOverdueBody');
   if (overdueBody) overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
-  if (document.getElementById('homeStageBody')) renderHomeWorkflowMiniBoard();
+  if (document.getElementById('homeStageBody')) {
+    renderHomeWorkflowMiniBoard();
+    if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
+  }
   const todayBody = document.getElementById('homeTodayBody');
-  if (todayBody) todayBody.innerHTML = renderHomeTodayScheduleWidget(buildHomeTodayScheduleRows());
+  const todayWidgetEl = document.getElementById('homeWidgetToday');
+  if (todayBody) {
+    const ganttExpanded = homeExpandedWidgetId === 'gantt';
+    const windowDays = ganttExpanded ? 13 : HOME_MINI_GANTT_WINDOW_DAYS;
+    if (todayWidgetEl) todayWidgetEl.style.setProperty('--home-gantt-days', windowDays);
+    let rows;
+    if (ganttExpanded) {
+      const todayMidnight = new Date(new Date().toDateString());
+      const half = Math.floor(windowDays / 2);
+      const windowStart = new Date(todayMidnight.getTime() - half * 86400000);
+      const windowEnd = new Date(windowStart.getTime() + windowDays * 86400000);
+      rows = buildHomeUpcomingScheduleRows(windowStart, windowEnd);
+    } else {
+      rows = buildHomeTodayScheduleRows();
+    }
+    todayBody.innerHTML = renderHomeTodayScheduleWidget(rows, windowDays, ganttExpanded ? 'Nothing scheduled in this window.' : null);
+  }
   renderHomeJobChat();
   applyPermissionGating();
 }
