@@ -3748,7 +3748,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.16';
+const APP_VERSION = '2026-09-03.17';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6962,13 +6962,26 @@ function applyHomeReflowTracks() {
   // CORNER widget is the one expanded — it isn't just getting smaller
   // along with everyone else at that point, it's meant to fully close
   // up into an icon + expand-button strip (see the matching
-  // .is-collapsed-thin CSS) so the two widgets that actually matter
-  // (the hero and the opposite side) split the space it gives up.
+  // .is-collapsed-thin CSS). The space that frees up goes entirely to
+  // the OPPOSITE side (the already-smaller pair) — not to the hero,
+  // which Karl specifically didn't want growing any further just
+  // because Job Chat shrank. Plain 3fr/0.55fr columns would give the
+  // hero the lion's share of that freed space too (fr distribution is
+  // proportional across every flexible track, hero included), so the
+  // hero's column is pinned to a real measured pixel width instead —
+  // exactly what it would already be under the normal 3fr/0.55fr/0.55fr
+  // split with Job Chat still at its usual size — and only the opposite
+  // side is left as a flexible 1fr to soak up whatever Job Chat gave up.
   let colsStr;
   if (!track) colsStr = '1fr 0.8fr 1fr';
   else if (track.col === 'center') colsStr = '0.55fr 3fr 0.55fr';
-  else if (track.col === 'left') colsStr = '3fr 52px 0.55fr';
-  else colsStr = '0.55fr 52px 3fr';
+  else {
+    const totalW = grid.getBoundingClientRect().width;
+    const gapPx = 16;
+    const trackSpace = Math.max(0, totalW - gapPx * 2);
+    const heroPx = Math.round(trackSpace * (3 / 4.1));
+    colsStr = track.col === 'left' ? (heroPx + 'px 52px 1fr') : ('1fr 52px ' + heroPx + 'px');
+  }
   grid.style.gridTemplateColumns = colsStr;
 
   const jobChatWidget = document.getElementById(HOME_EXPAND_WIDGET_ID.jobchat);
