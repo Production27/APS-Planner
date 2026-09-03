@@ -3618,7 +3618,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.7';
+const APP_VERSION = '2026-09-03.8';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6568,6 +6568,24 @@ function toggleHomeWidgetExpand(key, event) {
   const stageBody = document.getElementById('homeStageBody');
   if (stageBody) stageBody.classList.toggle('is-expanded-view', homeExpandedWidgetId === 'board');
   renderHomeDashboard();
+  // renderHomeCalendarExpanded() positions its job bars with offsetLeft/
+  // offsetWidth pixel measurements taken synchronously, in this same
+  // tick — before .home-grid's own .45s grid-template-columns/rows
+  // transition (which is what's actually resizing the Calendar widget
+  // right now) has moved at all. The bars end up frozen at that stale,
+  // still-narrow pre-expand geometry forever, not just for the duration
+  // of the animation — nothing re-measures them later on its own. Once
+  // the grid settles, redo just that one widget's render so its bars
+  // pick up the real, final column width.
+  const grid = document.querySelector('#panel-home .home-grid');
+  if (grid) {
+    const onSettled = function(e) {
+      if (e.target !== grid) return;
+      grid.removeEventListener('transitionend', onSettled);
+      if (homeExpandedWidgetId === 'calendar') renderHomeDashboard();
+    };
+    grid.addEventListener('transitionend', onSettled);
+  }
 }
 
 window.addEventListener('resize', function() {
