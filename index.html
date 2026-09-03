@@ -1625,6 +1625,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   body.dark-mode .home-widget.is-expanded .home-widget-expand-btn { color: var(--primary-ondark); }
   .home-widget.is-expanded { box-shadow: var(--shadow-hover); }
   .home-widget.is-expanded .job-chat-feed { max-height: none; }
+  /* Job Chat collapses to a thin icon+expand-button strip whenever a
+     CORNER widget (not itself) is the one expanded — see
+     applyHomeReflowTracks()'s own fixed-52px column for it in that
+     case. Not just "smaller," genuinely closed: no compose bar, no
+     feed, nothing to scroll — Karl's own ask, since a 0.55fr share was
+     still wide enough to half-render a compose row no one could use at
+     that width anyway. */
+  .home-widget.is-collapsed-thin .home-widget-body { display: none; }
+  .home-widget.is-collapsed-thin .home-widget-jobchat-label { display: none; }
+  .home-widget.is-collapsed-thin .home-widget-header {
+    flex-direction: column; padding: 10px 4px; gap: 6px;
+  }
+  .home-widget.is-collapsed-thin .home-widget-expand-btn { margin-left: 0; }
   @media (max-width: 900px) { .home-widget-expand-btn { display: none; } }
   @media (min-width: 901px) {
     .home-grid { flex: 1; min-height: 0; }
@@ -3141,7 +3154,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
                on desktop. -->
           <div class="home-widget home-widget-center" id="homeWidgetJobChat">
             <div class="home-widget-header no-nav" title="Comments across every job you can see">
-              <span class="home-widget-icon tint-purple"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#7e57c2"/></svg></span> Job Chat
+              <span class="home-widget-icon tint-purple"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#7e57c2"/></svg></span><span class="home-widget-jobchat-label"> Job Chat</span>
               <button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('jobchat', event)" title="Expand" aria-label="Expand Job Chat"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="home-widget-body">
@@ -3735,7 +3748,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.15';
+const APP_VERSION = '2026-09-03.16';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6945,12 +6958,21 @@ function applyHomeReflowTracks() {
   if (!grid || !leftGroup || !rightGroup) return;
   const track = homeExpandedWidgetId && HOME_REFLOW_TRACK[homeExpandedWidgetId];
 
-  let cols = [1, 0.8, 1];
-  if (track) {
-    cols = [0.55, 0.55, 0.55];
-    cols[track.col === 'left' ? 0 : track.col === 'center' ? 1 : 2] = 3;
-  }
-  grid.style.gridTemplateColumns = cols.map(function(v) { return v + 'fr'; }).join(' ');
+  // Job Chat's own column is a fixed 52px (not a fr share) whenever a
+  // CORNER widget is the one expanded — it isn't just getting smaller
+  // along with everyone else at that point, it's meant to fully close
+  // up into an icon + expand-button strip (see the matching
+  // .is-collapsed-thin CSS) so the two widgets that actually matter
+  // (the hero and the opposite side) split the space it gives up.
+  let colsStr;
+  if (!track) colsStr = '1fr 0.8fr 1fr';
+  else if (track.col === 'center') colsStr = '0.55fr 3fr 0.55fr';
+  else if (track.col === 'left') colsStr = '3fr 52px 0.55fr';
+  else colsStr = '0.55fr 52px 3fr';
+  grid.style.gridTemplateColumns = colsStr;
+
+  const jobChatWidget = document.getElementById(HOME_EXPAND_WIDGET_ID.jobchat);
+  if (jobChatWidget) jobChatWidget.classList.toggle('is-collapsed-thin', !!track && track.col !== 'center');
 
   // A side's own two rows split evenly UNLESS the expanded widget is
   // actually on that side — only then does its own row grow at the
