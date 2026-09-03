@@ -1874,8 +1874,20 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   #homeStageBody.is-expanded-view .wsm-bars-wrap { display: none; }
   #homeStageBody.is-expanded-view .home-board-expanded { display: flex; }
   #homeStageBody.is-expanded-view { display: flex; flex-direction: column; }
-  .home-board-expanded { flex: 1; min-height: 0; gap: 10px; overflow-x: auto; padding-top: 4px; }
-  .home-board-col { flex: 0 0 240px; display: flex; flex-direction: column; min-height: 0; background: var(--bg); border-radius: 8px; padding: 8px; }
+  /* align-items:flex-start, matching the real Board tab's own
+     .board-wrapper (not the flex default of stretch) — a column sizes to
+     its own card content, same as the real page, instead of every
+     column stretching to match the tallest one. Without this, a column
+     with just one card would still paint its colored background (see
+     .home-board-col below) down the full height of its tallest sibling,
+     one big empty-looking block past where its own cards actually end. */
+  .home-board-expanded { flex: 1; min-height: 0; gap: 10px; overflow-x: auto; padding-top: 4px; align-items: flex-start; }
+  /* max-height:100% mirrors the real .board-column's own cap — needed
+     now that flex-start (above) no longer stretches every column to the
+     row's height for free; a column with many cards still gets capped at
+     the available height and scrolls internally (.home-board-cards'
+     own overflow-y:auto) instead of pushing the row taller. */
+  .home-board-col { flex: 0 0 240px; max-height: 100%; display: flex; flex-direction: column; min-height: 0; background: var(--bg); border-radius: 8px; padding: 8px; }
   .home-board-col-head { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; flex-shrink: 0; }
   .home-board-col-count { font-size: 10.5px; font-weight: 700; color: var(--text-light); background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
   .home-board-cards { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
@@ -3629,7 +3641,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.12';
+const APP_VERSION = '2026-09-03.13';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
