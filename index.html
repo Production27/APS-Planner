@@ -3558,7 +3558,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.2';
+const APP_VERSION = '2026-09-03.3';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -9757,11 +9757,19 @@ function handleGanttWheelZoom(e) {
   requestGanttZoom(dayWidth * Math.exp(-e.deltaY * 0.01), e.clientX);
 }
 
-// Desktop-only zoom buttons (see .gantt-zoom-btn) — plain step/reset, no
-// anchor-point math the way the pinch/wheel paths have, matching how
-// these behaved before pinch-to-zoom existed at all.
-function zoomIn() { dayWidth = Math.min(dayWidth + 6, GANTT_ZOOM_MAX); renderGantt(); }
-function zoomOut() { dayWidth = Math.max(dayWidth - 6, GANTT_ZOOM_MIN); renderGantt(); }
+// Desktop-only zoom buttons (see .gantt-zoom-btn) — anchored on the
+// visible timeline viewport's own horizontal center (there's no cursor
+// position to anchor on the way the wheel/pinch paths have one), reusing
+// the same setGanttDayWidthAnchored() commit path so the day currently in
+// the middle of the screen stays there instead of the zoom appearing to
+// pull everything toward the left edge.
+function zoomGanttCentered(newDayWidth) {
+  const timelineBody = document.getElementById('timelineBody');
+  const rect = timelineBody.getBoundingClientRect();
+  setGanttDayWidthAnchored(newDayWidth, rect.left + rect.width / 2);
+}
+function zoomIn() { zoomGanttCentered(dayWidth + 6); }
+function zoomOut() { zoomGanttCentered(dayWidth - 6); }
 function resetZoom() { dayWidth = 34; renderGantt(); }
 
 function fitToView() {
