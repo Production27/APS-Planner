@@ -1597,15 +1597,23 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      .home-widget's own row height then comes from its GRID CELL, not its
      content, with .home-widget-body's flex:1 (see its own rule) filling
      whatever's left inside each card after the header/alert. */
-  .home-grid { display: grid; grid-template-columns: 1fr 0.8fr 1fr; gap: 16px; transition: grid-template-columns .45s cubic-bezier(.22,.61,.36,1), grid-template-rows .45s cubic-bezier(.22,.61,.36,1); }
-  @media (prefers-reduced-motion: reduce) { .home-grid { transition: none; } }
+  /* Single row of 3 columns now (left group | Job Chat | right group) —
+     each group is its OWN nested 2-row grid (.home-grid-left/-right,
+     further down) rather than Checklist/Board/Calendar/Gantt being 4
+     direct auto-placed items of one shared 2-row grid. That split is
+     what lets each side's row proportions move independently — see
+     applyHomeReflowTracks()'s own comment for why a shared row list
+     caused Karl-reported side effects (Calendar/Gantt ending up
+     lopsided just because Board, a different column, was expanding). */
+  .home-grid { display: grid; grid-template-columns: 1fr 0.8fr 1fr; gap: 16px; transition: grid-template-columns .45s cubic-bezier(.22,.61,.36,1); }
+  @media (prefers-reduced-motion: reduce) { .home-grid, .home-grid-left, .home-grid-right { transition: none; } }
   /* One widget can be "expanded in place" (see toggleHomeWidgetExpand()) —
      its own grid row/column grows via an inline style JS sets on
-     .home-grid itself (HOME_REFLOW_TRACK), everyone else just gets
-     smaller, nobody leaves the grid. Desktop-only (>900px) — see
-     .home-widget-expand-btn's own media-query hide below; below that the
-     grid is already a single stacked column where "expand and shove
-     siblings aside" doesn't mean anything. */
+     .home-grid/.home-grid-left/.home-grid-right (HOME_REFLOW_TRACK),
+     everyone else just gets smaller, nobody leaves the grid. Desktop-only
+     (>900px) — see .home-widget-expand-btn's own media-query hide below;
+     below that the grid is already a single stacked column where "expand
+     and shove siblings aside" doesn't mean anything. */
   .home-widget-expand-btn {
     appearance: none; border: none; background: none; color: var(--text-light); cursor: pointer;
     width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
@@ -1619,18 +1627,28 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-widget.is-expanded .job-chat-feed { max-height: none; }
   @media (max-width: 900px) { .home-widget-expand-btn { display: none; } }
   @media (min-width: 901px) {
-    .home-grid { flex: 1; min-height: 0; grid-template-rows: 1fr 1fr; }
+    .home-grid { flex: 1; min-height: 0; }
   }
-  @media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
-  .home-widget-center { grid-column: 2; grid-row: 1 / span 2; }
+  .home-grid-left, .home-grid-right {
+    display: grid; grid-template-rows: 1fr 1fr; gap: 16px; min-height: 0;
+    transition: grid-template-rows .45s cubic-bezier(.22,.61,.36,1);
+  }
   @media (max-width: 900px) {
-    /* The explicit column-2/row-span above would otherwise reserve a
-       phantom second column even after .home-grid collapses to one —
-       resetting both back to auto lets it fall into normal single-column
-       flow, same as its siblings. `order` still moves it after all four
-       once flattened to one column — "last is fine" on mobile was a
-       separate call from "center" on desktop. */
-    .home-widget-center { grid-column: auto; grid-row: auto; order: 1; }
+    /* .home-grid becomes a plain 3-item flex column (left group, Job
+       Chat, right group) instead of a CSS grid — order:1 on Job Chat
+       (below) needs to move an actual flex/grid ITEM, and each group
+       staying a real container (not display:contents-unwrapped) is what
+       keeps that reliable; order silently failed to reorder past a
+       display:contents boundary the one time this was tried that way. */
+    .home-grid { display: flex; flex-direction: column; gap: 16px; }
+    /* Each group drops its desktop 1fr/1fr row split for a plain stack —
+       Checklist above Board, Calendar above Gantt, each its natural
+       height instead of forced-even halves of the group. */
+    .home-grid-left, .home-grid-right { display: flex; flex-direction: column; gap: 16px; }
+    /* "Last is fine" on mobile was a separate call from "center" on
+       desktop (still true) — order moves the whole Job Chat widget after
+       both groups once flattened to one column. */
+    .home-widget-center { order: 1; }
   }
   /* Compose row — same container/input recipe as .my-checklist-add-bar
      (job-picker + text + button), including the var(--bg)-on-var(--card)
@@ -3098,21 +3116,29 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
       <div class="home-wrapper">
         <div class="home-greeting-banner" id="homeGreeting"></div>
         <div class="home-grid">
-          <div class="home-widget" id="homeWidgetChecklist">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('checklist', event)" title="Expand" aria-label="Expand Checklist"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-            <div class="home-widget-body" id="homeChecklistBody"></div>
+          <!-- Left group — Checklist over Board, its own 2-row nested
+               grid (see .home-grid-left's own CSS) so this side's row
+               split stays independent of the right group's. -->
+          <div class="home-grid-left">
+            <div class="home-widget" id="homeWidgetChecklist">
+              <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('checklist', event)" title="Expand" aria-label="Expand Checklist"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-body" id="homeChecklistBody"></div>
+            </div>
+            <div class="home-widget" id="homeWidgetWorkflow">
+              <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('board', event)" title="Expand" aria-label="Expand Board"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-body" id="homeStageBody">
+                <div id="homeStageAlert"></div>
+                <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
+                <div class="wsm-bars-wrap" id="wsmBarsWrap"></div>
+                <div class="home-board-expanded" id="homeBoardExpanded"></div>
+              </div>
+            </div>
           </div>
-          <div class="home-widget" id="homeWidgetCalendar">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('calendar', event)" title="Expand" aria-label="Expand Calendar"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-            <div class="home-widget-body" id="homeOverdueBody"></div>
-          </div>
-          <!-- Middle column, spanning both rows — sits vertically between
-               the other four (two stacked on each side) at desktop width,
-               per Karl's own placement call (see .home-widget-center's
-               own comment for how the grid placement achieves this from
-               plain DOM order). Reordered to last on the single-column
-               mobile layout instead — "last is fine" on mobile was a
-               separate call from "center" on desktop. -->
+          <!-- Middle column — sits vertically between the other two groups
+               at desktop width, per Karl's own placement call. Reordered
+               to last on the single-column mobile layout instead —
+               "last is fine" on mobile was a separate call from "center"
+               on desktop. -->
           <div class="home-widget home-widget-center" id="homeWidgetJobChat">
             <div class="home-widget-header no-nav" title="Comments across every job you can see">
               <span class="home-widget-icon tint-purple"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#7e57c2"/></svg></span> Job Chat
@@ -3127,18 +3153,17 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
               <div class="job-comments-list job-chat-feed" id="homeJobChatList"></div>
             </div>
           </div>
-          <div class="home-widget" id="homeWidgetWorkflow">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('board', event)" title="Expand" aria-label="Expand Board"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-            <div class="home-widget-body" id="homeStageBody">
-              <div id="homeStageAlert"></div>
-              <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
-              <div class="wsm-bars-wrap" id="wsmBarsWrap"></div>
-              <div class="home-board-expanded" id="homeBoardExpanded"></div>
+          <!-- Right group — Calendar over Gantt, same independent-2-row
+               idea as .home-grid-left above. -->
+          <div class="home-grid-right">
+            <div class="home-widget" id="homeWidgetCalendar">
+              <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('calendar', event)" title="Expand" aria-label="Expand Calendar"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-body" id="homeOverdueBody"></div>
             </div>
-          </div>
-          <div class="home-widget" id="homeWidgetToday">
-            <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('gantt', event)" title="Expand" aria-label="Expand Gantt Chart"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-            <div class="home-widget-body" id="homeTodayBody"></div>
+            <div class="home-widget" id="homeWidgetToday">
+              <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('gantt', event)" title="Expand" aria-label="Expand Gantt Chart"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-body" id="homeTodayBody"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -3710,7 +3735,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.14';
+const APP_VERSION = '2026-09-03.15';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6899,35 +6924,48 @@ const HOME_EXPAND_WIDGET_ID = {
   board: 'homeWidgetWorkflow',
   gantt: 'homeWidgetToday'
 };
-// [col, row] each widget's cell sits in on the desktop 3x2 home grid.
-// NOT simply DOM order read top-to-bottom — only .home-widget-center has
-// an explicit grid-column/grid-row; the other four are auto-placed, and
-// auto-placement resolves around that explicit claim on column 2 before
-// walking the remaining DOM order, which lands Calendar top-RIGHT and
-// Board bottom-LEFT (not the top-left/bottom-right their own DOM order
-// would suggest) — verified against getBoundingClientRect(), not assumed.
-// Job Chat's row is null: it already spans both rows, so expanding it
-// never needs a row change.
+// Which of the 3 outer columns a widget lives in, and (for the two
+// side groups) which row within its own .home-grid-left/-right — see
+// those elements' own CSS comment for why each side tracks its row
+// split independently instead of both columns sharing one grid-template-
+// rows list the way an earlier version of this did. Job Chat's row is
+// null: it's the center group's only widget, so expanding it never
+// needs a row change.
 const HOME_REFLOW_TRACK = {
-  checklist: [0, 0], calendar: [2, 0], jobchat: [1, null], board: [0, 1], gantt: [2, 1]
+  checklist: { col: 'left', row: 0 }, board: { col: 'left', row: 1 },
+  jobchat: { col: 'center', row: null },
+  calendar: { col: 'right', row: 0 }, gantt: { col: 'right', row: 1 }
 };
 let homeExpandedWidgetId = null;
 
 function applyHomeReflowTracks() {
   const grid = document.querySelector('#panel-home .home-grid');
-  if (!grid) return;
-  let cols = [1, 0.8, 1], rows = [1, 1];
+  const leftGroup = document.querySelector('#panel-home .home-grid-left');
+  const rightGroup = document.querySelector('#panel-home .home-grid-right');
+  if (!grid || !leftGroup || !rightGroup) return;
   const track = homeExpandedWidgetId && HOME_REFLOW_TRACK[homeExpandedWidgetId];
+
+  let cols = [1, 0.8, 1];
   if (track) {
     cols = [0.55, 0.55, 0.55];
-    cols[track[0]] = 3;
-    if (track[1] !== null) {
-      rows = [0.55, 0.55];
-      rows[track[1]] = 3;
-    }
+    cols[track.col === 'left' ? 0 : track.col === 'center' ? 1 : 2] = 3;
   }
   grid.style.gridTemplateColumns = cols.map(function(v) { return v + 'fr'; }).join(' ');
-  grid.style.gridTemplateRows = rows.map(function(v) { return v + 'fr'; }).join(' ');
+
+  // A side's own two rows split evenly UNLESS the expanded widget is
+  // actually on that side — only then does its own row grow at the
+  // other row's expense. Keeps the side that has nothing to do with
+  // whichever widget expanded from getting dragged along uneven.
+  function sideRows(side) {
+    if (track && track.col === side && track.row !== null) {
+      const rows = [0.55, 0.55];
+      rows[track.row] = 3;
+      return rows;
+    }
+    return [1, 1];
+  }
+  leftGroup.style.gridTemplateRows = sideRows('left').map(function(v) { return v + 'fr'; }).join(' ');
+  rightGroup.style.gridTemplateRows = sideRows('right').map(function(v) { return v + 'fr'; }).join(' ');
 }
 
 // Desktop-only (see .home-widget-expand-btn's own max-width:900px rule
