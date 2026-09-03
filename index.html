@@ -3558,7 +3558,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.4';
+const APP_VERSION = '2026-09-03.5';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -9783,14 +9783,14 @@ function zoomGanttCentered(newDayWidth) {
 }
 function zoomIn() { zoomGanttCentered(dayWidth + 6); }
 function zoomOut() { zoomGanttCentered(dayWidth - 6); }
-function resetZoom() { dayWidth = 34; renderGantt(); }
+function resetZoom() { zoomGanttCentered(34); }
 
 function fitToView() {
   const containerWidth = document.getElementById('timelineBody').clientWidth - 20;
   computeDateRange();
   const totalDays = getDaysDiff(startDate, endDate) + 1;
-  dayWidth = Math.max(Math.floor(containerWidth / totalDays), 14);
-  renderGantt();
+  const fitted = Math.max(Math.floor(containerWidth / totalDays), 14);
+  zoomGanttCentered(fitted);
 }
 
 // ===== DATE POPOVER =====
