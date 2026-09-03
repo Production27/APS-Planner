@@ -3748,7 +3748,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.17';
+const APP_VERSION = '2026-09-03.18';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6958,31 +6958,36 @@ function applyHomeReflowTracks() {
   if (!grid || !leftGroup || !rightGroup) return;
   const track = homeExpandedWidgetId && HOME_REFLOW_TRACK[homeExpandedWidgetId];
 
-  // Job Chat's own column is a fixed 52px (not a fr share) whenever a
-  // CORNER widget is the one expanded — it isn't just getting smaller
-  // along with everyone else at that point, it's meant to fully close
-  // up into an icon + expand-button strip (see the matching
-  // .is-collapsed-thin CSS). The space that frees up goes entirely to
-  // the OPPOSITE side (the already-smaller pair) — not to the hero,
-  // which Karl specifically didn't want growing any further just
-  // because Job Chat shrank. Plain 3fr/0.55fr columns would give the
-  // hero the lion's share of that freed space too (fr distribution is
-  // proportional across every flexible track, hero included), so the
-  // hero's column is pinned to a real measured pixel width instead —
-  // exactly what it would already be under the normal 3fr/0.55fr/0.55fr
-  // split with Job Chat still at its usual size — and only the opposite
-  // side is left as a flexible 1fr to soak up whatever Job Chat gave up.
-  let colsStr;
-  if (!track) colsStr = '1fr 0.8fr 1fr';
-  else if (track.col === 'center') colsStr = '0.55fr 3fr 0.55fr';
-  else {
-    const totalW = grid.getBoundingClientRect().width;
-    const gapPx = 16;
-    const trackSpace = Math.max(0, totalW - gapPx * 2);
-    const heroPx = Math.round(trackSpace * (3 / 4.1));
-    colsStr = track.col === 'left' ? (heroPx + 'px 52px 1fr') : ('1fr 52px ' + heroPx + 'px');
+  // Always computed as real pixel widths for all 3 columns, never mixed
+  // with fr — a CSS transition can only animate a grid track between two
+  // values of the SAME kind (px<->px or fr<->fr); a version of this that
+  // pinned only the hero's column to a measured px width while the other
+  // two stayed fr silently killed the animation for every track whose
+  // kind changed between states, which was most of them (Karl noticed:
+  // "I just lost the transition to expand a window"). Job Chat's own
+  // column collapses to a fixed 52px whenever a CORNER widget is the
+  // one expanded (it closes up into an icon + expand-button strip, see
+  // the matching .is-collapsed-thin CSS) — the hero's own px width is
+  // pinned to what it would already be under the normal
+  // 3fr/0.55fr/0.55fr ratio with Job Chat at its usual size, so closing
+  // Job Chat up doesn't also grow the hero; the freed space goes to the
+  // opposite (already-smaller) side instead.
+  const totalW = grid.getBoundingClientRect().width;
+  const gapPx = 16;
+  const trackSpace = Math.max(0, totalW - gapPx * 2);
+  function weightedPx(weights) {
+    const sum = weights[0] + weights[1] + weights[2];
+    return weights.map(function(w) { return Math.round(trackSpace * w / sum); });
   }
-  grid.style.gridTemplateColumns = colsStr;
+  let colPx;
+  if (!track) colPx = weightedPx([1, 0.8, 1]);
+  else if (track.col === 'center') colPx = weightedPx([0.55, 3, 0.55]);
+  else {
+    const heroPx = Math.round(trackSpace * (3 / 4.1));
+    const otherPx = Math.max(0, trackSpace - heroPx - 52);
+    colPx = track.col === 'left' ? [heroPx, 52, otherPx] : [otherPx, 52, heroPx];
+  }
+  grid.style.gridTemplateColumns = colPx.map(function(v) { return v + 'px'; }).join(' ');
 
   const jobChatWidget = document.getElementById(HOME_EXPAND_WIDGET_ID.jobchat);
   if (jobChatWidget) jobChatWidget.classList.toggle('is-collapsed-thin', !!track && track.col !== 'center');
@@ -7024,13 +7029,21 @@ function toggleHomeWidgetExpand(key, event) {
 }
 
 window.addEventListener('resize', function() {
-  if (homeExpandedWidgetId && window.innerWidth <= 900) {
+  if (!homeExpandedWidgetId) return;
+  if (window.innerWidth <= 900) {
     homeExpandedWidgetId = null;
     applyHomeReflowTracks();
     document.querySelectorAll('.home-widget.is-expanded').forEach(function(el) { el.classList.remove('is-expanded'); });
     const stageBody = document.getElementById('homeStageBody');
     if (stageBody) stageBody.classList.remove('is-expanded-view');
     renderHomeDashboard();
+  } else {
+    // Column widths are real pixel values now (see applyHomeReflowTracks()'s
+    // own comment), not the self-adjusting fr units they used to be —
+    // recompute them against the new window width so an expanded grid
+    // stays correctly proportioned through a resize instead of keeping
+    // its old pixel widths verbatim.
+    applyHomeReflowTracks();
   }
 });
 
@@ -15609,6 +15622,21 @@ function handleHomeReplyKey(event, jobId, commentId) {
 function renderHomeDashboard() {
   const panel = document.getElementById('panel-home');
   if (!panel) return;
+  // Keeps .home-grid's own inline column widths (see
+  // applyHomeReflowTracks()) in sync on every Home render, not just when
+  // actually expanding/collapsing a widget — critically including the
+  // very FIRST render, before any expand click has ever happened. Without
+  // this, that first click transitions from the plain CSS default
+  // (1fr 0.8fr 1fr, a stylesheet rule, not an inline style) straight to
+  // the computed pixel widths applyHomeReflowTracks() uses — grid track
+  // lists can only animate smoothly between two values of the SAME kind
+  // (fr<->fr or px<->px), so that fr->px jump has no valid interpolation
+  // path and Chrome falls back to snapping partway through the duration
+  // instead of animating (verified against an isolated repro — Karl's
+  // own "I just lost the transition" report). Establishing a pixel
+  // baseline here means every later transition, including that first
+  // one, is px->px.
+  applyHomeReflowTracks();
   const checklistRows = buildMyChecklistRows();
   const overdueRows = buildHomeOverdueRows();
   const greetingEl = document.getElementById('homeGreeting');
