@@ -3748,7 +3748,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.20';
+const APP_VERSION = '2026-09-03.21';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -11836,14 +11836,7 @@ function autoSaveJobForm() {
     editingJobId = job.id;
     editingTaskId = job.tasks[0] ? job.tasks[0].id : null;
     ensureJobHasCards(job); // give it a board card immediately, not just on next load
-    // Every new job starts pre-split into its first phase — no more
-    // unphased jobs going forward. Moves the tasks/card just set up above
-    // onto that phase (see splitJobIntoPhases()), so editingPhaseId must be
-    // pointed at it too — otherwise the description/checklist/attachments
-    // save below (which reads getPhaseCard(job, editingPhaseId)) would keep
-    // looking for the old phaseId:null card that no longer matches.
-    splitJobIntoPhases(job);
-    editingPhaseId = job.phases[0].id;
+    editingPhaseId = null;
     justCreated = true;
   }
 
