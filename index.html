@@ -1607,6 +1607,17 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      lopsided just because Board, a different column, was expanding). */
   .home-grid { display: grid; grid-template-columns: 1fr 0.8fr 1fr; gap: 16px; transition: grid-template-columns .45s cubic-bezier(.22,.61,.36,1); }
   @media (prefers-reduced-motion: reduce) { .home-grid, .home-grid-left, .home-grid-right { transition: none; } }
+  /* Suppressed for the duration of a live window resize (see the
+     'resize' listener below) — the .45s transition exists for the
+     deliberate expand/collapse toggle; applying it to every resize-driven
+     pixel-column recompute too meant a window drag kept restarting a
+     brand-new .45s animation toward a moving target every tick instead of
+     tracking the cursor, which read as laggy/rubber-banding rather than
+     smooth (Karl: "doesn't move very smoothly when the window expands and
+     contracts"). */
+  .home-grid.is-resizing-live,
+  .home-grid.is-resizing-live .home-grid-left,
+  .home-grid.is-resizing-live .home-grid-right { transition: none; }
   /* One widget can be "expanded in place" (see toggleHomeWidgetExpand()) —
      its own grid row/column grows via an inline style JS sets on
      .home-grid/.home-grid-left/.home-grid-right (HOME_REFLOW_TRACK),
@@ -3748,7 +3759,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.21';
+const APP_VERSION = '2026-09-03.22';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -7047,21 +7058,39 @@ function toggleHomeWidgetExpand(key, event) {
   }
 }
 
+// Same .is-resizing-live class for both branches below — even the
+// mobile-collapse branch calls applyHomeReflowTracks() (to reset back to
+// idle ratios) and shouldn't animate that either mid-drag.
+let homeGridResizeSettleTimer = null;
 window.addEventListener('resize', function() {
-  if (!homeExpandedWidgetId) return;
-  if (window.innerWidth <= 900) {
+  const grid = document.querySelector('#panel-home .home-grid');
+  if (grid) grid.classList.add('is-resizing-live');
+  clearTimeout(homeGridResizeSettleTimer);
+  homeGridResizeSettleTimer = setTimeout(function() {
+    if (grid) grid.classList.remove('is-resizing-live');
+  }, 200);
+
+  if (homeExpandedWidgetId && window.innerWidth <= 900) {
     homeExpandedWidgetId = null;
     applyHomeReflowTracks();
     document.querySelectorAll('.home-widget.is-expanded').forEach(function(el) { el.classList.remove('is-expanded'); });
     const stageBody = document.getElementById('homeStageBody');
     if (stageBody) stageBody.classList.remove('is-expanded-view');
     renderHomeDashboard();
-  } else {
-    // Column widths are real pixel values now (see applyHomeReflowTracks()'s
-    // own comment), not the self-adjusting fr units they used to be —
-    // recompute them against the new window width so an expanded grid
-    // stays correctly proportioned through a resize instead of keeping
-    // its old pixel widths verbatim.
+  } else if (window.innerWidth > 900) {
+    // Column widths are real pixel values (see applyHomeReflowTracks()'s
+    // own comment), not self-adjusting fr units — recompute them against
+    // the new window width on EVERY resize, expanded or idle. Previously
+    // this only ran while a widget was expanded, so the idle grid (primed
+    // to fixed px on its first render, to keep the very first expand
+    // transition animatable) just froze at whatever width the page
+    // happened to load at and never tracked the window afterward (Karl:
+    // "the workflow summary doesn't move very smoothly when the window
+    // expands and contracts" — it wasn't moving at all until some other
+    // action, like expanding a widget, forced a recompute). The
+    // .is-resizing-live class above keeps this snapping to the live
+    // window width instead of chasing it through a freshly-restarted
+    // .45s animation on every tick.
     applyHomeReflowTracks();
   }
 });
@@ -15384,6 +15413,23 @@ function renderHomeWorkflowMiniBoard() {
     track.style.transform = 'translateX(-' + barsWrap.scrollLeft + 'px)';
   };
 }
+
+// Recomputes the bracket band on resize — its segment positions are
+// measured in real pixels (see above), so a window drag leaves them
+// stale relative to the bars underneath unless re-measured, same
+// reasoning as renderBoardWorkflowStrip()'s own resize listener below.
+// Debounced like the Calendar's own resize listener above, since a drag
+// fires 'resize' many times in quick succession and this does a full
+// innerHTML rebuild, not just a style write (unlike applyHomeReflowTracks()'s
+// own undebounced resize listener, which only writes inline styles).
+let homeWorkflowResizeDebounceTimer = null;
+window.addEventListener('resize', function() {
+  clearTimeout(homeWorkflowResizeDebounceTimer);
+  homeWorkflowResizeDebounceTimer = setTimeout(function() {
+    const panel = document.getElementById('panel-home');
+    if (panel && panel.classList.contains('active')) renderHomeWorkflowMiniBoard();
+  }, 200);
+});
 
 // Expanded-in-place Board (see toggleHomeWidgetExpand()) — real kanban
 // columns built from the exact same buildCardEl() the real Board tab
