@@ -798,12 +798,26 @@ async function handleAuth(request, env, corsHeaders, ctx) {
 }
 
 // --- 6. USER MANAGEMENT HANDLERS (unchanged) ---
+
+// Re-checked fresh from KV rather than trusted off the token: an
+// admin-gated endpoint must not honor a caller demoted after their token
+// was minted, only after the token's own TTL expires. Shared by every
+// admin-only handler below so a future one can't accidentally skip the
+// fresh recheck the way handleUsersList and handleUsersResetPassword
+// used to (both trusted caller.role straight off the token until this).
+async function requireAdmin(env, caller, corsHeaders) {
+  if (!caller) return { error: jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders) };
+  const user = await getUser(env, caller.username);
+  if (!user || user.role !== "admin") return { error: jsonResponse({ error: "Admin access required" }, 403, corsHeaders) };
+  return { user };
+}
+
 async function handleUsersList(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
-  if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
-  if (caller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
+  const admin = await requireAdmin(env, caller, corsHeaders);
+  if (admin.error) return admin.error;
   const users = await listAllUsers(env);
   return jsonResponse({ users }, 200, corsHeaders);
 }
@@ -826,12 +840,8 @@ async function handleUsersAdd(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
-  if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
-  // Re-checked fresh from KV rather than trusted off the token: this
-  // endpoint grants power, so a caller demoted after their token was
-  // minted must lose access immediately, not after the token's TTL.
-  const freshCaller = await getUser(env, caller.username);
-  if (!freshCaller || freshCaller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
+  const admin = await requireAdmin(env, caller, corsHeaders);
+  if (admin.error) return admin.error;
 
   const newUsername = normalizeUsername(body.newUsername);
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
@@ -898,9 +908,8 @@ async function handleUsersUpdate(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
-  if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
-  const freshCaller = await getUser(env, caller.username);
-  if (!freshCaller || freshCaller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
+  const admin = await requireAdmin(env, caller, corsHeaders);
+  if (admin.error) return admin.error;
 
   const targetUsername = normalizeUsername(body.targetUsername);
   const target = await getUser(env, targetUsername);
@@ -940,9 +949,8 @@ async function handleUsersRemove(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
-  if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
-  const freshCaller = await getUser(env, caller.username);
-  if (!freshCaller || freshCaller.role !== "admin") return jsonResponse({ error: "Admin access required" }, 403, corsHeaders);
+  const admin = await requireAdmin(env, caller, corsHeaders);
+  if (admin.error) return admin.error;
 
   const targetUsername = normalizeUsername(body.targetUsername);
   const target = await getUser(env, targetUsername);
@@ -969,8 +977,13 @@ async function handleUsersResetPassword(request, env, corsHeaders) {
 
   const targetUsername = normalizeUsername(body.targetUsername);
   const isSelfService = !!caller.username && caller.username === targetUsername;
-  if (caller.role !== "admin" && !isSelfService) {
-    return jsonResponse({ error: "Admin access required (or reset your own account only)" }, 403, corsHeaders);
+  if (!isSelfService) {
+    // Same fresh-from-KV recheck as every other admin-gated handler now
+    // uses — this branch used to trust caller.role straight off the
+    // token, unlike its siblings, so a demoted admin could reset another
+    // user's password until the token's own TTL expired.
+    const admin = await requireAdmin(env, caller, corsHeaders);
+    if (admin.error) return admin.error;
   }
 
   const target = await getUser(env, targetUsername);

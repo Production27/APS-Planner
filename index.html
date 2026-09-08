@@ -3759,7 +3759,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-08.3';
+const APP_VERSION = '2026-09-08.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5378,6 +5378,10 @@ async function ensureUserRosterLoaded() {
   } catch (e) {
     console.error('Failed to load team roster for checklist assignment:', e);
     userRosterLoadError = e.message || String(e);
+    // Single choke point every caller of ensureUserRosterLoaded() goes
+    // through, so this covers all of them at once rather than needing a
+    // toast at each of the 5 call sites individually.
+    showToast("Couldn't load the team list — " + userRosterLoadError, 'error');
   }
   return cachedUserRoster || [];
 }
@@ -7971,14 +7975,27 @@ function renderWeekHourGrid(cellDates, timedCalRows, today, sectionId, labelsId,
 // change/on-screen-keyboard show-hide can fire 'resize' many times in
 // quick succession, each otherwise triggering a full calendar rebuild
 // mid-gesture instead of one settled render once it's actually done.
-let calendarResizeDebounceTimer = null;
-window.addEventListener('resize', () => {
-  clearTimeout(calendarResizeDebounceTimer);
-  calendarResizeDebounceTimer = setTimeout(() => {
-    const panel = document.getElementById('panel-calendar');
-    if (panel && panel.classList.contains('active')) renderCalendar();
-  }, 200);
-});
+// Registers a permanent resize listener that re-renders renderFn only
+// while panelId's panel is the active one, optionally debounced — the
+// shape shared by the Calendar/Home-workflow/Board-workflow resize
+// listeners below (each used to hand-roll its own clearTimeout/setTimeout
+// pair, or for the Board workflow strip, none at all — debounceMs: 0
+// preserves that exact synchronous behavior rather than changing it).
+// Deliberately NOT used for the Home grid's own resize listener further
+// up, which does meaningfully different work (toggles a CSS class
+// immediately, plus separate viewport-width branch logic) rather than
+// just debouncing a render call.
+function onPanelResize(panelId, renderFn, debounceMs) {
+  let timer = null;
+  window.addEventListener('resize', function() {
+    const panel = document.getElementById(panelId);
+    const fire = function() { if (panel && panel.classList.contains('active')) renderFn(); };
+    if (!debounceMs) { fire(); return; }
+    clearTimeout(timer);
+    timer = setTimeout(fire, debounceMs);
+  });
+}
+onPanelResize('panel-calendar', renderCalendar, 200);
 
 /* ===== CALENDAR DRAG HANDLERS ===== */
 function initCalendarDragHandlers() {
@@ -12292,23 +12309,32 @@ async function loadBackupsList() {
 // auth (matching every other endpoint here) means fetching the file
 // ourselves and handing the browser the resulting blob instead of letting
 // it navigate directly.
+// Shared by downloadBackupFile/postUsersEndpoint/uploadAttachmentFile
+// below — each used to hand-roll the identical "fetch, if 401 clear the
+// stored token + force a fresh login + refetch" cycle. buildOptions is a
+// function of the token (not a fixed options object) since the retry
+// needs the NEW token reauthenticateOnce() just minted, not the stale one
+// that got the 401.
+async function fetchWithReauth(url, buildOptions) {
+  let token = await getSessionToken();
+  let res = await fetch(url, buildOptions(token));
+  if (res.status === 401) {
+    setStoredSessionToken(null);
+    token = await reauthenticateOnce(true);
+    res = await fetch(url, buildOptions(token));
+  }
+  return res;
+}
+
 async function downloadBackupFile(key) {
   try {
-    let token = await getSessionToken();
-    let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token, key: key })
-    });
-    if (res.status === 401) {
-      setStoredSessionToken(null);
-      token = await reauthenticateOnce(true);
-      res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', {
+    const res = await fetchWithReauth(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', function(token) {
+      return {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: token, key: key })
-      });
-    }
+      };
+    });
     if (!res.ok) {
       const data = await res.json().catch(function() { return {}; });
       throw new Error(data.error || ('Download failed: ' + res.status));
@@ -12359,21 +12385,13 @@ async function restoreBackupFile(key, dateLabel) {
 // getSessionToken()) — the Worker re-verifies it, and the caller's role,
 // on every single request; nothing here is trusted client-side.
 async function postUsersEndpoint(path, extraBody) {
-  let token = await getSessionToken();
-  let res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(Object.assign({ token: token }, extraBody || {}))
-  });
-  if (res.status === 401) {
-    setStoredSessionToken(null);
-    token = await reauthenticateOnce(true);
-    res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + path, {
+  const res = await fetchWithReauth(LIVEBLOCKS_AUTH_ENDPOINT + path, function(token) {
+    return {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ token: token }, extraBody || {}))
-    });
-  }
+    };
+  });
   const data = await res.json().catch(function() { return {}; });
   if (!res.ok) throw new Error(data.error || ('Request failed: ' + res.status));
   return data;
@@ -13786,13 +13804,9 @@ async function uploadAttachmentFile(file) {
   // endpoint does (matches the Worker's handleAttachmentUpload()).
   const url = LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/upload?name=' + encodeURIComponent(file.name) +
     '&type=' + encodeURIComponent(file.type || 'application/octet-stream');
-  let token = await getSessionToken();
-  let res = await fetch(url, { method: 'POST', headers: { 'X-Aps-Token': token }, body: file });
-  if (res.status === 401) {
-    setStoredSessionToken(null);
-    token = await reauthenticateOnce(true);
-    res = await fetch(url, { method: 'POST', headers: { 'X-Aps-Token': token }, body: file });
-  }
+  const res = await fetchWithReauth(url, function(token) {
+    return { method: 'POST', headers: { 'X-Aps-Token': token }, body: file };
+  });
   if (!res.ok) throw new Error('Upload failed: ' + res.status);
   return res.json(); // { key, name }
 }
@@ -15428,14 +15442,7 @@ function renderHomeWorkflowMiniBoard() {
 // fires 'resize' many times in quick succession and this does a full
 // innerHTML rebuild, not just a style write (unlike applyHomeReflowTracks()'s
 // own undebounced resize listener, which only writes inline styles).
-let homeWorkflowResizeDebounceTimer = null;
-window.addEventListener('resize', function() {
-  clearTimeout(homeWorkflowResizeDebounceTimer);
-  homeWorkflowResizeDebounceTimer = setTimeout(function() {
-    const panel = document.getElementById('panel-home');
-    if (panel && panel.classList.contains('active')) renderHomeWorkflowMiniBoard();
-  }, 200);
-});
+onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200);
 
 // Expanded-in-place Board (see toggleHomeWidgetExpand()) — real kanban
 // columns built from the exact same buildCardEl() the real Board tab
@@ -15850,10 +15857,7 @@ function renderBoardWorkflowStrip() {
 // since the band's segment positions are measured in real pixels, not
 // derived from a fixed formula — only while Board is actually the
 // visible tab, to avoid needless work on every other view.
-window.addEventListener('resize', function() {
-  const panel = document.getElementById('panel-board');
-  if (panel && panel.classList.contains('active')) renderBoardWorkflowStrip();
-});
+onPanelResize('panel-board', renderBoardWorkflowStrip, 0);
 
 function scrollToBoardColumn(colId) {
   const el = document.querySelector('.board-column[data-column="' + colId + '"]');
@@ -16685,7 +16689,11 @@ function handleRoomOpen() {
   // already landed; a stale whole-value replay gets correctly rejected +
   // re-synced the same as any other stale write).
   pendingWrites.forEach(function(entry) {
-    try { roomSocket.send(JSON.stringify(entry.msg)); } catch (e) {}
+    // Unlike its fire-and-forget siblings elsewhere in this file, this is
+    // resending real unsaved user data — armStuckWriteWatch()'s 8s timer
+    // remains the actual safety net either way, but a silent failure here
+    // shouldn't also be a silent one in the console.
+    try { roomSocket.send(JSON.stringify(entry.msg)); } catch (e) { console.error('Failed to resend pending write on reconnect', entry.msg, e); }
   });
   sendPresenceUpdate();
 }
