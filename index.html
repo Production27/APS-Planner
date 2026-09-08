@@ -3645,7 +3645,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     <div class="card-modal-scroll">
       <h4 id="cardModalTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><rect x="11" y="6.5" width="2" height="11" rx="1" fill="#fff"/><rect x="6.5" y="11" width="11" height="2" rx="1" fill="#fff"/></svg>New Card</h4>
       <div class="form-group">
-        <label>Title *</label>
+        <label id="c_title_label">Title *</label>
         <input type="text" id="c_title" placeholder="e.g. Follow up on change order">
         <span class="field-error-hint" id="c_title_hint" style="display:none;">Title required to save</span>
       </div>
@@ -3759,7 +3759,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-03.22';
+const APP_VERSION = '2026-09-08.1';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13345,6 +13345,7 @@ function moveCardToColumn(cardId, targetColumnId) {
   }
   saveBoardCards();
   renderBoard();
+  if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
   showToast('Moved to "' + (targetCol ? targetCol.label : targetColumnId) + '"', 'success');
 }
 
@@ -13594,6 +13595,7 @@ function reconnectCard(cardId, event) {
   saveBoardCards();
   logActivity('reconnected "' + card.title + '" to the schedule');
   renderBoard();
+  if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
   showToast('Card reconnected to schedule', 'success');
 }
 
@@ -15855,6 +15857,26 @@ function scrollToBoardColumn(colId) {
 }
 
 // ----- Open / save / delete card -----
+// A card has no independent name of its own — ensureJobHasCards()
+// unconditionally re-derives card.title from job.name (+ phase.name for a
+// phased card) on every save, the same "job/phase is the single source of
+// truth" treatment already given to card.color (see that field's own
+// comment). So the card modal's Title field edits whichever of those is
+// actually behind this card, resolved fresh here rather than cached, since
+// the card itself doesn't know which — it just has a jobId/phaseId.
+// Falls back to editing the card's own (otherwise-unused) title directly
+// for the defensive edge case of a card with no resolvable job (shouldn't
+// happen in normal operation — see migrateOrphanedCards()).
+function resolveCardNameTarget(card) {
+  const job = card.jobId ? jobs.find(function(j) { return j.id === card.jobId; }) : null;
+  if (!job) return { type: 'card' };
+  if (job.phases && job.phases.length) {
+    const phase = job.phases.find(function(p) { return p.id === (card.phaseId || null); });
+    if (phase) return { type: 'phase', job: job, phase: phase };
+  }
+  return { type: 'job', job: job };
+}
+
 function openEditCard(id) {
   // Flush whatever card this modal was previously open on (defensive —
   // normally you close before opening another).
@@ -15871,7 +15893,18 @@ function openEditCard(id) {
   draftAttachments = JSON.parse(JSON.stringify(card.attachments || []));
   document.getElementById('cardModalTitle').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Card';
   document.getElementById('cardDeleteBtn').style.display = 'inline-flex';
-  document.getElementById('c_title').value = card.title;
+  const nameTarget = resolveCardNameTarget(card);
+  const titleLabel = document.getElementById('c_title_label');
+  if (nameTarget.type === 'phase') {
+    titleLabel.textContent = 'Phase Name *';
+    document.getElementById('c_title').value = nameTarget.phase.name;
+  } else if (nameTarget.type === 'job') {
+    titleLabel.textContent = 'Job Name *';
+    document.getElementById('c_title').value = nameTarget.job.name;
+  } else {
+    titleLabel.textContent = 'Title *';
+    document.getElementById('c_title').value = card.title;
+  }
   document.getElementById('c_due').value = card.due || '';
   renderCustomFieldsGrid(card.customFields || {});
   renderTeamFieldsGrid(card.customFields || {});
@@ -15921,7 +15954,22 @@ function autoSaveCardForm() {
     customFields: collectCustomFieldValues(),
     attachments: draftAttachments
   };
-  if (title) cardData.title = title; // never blank out an already-saved title
+  // The Title field doesn't own its own value — see resolveCardNameTarget()'s
+  // own comment. Renaming here writes straight to the job/phase; the next
+  // ensureJobHasCards() pass (inside saveBoardCards() below) re-derives
+  // card.title from that, so cardData.title is only ever set in the
+  // defensive no-job fallback where there's nothing else to rename.
+  let renamedJobOrPhase = false;
+  if (title) {
+    const nameTarget = resolveCardNameTarget(boardCards[idx]);
+    if (nameTarget.type === 'phase') {
+      if (nameTarget.phase.name !== title) { nameTarget.phase.name = title; renamedJobOrPhase = true; }
+    } else if (nameTarget.type === 'job') {
+      if (nameTarget.job.name !== title) { nameTarget.job.name = title; renamedJobOrPhase = true; }
+    } else {
+      cardData.title = title; // never blank out an already-saved title
+    }
+  }
 
   boardCards[idx] = Object.assign({}, boardCards[idx], cardData);
   const savedCard = boardCards[idx];
@@ -15933,6 +15981,17 @@ function autoSaveCardForm() {
   // description/due/custom fields/checklist/attachments would keep showing
   // whatever was there when that form was first opened.
   if (savedCard.jobId) refreshJobFormIfOpen(savedCard.jobId);
+  // A job/phase rename shows up in more places than just the Board — same
+  // refresh set autoSaveJobForm() runs after its own name edits.
+  if (renamedJobOrPhase) { renderJobList(); renderGantt(); renderCalendar(); }
+  // renderBoard() only touches the real (possibly hidden) Board tab's own
+  // DOM — a card edited via the Home widget's own expanded-in-place Board
+  // (see renderHomeWorkflowExpandedBoard()) is a separate render of the
+  // same buildCardEl() cards, so without this the expanded view kept
+  // showing the pre-edit card until the user left Home and came back
+  // (Karl's report: "updated a card in the expanded view... didn't save"
+  // — it did save, just wasn't visible there yet).
+  if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
 }
 
 // Attached once at init, same reasoning as initJobFormAutosaveListeners:
@@ -15971,6 +16030,7 @@ function deleteCardFromModal() {
   saveBoardCards();
   deleteCardFromShared(activeProjectId, cardId);
   renderBoard();
+  if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
   closeCardModal();
   showToast('Card deleted', 'info');
 }
