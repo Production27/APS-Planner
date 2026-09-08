@@ -86,6 +86,26 @@ function emptyRoomState() {
   return { projects: {} };
 }
 
+// Read-side counterpart to the write-side project-scoping check in
+// webSocketMessage() below (":1325-1334" as of this writing) — that check
+// already exempts role==='admin' and an unset assignedProjectId the same
+// way this does, so a restricted connection's blast radius matches on
+// both reads and writes. A blankProject() stand-in is sent for the
+// non-assigned project rather than omitting it from `projects` entirely,
+// so the client always sees the same fixed set of project ids it always
+// has (see FIXED_PROJECT_NAMES/enforceFixedProjectSet() in index.html) —
+// omitting the key would exercise that create-if-missing path instead.
+function filterRoomStateForAttachment(roomState, attachment) {
+  if (!attachment || attachment.role === "admin" || !attachment.assignedProjectId) return roomState;
+  const filtered = { projects: {} };
+  Object.keys(roomState.projects).forEach(function (pid) {
+    filtered.projects[pid] = pid === attachment.assignedProjectId
+      ? roomState.projects[pid]
+      : blankProject(roomState.projects[pid].name);
+  });
+  return filtered;
+}
+
 function handleUpsertJob(project, msg) {
   const job = msg.job;
   if (!job || !job.id) return { project, changed: false, error: 'upsertJob missing job.id' };
@@ -936,6 +956,20 @@ async function handleUsersResetPassword(request, env, corsHeaders) {
 // storage and every snapshot broadcast. The key prefix check on
 // download/delete matters: it's what stops these endpoints from being
 // used to read/delete backup files out of the same shared bucket.
+//
+// isSafeInlineImageType() is the one thing standing between an uploader
+// and stored XSS: handleAttachmentDownload() serves attacker-controlled
+// bytes back to every other teammate who opens the file, so nothing that
+// could render/execute as a document (HTML, SVG with embedded <script>,
+// anything else) is ever allowed to come back as Content-Disposition:
+// inline. Deliberately matches the client's own isImage heuristic
+// (file.type.startsWith('image/'), see index.html's attachment upload)
+// minus svg+xml, rather than an arbitrary allowlist, so real photo
+// attachments keep rendering as thumbnails exactly as before.
+function isSafeInlineImageType(type) {
+  return typeof type === "string" && type.indexOf("image/") === 0 && type !== "image/svg+xml";
+}
+
 async function handleAttachmentUpload(request, env, corsHeaders, url) {
   // Credentials via headers, not query params — this request's body IS
   // the raw file (streamed straight into R2 below), so there's no JSON
@@ -946,12 +980,17 @@ async function handleAttachmentUpload(request, env, corsHeaders, url) {
   if (!identity) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
 
   const name = url.searchParams.get("name") || "file";
-  const type = url.searchParams.get("type") || "application/octet-stream";
+  // The uploader's claimed type is never trusted beyond the inline-image
+  // check above — anything else is stored as a generic byte stream, which
+  // handleAttachmentDownload() below always forces to download rather
+  // than render, regardless of what a future upload claims to be.
+  const claimedType = url.searchParams.get("type") || "";
+  const storedType = isSafeInlineImageType(claimedType) ? claimedType : "application/octet-stream";
   const dotIdx = name.lastIndexOf(".");
   const ext = dotIdx > -1 ? name.slice(dotIdx) : "";
   const key = "attachments/" + crypto.randomUUID() + ext;
 
-  await env.BACKUP_BUCKET.put(key, request.body, { httpMetadata: { contentType: type } });
+  await env.BACKUP_BUCKET.put(key, request.body, { httpMetadata: { contentType: storedType } });
   return jsonResponse({ key, name }, 200, corsHeaders);
 }
 
@@ -965,9 +1004,15 @@ async function handleAttachmentDownload(request, env, corsHeaders, url) {
   const obj = await env.BACKUP_BUCKET.get(key);
   if (!obj) return new Response("Not found", { status: 404, headers: corsHeaders });
 
+  const storedType = (obj.httpMetadata && obj.httpMetadata.contentType) || "application/octet-stream";
   return new Response(obj.body, {
     headers: Object.assign({}, corsHeaders, {
-      "Content-Type": (obj.httpMetadata && obj.httpMetadata.contentType) || "application/octet-stream"
+      "Content-Type": storedType,
+      "X-Content-Type-Options": "nosniff",
+      // Only ever render inline for the same narrow image check enforced
+      // at upload time — everything else downloads instead of executing,
+      // no matter what content-type ended up stored.
+      "Content-Disposition": isSafeInlineImageType(storedType) ? "inline" : "attachment"
     })
   });
 }
@@ -1233,7 +1278,8 @@ export class ApsRoom {
     server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role, assignedProjectId: identity.assignedProjectId || null, view: null, projectId: null });
 
     const roomState = await this.loadRoomState();
-    server.send(JSON.stringify(Object.assign({ type: 'snapshot' }, roomState)));
+    const scoped = filterRoomStateForAttachment(roomState, identity);
+    server.send(JSON.stringify(Object.assign({ type: 'snapshot' }, scoped)));
     this.broadcastPresence();
 
     return new Response(null, { status: 101, webSocket: client });
@@ -1351,7 +1397,7 @@ export class ApsRoom {
       // something newer — send fresh data immediately rather than leaving
       // their local view wrong until the next unrelated broadcast.
       ws.send(JSON.stringify(Object.assign({ type: 'rejected', msgId: msg.msgId }, result.rejected)));
-      ws.send(JSON.stringify(Object.assign({ type: 'snapshot' }, this.roomState)));
+      ws.send(JSON.stringify(Object.assign({ type: 'snapshot' }, filterRoomStateForAttachment(this.roomState, attachment))));
       return;
     }
     if (result.ack) ws.send(JSON.stringify(result.ack));
@@ -1363,10 +1409,15 @@ export class ApsRoom {
     }
   }
 
+  // Per-socket, not one shared payload — two connections can have
+  // different assignedProjectId scoping (see filterRoomStateForAttachment()),
+  // so what each one is allowed to receive can differ.
   broadcastSnapshot() {
-    const payload = JSON.stringify(Object.assign({ type: 'snapshot' }, this.roomState));
     const sockets = this.state.getWebSockets();
     for (const ws of sockets) {
+      const attachment = ws.deserializeAttachment();
+      const scoped = filterRoomStateForAttachment(this.roomState, attachment);
+      const payload = JSON.stringify(Object.assign({ type: 'snapshot' }, scoped));
       try { ws.send(payload); } catch (e) { /* dead socket, webSocketClose() cleans up */ }
     }
   }

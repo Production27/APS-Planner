@@ -3759,7 +3759,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-08.1';
+const APP_VERSION = '2026-09-08.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -13862,7 +13862,11 @@ function handleAttachmentPanelUpload(e, config) {
         id: localId,
         name: file.name,
         size: file.size,
-        isImage: file.type.startsWith('image/'),
+        // Matches the Worker's own isSafeInlineImageType() — svg+xml is
+        // excluded because it's now always force-downloaded server-side
+        // (can carry embedded scripts), so treating it as isImage here
+        // would just render as a broken thumbnail.
+        isImage: file.type.startsWith('image/') && file.type !== 'image/svg+xml',
         key: result.key
       });
       renderAttachmentPanel(config);
