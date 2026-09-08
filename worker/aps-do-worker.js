@@ -319,9 +319,18 @@ function handleRecordTombstone(project, msg) {
   return { project: next, changed: true };
 }
 
-function handleLogActivity(project, msg) {
+// attachment (the WS connection's own server-verified identity, from
+// resolveIdentityFromToken() at connect time) is preferred over msg.who
+// whenever it's available — msg.who is the client's own display-name
+// preference (editable in localStorage, not authenticated), so trusting
+// it outright let anyone attribute an activity-log entry to a different
+// teammate. Same reasoning for `when`: Date.now() is always server time,
+// never the client's claim, since a log a caller can backdate isn't much
+// of an audit trail.
+function handleLogActivity(project, msg, attachment) {
   const next = cloneRoomState({ projects: { p: project } }).projects.p;
-  next.activityLog.push({ who: msg.who || 'Someone', what: msg.what || '', when: msg.when || Date.now() });
+  const who = (attachment && attachment.displayName) || msg.who || 'Someone';
+  next.activityLog.push({ who: who, what: msg.what || '', when: Date.now() });
   while (next.activityLog.length > ACTIVITY_LOG_CAP) next.activityLog.shift();
   next.rev++;
   return { project: next, changed: true };
@@ -351,7 +360,7 @@ const MESSAGE_TIER_REQUIREMENTS = {
   removeProject: 'admin'
 };
 
-function applyMessage(state, msg) {
+function applyMessage(state, msg, attachment) {
   if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') {
     return { state, changed: false, error: 'malformed message' };
   }
@@ -386,7 +395,7 @@ function applyMessage(state, msg) {
     case 'setWorkflowItems': result = handleSetWholeField(project, msg, 'workflowItems'); break;
     case 'deleteFromMap': result = handleDeleteFromMap(project, msg); break;
     case 'recordTombstone': result = handleRecordTombstone(project, msg); break;
-    case 'logActivity': result = handleLogActivity(project, msg); break;
+    case 'logActivity': result = handleLogActivity(project, msg, attachment); break;
     case 'renameProject': {
       const next = cloneRoomState({ projects: { p: project } }).projects.p;
       next.name = msg.name || next.name;
@@ -864,6 +873,27 @@ async function handleUsersAdd(request, env, corsHeaders) {
 // Same shape as handleUsersResetPassword below, plus handleUsersRemove's
 // last-admin guard reused here so the last true admin can't be demoted away,
 // same rationale as not being able to delete the last admin account.
+// Best-effort — worst case a stale-permission connection just persists
+// until its token naturally expires (see ApsRoom's /internal/kick-user
+// for why closing the socket is what actually matters here, not this
+// call itself failing or succeeding).
+async function kickUserFromRoom(env, targetUsername) {
+  try {
+    await getRoomStub(env).fetch('https://internal/internal/kick-user?username=' + encodeURIComponent(targetUsername), { method: 'POST' });
+  } catch (e) { /* best-effort */ }
+}
+
+// Pure decision logic pulled out of handleUsersUpdate() below so it's
+// independently testable — an isLead-only edit shouldn't force a
+// reconnect, only an actual role/project change should.
+function computeRoleProjectChange(target, body) {
+  const roleChanged = target.role !== body.newRole;
+  const newAssignedProjectId = (body.newRole !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
+    ? body.newAssignedProjectId : null;
+  const projectChanged = target.assignedProjectId !== newAssignedProjectId;
+  return { roleChanged, projectChanged, newAssignedProjectId };
+}
+
 async function handleUsersUpdate(request, env, corsHeaders) {
   let body;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
@@ -891,11 +921,18 @@ async function handleUsersUpdate(request, env, corsHeaders) {
     }
   }
 
+  // Captured before mutating target below.
+  const { roleChanged, projectChanged, newAssignedProjectId } = computeRoleProjectChange(target, body);
+
   target.role = body.newRole;
-  target.assignedProjectId = (target.role !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
-    ? body.newAssignedProjectId : null;
+  target.assignedProjectId = newAssignedProjectId;
   target.isLead = !!body.newIsLead;
   await putUser(env, target);
+
+  if (roleChanged || projectChanged) {
+    await kickUserFromRoom(env, targetUsername);
+  }
+
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
 
@@ -920,6 +957,7 @@ async function handleUsersRemove(request, env, corsHeaders) {
   }
 
   await deleteUser(env, targetUsername);
+  await kickUserFromRoom(env, targetUsername);
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
 
@@ -1252,6 +1290,28 @@ export class ApsRoom {
       return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     }
 
+    // Called by handleUsersUpdate()/handleUsersRemove() (plain HTTP
+    // handlers with no access to this DO's live sockets otherwise) right
+    // after a role/project/removal change actually lands in KV — force-
+    // closes that user's connection(s) so a stale role can't just keep
+    // working until the token's own 24h expiry. Closing alone isn't
+    // enough to fix stale permissions on its own (a plain reconnect would
+    // just resend the same still-valid, now-stale token) — the client's
+    // handleRoomClose() is what turns this specific close code into a
+    // forced re-login instead of a silent reconnect.
+    if (url.pathname === '/internal/kick-user' && request.method === 'POST') {
+      const targetUsername = url.searchParams.get('username') || '';
+      let kicked = 0;
+      for (const ws of this.state.getWebSockets()) {
+        const a = ws.deserializeAttachment();
+        if (a && a.username === targetUsername) {
+          try { ws.close(4001, 'Permissions changed — please sign in again'); } catch (e) {}
+          kicked++;
+        }
+      }
+      return new Response(JSON.stringify({ success: true, kicked }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
     if (request.headers.get('Upgrade') === 'websocket') {
       return this.handleWebSocketUpgrade(request);
     }
@@ -1385,7 +1445,7 @@ export class ApsRoom {
       msg = filterUpsertProjectBatchByTier(msg, roomState.projects[msg.projectId], attachment.role);
     }
 
-    const result = applyMessage(roomState, msg);
+    const result = applyMessage(roomState, msg, attachment);
 
     if (result.error) {
       ws.send(JSON.stringify({ type: 'error', msgId: msg.msgId, message: result.error }));

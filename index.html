@@ -3759,7 +3759,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-08.2';
+const APP_VERSION = '2026-09-08.3';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -16534,7 +16534,12 @@ function isBusyEditing() {
   // still points at the pre-refresh DOM/objects. Left unguarded, dropping
   // the drag after that lands on stale objects instead of the fresh ones,
   // which can end up mutating the wrong task's dates entirely.
-  if (barMoveState || tickResizeState || barResizeState || calDragState) return true;
+  // draggedCardId/draggedColId are the Board's own drag-in-progress flags
+  // (set/cleared by handleCardDragStart/End, handleColumnDragStart/End) —
+  // same idiom as the Gantt/Calendar flags above, added here so a remote
+  // snapshot mid-drag can't rebuild the board out from under the user the
+  // same way it already can't for a Gantt/Calendar drag.
+  if (barMoveState || tickResizeState || barResizeState || calDragState || draggedCardId || draggedColId) return true;
 
   const active = document.activeElement;
   if (active) {
@@ -16762,11 +16767,29 @@ function renderPresenceAvatars() {
     return '<span class="presence-avatar" style="background:' + presenceAvatarColor(u.username || name) + ';animation-delay:' + presenceAnimDelay(delayKey) + 's;" title="' + escapeHtml(title) + '">' + escapeHtml(presenceInitials(name)) + '</span>';
   }).join('');
 }
-function handleRoomClose() {
+function handleRoomClose(event) {
+  // Close code 4001 = the server force-closed this connection because an
+  // admin changed our role/project assignment (see the Worker's
+  // /internal/kick-user, called from handleUsersUpdate/handleUsersRemove).
+  // The cached token still encodes the OLD permissions and buildRoomWsUrl()
+  // would happily reuse it on a plain reconnect (getSessionToken() only
+  // re-authenticates when the cached token is actually expired) — clearing
+  // it here forces a fresh interactive login instead, so the reconnect
+  // picks up real, current permissions (or correctly fails if removed).
+  if (event && event.code === 4001) {
+    setStoredSessionToken(null);
+    reauthenticateOnce(true);
+  }
+  // Escalate to the offline indicator on ANY close, not just one after a
+  // previously-successful connection — a first-connection failure (cold
+  // start, brief outage right at page load) used to leave the dot stuck on
+  // "Connecting…" forever since roomEverConnected was still false.
+  // scheduleOfflineEscalation() already dedupes via offlineSince/
+  // clearTimeout, so calling it unconditionally here is safe.
   if (roomEverConnected) {
     setSyncIndicator('connecting', 'Reconnecting…');
-    scheduleOfflineEscalation();
   }
+  scheduleOfflineEscalation();
 }
 function handleRoomSocketError(err) {
   console.error('Room socket error', err);
