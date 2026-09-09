@@ -26,6 +26,17 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      # GitHub's ubuntu-latest runners come with Google Chrome (the real
+      # browser, not Playwright's own bundled Chromium) pre-installed,
+      # with its own apt source configured. We never use it — only
+      # Playwright's Chromium — but `apt-get update` below still queries
+      # every configured source on the machine regardless, including that
+      # unrelated one. When Google's own mirror has a sync hiccup (seen
+      # directly: a Hash Sum mismatch on dl.google.com that persisted for
+      # 20+ minutes), that unrelated failure was aborting an install that
+      # needed nothing from it. Removing the source we don't use avoids
+      # depending on infrastructure this pipeline has no actual need for.
+      - run: sudo rm -f /etc/apt/sources.list.d/google-chrome.list*
       - run: npx playwright install --with-deps chromium
       - run: npm test
       - if: failure()
