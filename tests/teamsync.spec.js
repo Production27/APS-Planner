@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
+const { APP_URL, WORKER_ORIGIN, seedSession, mockRoomWebSocket } = require('./helpers');
 
 test('login: a valid seeded session bypasses the login overlay', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
@@ -267,6 +267,60 @@ test('gantt drag: moving a task bar shifts its dates by the dragged number of da
   expect(result).not.toBeNull();
   expect(result.start).toBe(expected.start);
   expect(result.finish).toBe(expected.finish);
+});
+
+test('error reporting: an uncaught error and an unhandled rejection both POST a report to the Worker', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+
+  const reported = [];
+  await page.route(WORKER_ORIGIN + '/report-error', async (route) => {
+    reported.push(JSON.parse(route.request().postData()));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true}' });
+  });
+
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await page.evaluate(() => {
+    setTimeout(() => { throw new Error('Playwright synthetic uncaught error'); }, 0);
+  });
+  await page.waitForTimeout(100);
+
+  await page.evaluate(() => {
+    Promise.reject(new Error('Playwright synthetic unhandled rejection'));
+  });
+  await page.waitForTimeout(100);
+
+  expect(reported.length).toBe(2);
+  const errorReport = reported.find((r) => r.kind === 'error');
+  const rejectionReport = reported.find((r) => r.kind === 'unhandledrejection');
+  expect(errorReport.message).toContain('Playwright synthetic uncaught error');
+  expect(rejectionReport.message).toContain('Playwright synthetic unhandled rejection');
+  // A verified identity should ride along on the report — this session
+  // was seeded as an admin — rather than trusting a client-claimed name.
+  expect(errorReport.token).toBeTruthy();
+});
+
+test('error reporting: a tight error loop is capped rather than flooding the Worker', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+
+  let reportCount = 0;
+  await page.route(WORKER_ORIGIN + '/report-error', async (route) => {
+    reportCount++;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true}' });
+  });
+
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await page.evaluate(() => {
+    for (let i = 0; i < 30; i++) reportClientError('error', 'loop ' + i, {});
+  });
+  await page.waitForTimeout(100);
+
+  expect(reportCount).toBe(20); // MAX_CLIENT_ERROR_REPORTS_PER_LOAD
 });
 
 test('cross-project isolation: a project-restricted account cannot switch to the other project', async ({ page }) => {
