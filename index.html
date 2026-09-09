@@ -27,10 +27,20 @@
     /* Type scale — replaces ad hoc per-element font sizing (some as fine
        as half-pixel steps) in new/redesigned rules going forward. Not
        retrofitted across the whole existing stylesheet in this pass. */
-    --t-2xs: 10px; --t-xs: 11px; --t-sm: 12px; --t-base: 13px; --t-md: 14px; --t-lg: 16px; --t-xl: 20px;
+    --t-3xs: 9px; --t-2xs: 10px; --t-xs: 11px; --t-sm: 12px; --t-base: 13px; --t-md: 14px; --t-lg: 16px; --t-xl: 20px;
+    /* --t-3xs (9px) isn't a new size — it's a mechanical audit finding:
+       14 existing sites already use 9/8.5/8px as a consistent "micro
+       badge" text size across Gantt/Calendar/Board/Home/Job Manager.
+       Snapping those up to the 10px floor would visibly bloat every
+       small badge/pill app-wide, so it gets its own scale step instead. */
     /* Spacing scale — same "new rules use this, existing ones untouched
-       for now" reasoning. */
-    --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px;
+       for now" reasoning. --s-0-5/1-5/2-5/3-5/7 are the same kind of
+       finding as --t-3xs above, not new values: 2/6/10/14px form a
+       consistent half-step grid already in wide cross-view use for dense
+       rows (203 of the ~330 "off-scale" spacing values found), and 20px
+       recurs often enough (15 sites) to be a real step rather than a
+       one-off. */
+    --s-0-5: 2px; --s-1: 4px; --s-1-5: 6px; --s-2: 8px; --s-2-5: 10px; --s-3: 12px; --s-3-5: 14px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-7: 32px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   /* 100dvh (falls back to 100vh in browsers that don't support it) rather
@@ -80,7 +90,7 @@
   }
   .app-header .header-text { flex: 1; min-width: 0; }
   .app-header h1 {
-    font-size: 17px; font-weight: 600; letter-spacing: 0.3px;
+    font-size: var(--t-lg); font-weight: 600; letter-spacing: 0.3px;
     cursor: text; padding: 2px 6px; border-radius: 4px; border: 1px solid transparent;
     transition: all 0.2s; display: inline-block; min-width: 200px;
   }
@@ -101,7 +111,7 @@
   }
   /* ===== PRESENCE AVATARS =====
      Lives in .manager-sidebar-header's own <h2> now, right after the Jobs
-     add button — that button's own margin-left:auto already pushes both
+     add button — that button's own margin-left: auto already pushes both
      it and this (its next sibling) flush to the row's right edge, so no
      extra positioning is needed here. */
   .presence-avatars { display: flex; align-items: center; flex-shrink: 0; }
@@ -170,8 +180,8 @@
   }
   .settings-dropdown.show { display: block; }
   .settings-dropdown-item {
-    display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 6px;
-    font-size: 12.5px; font-weight: 600; color: var(--text); cursor: pointer; transition: background 0.15s;
+    display: flex; align-items: center; gap: 9px; padding: var(--s-2-5) 12px; border-radius: 6px;
+    font-size: var(--t-base); font-weight: 600; color: var(--text); cursor: pointer; transition: background 0.15s;
   }
   .settings-dropdown-item:hover { background: #eef1fa; color: var(--primary); }
   .settings-dropdown-item.toggle-item { justify-content: space-between; }
@@ -334,9 +344,9 @@
      whole toolbar (was flex:1 + text-align:center) — Google Calendar's
      own layout groups Today/‹/›/month-label together on the left, with
      everything else pushed to the right (see .calendar-view-toggle-wrap's
-     margin-left:auto). */
-  .calendar-toolbar h3 { font-size: 19px; color: var(--text); }
-  /* Slightly smaller than the app's default .btn (padding:10px 22px) —
+     margin-left: auto). */
+  .calendar-toolbar h3 { font-size: var(--t-xl); color: var(--text); }
+  /* Slightly smaller than the app's default .btn (padding: 10px var(--s-6)) —
      the request was specifically to make this bar a little shorter, and
      the default button size was what set its height. */
   .calendar-toolbar .btn { padding: 7px 14px; font-size: 12px; }
@@ -350,7 +360,7 @@
   }
   .cal-nav-btn {
     border: none; background: transparent; cursor: pointer; padding: 6px 10px;
-    font-size: 15px; line-height: 1; color: var(--text); font-weight: 700;
+    font-size: var(--t-lg); line-height: 1; color: var(--text); font-weight: 700;
   }
   .cal-nav-btn:first-child { border-right: 1px solid var(--border); }
   .cal-nav-btn:hover { background: rgba(0,0,0,0.05); }
@@ -416,7 +426,7 @@
   }
   .cal-event-bar:hover { filter: brightness(1.1); z-index: 5; }
   .cal-event-bar .cal-jobname-tag {
-    display: inline-block; font-size: 8.5px; font-weight: 700; color: #fff;
+    display: inline-block; font-size: var(--t-3xs); font-weight: 700; color: #fff;
     padding: 0 5px; border-radius: 7px; margin-left: 4px; vertical-align: middle;
     line-height: 12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3);
   }
@@ -575,7 +585,7 @@
   }
   .timeline-header .day-header:hover { background: #e3f2fd; color: var(--primary); }
   .timeline-header .day-header .day-num { font-weight: 700; font-size: 11px; }
-  .timeline-header .day-header .day-name { font-size: 8px; color: var(--text-faint); text-transform: uppercase; }
+  .timeline-header .day-header .day-name { font-size: var(--t-3xs); color: var(--text-faint); text-transform: uppercase; }
   .timeline-header .day-header.weekend { background: #f0f0f0; color: #aaa; }
   .timeline-header .day-header.weekend:hover { background: var(--border); }
   .timeline-header .day-header.today-header {
@@ -744,7 +754,7 @@
   .cal-event-bar.timed-style::before {
     content: ''; width: 7px; height: 7px; min-width: 7px; border-radius: 50%; background: var(--dot-color, #7e57c2);
   }
-  .cal-event-bar.timed-style .cal-event-time { font-weight: 700; font-size: 9.5px; color: var(--text-light); flex-shrink: 0; }
+  .cal-event-bar.timed-style .cal-event-time { font-weight: 700; font-size: var(--t-3xs); color: var(--text-light); flex-shrink: 0; }
   .cal-event-bar.timed-style:hover { filter: none; background: rgba(0,0,0,0.06) !important; }
   body.dark-mode .cal-event-bar.timed-style:hover { background: rgba(255,255,255,0.08) !important; }
   /* Week view hourly grid */
@@ -777,7 +787,7 @@
   .week-hour-row-line { height: 48px; border-bottom: 1px solid var(--border); box-sizing: border-box; }
   .week-timed-event {
     position: absolute; left: 2px; right: 2px; border-radius: 4px; padding: 2px 5px;
-    font-size: 10.5px; color: #fff; overflow: hidden; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    font-size: var(--t-xs); color: #fff; overflow: hidden; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
     z-index: 2; line-height: 13px;
   }
   .week-timed-event:hover { filter: brightness(1.1); z-index: 6; }
@@ -855,7 +865,7 @@
   .gantt-toolbar button:hover { background: #eef1fa; color: var(--primary); border-color: var(--primary-light); box-shadow: 0 3px 6px rgba(26,35,126,0.15); transform: translateY(-1px); }
   .gantt-toolbar button:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,0.1) inset; }
   /* See ganttFocusedJobId/syncGanttJobFocusBanner() — sits ahead of the icon
-     buttons, pushed to the toolbar's left edge via margin-right:auto so the
+     buttons, pushed to the toolbar's left edge via margin-right: auto so the
      zoom/today/etc. buttons stay pinned right regardless of whether it's
      showing. */
   .gantt-job-focus-banner { align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text); margin-right: auto; }
@@ -1037,7 +1047,7 @@
   body.dark-mode .job-phase-strip-btn:hover { border-color: var(--primary-ondark); color: var(--primary-ondark); }
   .job-subphase-strip { margin: 6px 0 0 20px; padding-left: 10px; border-left: 2px solid #dcdfe6; }
   body.dark-mode .job-subphase-strip { border-left-color: rgba(255,255,255,0.15); }
-  .job-subphase-strip .job-phase-chip { font-size: 11px; padding: 4px 9px; }
+  .job-subphase-strip .job-phase-chip { font-size: 11px; padding: 4px var(--s-2-5); }
   .job-link-active-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; background: #eef1fa; font-size: 12px; font-weight: 600; color: var(--text); }
   body.dark-mode .job-link-active-row { background: rgba(255,255,255,0.08); }
   .job-link-active-row .job-link-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1061,7 +1071,7 @@
   }
   /* Kept in sync with #jobCommentsPanel's own .collapsed (see
      toggleJobCommentsPanel()) — otherwise the drawer stays its full
-     888px-for-two-panels width and .job-edit-row's margin:0 auto just
+     888px-for-two-panels width and .job-edit-row's margin: 0 auto just
      centers the now-narrow content in the middle of a lot of dead space,
      rather than the drawer itself getting smaller. 592px = the collapsed
      row's actual content width (460px form + 24px gap + 44px tab) plus
@@ -1069,9 +1079,9 @@
   .manager-form-area.comments-collapsed { width: min(592px, 100%); }
   .manager-form-area.open { transform: translateX(0); }
   .job-edit-row { display: flex; gap: 24px; align-items: flex-start; max-width: 824px; margin: 0 auto; }
-  .form-container { max-width: 460px; margin: 0; flex: 1 1 460px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 32px; }
-  .form-container h3 { font-size: 18px; font-weight: 700; margin-bottom: 0; color: var(--text); display: flex; align-items: center; gap: 10px; }
-  .form-group { margin-bottom: 18px; }
+  .form-container { max-width: 460px; margin: 0; flex: 1 1 460px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: var(--s-7) 32px; }
+  .form-container h3 { font-size: var(--t-xl); font-weight: 700; margin-bottom: 0; color: var(--text); display: flex; align-items: center; gap: 10px; }
+  .form-group { margin-bottom: var(--s-5); }
   .form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--text-light); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
   .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.2s, box-shadow 0.2s; background: white; }
   .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
@@ -1090,11 +1100,11 @@
   .job-comments-panel {
     flex: 0 0 340px; width: 340px; max-height: calc(100vh - 220px);
     background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
-    padding: 20px 22px; display: none; flex-direction: column;
+    padding: 20px var(--s-6); display: none; flex-direction: column;
     transition: flex-basis 0.2s ease, width 0.2s ease, padding 0.2s ease;
   }
-  .job-comments-panel h4 { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--text); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  .job-comments-collapse-btn { margin-left: auto; background: none; border: none; color: var(--text-light); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .job-comments-panel h4 { font-size: var(--t-lg); font-weight: 700; margin-bottom: 14px; color: var(--text); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .job-comments-collapse-btn { margin-left: auto; background: none; border: none; color: var(--text-light); font-size: var(--t-xl); line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
   .job-comments-collapse-btn:hover { background: #eef1fa; color: var(--primary); }
   /* Collapsed (the default each time a job opens — see editJob()/
      the justCreated branch) shrinks the panel down to a narrow tab
@@ -1113,7 +1123,7 @@
     background: var(--danger); border: 2px solid var(--card);
   }
   .job-comments-panel.collapsed {
-    flex-basis: 44px; width: 44px; padding: 18px 0; align-items: center; cursor: pointer;
+    flex-basis: 44px; width: 44px; padding: var(--s-5) 0; align-items: center; cursor: pointer;
   }
   .job-comments-panel.collapsed:hover { background: #eef1fa; }
   .job-comments-panel.collapsed h4,
@@ -1137,7 +1147,7 @@
   body.dark-mode .job-comment-author { color: var(--primary-ondark); }
   .job-comment-when { font-size: 11px; color: var(--text-light); flex-shrink: 0; }
   .job-comment-text { font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
-  .job-comment-delete { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
+  .job-comment-delete { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: var(--t-lg); line-height: 1; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
   .job-comment-delete:hover { color: var(--danger); background: #ffebee; }
   .job-comments-input-row { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
   .job-comments-input-row textarea {
@@ -1185,7 +1195,7 @@
        edit box" doesn't apply once the panel has stacked above the form.
        Selector beats the base .collapsed rule on specificity alone, but
        spelled out for clarity. */
-    .job-comments-panel.collapsed { width: 100%; max-width: 460px; flex: none; padding: 20px 22px; align-items: stretch; cursor: default; }
+    .job-comments-panel.collapsed { width: 100%; max-width: 460px; flex: none; padding: 20px var(--s-6); align-items: stretch; cursor: default; }
     .job-comments-panel.collapsed:hover { background: var(--card); }
     .job-comments-panel.collapsed h4 { display: flex; }
     .job-comments-panel.collapsed .mobile-field-body { display: block; }
@@ -1251,7 +1261,7 @@
   .color-preset:hover { transform: scale(1.15); box-shadow: 0 3px 8px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.3); }
   .color-preset.selected { border-color: var(--text); transform: scale(1.15); box-shadow: 0 3px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3); }
   .form-actions { display: flex; gap: 10px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
-  .btn { padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; position: relative; }
+  .btn { padding: 10px var(--s-6); border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; position: relative; }
   .btn:active { transform: translateY(1px) !important; }
   .btn-primary { background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: white; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); }
   .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 3px 6px rgba(26,35,126,0.3), 0 8px 18px rgba(26,35,126,0.35); }
@@ -1278,7 +1288,7 @@
   /* flex:1/min-height:0 only matter now that #panel-board.active is a
      flex column (board-workflow-strip below sits above this as the
      other child) — harmless no-ops otherwise. */
-  .board-wrapper { height: 100%; flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; display: flex; gap: 16px; padding: 8px 24px 18px; background: var(--bg); align-items: flex-start; }
+  .board-wrapper { height: 100%; flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; display: flex; gap: 16px; padding: 8px 24px var(--s-5); background: var(--bg); align-items: flex-start; }
   .board-wrapper::-webkit-scrollbar { height: 8px; }
   #panel-board.active { display: flex; flex-direction: column; }
 
@@ -1405,7 +1415,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .card-modal-scroll { max-height: 78vh; overflow-y: auto; padding-right: 4px; }
   .card-modal-scroll::-webkit-scrollbar { width: 6px; }
   .card-modal-scroll::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-  .card-section { margin-top: 22px; }
+  .card-section { margin-top: var(--s-6); }
   .card-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .card-section-header h5 { font-size: 13px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.4px; }
   .card-section-header .btn { padding: 5px 12px; font-size: 11px; }
@@ -1473,7 +1483,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .checklist-item .ci-assignee .ms-dropdown-toggle { font-size: 11px; padding: 3px 6px; gap: 4px; color: var(--text-light); }
   .checklist-item .ci-assignee .ms-dropdown-toggle span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .checklist-item .ci-assignee .ms-dropdown-panel { width: 200px; left: auto; right: 0; }
-  .checklist-item .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 15px; padding: 2px 6px; flex-shrink: 0; }
+  .checklist-item .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: var(--t-lg); padding: 2px 6px; flex-shrink: 0; }
   .checklist-item .ci-delete:hover { color: var(--danger); }
   /* "Killer item" flag — see toggleMyChecklistItemRequired(). Only
      required items are what the board-move confirm (moveCardToColumn's
@@ -1495,7 +1505,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      assigned to whoever's on the parent item (see the .ci-assignee
      dropdown above). Indented under the parent, roughly aligned past
      its checkbox, same visual language as .job-comment-replies. */
-  .checklist-subitems { margin: 2px 0 6px 26px; padding-left: 12px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+  .checklist-subitems { margin: 2px 0 6px var(--s-6); padding-left: 12px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
   .checklist-subitem { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
   .checklist-subitem input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
   .checklist-subitem .ci-text { flex: 1; font-size: 12px; color: var(--text); }
@@ -1589,9 +1599,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-wrapper { height: 100%; overflow-y: auto; padding: 20px 24px 32px; display: flex; flex-direction: column; }
   .home-greeting-banner {
     background: linear-gradient(135deg, var(--primary), var(--primary-light));
-    color: #fff; border-radius: var(--radius); padding: 18px 24px; margin-bottom: 16px; box-shadow: var(--shadow);
+    color: #fff; border-radius: var(--radius); padding: var(--s-5) 24px; margin-bottom: 16px; box-shadow: var(--shadow);
   }
-  .home-greeting-text { font-size: 19px; font-weight: 700; }
+  .home-greeting-text { font-size: var(--t-xl); font-weight: 700; }
   .home-greeting-date { font-size: 13px; opacity: 0.85; margin-top: 2px; }
   /* Three columns, not two — Job Chat (.home-widget-center below) takes
      the middle one as a tall span across both rows, so it sits BETWEEN
@@ -1801,7 +1811,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      different jobs), it reads as a new alert and shows again. */
   .home-widget-alert {
     display: flex; align-items: center; gap: 8px; background: #fdecea; color: var(--danger);
-    font-size: 11.5px; font-weight: 600; padding: 7px 8px 7px 10px; border-radius: 6px; margin-bottom: 8px;
+    font-size: var(--t-sm); font-weight: 600; padding: 7px 8px 7px 10px; border-radius: 6px; margin-bottom: 8px;
   }
   body.dark-mode .home-widget-alert { background: rgba(220,53,69,0.22); color: #ff8a80; }
   /* Severity tiers (see renderHomeWidgetAlert()'s own tier param) — same
@@ -1824,7 +1834,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      empty widget still looks finished rather than broken. */
   .home-widget-empty {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 10px; padding: 30px 16px; font-size: 13px; color: var(--text-light); text-align: center;
+    gap: 10px; padding: var(--s-7) 16px; font-size: 13px; color: var(--text-light); text-align: center;
   }
   .home-widget-empty svg { opacity: 0.4; }
   .home-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
@@ -1849,7 +1859,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .home-mini-cal-dow { text-align: center; font-size: 9px; font-weight: 700; color: var(--text-light); text-transform: uppercase; padding-bottom: 4px; }
   .home-mini-cal-day {
     min-height: 34px; display: flex; flex-direction: column; align-items: center;
-    padding-top: 3px; border-radius: 6px; font-size: 10.5px; color: var(--text);
+    padding-top: 3px; border-radius: 6px; font-size: var(--t-xs); color: var(--text);
     position: relative; cursor: pointer; gap: 2px; transition: background 0.15s;
   }
   .home-mini-cal-day:hover { background: rgba(57,73,171,0.08); }
@@ -1901,7 +1911,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .wsm-bracket-band { position: relative; overflow: hidden; height: 30px; }
   .wsm-bracket-track { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
   .wsm-seg { position: absolute; top: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; padding-bottom: 2px; }
-  .wsm-seg-label { font-size: 10.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 2px; }
+  .wsm-seg-label { font-size: var(--t-xs); font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 2px; }
   .wsm-bracket-wrap { width: calc(100% - 10px); height: 8px; }
   .wsm-bracket-wrap svg { display: block; }
   .wsm-bars-wrap { display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 6px 2px 0; }
@@ -1917,7 +1927,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      align-items:flex-start) and grow downward by however many cards, rather
      than growing up from a shared baseline like a typical bar chart. */
   .wsm-bar { width: 100%; border-radius: 3px 3px 6px 6px; min-height: 4px; transition: height 0.2s; }
-  .wsm-bar-label { font-size: 9.5px; color: var(--text-light); font-weight: 600; margin-bottom: 4px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .wsm-bar-label { font-size: var(--t-3xs); color: var(--text-light); font-weight: 600; margin-bottom: 4px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .wsm-bar-col:hover .wsm-bar-label { color: var(--primary); }
   body.dark-mode .wsm-bar-col:hover .wsm-bar-label { color: var(--primary-ondark); }
   /* ===== EXPANDED BOARD (Home widget, in-place) ===== real kanban
@@ -1947,8 +1957,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      the available height and scrolls internally (.home-board-cards'
      own overflow-y:auto) instead of pushing the row taller. */
   .home-board-col { flex: 0 0 240px; max-height: 100%; display: flex; flex-direction: column; min-height: 0; background: var(--bg); border-radius: 8px; padding: 8px; }
-  .home-board-col-head { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; flex-shrink: 0; }
-  .home-board-col-count { font-size: 10.5px; font-weight: 700; color: var(--text-light); background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
+  .home-board-col-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--t-sm); font-weight: 700; color: var(--text); margin-bottom: 6px; flex-shrink: 0; }
+  .home-board-col-count { font-size: var(--t-xs); font-weight: 700; color: var(--text-light); background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
   .home-board-cards { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
   .home-board-col-empty { font-size: 11px; color: var(--text-light); text-align: center; padding: 10px 0; }
   /* ===== TODAY'S SCHEDULE MINI-GANTT ===== a small version of the real
@@ -1973,7 +1983,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     display: grid; grid-template-columns: 56px repeat(var(--home-gantt-days, 7), 1fr); gap: 2px; align-items: center;
   }
   .home-mini-gantt-days { margin-bottom: 6px; }
-  .home-mini-gantt-day { text-align: center; font-size: 9.5px; color: var(--text-light); font-weight: 600; padding-bottom: 4px; border-bottom: 2px solid transparent; }
+  .home-mini-gantt-day { text-align: center; font-size: var(--t-3xs); color: var(--text-light); font-weight: 600; padding-bottom: 4px; border-bottom: 2px solid transparent; }
   .home-mini-gantt-day.today { color: var(--primary-light); border-bottom-color: var(--primary-light); }
   body.dark-mode .home-mini-gantt-day.today { color: var(--primary-ondark); border-bottom-color: var(--primary-ondark); }
   .home-mini-gantt-dow { display: block; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
@@ -1995,7 +2005,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
   .home-mini-gantt-pill {
-    font-size: 8.5px; font-weight: 700; color: #fff; line-height: 1.5;
+    font-size: var(--t-3xs); font-weight: 700; color: #fff; line-height: 1.5;
     padding: 1px 6px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
     max-width: 100%; pointer-events: none;
@@ -2018,11 +2028,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   /* Attachments */
   .attachment-item { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
   .attachment-item .att-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #f0f0f0; }
-  .attachment-item .att-icon { width: 40px; height: 40px; border-radius: 6px; background: #eef1fa; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .attachment-item .att-icon { width: 40px; height: 40px; border-radius: 6px; background: #eef1fa; display: flex; align-items: center; justify-content: center; font-size: var(--t-xl); flex-shrink: 0; }
   .attachment-item .att-info { flex: 1; min-width: 0; }
   .attachment-item .att-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
   .attachment-item .att-size { font-size: 10px; color: var(--text-light); }
-  .attachment-item .att-remove { background: none; border: none; color: #ccc; cursor: pointer; font-size: 15px; flex-shrink: 0; }
+  .attachment-item .att-remove { background: none; border: none; color: #ccc; cursor: pointer; font-size: var(--t-lg); flex-shrink: 0; }
   .attachment-item .att-remove:hover { color: var(--danger); }
 
   /* Card front badges */
@@ -2033,7 +2043,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   /* Manage custom fields modal */
   .manage-fields-box { max-width: 520px; max-height: 80vh; overflow-y: auto; }
-  .manage-field-group { margin-bottom: 18px; }
+  .manage-field-group { margin-bottom: var(--s-5); }
   .manage-field-group h5 { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
   .manage-field-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .manage-field-chip { display: inline-flex; align-items: center; gap: 6px; background: #eef1fa; color: var(--primary); font-size: 11px; font-weight: 600; padding: 4px 6px 4px 10px; border-radius: 999px; }
@@ -2047,7 +2057,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-col-settings-wrap { position: relative; flex-shrink: 0; }
   .board-col-settings-btn {
     background: transparent; border: none; color: var(--text-light);
-    font-size: 15px; line-height: 1; padding: 4px 8px; border-radius: 6px;
+    font-size: var(--t-lg); line-height: 1; padding: 4px 8px; border-radius: 6px;
     cursor: pointer; transition: all 0.15s; letter-spacing: 1px;
     display: flex; align-items: center; justify-content: center;
   }
@@ -2166,7 +2176,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   /* ===== TOAST ===== */
   .toast-container { position: fixed; top: 70px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
-  .toast { background: white; border-radius: 8px; padding: 12px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; animation: slideIn 0.3s ease; border-left: 4px solid var(--success); }
+  .toast { background: white; border-radius: 8px; padding: 12px var(--s-5); box-shadow: 0 4px 16px rgba(0,0,0,0.15); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; animation: slideIn 0.3s ease; border-left: 4px solid var(--success); }
   .toast.error { border-left-color: var(--danger); }
   .toast.info { border-left-color: var(--primary-light); }
   @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -2188,13 +2198,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .onb-notif-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
   .onb-notif-icon { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; background: #e8eaf6; display: flex; align-items: center; justify-content: center; }
   body.dark-mode .onb-notif-icon { background: rgba(57,73,171,0.24); }
-  .onb-notif-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
-  .onb-notif-text { font-size: 12.5px; color: var(--text-light); line-height: 1.5; margin: 2px 0 12px; }
-  .onb-notif-x { margin-left: auto; background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px; opacity: 0.6; flex-shrink: 0; }
+  .onb-notif-title { font-size: var(--t-md); font-weight: 700; color: var(--text); }
+  .onb-notif-text { font-size: var(--t-base); color: var(--text-light); line-height: 1.5; margin: 2px 0 12px; }
+  .onb-notif-x { margin-left: auto; background: none; border: none; color: var(--text-light); cursor: pointer; font-size: var(--t-lg); line-height: 1; padding: 2px; opacity: 0.6; flex-shrink: 0; }
   .onb-notif-x:hover { opacity: 1; }
   .onb-notif-actions { display: flex; align-items: center; gap: 8px; }
-  .onb-notif-primary { flex: 1; padding: 8px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 700; cursor: pointer; border: none; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: #fff; box-shadow: 0 2px 4px rgba(26,35,126,0.25); }
-  .onb-notif-secondary { padding: 8px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; background: none; border: 1px solid var(--border); color: var(--text); }
+  .onb-notif-primary { flex: 1; padding: 8px 12px; border-radius: 7px; font-size: var(--t-base); font-weight: 700; cursor: pointer; border: none; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: #fff; box-shadow: 0 2px 4px rgba(26,35,126,0.25); }
+  .onb-notif-secondary { padding: 8px 12px; border-radius: 7px; font-size: var(--t-base); font-weight: 600; cursor: pointer; background: none; border: 1px solid var(--border); color: var(--text); }
   .onb-notif-secondary:hover { background: var(--bg); }
   .onb-notif-never { display: block; width: 100%; text-align: center; background: none; border: none; margin-top: 10px; font-size: 11px; color: var(--text-light); text-decoration: underline; cursor: pointer; padding: 2px; }
   .onb-notif-never:hover { color: var(--text); }
@@ -2205,40 +2215,40 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .onb-tut-overlay.show .onb-tut-box { transform: scale(1); }
   .onb-tut-visual { height: 130px; display: flex; align-items: center; justify-content: center; background: linear-gradient(165deg, var(--primary-light) 0%, var(--primary) 100%); }
   .onb-tut-body { padding: 20px 24px 16px; }
-  .onb-tut-step-label { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary-light); margin-bottom: 6px; }
+  .onb-tut-step-label { font-size: var(--t-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary-light); margin-bottom: 6px; }
   body.dark-mode .onb-tut-step-label { color: var(--primary-ondark); }
   .onb-tut-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-  .onb-tut-desc { font-size: 12.5px; color: var(--text-light); line-height: 1.6; }
-  .onb-tut-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px 18px; }
+  .onb-tut-desc { font-size: var(--t-base); color: var(--text-light); line-height: 1.6; }
+  .onb-tut-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px var(--s-5); }
   .onb-tut-dots { display: flex; gap: 6px; }
   .onb-tut-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: background .15s, width .15s; }
   .onb-tut-dot.active { background: var(--primary-light); width: 16px; border-radius: 3px; }
   body.dark-mode .onb-tut-dot.active { background: var(--primary-ondark); }
   .onb-tut-nav { display: flex; gap: 8px; align-items: center; }
-  .onb-tut-nav button { padding: 8px 16px; border-radius: 7px; font-size: 12.5px; font-weight: 700; cursor: pointer; border: none; }
+  .onb-tut-nav button { padding: 8px 16px; border-radius: 7px; font-size: var(--t-base); font-weight: 700; cursor: pointer; border: none; }
   .onb-tut-back { background: none; color: var(--text-light); }
   .onb-tut-back:hover { color: var(--text); }
   .onb-tut-back:disabled { visibility: hidden; }
   .onb-tut-next { background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: #fff; }
-  .onb-tut-skip { font-size: 11.5px; color: var(--text-light); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 4px; }
+  .onb-tut-skip { font-size: var(--t-sm); color: var(--text-light); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 4px; }
 
   .onb-cm-dim { position: fixed; inset: 0; z-index: 5000; opacity: 0; pointer-events: none; transition: opacity .2s ease; }
   .onb-cm-dim.show { opacity: 1; pointer-events: auto; }
   .onb-cm-hole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1), width .28s cubic-bezier(.22,.61,.36,1), height .28s cubic-bezier(.22,.61,.36,1); pointer-events: none; }
   .onb-cm-ring { position: absolute; inset: -4px; border-radius: 12px; border: 2px solid #fff; box-shadow: 0 0 0 3px rgba(57,73,171,0.55); pointer-events: none; }
-  .onb-cm-card { position: fixed; width: 250px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 14px 15px 12px; transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1); }
+  .onb-cm-card { position: fixed; width: 250px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 14px var(--s-4) 12px; transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1); }
   .onb-cm-step-label { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--primary-light); margin-bottom: 4px; }
   body.dark-mode .onb-cm-step-label { color: var(--primary-ondark); }
-  .onb-cm-title { font-size: 13.5px; font-weight: 700; margin-bottom: 5px; }
-  .onb-cm-desc { font-size: 11.5px; color: var(--text-light); line-height: 1.5; margin-bottom: 10px; }
+  .onb-cm-title { font-size: var(--t-md); font-weight: 700; margin-bottom: 5px; }
+  .onb-cm-desc { font-size: var(--t-sm); color: var(--text-light); line-height: 1.5; margin-bottom: 10px; }
   .onb-cm-footer { display: flex; align-items: center; justify-content: space-between; }
   .onb-cm-nav { display: flex; gap: 6px; }
-  .onb-cm-nav button { padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; border: none; }
+  .onb-cm-nav button { padding: 6px var(--s-3); border-radius: 6px; font-size: var(--t-sm); font-weight: 700; cursor: pointer; border: none; }
   .onb-cm-back { background: none; color: var(--text-light); }
   .onb-cm-back:disabled { visibility: hidden; }
   .onb-cm-next { background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: #fff; }
-  .onb-cm-skip { font-size: 10.5px; color: var(--text-light); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 3px; }
-  .onb-cm-progress { font-size: 10.5px; color: var(--text-light); }
+  .onb-cm-skip { font-size: var(--t-xs); color: var(--text-light); text-decoration: underline; cursor: pointer; background: none; border: none; padding: 3px; }
+  .onb-cm-progress { font-size: var(--t-xs); color: var(--text-light); }
 
   /* ===== FRESH-DEVICE LOADING SCREEN ===== */
   /* Shown only for a device with no locally-cached project data at all
@@ -2249,7 +2259,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   #freshLoadOverlay { position: fixed; inset: 0; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); z-index: 9999; display: none; align-items: center; justify-content: center; flex-direction: column; color: #fff; }
   #freshLoadOverlay.show { display: flex; }
   #freshLoadOverlay .spinner { width: 34px; height: 34px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: freshLoadSpin 0.8s linear infinite; margin-bottom: 16px; }
-  #freshLoadOverlay .msg { font-size: 15px; font-weight: 500; letter-spacing: 0.2px; }
+  #freshLoadOverlay .msg { font-size: var(--t-lg); font-weight: 500; letter-spacing: 0.2px; }
   @keyframes freshLoadSpin { to { transform: rotate(360deg); } }
 
   /* LOGIN OVERLAY — replaces the old window.prompt()-based reauthenticate()
@@ -2260,15 +2270,15 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      everything else. */
   #loginOverlay { position: fixed; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; padding: 24px; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); }
   #loginOverlay.show { display: flex; }
-  .login-card { width: 100%; max-width: 380px; background: var(--card); color: var(--text); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 36px 32px 30px; }
-  .login-brand { display: flex; flex-direction: column; align-items: center; margin-bottom: 26px; }
-  .login-mark { width: 46px; height: 46px; border-radius: 12px; margin-bottom: 14px; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 17px; letter-spacing: 0.5px; }
-  .login-title { font-size: 21px; font-weight: 700; letter-spacing: 0.1px; text-align: center; }
+  .login-card { width: 100%; max-width: 380px; background: var(--card); color: var(--text); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 36px 32px var(--s-7); }
+  .login-brand { display: flex; flex-direction: column; align-items: center; margin-bottom: var(--s-6); }
+  .login-mark { width: 46px; height: 46px; border-radius: 12px; margin-bottom: 14px; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: var(--t-lg); letter-spacing: 0.5px; }
+  .login-title { font-size: var(--t-xl); font-weight: 700; letter-spacing: 0.1px; text-align: center; }
   .login-sub { font-size: 13px; color: var(--text-light); margin-top: 4px; }
   .login-field { margin-bottom: 16px; }
   .login-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
   .login-input-wrap { position: relative; }
-  .login-input { width: 100%; padding: 11px 13px; font-size: 15px; font-family: inherit; color: var(--text); background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; outline: none; transition: border-color 0.15s, background 0.15s; }
+  .login-input { width: 100%; padding: var(--s-3) var(--s-3-5); font-size: var(--t-lg); font-family: inherit; color: var(--text); background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; outline: none; transition: border-color 0.15s, background 0.15s; }
   .login-input::placeholder { color: var(--text-light); opacity: 0.7; }
   .login-input:focus { border-color: var(--primary-light); background: var(--card); }
   .login-field.has-error .login-input { border-color: var(--danger); }
@@ -2278,7 +2288,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .pw-toggle svg.eye-off { display: none; }
   .pw-toggle.showing svg.eye { display: none; }
   .pw-toggle.showing svg.eye-off { display: block; }
-  .login-submit { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; font-family: inherit; color: #fff; border: none; border-radius: 8px; cursor: pointer; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; gap: 9px; transition: filter 0.15s, transform 0.05s; margin-top: 4px; }
+  .login-submit { width: 100%; padding: 12px; font-size: var(--t-lg); font-weight: 600; font-family: inherit; color: #fff; border: none; border-radius: 8px; cursor: pointer; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; gap: 9px; transition: filter 0.15s, transform 0.05s; margin-top: 4px; }
   .login-submit:hover { filter: brightness(1.06); }
   .login-submit:active { transform: translateY(1px); }
   .login-submit:disabled { cursor: default; filter: none; opacity: 0.85; }
@@ -2286,7 +2296,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .login-submit.loading .login-spinner { display: inline-block; }
   .login-submit.loading .login-submit-label { opacity: 0.85; }
   @media (prefers-reduced-motion: reduce) { .login-spinner { animation: none; } }
-  .login-banner { display: none; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.45; padding: 10px 12px; border-radius: 8px; margin-bottom: 18px; }
+  .login-banner { display: none; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.45; padding: 10px 12px; border-radius: 8px; margin-bottom: var(--s-5); }
   .login-banner.show { display: flex; }
   .login-banner svg { flex-shrink: 0; margin-top: 1px; }
   .login-banner.err { background: rgba(220,53,69,0.1); color: var(--danger); border: 1px solid rgba(220,53,69,0.3); }
@@ -2301,19 +2311,19 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   /* ===== MODAL ===== */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 3000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
   .modal-overlay.show { display: flex; }
-  .modal-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 24px 28px; max-width: 420px; width: 90%; animation: modalIn 0.25s ease; }
+  .modal-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 24px var(--s-7); max-width: 420px; width: 90%; animation: modalIn 0.25s ease; }
   @keyframes modalIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .modal-box h4 { font-size: 16px; margin-bottom: 10px; }
   .modal-box p { font-size: 13px; color: var(--text-light); margin-bottom: 20px; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
-  .activity-log-item { display:flex; gap:10px; padding:10px 12px; border-bottom:1px solid var(--border); font-size:12px; align-items:flex-start; }
+  .activity-log-item { display:flex; gap:10px; padding: 10px 12px; border-bottom:1px solid var(--border); font-size:12px; align-items:flex-start; }
   .activity-log-item:last-child { border-bottom:none; }
   .activity-log-time { color:var(--text-light); font-size:11px; white-space:nowrap; min-width:70px; text-align:right; flex-shrink:0; }
   .activity-log-who { font-weight:700; color:var(--primary-light); }
   body.dark-mode .activity-log-who { color: var(--primary-ondark); }
   .activity-log-what { color:var(--text); }
-  .activity-log-empty { padding:20px; text-align:center; color:var(--text-faint); font-size:13px; }
+  .activity-log-empty { padding: 20px; text-align:center; color:var(--text-faint); font-size:13px; }
   body.dark-mode .activity-log-item { border-bottom-color:var(--border); }
   body.dark-mode .activity-log-empty { color:var(--text-faint); }
 
@@ -2466,7 +2476,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        look like an underline, not a ring. */
     .mobile-view-btn {
       flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
-      padding: 11px 2px; border: none; background: transparent;
+      padding: var(--s-3) 2px; border: none; background: transparent;
       cursor: pointer; position: relative;
     }
     .mobile-view-btn svg { flex-shrink: 0; position: relative; z-index: 1; }
@@ -2531,7 +2541,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
     .mobile-collapsible > h4 {
       cursor: pointer; user-select: none;
     }
-    .mobile-collapsible > label { position: relative; padding-right: 18px; }
+    .mobile-collapsible > label { position: relative; padding-right: var(--s-5); }
     .mobile-collapsible > label::after {
       content: '▾'; position: absolute; right: 0; top: 0; color: var(--text-light);
       transition: transform 0.15s;
@@ -2603,13 +2613,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        which leaves Today and the label as the only two things in this row
        during month/week view, adjacent in DOM order already. */
     .calendar-toolbar { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-    .calendar-toolbar h3 { font-size: 15px; }
+    .calendar-toolbar h3 { font-size: var(--t-lg); }
     .calendar-toolbar button { padding: 6px 10px; font-size: 12px; }
     .cal-nav-group { display: none; }
     .calendar-grid { gap: 3px; }
     .cal-day { min-height: 62px; padding: 3px; }
     .cal-day-num { font-size: 10px; margin-bottom: 2px; }
-    .cal-event-bar { font-size: 8.5px; padding: 1px 3px; line-height: 11px; }
+    .cal-event-bar { font-size: var(--t-3xs); padding: 1px 3px; line-height: 11px; }
     /* No room for a second label at this size — the bar's own color/
        position already says which job it's for. */
     .cal-event-bar .cal-jobname-tag { display: none; }
@@ -2738,7 +2748,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
        against since a landscape phone is well under 1440px wide too. */
     .job-edit-row { flex-direction: row; max-width: 824px; }
     .job-comments-panel { width: 340px; max-width: none; flex: 0 0 340px; max-height: none; order: 0; }
-    .job-comments-panel.collapsed { width: 44px; max-width: none; flex: 0 0 44px; padding: 18px 0; align-items: center; cursor: pointer; }
+    .job-comments-panel.collapsed { width: 44px; max-width: none; flex: 0 0 44px; padding: var(--s-5) 0; align-items: center; cursor: pointer; }
     .job-comments-panel.collapsed h4,
     .job-comments-panel.collapsed .mobile-field-body { display: none; }
     .job-comments-panel.collapsed .job-comments-tab { display: flex; }
@@ -3776,7 +3786,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.5';
+const APP_VERSION = '2026-09-09.6';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
