@@ -80,6 +80,37 @@ export interface BoardColumn {
   [key: string]: unknown;
 }
 
+export interface CalendarEventException {
+  skip?: boolean;
+  start?: string;
+  time?: string;
+  duration?: number;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  time?: string;
+  duration?: number;
+  repeat?: string;
+  repeatUntil?: string | null;
+  color?: string;
+  exceptions?: Record<string, CalendarEventException>;
+  visibility?: string;
+  visibleMembers?: string[];
+  createdBy?: string;
+  [key: string]: unknown;
+}
+
+export interface CalendarEventOccurrence {
+  sourceDate: string;
+  start: Date;
+  finish: Date;
+  time: string;
+  duration: number;
+}
+
 export interface CustomFieldDef {
   key: string;
   label: string;

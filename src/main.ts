@@ -25,6 +25,10 @@ import {
   resolveCardNameTarget, openEditCard, closeCardModal, scheduleCardAutosave, flushCardAutosave, cancelPendingCardAutosave,
   setCardTitleHint, autoSaveCardForm, initCardFormAutosaveListeners, deleteCardFromModal, renderBoard, buildCardEl,
 } from './views/board';
+import {
+  isCalendarEventTaskId, parseCalendarEventTaskId, defaultRepeatUntil, getCalendarEventOccurrences,
+  isCalendarEventVisibleToMe, flattenCalendarEventsForRange, ensureCalendarEventIds,
+} from './views/calendar';
 
 declare global {
   interface Window {
@@ -90,6 +94,13 @@ declare global {
     deleteCardFromModal: typeof deleteCardFromModal;
     renderBoard: typeof renderBoard;
     buildCardEl: typeof buildCardEl;
+    isCalendarEventTaskId: typeof isCalendarEventTaskId;
+    parseCalendarEventTaskId: typeof parseCalendarEventTaskId;
+    defaultRepeatUntil: typeof defaultRepeatUntil;
+    getCalendarEventOccurrences: typeof getCalendarEventOccurrences;
+    isCalendarEventVisibleToMe: typeof isCalendarEventVisibleToMe;
+    flattenCalendarEventsForRange: typeof flattenCalendarEventsForRange;
+    ensureCalendarEventIds: typeof ensureCalendarEventIds;
   }
 }
 
@@ -155,3 +166,10 @@ window.initCardFormAutosaveListeners = initCardFormAutosaveListeners;
 window.deleteCardFromModal = deleteCardFromModal;
 window.renderBoard = renderBoard;
 window.buildCardEl = buildCardEl;
+window.isCalendarEventTaskId = isCalendarEventTaskId;
+window.parseCalendarEventTaskId = parseCalendarEventTaskId;
+window.defaultRepeatUntil = defaultRepeatUntil;
+window.getCalendarEventOccurrences = getCalendarEventOccurrences;
+window.isCalendarEventVisibleToMe = isCalendarEventVisibleToMe;
+window.flattenCalendarEventsForRange = flattenCalendarEventsForRange;
+window.ensureCalendarEventIds = ensureCalendarEventIds;

@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.14';
+const APP_VERSION = '2026-09-09.15';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -4287,93 +4287,10 @@ function buildCalendarJobRows(jobsArr) {
   return rows;
 }
 
-const CALENDAR_EVENT_TASK_PREFIX = 'calevt|';
-function isCalendarEventTaskId(taskId) {
-  return typeof taskId === 'string' && taskId.indexOf(CALENDAR_EVENT_TASK_PREFIX) === 0;
-}
-function parseCalendarEventTaskId(taskId) {
-  // 'calevt|<eventId>|<sourceDate>' — eventId is a genId() and never
-  // contains '|', so a plain split is safe.
-  const parts = taskId.split('|');
-  return { eventId: parts[1], sourceDate: parts[2] };
-}
-
-// Default recurrence horizon when repeatUntil is left blank: 6 months out
-// from the anchor date, so a repeating event is usable without typing an
-// end date, but doesn't generate occurrences forever.
-function defaultRepeatUntil(anchorDate) {
-  return addMonths(anchorDate, 6);
-}
-
-// Expands one calendar event into its concrete occurrences within
-// [rangeStart, rangeEnd] (inclusive), applying any per-occurrence
-// exceptions. Each occurrence carries `sourceDate` — the theoretical,
-// un-overridden date it was generated from — which exceptions are keyed
-// by and which identifies it for dragging (see CALENDAR_EVENT_TASK_PREFIX).
-function getCalendarEventOccurrences(evt, rangeStart, rangeEnd) {
-  const anchor = new Date(evt.start + 'T00:00:00');
-  if (isNaN(anchor.getTime())) return [];
-
-  const theoretical = [];
-  if (!evt.repeat || evt.repeat === 'none') {
-    theoretical.push({ sourceDate: evt.start, start: evt.start, time: evt.time || '', duration: evt.duration || 1 });
-  } else {
-    const until = evt.repeatUntil ? new Date(evt.repeatUntil + 'T00:00:00') : defaultRepeatUntil(anchor);
-    let cursor = new Date(anchor);
-    let guard = 0;
-    while (cursor <= until && guard < 500) {
-      const dateStr = toIsoDate(cursor);
-      theoretical.push({ sourceDate: dateStr, start: dateStr, time: evt.time || '', duration: evt.duration || 1 });
-      if (evt.repeat === 'daily') cursor.setDate(cursor.getDate() + 1);
-      else if (evt.repeat === 'weekly') cursor.setDate(cursor.getDate() + 7);
-      else if (evt.repeat === 'monthly') cursor = addMonths(cursor, 1);
-      else break; // unrecognized repeat value — treat as non-repeating
-      guard++;
-    }
-  }
-
-  const exceptions = evt.exceptions || {};
-  const result = [];
-  theoretical.forEach(function(occ) {
-    const ex = exceptions[occ.sourceDate];
-    if (ex && ex.skip) return;
-    const effectiveStart = (ex && ex.start) || occ.start;
-    const effectiveTime = (ex && ex.time !== undefined) ? ex.time : occ.time;
-    const effectiveDuration = (ex && ex.duration) ? ex.duration : occ.duration;
-    const s = new Date(effectiveStart + 'T00:00:00');
-    if (isNaN(s.getTime())) return;
-    const f = new Date(s);
-    f.setDate(f.getDate() + effectiveDuration - 1);
-    if (rangeEnd && s > rangeEnd) return;
-    if (rangeStart && f < rangeStart) return;
-    result.push({ sourceDate: occ.sourceDate, start: s, finish: f, time: effectiveTime, duration: effectiveDuration });
-  });
-  return result;
-}
-
-// Shapes calendar-event occurrences to match flattenJobs()'s {job, task,
-// start, finish} rows, so the Calendar's existing lane-packing/rendering
-// code can treat them identically to job task rows without a rewrite.
-function flattenCalendarEventsForRange(rangeStart, rangeEnd) {
-  const rows = [];
-  (calendarEvents || []).filter(isCalendarEventVisibleToMe).forEach(function(evt) {
-    getCalendarEventOccurrences(evt, rangeStart, rangeEnd).forEach(function(occ) {
-      const fakeJob = { id: 'calevt-job-' + evt.id, name: evt.title, color: evt.color, archived: false };
-      const fakeTask = {
-        id: CALENDAR_EVENT_TASK_PREFIX + evt.id + '|' + occ.sourceDate,
-        name: evt.title,
-        notes: '',
-        color: evt.color,
-        start: toIsoDate(occ.start),
-        finish: toIsoDate(occ.finish),
-        isCalendarEvent: true,
-        time: occ.time
-      };
-      rows.push({ job: fakeJob, task: fakeTask, start: occ.start, finish: occ.finish });
-    });
-  });
-  return rows;
-}
+// isCalendarEventTaskId()/parseCalendarEventTaskId()/defaultRepeatUntil()/
+// getCalendarEventOccurrences()/flattenCalendarEventsForRange() moved to
+// src/views/calendar.ts (Phase 5 of the architecture roadmap) — see the
+// identical note by genId() above.
 
 // findJob()/findTask() moved to src/core/models.ts (Phase 3 of the
 // architecture roadmap) — see the identical note by genId() above.
@@ -4946,16 +4863,8 @@ function ensureCardIds(arr) {
 // overrides (keyed by the theoretical, un-overridden occurrence date) so
 // dragging one instance of a repeating event moves just that instance
 // instead of the whole series — see getCalendarEventOccurrences().
-function ensureCalendarEventIds(arr) {
-  (arr || []).forEach(function(e) {
-    if (!e.id) e.id = genId();
-    if (!e.repeat) e.repeat = 'none';
-    if (typeof e.duration !== 'number' || e.duration < 1) e.duration = 1;
-    if (!e.exceptions || typeof e.exceptions !== 'object') e.exceptions = {};
-    if (!e.color) e.color = '#7e57c2';
-  });
-  return arr;
-}
+// ensureCalendarEventIds() moved to src/views/calendar.ts (Phase 5 of
+// the architecture roadmap) — see the identical note by genId() above.
 
 // `var`, not `let` — this specific global must be a real `window`
 // property (which only `var`/a bare assignment gives you at the top
@@ -5233,7 +5142,9 @@ function isFinishedColumnId(colId) {
 
 // `var`, not `let` — same reasoning as `jobs` above (see its comment).
 var boardCards = [];
-let calendarEvents = [];
+// `var` — same cross-script-visibility reasoning as `jobs` elsewhere in
+// this file: src/views/calendar.ts's bundled code (Phase 5) reads this.
+var calendarEvents = [];
 let editingCalendarEventId = null;
 let calendarEventTargetDate = null; // set by openAddCalendarEvent(), read by saveCalendarEventFromModal()
 // `var` — same cross-script-visibility reasoning as `jobs` above:
@@ -5357,17 +5268,8 @@ function getVisibleJobs() {
 // viewAsUsername simulates a specific member's own view when an Admin is
 // previewing, so this still correctly bypasses for a simulated Project
 // Admin's own preview.
-function isCalendarEventVisibleToMe(evt) {
-  if (!evt) return false;
-  const visibility = evt.visibility || 'all';
-  if (visibility === 'all') return true;
-  const effectiveRole = getEffectiveRole();
-  if (effectiveRole === 'projectAdmin') return true;
-  const asUsername = viewAsUsername || getStoredUsername();
-  if (visibility === 'private') return evt.createdBy === asUsername;
-  if (visibility === 'members') return (evt.visibleMembers || []).indexOf(asUsername) !== -1;
-  return true;
-}
+// isCalendarEventVisibleToMe() moved to src/views/calendar.ts (Phase 5
+// of the architecture roadmap) — see the identical note by genId() above.
 
 // Real user accounts (username/displayName only, no passwords/roles) for
 // the "Visible to" picker — fetched once per session via the Worker's
@@ -5445,7 +5347,9 @@ async function ensureUserRosterLoaded() {
 // here any more.) Session-only, like ganttFocusedJobId — not persisted,
 // and cleared on project switch (see
 // switchProject()).
-let viewAsUsername = null;
+// `var` — same cross-script-visibility reasoning as `jobs` above:
+// src/views/calendar.ts's isCalendarEventVisibleToMe() (Phase 5) reads this.
+var viewAsUsername = null;
 let viewAsRole = null;
 
 // Admin-only roster WITH role — the public roster (cachedUserRoster, via
