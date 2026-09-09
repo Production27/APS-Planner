@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.9';
+const APP_VERSION = '2026-09-09.10';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5185,7 +5185,10 @@ const DEFAULT_BOARD_COLUMNS = [
   { id: 'complete', label: 'Complete' },
   { id: 'invoiced', label: 'Invoiced' }
 ];
-let BOARD_COLUMNS = [];
+// `var` — same cross-script-visibility reasoning as `jobs`/`boardCards`
+// above (see `jobs`'s comment): src/views/board.ts's bundled drag-and-drop
+// code (Phase 4) reads and reassigns this as an ambient global.
+var BOARD_COLUMNS = [];
 // Named groups a board can be assigned to (col.workflowItemId, see the
 // ⋮ menu's "Workflow Item" picker) — deliberately independent of any
 // column's own label, so the same item can span several adjacently-
@@ -5223,7 +5226,13 @@ let calendarEvents = [];
 let editingCalendarEventId = null;
 let calendarEventTargetDate = null; // set by openAddCalendarEvent(), read by saveCalendarEventFromModal()
 let editingCardId = null;
-let draggedCardId = null;
+// `var` — same cross-script-visibility reasoning as `jobs` above:
+// src/views/board.ts (Phase 4) sets this, and isBusyEditing() (still in
+// this file) reads it directly.
+var draggedCardId = null;
+// Same reasoning — relocated here from its old spot right before the
+// column-drag-and-drop code below, which moved to src/views/board.ts.
+var draggedColId = null;
 let localActivityLog = [];
 let draftAttachments = [];
 // Job Manager's own copy of the card modal's draft attachment state — kept
@@ -6994,7 +7003,9 @@ const HOME_REFLOW_TRACK = {
   jobchat: { col: 'center', row: null },
   calendar: { col: 'right', row: 0 }, gantt: { col: 'right', row: 1 }
 };
-let homeExpandedWidgetId = null;
+// `var` — same cross-script-visibility reasoning as `jobs` above:
+// src/views/board.ts's moveCardToColumn() (Phase 4) reads this directly.
+var homeExpandedWidgetId = null;
 
 function applyHomeReflowTracks() {
   const grid = document.querySelector('#panel-home .home-grid');
@@ -13055,192 +13066,14 @@ function buildCardEl(card) {
   return el;
 }
 
-// ===== BOARD: COLUMN DRAG & DROP =====
-let draggedColId = null;
-
-function handleColumnDragStart(e) {
-  // Don't drag if clicking the delete button
-  if (e.target.closest('.board-col-settings-btn') || e.target.closest('.board-col-settings-dropdown')) {
-    e.preventDefault();
-    return;
-  }
-  const header = e.target.closest('.board-column-header');
-  if (!header) {
-    e.preventDefault();
-    return;
-  }
-  const colEl = header.closest('.board-column');
-  draggedColId = colEl.dataset.column;
-  e.dataTransfer.setData('text/col-id', draggedColId);
-  e.dataTransfer.effectAllowed = 'move';
-
-  // Use the whole column as the drag ghost image
-  const rect = colEl.getBoundingClientRect();
-  const clone = colEl.cloneNode(true);
-  clone.style.position = 'fixed';
-  clone.style.top = '-9999px';
-  clone.style.left = '-9999px';
-  clone.style.width = rect.width + 'px';
-  clone.style.opacity = '1';
-  clone.classList.remove('dragging-col');
-  document.body.appendChild(clone);
-  e.dataTransfer.setDragImage(clone, e.clientX - rect.left, e.clientY - rect.top);
-  setTimeout(() => clone.remove(), 0);
-
-  setTimeout(() => colEl.classList.add('dragging-col'), 0);
-}
-
-function handleColumnDragEnd(e) {
-  const header = e.target.closest('.board-column-header');
-  if (header) {
-    const colEl = header.closest('.board-column');
-    if (colEl) colEl.classList.remove('dragging-col');
-  }
-  document.querySelectorAll('.board-column').forEach(c => c.classList.remove('drag-over-col'));
-  draggedColId = null;
-}
-
-function handleColumnReorderOver(e) {
-  e.preventDefault();
-  if (!draggedColId) return;
-  const colEl = e.currentTarget.closest('.board-column');
-  if (!colEl || colEl.dataset.column === draggedColId) return;
-  colEl.classList.add('drag-over-col');
-  e.dataTransfer.dropEffect = 'move';
-
-  const wrapper = document.getElementById('boardWrapper');
-  const afterCol = getDragAfterColumn(wrapper, e.clientX);
-  const draggedEl = document.querySelector('.board-column[data-column="' + draggedColId + '"]');
-  if (!draggedEl) return;
-  if (afterCol == null) {
-    wrapper.insertBefore(draggedEl, document.getElementById('addColumnContainer'));
-  } else {
-    wrapper.insertBefore(draggedEl, afterCol);
-  }
-}
-
-function handleColumnReorderLeave(e) {
-  if (e.currentTarget === e.target || e.currentTarget.contains(e.relatedTarget)) {
-    e.currentTarget.classList.remove('drag-over-col');
-  }
-}
-
-function handleColumnReorderDrop(e) {
-  e.preventDefault();
-  document.querySelectorAll('.board-column').forEach(c => c.classList.remove('drag-over-col'));
-  syncColumnsFromDOM();
-}
-
-function getDragAfterColumn(container, x) {
-  const cols = [...container.querySelectorAll('.board-column:not(.dragging-col)')];
-  return cols.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = x - box.left - box.width / 2;
-    if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-    return closest;
-  }, { offset: Number.NEGATIVE_INFINITY }).element;
-}
-
-function syncColumnsFromDOM() {
-  const wrapper = document.getElementById('boardWrapper');
-  const orderedIds = [...wrapper.querySelectorAll('.board-column')].map(el => el.dataset.column);
-  const newColumns = [];
-  orderedIds.forEach(id => {
-    const col = BOARD_COLUMNS.find(c => c.id === id);
-    if (col) newColumns.push(col);
-  });
-  // Append any missing columns (shouldn't happen, but safety)
-  BOARD_COLUMNS.forEach(c => { if (!orderedIds.includes(c.id)) newColumns.push(c); });
-  BOARD_COLUMNS = newColumns;
-  saveBoardColumns();
-  logActivity('reordered boards');
-  renderBoard();
-  showToast('Board reordered', 'success');
-}
-
-// ===== BOARD: DRAG & DROP =====
-function handleCardDragStart(e) {
-  e.stopPropagation();
-  draggedCardId = e.currentTarget.dataset.id;
-  e.dataTransfer.setData('text/plain', e.currentTarget.dataset.id);
-  e.dataTransfer.effectAllowed = 'move';
-  e.currentTarget.classList.add('dragging');
-}
-
-function handleCardDragEnd(e) {
-  e.stopPropagation();
-  draggedCardId = null;
-  e.currentTarget.classList.remove('dragging');
-  document.querySelectorAll('.board-column-body').forEach(b => b.classList.remove('drag-over'));
-  document.querySelectorAll('.board-column').forEach(c => c.classList.remove('card-drag-over'));
-}
-
-// The reposition-while-dragging work below (getDragAfterElement's
-// getBoundingClientRect() over every card in the column, then an
-// insertBefore/appendChild) is rAF-coalesced -- native dragover can fire
-// far more often than this can usefully repaint, same reason every other
-// drag handler in this file is throttled this way. Not cached across
-// ticks (unlike the Gantt/Calendar bar-drag fixes) since the cards this
-// reads the position of are the SAME ones insertBefore/appendChild just
-// reordered — recomputing fresh each rAF tick (instead of on every raw
-// event) is what makes this safe: never stale, just not redone dozens of
-// times a second for no visual benefit.
-let dragOverRafPending = false;
-let dragOverLatestEvent = null;
-function handleColumnDragOver(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  e.dataTransfer.dropEffect = 'move';
-  const body = e.currentTarget;
-  body.classList.add('drag-over');
-  const col = body.closest('.board-column');
-  if (col) col.classList.add('card-drag-over');
-
-  dragOverLatestEvent = { body: body, clientY: e.clientY };
-  if (dragOverRafPending) return;
-  dragOverRafPending = true;
-  requestAnimationFrame(function() {
-    dragOverRafPending = false;
-    if (dragOverLatestEvent) applyColumnDragOver(dragOverLatestEvent.body, dragOverLatestEvent.clientY);
-  });
-}
-function applyColumnDragOver(body, clientY) {
-  const dragging = document.querySelector('.board-card.dragging');
-  if (!dragging) return;
-  // Only move if not already in this body
-  if (dragging.parentElement === body) {
-    const afterEl = getDragAfterElement(body, clientY);
-    if (afterEl == null) {
-      if (body.lastElementChild !== dragging) body.appendChild(dragging);
-    } else {
-      if (afterEl !== dragging) body.insertBefore(dragging, afterEl);
-    }
-  } else {
-    const afterEl = getDragAfterElement(body, clientY);
-    if (afterEl == null) body.appendChild(dragging);
-    else body.insertBefore(dragging, afterEl);
-  }
-}
-
-function handleColumnDragLeave(e) {
-  if (e.currentTarget === e.target) {
-    e.currentTarget.classList.remove('drag-over');
-    const col = e.currentTarget.closest('.board-column');
-    if (col) col.classList.remove('card-drag-over');
-  }
-}
-
-// A drop into a hideFromSchedule board (Bid/Invoiced-style — no
-// meaningful dates of its own) doesn't need a temporary 24h override:
-// deriveColumnForTasks() already treats sitting in a hideFromSchedule
-// board as a freely-chosen, indefinite holding spot on its own (until
-// today reaches an actually-scheduled task's date range). Setting one
-// anyway would just show a misleading "resumes in 24h" badge for a
-// placement that isn't actually time-limited.
-function dropNeedsManualOverride(targetColumnId) {
-  const targetCol = BOARD_COLUMNS.find(function(c) { return c.id === targetColumnId; });
-  return !(targetCol && targetCol.hideFromSchedule);
-}
+// Column drag/reorder (handleColumnDragStart/End, handleColumnReorderOver/
+// Leave/Drop, getDragAfterColumn, syncColumnsFromDOM) and card drag/drop
+// (handleCardDragStart/End, handleColumnDragOver/applyColumnDragOver/
+// handleColumnDragLeave, dropNeedsManualOverride) moved to
+// src/views/board.ts (Phase 4 of the architecture roadmap) — see the
+// identical note by genId() above. getOpenChecklistItemsForCard() and
+// confirmChecklistBeforeMove() right below stayed here on purpose (see
+// board.ts's own top-of-file comment for why).
 
 // Open (not-done) checklist items on a card's CURRENT stage, respecting
 // per-stage visibility the same way buildCardEl()'s progress badge does —
@@ -13288,105 +13121,9 @@ function confirmChecklistBeforeMove(card) {
   return window.confirm('"' + card.title + '" still has ' + open.length + ' open checklist item' + (open.length === 1 ? '' : 's') + ' on this stage:\n\n' + preview + more + '\n\nMove it anyway?');
 }
 
-function handleColumnDrop(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  // Flush any dragover reposition still waiting on its rAF (see
-  // handleColumnDragOver()) before syncBoardCardsFromDOM() below reads
-  // the DOM's card order -- drop fires as its own event, so without this
-  // the last dragover's reorder could still be pending when we read the
-  // order, and applying it a moment later (between drop and dragend,
-  // when dragend is what actually clears .dragging) would silently
-  // reorder the DOM again after boardCards had already been captured.
-  if (dragOverLatestEvent) {
-    applyColumnDragOver(dragOverLatestEvent.body, dragOverLatestEvent.clientY);
-    dragOverLatestEvent = null;
-  }
-  const body = e.currentTarget;
-  body.classList.remove('drag-over');
-  const colEl = body.closest('.board-column');
-  if (colEl) colEl.classList.remove('card-drag-over');
-
-  const targetColumnId = body.id.indexOf('col-body-') === 0 ? body.id.slice('col-body-'.length) : null;
-  const cardId = draggedCardId;
-  draggedCardId = null;
-  if (!cardId || !targetColumnId) return;
-
-  const card = boardCards.find(function(c) { return String(c.id) === String(cardId); });
-  if (!card) return;
-  if (!confirmChecklistBeforeMove(card)) return;
-
-  setCardColumn(card, targetColumnId);
-  if (card.jobId) {
-    // Job-linked cards are normally auto-positioned by date; a manual
-    // drop overrides that for 24 hours, or until the job's dates are
-    // re-saved (see autoSaveJobForm()), whichever comes first — unless
-    // the target is a hideFromSchedule board, which doesn't need one.
-    if (dropNeedsManualOverride(targetColumnId)) {
-      card.manualColumn = targetColumnId;
-      card.manualColumnUntil = Date.now() + 24 * 60 * 60 * 1000;
-    } else {
-      card.manualColumn = null;
-      card.manualColumnUntil = null;
-    }
-    const targetCol = BOARD_COLUMNS.find(function(c) { return c.id === targetColumnId; });
-    logActivity('manually moved "' + card.title + '" to "' + (targetCol ? targetCol.label : targetColumnId) + '"');
-  }
-
-  syncBoardCardsFromDOM();
-  saveBoardCards();
-  requestAnimationFrame(() => renderBoard());
-}
-
-// Touch-friendly equivalent of dropping a card into a different column via
-// handleColumnDrop() above — same logic (manual-override on job-linked
-// cards, activity log, save+re-render), just triggered from the mobile
-// <select> in buildCardEl() instead of a native HTML5 drag, which doesn't
-// fire on touchscreens.
-function moveCardToColumn(cardId, targetColumnId) {
-  const card = boardCards.find(function(c) { return String(c.id) === String(cardId); });
-  if (!card || card.column === targetColumnId) return;
-  if (!confirmChecklistBeforeMove(card)) return;
-  const targetCol = BOARD_COLUMNS.find(function(c) { return c.id === targetColumnId; });
-  setCardColumn(card, targetColumnId);
-  if (card.jobId) {
-    if (dropNeedsManualOverride(targetColumnId)) {
-      card.manualColumn = targetColumnId;
-      card.manualColumnUntil = Date.now() + 24 * 60 * 60 * 1000;
-    } else {
-      card.manualColumn = null;
-      card.manualColumnUntil = null;
-    }
-    logActivity('manually moved "' + card.title + '" to "' + (targetCol ? targetCol.label : targetColumnId) + '"');
-  }
-  saveBoardCards();
-  renderBoard();
-  if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
-  showToast('Moved to "' + (targetCol ? targetCol.label : targetColumnId) + '"', 'success');
-}
-
-function getDragAfterElement(container, y) {
-  const els = [...container.querySelectorAll('.board-card:not(.dragging)')];
-  return els.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-    return closest;
-  }, { offset: Number.NEGATIVE_INFINITY }).element;
-}
-
-function syncBoardCardsFromDOM() {
-  const ordered = [];
-  BOARD_COLUMNS.forEach(col => {
-    const body = document.getElementById('col-body-' + col.id);
-    if (!body) return;
-    body.querySelectorAll('.board-card').forEach(el => {
-      const card = boardCards.find(c => String(c.id) === el.dataset.id);
-      if (card) { setCardColumn(card, col.id); ordered.push(card); }
-    });
-  });
-  boardCards = ordered;
-}
+// handleColumnDrop()/moveCardToColumn()/getDragAfterElement()/
+// syncBoardCardsFromDOM() moved to src/views/board.ts (Phase 4) — see
+// the note above by getOpenChecklistItemsForCard().
 
 // ===== COLUMN SETTINGS DROPDOWN =====
 function isDarkColor(hex) {

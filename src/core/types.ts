@@ -52,6 +52,18 @@ export interface BoardCard {
   jobId?: string;
   phaseId?: string | null;
   column: string;
+  columnEnteredAt?: number;
+  manualColumn?: string | null;
+  manualColumnUntil?: number | null;
+  title?: string;
+  [key: string]: unknown;
+}
+
+export interface BoardColumn {
+  id: string;
+  label: string;
+  hideFromSchedule?: boolean;
+  defaultChecklist?: unknown[];
   [key: string]: unknown;
 }
 

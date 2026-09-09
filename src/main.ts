@@ -13,6 +13,11 @@ import { genId, safeJsonParse } from './utils/id';
 import { getDaysDiff, toIsoDate, addMonths, getBusinessDaysDiff, addBusinessDays, formatTimeLabel, timeToMinutes } from './utils/date';
 import { darkenColor, softenColor, SOFTEN_AMOUNT } from './utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
+import {
+  handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
+  getDragAfterColumn, syncColumnsFromDOM, handleCardDragStart, handleCardDragEnd, handleColumnDragOver, applyColumnDragOver,
+  handleColumnDragLeave, dropNeedsManualOverride, handleColumnDrop, moveCardToColumn, getDragAfterElement, syncBoardCardsFromDOM,
+} from './views/board';
 
 declare global {
   interface Window {
@@ -35,6 +40,23 @@ declare global {
     getPhaseCard: typeof getPhaseCard;
     getJobCards: typeof getJobCards;
     getPrimaryPhaseCard: typeof getPrimaryPhaseCard;
+    handleColumnDragStart: typeof handleColumnDragStart;
+    handleColumnDragEnd: typeof handleColumnDragEnd;
+    handleColumnReorderOver: typeof handleColumnReorderOver;
+    handleColumnReorderLeave: typeof handleColumnReorderLeave;
+    handleColumnReorderDrop: typeof handleColumnReorderDrop;
+    getDragAfterColumn: typeof getDragAfterColumn;
+    syncColumnsFromDOM: typeof syncColumnsFromDOM;
+    handleCardDragStart: typeof handleCardDragStart;
+    handleCardDragEnd: typeof handleCardDragEnd;
+    handleColumnDragOver: typeof handleColumnDragOver;
+    applyColumnDragOver: typeof applyColumnDragOver;
+    handleColumnDragLeave: typeof handleColumnDragLeave;
+    dropNeedsManualOverride: typeof dropNeedsManualOverride;
+    handleColumnDrop: typeof handleColumnDrop;
+    moveCardToColumn: typeof moveCardToColumn;
+    getDragAfterElement: typeof getDragAfterElement;
+    syncBoardCardsFromDOM: typeof syncBoardCardsFromDOM;
   }
 }
 
@@ -57,3 +79,20 @@ window.getPhaseSubUnits = getPhaseSubUnits;
 window.getPhaseCard = getPhaseCard;
 window.getJobCards = getJobCards;
 window.getPrimaryPhaseCard = getPrimaryPhaseCard;
+window.handleColumnDragStart = handleColumnDragStart;
+window.handleColumnDragEnd = handleColumnDragEnd;
+window.handleColumnReorderOver = handleColumnReorderOver;
+window.handleColumnReorderLeave = handleColumnReorderLeave;
+window.handleColumnReorderDrop = handleColumnReorderDrop;
+window.getDragAfterColumn = getDragAfterColumn;
+window.syncColumnsFromDOM = syncColumnsFromDOM;
+window.handleCardDragStart = handleCardDragStart;
+window.handleCardDragEnd = handleCardDragEnd;
+window.handleColumnDragOver = handleColumnDragOver;
+window.applyColumnDragOver = applyColumnDragOver;
+window.handleColumnDragLeave = handleColumnDragLeave;
+window.dropNeedsManualOverride = dropNeedsManualOverride;
+window.handleColumnDrop = handleColumnDrop;
+window.moveCardToColumn = moveCardToColumn;
+window.getDragAfterElement = getDragAfterElement;
+window.syncBoardCardsFromDOM = syncBoardCardsFromDOM;
