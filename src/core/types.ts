@@ -44,6 +44,12 @@ export interface Job {
   archived: boolean;
   tasks?: Task[];
   phases?: Phase[];
+  // A "linked reference" is a read-only copy of a job from the OTHER
+  // fixed project, shown inline for visibility (see getLinkedReferenceJobs()
+  // in index.html) — link points back at its real counterpart.
+  isLinkedReference?: boolean;
+  linkedFromProjectName?: string;
+  link?: { jobId: string } | null;
   [key: string]: unknown;
 }
 

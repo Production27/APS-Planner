@@ -5,24 +5,37 @@
 // reason its own touch/pinch-zoom gestures are deferred within this
 // phase too (see below).
 //
-//   Phase 6a — the bar/tick drag-and-resize mechanics (this file's
-//     initial content): cascadeShiftLaterTasks/startBarResizeRight/
-//     startBarResizeLeft/onBarResizeMove/applyBarResizeMove/
-//     onBarResizeEnd/startTickResize/onTickResizeMove/
-//     applyTickResizeMove/onTickResizeEnd/startBarMove/onBarMoveMove/
-//     applyBarMoveMove/onBarMoveEnd. Chosen as the first slice because
-//     it already had real test coverage (the "gantt drag" test from
-//     Phase 1a covers the plain bar-move path) — same reasoning Board's
-//     Phase 4a used to pick its own first slice. Two new dedicated
-//     tests (bar resize, job-span move) cover the paths that test
-//     didn't, each confirmed via break-then-restore.
+//   Phase 6a — the bar/tick drag-and-resize mechanics (initial content):
+//     cascadeShiftLaterTasks/startBarResizeRight/startBarResizeLeft/
+//     onBarResizeMove/applyBarResizeMove/onBarResizeEnd/startTickResize/
+//     onTickResizeMove/applyTickResizeMove/onTickResizeEnd/startBarMove/
+//     onBarMoveMove/applyBarMoveMove/onBarMoveEnd. Chosen as the first
+//     slice because it already had real test coverage (the "gantt drag"
+//     test from Phase 1a covers the plain bar-move path) — same
+//     reasoning Board's Phase 4a used to pick its own first slice. Two
+//     new dedicated tests (bar resize, job-span move) cover the paths
+//     that test didn't, each confirmed via break-then-restore.
+//   Phase 6b — the visible-row builder: byStartDate/getPhaseSegments/
+//     buildSegment/buildPhaseCollapsedRow/buildSubPhaseRow/
+//     buildVisibleTaskRows. This was originally a cluster of nested
+//     closures INSIDE renderGantt() itself (see that function's own "10
+//     phases... purely for readability" comment) with exactly one
+//     external call site (`visibleRows = buildVisibleTaskRows();`) —
+//     confirmed by grepping renderGantt()'s entire body before moving
+//     anything, the same "survey before cutting" discipline every prior
+//     phase used. Pure data transformation (jobs/phases/tasks in, a flat
+//     row list out) with zero DOM reads or writes, so — unlike the DOM-
+//     drawing code that consumes its output — it's directly unit-
+//     testable against the blank fixture, same as Calendar's recurrence
+//     logic (Phase 5a).
 //
-// renderGantt() itself (the actual DOM-building — Gantt's own
-// renderBoard()/renderMonthCalendar() equivalent, and by far the
-// densest single function in the whole app) is NOT part of this move —
-// deliberately deferred to its own later, separately-scoped phase, same
-// narrowing judgment applied to Board's renderBoard()/buildCardEl() and
-// Calendar's render engine before their own turns came up.
+// renderGantt()'s remaining ~800 lines (the actual DOM-building "10
+// phases" that consume buildVisibleTaskRows()'s output — Gantt's own
+// renderBoard()/renderMonthCalendar() equivalent, and by far the densest
+// single function in the whole app) are NOT part of this move —
+// deliberately deferred to their own later, separately-scoped phase,
+// same narrowing judgment applied to Board's renderBoard()/buildCardEl()
+// and Calendar's render engine before their own turns came up.
 //
 // The touch/pinch-zoom gesture cluster (ganttTouchDist/
 // setGanttDayWidthAnchored/requestGanttZoom/handleGanttTouchStart/Move/
@@ -40,7 +53,7 @@
 // popover/tooltip chrome — not drag mechanics) and are referenced below
 // as ambient globals, same as calendar.ts already does for
 // moveTooltip()/hideTooltip() specifically.
-import type { Job, BoardColumn } from '../core/types';
+import type { Job, Phase, SubPhase, BoardColumn } from '../core/types';
 import { toIsoDate, getDaysDiff } from '../utils/date';
 import { escapeHtml } from '../utils/html';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
@@ -76,19 +89,25 @@ declare global {
   function getJobDueMarkerTask(job: { id: string; name: string; [key: string]: unknown }, phaseId: string | null): { id: string; name: string; start?: string; finish?: string; [key: string]: unknown } | null;
   function moveTooltip(e: MouseEvent): void;
   function hideTooltip(): void;
+  function getVisibleJobs(): Job[];
+  function getLinkedReferenceJobs(): Job[];
+  function getHiddenTaskOrders(): Set<number>;
+  function getSubUnitKey(job: Job, phaseId: string | null, subPhaseId: string | null): string;
+  // eslint-disable-next-line no-var
+  var tasksExpandedPhaseIds: Set<string>;
+  // eslint-disable-next-line no-var
+  var tasksExpandedSubPhaseIds: Set<string>;
+  // eslint-disable-next-line no-var
+  var ganttFocusedJobId: string | null;
 }
 
-// Deliberately loose local types (mirrors src/views/calendar.ts's own
-// CalJob/CalTask): `task` here can be a REAL task from findTask(), a due-
-// date marker synthesized by getJobDueMarkerTask(), or — for a job-span
-// drag — a throwaway synthetic {name, start, finish} spanning every dated
-// task in a sub-unit, recomputed fresh at drag start (see startBarMove()).
-interface GanttJob {
-  id: string;
-  name: string;
-  [key: string]: unknown;
-}
-
+// Deliberately loose local type (mirrors src/views/calendar.ts's own
+// CalTask): `task` here can be a REAL task from a sub-unit's own
+// tasks[], a due-date marker synthesized by getJobDueMarkerTask(), or a
+// throwaway synthetic {name, start, finish} pseudo-task spanning a
+// collapsed phase/sub-phase's whole date range (buildPhaseCollapsedRow/
+// buildSubPhaseRow below) or — for a job-span drag — a whole sub-unit
+// (startBarMove() above).
 interface GanttTask {
   id?: string;
   name: string;
@@ -622,6 +641,189 @@ function onBarMoveEnd(e: MouseEvent): void {
   renderGantt();
 }
 
+// ===== GANTT: VISIBLE-ROW BUILDER =====
+// Pure data transformation — jobs/phases/tasks in, a flat list of rows to
+// draw out. Was a cluster of nested closures inside renderGantt() itself
+// with exactly one external call site (`visibleRows =
+// buildVisibleTaskRows();`), confirmed by grepping renderGantt()'s whole
+// body before moving anything.
+
+interface GanttSegment {
+  subPhaseId: string | null;
+  subPhaseName: string | null;
+  start: Date;
+  finish: Date;
+}
+
+interface GanttRow {
+  job: Job;
+  task: GanttTask;
+  phaseId: string | null;
+  phaseName: string | null;
+  subPhaseId: string | null;
+  subPhaseName: string | null;
+  collapsible: boolean;
+  collapsedSegments?: GanttSegment[];
+}
+
+// Row order across the WHOLE board: earliest start date first, regardless
+// of which job a task belongs to. Ties broken by job order then task's
+// stored order so identical start dates stay stable/predictable.
+function byStartDate(a: GanttTask, b: GanttTask): number {
+  const aValid = !!(a.start && a.finish && !isNaN(new Date(a.start + 'T00:00:00').getTime()));
+  const bValid = !!(b.start && b.finish && !isNaN(new Date(b.start + 'T00:00:00').getTime()));
+  if (aValid && bValid) {
+    const diff = new Date(a.start!).getTime() - new Date(b.start!).getTime();
+    if (diff !== 0) return diff;
+  } else if (aValid !== bValid) {
+    // Dated tasks sort above undated ones, which fall to the bottom.
+    return aValid ? -1 : 1;
+  }
+  return (a.order || 0) - (b.order || 0);
+}
+
+// Gathers one segment per dated sub-unit of a phase — the sub-unit's own
+// min-start/max-finish across its tasks. Shared by both row builders
+// below and by a single sub-phase's own condensed row.
+function getPhaseSegments(phase: Phase, hiddenOrders: Set<number>): GanttSegment[] {
+  const segments: GanttSegment[] = [];
+  getPhaseSubUnits(phase).forEach((subUnit) => {
+    const seg = buildSegment(subUnit, hiddenOrders);
+    if (seg) segments.push(seg);
+  });
+  return segments;
+}
+
+function buildSegment(subUnit: SubPhase, hiddenOrders: Set<number>): GanttSegment | null {
+  let minStart: Date | null = null;
+  let maxFinish: Date | null = null;
+  (subUnit.tasks || []).forEach((task) => {
+    if (hiddenOrders.has(task.order)) return;
+    if (!task.start || !task.finish) return;
+    const s = new Date(task.start + 'T00:00:00');
+    const f = new Date(task.finish + 'T00:00:00');
+    if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
+    if (!minStart || s < minStart) minStart = s;
+    if (!maxFinish || f > maxFinish) maxFinish = f;
+  });
+  if (!minStart || !maxFinish) return null;
+  return { subPhaseId: subUnit.id, subPhaseName: subUnit.isDefault ? null : subUnit.name, start: minStart!, finish: maxFinish! };
+}
+
+// One row for a WHOLE phase — every one of its sub-units' tasks folded
+// into a single span, with one solid segment per sub-unit drawn inside it
+// (see the isJobSpan collapsed branch in renderGantt() itself). Only
+// offered when the phase is actually split into 2+ real sub-phases.
+function buildPhaseCollapsedRow(job: Job, phase: Phase, segments: GanttSegment[]): GanttRow {
+  let overallStart: Date | null = null;
+  let overallFinish: Date | null = null;
+  segments.forEach((seg) => {
+    if (!overallStart || seg.start < overallStart) overallStart = seg.start;
+    if (!overallFinish || seg.finish > overallFinish) overallFinish = seg.finish;
+  });
+  const namePart = phase.isDefault ? '' : ' — ' + phase.name;
+  const pseudoTask: GanttTask = {
+    id: 'jobspan-collapsed|' + job.id + '|' + (phase.id || ''),
+    name: job.name + namePart,
+    start: toIsoDate(overallStart!),
+    finish: toIsoDate(overallFinish!),
+    notes: '',
+    color: job.color,
+    order: 0,
+    isJobSpan: true,
+  };
+  return { job, task: pseudoTask, phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name, subPhaseId: null, subPhaseName: null, collapsible: true, collapsedSegments: segments };
+}
+
+// One row for a SINGLE sub-unit — its own tasks folded into a single
+// span. Used both for every sub-unit of an un-folded phase in Jobs/Leads
+// view, and for a still-collapsed (i.e. not yet individually expanded)
+// sub-phase in Tasks view (see tasksExpandedSubPhaseIds).
+function buildSubPhaseRow(job: Job, phase: Phase, seg: GanttSegment): GanttRow {
+  const namePart = (phase.isDefault ? '' : ' — ' + phase.name) + (seg.subPhaseName ? ' — ' + seg.subPhaseName : '');
+  const pseudoTask: GanttTask = {
+    id: 'jobspan|' + job.id + '|' + (phase.id || '') + '|' + (seg.subPhaseId || ''),
+    name: job.name + namePart,
+    start: toIsoDate(seg.start),
+    finish: toIsoDate(seg.finish),
+    notes: '',
+    color: job.color,
+    order: 0,
+    isJobSpan: true,
+  };
+  const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
+  return { job, task: pseudoTask, phaseId: phase.id, phaseName: phase.isDefault ? null : phase.name, subPhaseId: seg.subPhaseId, subPhaseName: seg.subPhaseName, collapsible };
+}
+
+// Tasks view: every phase/sub-phase starts CONDENSED by default —
+// explicitly expanding one (see tasksExpandedPhaseIds/
+// tasksExpandedSubPhaseIds above toggleTasksPhaseExpanded()/
+// toggleTasksSubPhaseExpanded(), both still in index.html) peels it open
+// independently of every other phase/sub-phase.
+function buildVisibleTaskRows(): GanttRow[] {
+  const hiddenOrders = getHiddenTaskOrders();
+  const rows: GanttRow[] = [];
+  getVisibleJobs().concat(getLinkedReferenceJobs()).forEach((job) => {
+    if (job.archived) return;
+    // See ganttFocusedJobId/toggleGanttJobFocus() (both still in
+    // index.html) — isolates the chart to one job's rows when set, Tasks
+    // view only. Whichever side of a linked pair is isolated, the other
+    // side stays visible too — a job's .link.jobId only ever points at
+    // its actual linked counterpart (linkJobs() always pairs across the
+    // two fixed projects), so this can't accidentally match an unrelated
+    // job.
+    if (ganttFocusedJobId && job.id !== ganttFocusedJobId) {
+      const isLinkedCounterpart = !!(job.link && job.link.jobId === ganttFocusedJobId);
+      if (!isLinkedCounterpart) return;
+    }
+    getJobPhases(job).forEach((phase) => {
+      const phaseName = phase.isDefault ? null : phase.name;
+      const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
+      if (collapsible && !tasksExpandedPhaseIds.has(phase.id || '')) {
+        const segments = getPhaseSegments(phase, hiddenOrders);
+        if (segments.length) rows.push(buildPhaseCollapsedRow(job, phase, segments));
+        return;
+      }
+      getPhaseSubUnits(phase).forEach((subUnit, subIdx) => {
+        const subPhaseName = subUnit.isDefault ? null : subUnit.name;
+        const subKey = getSubUnitKey(job, phase.id, subUnit.id);
+        const subCollapsed = !tasksExpandedSubPhaseIds.has(subKey);
+        if (subCollapsed) {
+          const seg = buildSegment(subUnit, hiddenOrders);
+          if (seg) rows.push(buildSubPhaseRow(job, phase, seg));
+        } else {
+          (subUnit.tasks || []).forEach((task) => {
+            if (hiddenOrders.has(task.order)) return;
+            // Unscheduled tasks (no start/finish yet) don't get a Gantt row
+            // at all — they still exist on the job and in the Job Manager
+            // grid, they just don't clutter the schedule until a date is set.
+            if (!task.start || !task.finish) return;
+            if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
+            rows.push({ job, task, phaseId: phase.id, phaseName, subPhaseId: subUnit.id, subPhaseName, collapsible });
+          });
+        }
+        // A linked reference job's due marker lives on a card in ITS OWN
+        // project, not this one's boardCards — nothing to fetch here.
+        // Sub-phases never have their own card either, so the due marker
+        // only ever shows on the FIRST sub-unit's row — real or synthetic
+        // default — never duplicated across every sub-phase. A COLLAPSED
+        // first sub-unit already carries its own due marker inline (see
+        // the isJobSpan branch in renderGantt()'s own draw loop, which
+        // attaches the flag straight to the end of that sub-unit's own
+        // condensed bar) — pushing a second, separate due-marker row here
+        // on top of that would just duplicate it as an extra dropped-down
+        // line.
+        if (!job.isLinkedReference && subIdx === 0 && !subCollapsed) {
+          const dueTask = getJobDueMarkerTask(job, phase.id);
+          if (dueTask) rows.push({ job, task: dueTask, phaseId: phase.id, phaseName, subPhaseId: subUnit.id, subPhaseName, collapsible });
+        }
+      });
+    });
+  });
+  rows.sort((a, b) => byStartDate(a.task, b.task) || (((a.job.order as number | undefined) || 0) - ((b.job.order as number | undefined) || 0)));
+  return rows;
+}
+
 export {
   cascadeShiftLaterTasks,
   startBarResizeRight,
@@ -637,4 +839,5 @@ export {
   onBarMoveMove,
   applyBarMoveMove,
   onBarMoveEnd,
+  buildVisibleTaskRows,
 };

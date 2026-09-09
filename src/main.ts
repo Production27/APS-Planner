@@ -39,7 +39,7 @@ import {
 import {
   cascadeShiftLaterTasks, startBarResizeRight, startBarResizeLeft, onBarResizeMove, applyBarResizeMove,
   onBarResizeEnd, startTickResize, onTickResizeMove, applyTickResizeMove, onTickResizeEnd,
-  startBarMove, onBarMoveMove, applyBarMoveMove, onBarMoveEnd,
+  startBarMove, onBarMoveMove, applyBarMoveMove, onBarMoveEnd, buildVisibleTaskRows,
 } from './views/gantt';
 
 declare global {
@@ -156,6 +156,7 @@ declare global {
     onBarMoveMove: typeof onBarMoveMove;
     applyBarMoveMove: typeof applyBarMoveMove;
     onBarMoveEnd: typeof onBarMoveEnd;
+    buildVisibleTaskRows: typeof buildVisibleTaskRows;
   }
 }
 
@@ -271,3 +272,4 @@ window.startBarMove = startBarMove;
 window.onBarMoveMove = onBarMoveMove;
 window.applyBarMoveMove = applyBarMoveMove;
 window.onBarMoveEnd = onBarMoveEnd;
+window.buildVisibleTaskRows = buildVisibleTaskRows;
