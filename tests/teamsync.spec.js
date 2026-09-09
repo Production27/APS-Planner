@@ -481,6 +481,72 @@ test('gantt bar resize: dragging the right edge extends a task and cascades ever
   expect(result.laterFinish).toBe('2026-09-13'); // 09-10 cascaded by the same 3 days
 });
 
+test('gantt bar drag (real mouse events): dragging a bar body moves its dates, exercising renderTimelineBars()\'s own mousedown wiring', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  // switchTabMorphed() finishes its morph transition asynchronously (see
+  // its own note in the calendar Phase 5d work) — the panel isn't
+  // reliably laid out with real pixel dimensions until it settles, which
+  // this test's real page.mouse coordinates depend on (unlike the other
+  // Gantt tests here, which drive handlers directly and never need real
+  // on-screen positions). getActiveTab() flips before the CSS morph
+  // transition actually finishes settling the panel's layout, and under
+  // full-suite parallel load (6 workers contending for the CPU) that
+  // transition's wall-clock time stretches well past its nominal CSS
+  // duration — waiting on the tab-state condition alone still flaked, so
+  // this also gives the transition itself real room to finish.
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+  await page.waitForTimeout(1500);
+
+  // Every other Gantt drag test in this file drives startBarMove()/
+  // onBarMoveEnd() directly, bypassing the browser's real mousedown/
+  // mousemove/mouseup chain entirely — that's deliberate (see their own
+  // comments) to isolate the committed-state logic from rAF/event timing.
+  // This test instead exercises the actual DOM wiring renderTimelineBars()
+  // creates (bar.addEventListener('mousedown', ...)) via Playwright's real
+  // mouse API, the one thing none of those other tests can catch if it
+  // broke. A wide (multi-week) bar is used deliberately — the bar's own
+  // job-name tag (<span class="task-bar-job-tag collapsible">) is
+  // pointer-events:auto and stopPropagation()s its own mousedown so
+  // clicking THAT toggles job-focus instead of starting a drag (see its
+  // own comment in gantt.ts); a wide bar leaves clear space near its right
+  // end, past the tag, to grab the bar body itself instead.
+  const before = await page.evaluate(() => {
+    const job = jobs[0];
+    const phase = getJobPhases(job)[0];
+    const sub = getPhaseSubUnits(phase)[0];
+    const t = (sub.tasks || [])[0];
+    if (!t) return null;
+    t.start = '2026-09-01';
+    t.finish = '2026-09-20';
+    renderGantt();
+    return { jobId: job.id, taskId: t.id };
+  });
+  expect(before).not.toBeNull();
+
+  const bar = page.locator('.task-bar:not(.due-marker-bar)').first();
+  const box = await bar.boundingBox();
+  await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 20 - 68, box.y + box.height / 2, { steps: 5 }); // ~2 cells left at dayWidth 34
+  await page.mouse.up();
+
+  const result = await page.evaluate(
+    ({ jobId, taskId }) => {
+      const found = findTask(jobId, taskId);
+      return found ? { start: found.task.start, finish: found.task.finish } : null;
+    },
+    before
+  );
+
+  expect(result).not.toBeNull();
+  expect(result.start).toBe('2026-08-30'); // 09-01 shifted 2 days earlier
+  expect(result.finish).toBe('2026-09-18'); // 09-20 shifted the same 2 days
+});
+
 test('board column CRUD: add, rename, and delete a column via the real modal/prompt flow', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
