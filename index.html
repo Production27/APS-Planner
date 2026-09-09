@@ -13,15 +13,24 @@
      precondition for a custom in-app pinch gesture to work at all. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>TeamSync | Live Gantt + Job Manager</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
   :root {
     --primary: #1a237e; --primary-light: #3949ab; --accent: #e53935;
     --bg: #f5f6fa; --card: #ffffff; --border: #e0e0e0;
-    --text: #2c3e50; --text-light: #666;
+    --text: #2c3e50; --text-light: #666; --text-faint: #6b7684;
     --success: #28a745; --danger: #dc3545; --warning: #f0ad4e;
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
     --shadow-hover: 0 4px 20px rgba(0,0,0,0.15);
     --radius: 10px;
+    /* Type scale — replaces ad hoc per-element font sizing (some as fine
+       as half-pixel steps) in new/redesigned rules going forward. Not
+       retrofitted across the whole existing stylesheet in this pass. */
+    --t-2xs: 10px; --t-xs: 11px; --t-sm: 12px; --t-base: 13px; --t-md: 14px; --t-lg: 16px; --t-xl: 20px;
+    /* Spacing scale — same "new rules use this, existing ones untouched
+       for now" reasoning. */
+    --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   /* 100dvh (falls back to 100vh in browsers that don't support it) rather
@@ -32,7 +41,7 @@
      showing, silently clipping content at the bottom instead of it being
      reachable by scrolling. dvh tracks the real visible viewport as the
      browser chrome shows/hides. */
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body { font-family: 'Public Sans', 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
 
   /* Stale-cache guard — see checkForNewerVersion(). Fixed overlay rather
      than pushing layout down, since the rest of the app sizes itself off
@@ -180,7 +189,7 @@
   .theme-preset.selected::after { content: '✓'; position: absolute; top: 4px; right: 6px; color: white; font-size: 12px; font-weight: 900; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
   .theme-custom-row { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
   .theme-custom-row .cf-field { flex: 1; }
-  .theme-custom-row label { display: block; font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
+  .theme-custom-row label { display: block; font-size: 10px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
   .theme-custom-row input[type="color"] { width: 100%; height: 38px; padding: 2px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); }
   .theme-preview { margin-top: 16px; height: 50px; border-radius: 8px; display: flex; align-items: center; padding: 0 16px; color: white; font-weight: 600; font-size: 13px; transition: background 0.15s; }
   /* ===== VIEW SWITCHER (rail-tab-row, top of the job rail) =====
@@ -506,8 +515,8 @@
   .task-row:nth-child(even) { background: #fafafa; }
   .task-row:nth-child(even):hover { background: #e3f2fd; }
   .task-row .col { padding: 0 10px; border-right: 1px solid #f0f0f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
-  .task-row .col-start { width: 88px; color: #555; font-size: 11px; }
-  .task-row .col-finish { width: 88px; color: #555; font-size: 11px; }
+  .task-row .col-start { width: 88px; color: var(--text-light); font-size: 11px; }
+  .task-row .col-finish { width: 88px; color: var(--text-light); font-size: 11px; }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
   .task-row .col-jobs .task-row-name { font-weight: 700; }
   .task-row .col-jobs .company-tag { display: inline-block; font-size: 9px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: 600; color: white; vertical-align: middle; }
@@ -566,7 +575,7 @@
   }
   .timeline-header .day-header:hover { background: #e3f2fd; color: var(--primary); }
   .timeline-header .day-header .day-num { font-weight: 700; font-size: 11px; }
-  .timeline-header .day-header .day-name { font-size: 8px; color: #999; text-transform: uppercase; }
+  .timeline-header .day-header .day-name { font-size: 8px; color: var(--text-faint); text-transform: uppercase; }
   .timeline-header .day-header.weekend { background: #f0f0f0; color: #aaa; }
   .timeline-header .day-header.weekend:hover { background: var(--border); }
   .timeline-header .day-header.today-header {
@@ -870,7 +879,7 @@
   .date-popover h5 { font-size: 12px; margin-bottom: 6px; color: var(--primary); }
   body.dark-mode .date-popover h5 { color: var(--primary-ondark); }
   .date-popover .dp-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
-  .date-popover .dp-label { color: #888; }
+  .date-popover .dp-label { color: var(--text-faint); }
   .date-popover .dp-value { font-weight: 600; }
 
   /* ===== JOB MANAGER =====
@@ -991,8 +1000,8 @@
   .job-list { height: 100%; overflow-y: auto; padding: 8px; width: 260px; min-width: 260px; opacity: 1; transition: opacity 0.15s ease; }
   .job-list::-webkit-scrollbar { width: 6px; }
   .job-list::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-  .job-card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
-  .job-card:hover { border-color: var(--primary-light); box-shadow: var(--shadow); transform: translateY(-1px); }
+  .job-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+  .job-card:hover { border-color: var(--primary-light); box-shadow: var(--shadow-hover); transform: translateY(-1px); }
   .job-card.active { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.15); background: #f8f9ff; }
   .job-card .job-card-title { font-weight: 700; font-size: 13px; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
   .job-card .job-card-meta { font-size: 11px; color: var(--text-light); display: flex; gap: 12px; align-items: center; }
@@ -1003,9 +1012,9 @@
   .job-card .copy-btn { position: absolute; top: 8px; right: 34px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
   .job-card .copy-btn:hover { background: #eef1fa; color: var(--primary); }
   .form-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
-  .duplicate-job-btn { width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; color: #999; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; margin-left: auto; }
+  .duplicate-job-btn { width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; color: var(--text-faint); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; margin-left: auto; }
   .duplicate-job-btn:hover { background: #eef1fa; color: var(--primary); }
-  .job-card-board-tag { font-size: 10px; font-weight: 600; color: var(--text-light); background: #eef1fa; padding: 1px 8px 1px 5px; border-radius: 10px; display: inline-flex; align-items: center; gap: 4px; }
+  .job-card-board-tag { font-size: 10px; font-weight: 600; color: var(--text-light); background: #eef1fa; padding: 1px 8px 1px 5px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; }
   body.dark-mode .job-card-board-tag { background: rgba(57,73,171,0.18); }
   .job-card-board-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .job-card-phase-dots { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; }
@@ -1013,7 +1022,7 @@
   body.dark-mode .job-card-phase-dots .job-card-board-dot { border-color: rgba(255,255,255,0.25); }
   .job-current-board-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-light); margin: -14px 0 20px; }
   .job-phase-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .job-phase-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 14px; background: #eef1fa; color: var(--text-light); font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid transparent; }
+  .job-phase-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #eef1fa; color: var(--text-light); font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid transparent; }
   .job-phase-chip.active { background: var(--primary-light); color: #fff; }
   body.dark-mode .job-phase-chip { background: rgba(255,255,255,0.08); }
   body.dark-mode .job-phase-chip.active { background: var(--primary-light); color: #fff; }
@@ -1063,9 +1072,17 @@
   .form-container { max-width: 460px; margin: 0; flex: 1 1 460px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 32px; }
   .form-container h3 { font-size: 18px; font-weight: 700; margin-bottom: 0; color: var(--text); display: flex; align-items: center; gap: 10px; }
   .form-group { margin-bottom: 18px; }
-  .form-group label { display: block; font-size: 12px; font-weight: 700; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--text-light); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
   .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.2s, box-shadow 0.2s; background: white; }
   .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(57,73,171,0.1); }
+  /* Keyboard-only focus ring (mouse clicks don't trigger :focus-visible) —
+     until now only form fields had any focus treatment at all; buttons,
+     links, and anything given an explicit tabindex (see the Home widget
+     headers below) had none. Additive, not a replacement for the
+     form-field rule above. */
+  button:focus-visible, .btn:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--primary-light); outline-offset: 2px; border-radius: 6px;
+  }
   .form-group textarea { resize: vertical; min-height: 80px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
@@ -1353,7 +1370,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-column.card-drag-over .board-column-body {
     background: #e3e7f5;
   }
-  .board-card { background: white; border-radius: 8px; padding: 10px 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.14); cursor: grab; border-left: 4px solid var(--primary-light); transition: box-shadow 0.15s, transform 0.15s; }
+  .board-card { background: var(--card); border-radius: var(--radius); padding: 10px 12px; box-shadow: var(--shadow); cursor: grab; border-left: 4px solid var(--primary-light); transition: box-shadow 0.15s, transform 0.15s; }
   .board-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
   /* Mobile-only "Move to" fallback for touch, where native HTML5 drag
      doesn't work — see the @media (max-width:480px) rule that reveals
@@ -1362,12 +1379,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-card.dragging { opacity: 0.4; }
   .board-card .board-card-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; word-break: break-word; }
   .board-card .board-card-meta { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
-  .board-card .board-card-meta-line { font-size: 12px; color: #777; font-weight: 500; }
+  .board-card .board-card-meta-line { font-size: 12px; color: var(--text-faint); font-weight: 500; }
   body.dark-mode .board-card .board-card-meta-line { color: #98a0ae; }
   .board-card .board-card-due { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: #eef1fa; color: var(--text-light); }
   .board-card .board-card-due.overdue { background: #ffebee; color: var(--danger); }
   .board-card.manual-override { border-left-style: dashed; box-shadow: 0 2px 5px rgba(0,0,0,0.14), inset 0 0 0 1px rgba(240,173,78,0.5); }
-  .board-card-override-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: #fff3e0; color: #b26a00; margin-bottom: 6px; cursor: pointer; }
+  .board-card-override-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: #fff3e0; color: #b26a00; margin-bottom: 6px; cursor: pointer; }
   .board-card-override-badge:hover { background: #ffe4b3; }
   body.dark-mode .board-card-override-badge { background: rgba(240,173,78,0.18); color: var(--warning); }
   body.dark-mode .board-card-override-badge:hover { background: rgba(240,173,78,0.3); }
@@ -1395,7 +1412,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   /* Custom fields */
   .custom-fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
-  .cf-field label { display: block; font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
+  .cf-field label { display: block; font-size: 10px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
   .cf-field select, .cf-field input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: inherit; background: white; outline: none; }
   .cf-field select:focus, .cf-field input:focus { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.1); }
   /* Members — a 'multiselect' custom field (see CUSTOM_FIELD_DEFS), rendered
@@ -1405,8 +1422,8 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .cf-multiselect { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: white; }
   .cf-multiselect-option { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; color: var(--text); cursor: pointer; }
   .cf-multiselect-option input { width: auto; margin: 0; }
-  .cf-multiselect-empty { font-size: 11px; color: #999; padding: 2px 0; }
-  .cf-multiselect-loading { font-size: 11px; color: #999; font-style: italic; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  .cf-multiselect-empty { font-size: 11px; color: var(--text-faint); padding: 2px 0; }
+  .cf-multiselect-loading { font-size: 11px; color: var(--text-faint); font-style: italic; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; }
 
   /* Collapses a cf-multiselect checkbox list (Members custom field,
      calendar event "Visible to") behind a toggle button + panel instead
@@ -2019,7 +2036,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .manage-field-group { margin-bottom: 18px; }
   .manage-field-group h5 { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
   .manage-field-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-  .manage-field-chip { display: inline-flex; align-items: center; gap: 6px; background: #eef1fa; color: var(--primary); font-size: 11px; font-weight: 600; padding: 4px 6px 4px 10px; border-radius: 12px; }
+  .manage-field-chip { display: inline-flex; align-items: center; gap: 6px; background: #eef1fa; color: var(--primary); font-size: 11px; font-weight: 600; padding: 4px 6px 4px 10px; border-radius: 999px; }
   .manage-field-chip button { background: none; border: none; color: var(--primary-light); cursor: pointer; font-size: 13px; line-height: 1; }
   .manage-field-chip button:hover { color: var(--danger); }
   .manage-field-add-row { display: flex; gap: 8px; }
@@ -2209,7 +2226,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .onb-cm-dim.show { opacity: 1; pointer-events: auto; }
   .onb-cm-hole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1), width .28s cubic-bezier(.22,.61,.36,1), height .28s cubic-bezier(.22,.61,.36,1); pointer-events: none; }
   .onb-cm-ring { position: absolute; inset: -4px; border-radius: 12px; border: 2px solid #fff; box-shadow: 0 0 0 3px rgba(57,73,171,0.55); pointer-events: none; }
-  .onb-cm-card { position: fixed; width: 250px; background: var(--card); border-radius: 10px; box-shadow: var(--shadow-hover); padding: 14px 15px 12px; transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1); }
+  .onb-cm-card { position: fixed; width: 250px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 14px 15px 12px; transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1); }
   .onb-cm-step-label { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--primary-light); margin-bottom: 4px; }
   body.dark-mode .onb-cm-step-label { color: var(--primary-ondark); }
   .onb-cm-title { font-size: 13.5px; font-weight: 700; margin-bottom: 5px; }
@@ -2243,7 +2260,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
      everything else. */
   #loginOverlay { position: fixed; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; padding: 24px; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); }
   #loginOverlay.show { display: flex; }
-  .login-card { width: 100%; max-width: 380px; background: var(--card); color: var(--text); border-radius: var(--radius); box-shadow: 0 12px 40px rgba(0,0,0,0.25), var(--shadow); padding: 36px 32px 30px; }
+  .login-card { width: 100%; max-width: 380px; background: var(--card); color: var(--text); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 36px 32px 30px; }
   .login-brand { display: flex; flex-direction: column; align-items: center; margin-bottom: 26px; }
   .login-mark { width: 46px; height: 46px; border-radius: 12px; margin-bottom: 14px; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 17px; letter-spacing: 0.5px; }
   .login-title { font-size: 21px; font-weight: 700; letter-spacing: 0.1px; text-align: center; }
@@ -2284,7 +2301,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   /* ===== MODAL ===== */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 3000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
   .modal-overlay.show { display: flex; }
-  .modal-box { background: white; border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 24px 28px; max-width: 420px; width: 90%; animation: modalIn 0.25s ease; }
+  .modal-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 24px 28px; max-width: 420px; width: 90%; animation: modalIn 0.25s ease; }
   @keyframes modalIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .modal-box h4 { font-size: 16px; margin-bottom: 10px; }
   .modal-box p { font-size: 13px; color: var(--text-light); margin-bottom: 20px; }
@@ -2296,9 +2313,9 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .activity-log-who { font-weight:700; color:var(--primary-light); }
   body.dark-mode .activity-log-who { color: var(--primary-ondark); }
   .activity-log-what { color:var(--text); }
-  .activity-log-empty { padding:20px; text-align:center; color:#999; font-size:13px; }
+  .activity-log-empty { padding:20px; text-align:center; color:var(--text-faint); font-size:13px; }
   body.dark-mode .activity-log-item { border-bottom-color:var(--border); }
-  body.dark-mode .activity-log-empty { color:#777; }
+  body.dark-mode .activity-log-empty { color:var(--text-faint); }
 
 
   /* ===== APP SHELL =====
@@ -2335,7 +2352,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 
   body.dark-mode .activity-sidebar { background: var(--card); border-left-color: var(--border); }
   body.dark-mode .activity-sidebar-header { background: #1a1d25; border-bottom-color: var(--border); color: var(--text); }
-  body.dark-mode .activity-sidebar-close { color: #777; }
+  body.dark-mode .activity-sidebar-close { color: var(--text-faint); }
   body.dark-mode .activity-sidebar-close:hover { background: rgba(220,53,69,0.18); color: var(--danger); }
 
   @media (max-width: 1100px) {
@@ -2730,7 +2747,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   /* ===== DARK MODE ===== */
   body.dark-mode {
     --bg: #14161c; --card: #1c1f27; --border: #323744;
-    --text: #e7e9ee; --text-light: #98a0ae;
+    --text: #e7e9ee; --text-light: #98a0ae; --text-faint: #6b7684;
     /* --primary/--primary-light stay the SAME navy as light mode on
        purpose — they're also used as solid-fill button/badge
        backgrounds with white text on top (e.g. .badge, .job-rail-add-btn),
@@ -3145,11 +3162,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
                split stays independent of the right group's. -->
           <div class="home-grid-left">
             <div class="home-widget" id="homeWidgetChecklist">
-              <div class="home-widget-header" onclick="homeWidgetGoTo('checklist')" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('checklist', event)" title="Expand" aria-label="Expand Checklist"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-header" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="homeWidgetGoTo('checklist')" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('checklist', event)" title="Expand" aria-label="Expand Checklist"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               <div class="home-widget-body" id="homeChecklistBody"></div>
             </div>
             <div class="home-widget" id="homeWidgetWorkflow">
-              <div class="home-widget-header" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('board', event)" title="Expand" aria-label="Expand Board"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-header" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="homeWidgetGoTo('board')" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('board', event)" title="Expand" aria-label="Expand Board"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               <div class="home-widget-body" id="homeStageBody">
                 <div id="homeStageAlert"></div>
                 <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
@@ -3181,11 +3198,11 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
                idea as .home-grid-left above. -->
           <div class="home-grid-right">
             <div class="home-widget" id="homeWidgetCalendar">
-              <div class="home-widget-header" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('calendar', event)" title="Expand" aria-label="Expand Calendar"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-header" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="homeWidgetGoTo('calendar')" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('calendar', event)" title="Expand" aria-label="Expand Calendar"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               <div class="home-widget-body" id="homeOverdueBody"></div>
             </div>
             <div class="home-widget" id="homeWidgetToday">
-              <div class="home-widget-header" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('gantt', event)" title="Expand" aria-label="Expand Gantt Chart"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-header" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" onclick="homeWidgetGoTo('gantt')" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span><button class="home-widget-expand-btn" onclick="toggleHomeWidgetExpand('gantt', event)" title="Expand" aria-label="Expand Gantt Chart"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               <div class="home-widget-body" id="homeTodayBody"></div>
             </div>
           </div>
@@ -3759,7 +3776,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.1';
+const APP_VERSION = '2026-09-09.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
