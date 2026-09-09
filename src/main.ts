@@ -12,11 +12,13 @@
 import { genId, safeJsonParse } from './utils/id';
 import { getDaysDiff, toIsoDate, addMonths, getBusinessDaysDiff, addBusinessDays, formatTimeLabel, timeToMinutes } from './utils/date';
 import { darkenColor, softenColor, SOFTEN_AMOUNT } from './utils/color';
+import { escapeHtml } from './utils/html';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
   getDragAfterColumn, syncColumnsFromDOM, handleCardDragStart, handleCardDragEnd, handleColumnDragOver, applyColumnDragOver,
   handleColumnDragLeave, dropNeedsManualOverride, handleColumnDrop, moveCardToColumn, getDragAfterElement, syncBoardCardsFromDOM,
+  addBoardColumn, deleteBoardColumn, renameBoardColumn, isCardFromArchivedJob, isCardVisibleToMe,
 } from './views/board';
 
 declare global {
@@ -57,6 +59,12 @@ declare global {
     moveCardToColumn: typeof moveCardToColumn;
     getDragAfterElement: typeof getDragAfterElement;
     syncBoardCardsFromDOM: typeof syncBoardCardsFromDOM;
+    addBoardColumn: typeof addBoardColumn;
+    deleteBoardColumn: typeof deleteBoardColumn;
+    renameBoardColumn: typeof renameBoardColumn;
+    isCardFromArchivedJob: typeof isCardFromArchivedJob;
+    isCardVisibleToMe: typeof isCardVisibleToMe;
+    escapeHtml: typeof escapeHtml;
   }
 }
 
@@ -96,3 +104,9 @@ window.handleColumnDrop = handleColumnDrop;
 window.moveCardToColumn = moveCardToColumn;
 window.getDragAfterElement = getDragAfterElement;
 window.syncBoardCardsFromDOM = syncBoardCardsFromDOM;
+window.addBoardColumn = addBoardColumn;
+window.deleteBoardColumn = deleteBoardColumn;
+window.renameBoardColumn = renameBoardColumn;
+window.isCardFromArchivedJob = isCardFromArchivedJob;
+window.isCardVisibleToMe = isCardVisibleToMe;
+window.escapeHtml = escapeHtml;

@@ -298,6 +298,86 @@ test('gantt drag: moving a task bar shifts its dates by the dragged number of da
   expect(result.finish).toBe(expected.finish);
 });
 
+test('board column CRUD: add, rename, and delete a column via the real modal/prompt flow', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  // Add
+  const columnLabel = 'Playwright Test Board ' + Date.now();
+  const addedId = await page.evaluate((label) => {
+    addBoardColumn(label);
+    return BOARD_COLUMNS.find((c) => c.label === label).id;
+  }, columnLabel);
+  expect(addedId).toBeTruthy();
+
+  // Rename — deleteBoardColumn()/renameBoardColumn() use the native
+  // confirm()/prompt() dialogs; Playwright auto-dismisses dialogs unless
+  // a handler accepts them first.
+  const renamedLabel = columnLabel + ' (renamed)';
+  page.once('dialog', (d) => d.accept(renamedLabel));
+  await page.evaluate((id) => renameBoardColumn(id), addedId);
+  const afterRename = await page.evaluate((id) => BOARD_COLUMNS.find((c) => c.id === id).label, addedId);
+  expect(afterRename).toBe(renamedLabel);
+
+  // Delete — accepting the confirm() dialog
+  page.once('dialog', (d) => d.accept());
+  await page.evaluate((id) => deleteBoardColumn(id), addedId);
+  const stillExists = await page.evaluate((id) => BOARD_COLUMNS.some((c) => c.id === id), addedId);
+  expect(stillExists).toBe(false);
+});
+
+test('board column CRUD: the Complete and Invoiced columns cannot be deleted', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const before = await page.evaluate(() => BOARD_COLUMNS.length);
+  // Accept the confirm() dialog so this test actually isolates the
+  // complete/invoiced special-case guard — without this, Playwright's
+  // default dialog auto-dismiss (confirm() returning false) would make
+  // the assertion below pass for the WRONG reason even if that guard
+  // were removed, since the later confirm() check would still block the
+  // delete on its own. Confirmed this the hard way: the guard was
+  // temporarily removed and this test still passed until this handler
+  // was added.
+  page.on('dialog', (d) => d.accept());
+  await page.evaluate(() => deleteBoardColumn('complete'));
+  const after = await page.evaluate(() => BOARD_COLUMNS.length);
+  expect(after).toBe(before);
+});
+
+test('board card visibility: isCardFromArchivedJob/isCardVisibleToMe reflect the linked job\'s real state', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const job = jobs[0];
+    const originalArchived = job.archived;
+    job.archived = true;
+    const archivedResult = isCardFromArchivedJob({ jobId: job.id });
+    job.archived = originalArchived;
+    const restoredResult = isCardFromArchivedJob({ jobId: job.id });
+    // A card with no jobId at all (not linked to any job) fails open —
+    // stays visible/not-archived rather than erroring.
+    const noJobId = { jobId: null };
+    return {
+      archivedResult,
+      restoredResult,
+      noJobIdArchived: isCardFromArchivedJob(noJobId),
+      noJobIdVisible: isCardVisibleToMe(noJobId),
+    };
+  });
+  expect(result.archivedResult).toBe(true);
+  expect(result.restoredResult).toBe(false);
+  expect(result.noJobIdArchived).toBe(false);
+  expect(result.noJobIdVisible).toBe(true);
+});
+
 test('error reporting: an uncaught error and an unhandled rejection both POST a report to the Worker', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

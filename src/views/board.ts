@@ -1,31 +1,33 @@
-// Phase 4 of the architecture roadmap — Board's drag-and-drop mechanics,
-// moved verbatim. Deliberately narrower than "extract Board": this file
-// covers ONLY the two drag-and-drop subsystems (reordering columns,
-// moving cards between/within columns) — renderBoard() itself, the card
-// modal, checklists, and workflow items all stay in index.html for later,
-// separately-scoped follow-up phases. Every function here is already
-// covered by real test coverage (tests/teamsync.spec.js's board
-// drag-and-drop test, plus the isBusyEditing() regression test that
-// depends on draggedCardId/draggedColId), which is exactly the kind of
-// evidence that made Board a safer next move than, say, Gantt's more
-// timing-sensitive drag code — see the roadmap's own stated ordering.
+// Board, moved out of index.html across Phase 4 of the architecture
+// roadmap in deliberately narrow, separately-verified slices rather than
+// one giant move — renderBoard() itself, buildCardEl(), the card modal,
+// checklists, and workflow items are all still in index.html, left for
+// later follow-up phases once each has its own test coverage the way the
+// pieces below did before being moved:
+//   Phase 4a — drag-and-drop (this file's original content): covered by
+//     the existing board drag-and-drop test plus the isBusyEditing()
+//     regression test, which reads draggedCardId/draggedColId directly.
+//   Phase 4b — column CRUD + card visibility (addBoardColumn/
+//     deleteBoardColumn/renameBoardColumn/isCardFromArchivedJob/
+//     isCardVisibleToMe): new dedicated tests added alongside this move
+//     (tests/teamsync.spec.js).
 //
-// Two functions this file calls but does NOT define — setCardColumn()
-// and confirmChecklistBeforeMove() — stay in index.html on purpose: both
-// carry business rules (checklist-completion auto-assignment, the
-// "unfinished checklist" confirm gate) that belong with the rest of the
-// checklist system, not with drag mechanics. They're referenced below as
-// ambient globals, same as every other still-in-index.html function this
-// file calls (logActivity, showToast, saveBoardCards, saveBoardColumns,
-// renderBoard, renderHomeWorkflowExpandedBoard) — ordinary top-level
-// `function` declarations already attach to `window` on their own
-// (unlike `let`/`const`), so none of those needed any change to stay
-// visible here.
-import type { BoardCard, BoardColumn } from '../core/types';
+// Several functions this file calls but does NOT define — setCardColumn(),
+// confirmChecklistBeforeMove(), slugifyColumnId(), isJobVisibleToMe(),
+// renderGantt(), renderJobList() — stay in index.html on purpose (checklist
+// business rules, or genuinely separate concerns like the Gantt/Job List
+// re-renders a rename triggers). Referenced below as ambient globals: an
+// ordinary top-level `function` declaration already attaches to `window`
+// on its own (unlike `let`/`const`), so none of those needed any change to
+// stay visible here — only genuinely mutated DATA globals do.
+import type { BoardCard, BoardColumn, Job } from '../core/types';
+import { findJob } from '../core/models';
 
 declare global {
   // eslint-disable-next-line no-var
   var BOARD_COLUMNS: BoardColumn[];
+  // eslint-disable-next-line no-var
+  var boardCards: BoardCard[];
   // eslint-disable-next-line no-var
   var draggedCardId: string | null;
   // eslint-disable-next-line no-var
@@ -39,7 +41,11 @@ declare global {
   function logActivity(text: string): void;
   function showToast(text: string, kind?: string): void;
   function renderBoard(): void;
+  function renderGantt(): void;
+  function renderJobList(): void;
   function renderHomeWorkflowExpandedBoard(): void;
+  function slugifyColumnId(label: string): string;
+  function isJobVisibleToMe(job: Job): boolean;
 }
 
 // ===== BOARD: COLUMN DRAG & DROP =====
@@ -347,6 +353,94 @@ function syncBoardCardsFromDOM(): void {
   boardCards = ordered;
 }
 
+// ===== BOARD: COLUMN CRUD =====
+
+function addBoardColumn(label: string): void {
+  BOARD_COLUMNS.push({ id: slugifyColumnId(label), label: label });
+  saveBoardColumns();
+  logActivity('added board "' + label + '"');
+  renderBoard();
+  showToast('Board "' + label + '" added', 'success');
+  setTimeout(() => {
+    const wrapper = document.getElementById('boardWrapper')!;
+    wrapper.scrollLeft = wrapper.scrollWidth;
+  }, 60);
+}
+
+function deleteBoardColumn(colId: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  if (BOARD_COLUMNS.length <= 1) {
+    showToast('You need at least one board', 'error');
+    return;
+  }
+  // 'complete'/'invoiced' stay non-deletable on purpose, independent of
+  // isFinishedColumn()/the Finished Trigger toggle above: they're every
+  // project's starter "done" boards, and deleting one out from under a
+  // team mid-use (even with cards moved elsewhere) is more likely an
+  // accident than an intent a confirm dialog alone should be trusted to
+  // catch. A team that wants a different column as the/an ADDITIONAL
+  // finished trigger can just toggle that on directly — deleting these
+  // two isn't the way to do that.
+  if (colId === 'complete' || colId === 'invoiced') {
+    showToast('The Complete and Invoiced boards can\'t be deleted', 'error');
+    return;
+  }
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  const remaining = BOARD_COLUMNS.filter((c) => c.id !== colId);
+  const cardCount = boardCards.filter((c) => c.column === colId).length;
+  let msg = 'Delete the "' + col.label + '" board?';
+  if (cardCount > 0) {
+    msg += ' ' + cardCount + ' card' + (cardCount === 1 ? '' : 's') + ' will be moved to "' + remaining[0].label + '".';
+  }
+  if (!confirm(msg)) return;
+  if (cardCount > 0) {
+    boardCards.forEach((c) => { if (c.column === colId) setCardColumn(c, remaining[0].id); });
+    saveBoardCards();
+  }
+  BOARD_COLUMNS = remaining;
+  saveBoardColumns();
+  logActivity('deleted board "' + col.label + '"');
+  renderBoard();
+  showToast('Board deleted', 'info');
+}
+
+function renameBoardColumn(colId: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  const name = prompt('Rename board:', col.label);
+  if (!name || !name.trim()) return;
+  col.label = name.trim();
+  saveBoardColumns();
+  logActivity('renamed board to "' + col.label + '"');
+  renderBoard();
+  renderGantt();
+  renderJobList();
+  showToast('Board renamed', 'success');
+}
+
+// A job's card follows it into the archive — same as it's already hidden
+// from the Gantt/Calendar/Job Manager once archived, it shouldn't keep
+// occupying a spot on the board. Restoring the job brings it back.
+function isCardFromArchivedJob(card: BoardCard): boolean {
+  if (!card.jobId) return false;
+  const found = findJob(card.jobId);
+  return !!(found && found.job.archived);
+}
+
+// See isJobVisibleToMe() — same job-membership filter, resolved from a
+// board card back to its owning job. A card with no jobId, or one that
+// doesn't resolve to a real job, fails OPEN (stays visible) rather than
+// silently vanishing from the board — same reasoning as
+// isCardFromArchivedJob()'s own early return for that case.
+function isCardVisibleToMe(card: BoardCard): boolean {
+  if (!card.jobId) return true;
+  const found = findJob(card.jobId);
+  if (!found) return true;
+  return isJobVisibleToMe(found.job);
+}
+
 export {
   handleColumnDragStart,
   handleColumnDragEnd,
@@ -365,4 +459,9 @@ export {
   moveCardToColumn,
   getDragAfterElement,
   syncBoardCardsFromDOM,
+  addBoardColumn,
+  deleteBoardColumn,
+  renameBoardColumn,
+  isCardFromArchivedJob,
+  isCardVisibleToMe,
 };

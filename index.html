@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.10';
+const APP_VERSION = '2026-09-09.11';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -12683,96 +12683,10 @@ function submitAddColumn() {
   hideAddColumnForm();
 }
 
-function addBoardColumn(label) {
-  BOARD_COLUMNS.push({ id: slugifyColumnId(label), label: label });
-  saveBoardColumns();
-  logActivity('added board "' + label + '"');
-  renderBoard();
-  showToast('Board "' + label + '" added', 'success');
-  setTimeout(() => {
-    const wrapper = document.getElementById('boardWrapper');
-    wrapper.scrollLeft = wrapper.scrollWidth;
-  }, 60);
-}
-function deleteBoardColumn(colId, event) {
-  if (event) event.stopPropagation();
-  if (BOARD_COLUMNS.length <= 1) {
-    showToast('You need at least one board', 'error');
-    return;
-  }
-  // 'complete'/'invoiced' stay non-deletable on purpose, independent of
-  // isFinishedColumn()/the Finished Trigger toggle above: they're every
-  // project's starter "done" boards, and deleting one out from under a
-  // team mid-use (even with cards moved elsewhere) is more likely an
-  // accident than an intent a confirm dialog alone should be trusted to
-  // catch. A team that wants a different column as the/an ADDITIONAL
-  // finished trigger can just toggle that on directly — deleting these
-  // two isn't the way to do that.
-  if (colId === 'complete' || colId === 'invoiced') {
-    showToast('The Complete and Invoiced boards can\'t be deleted', 'error');
-    return;
-  }
-  const col = BOARD_COLUMNS.find(c => c.id === colId);
-  if (!col) return;
-  const remaining = BOARD_COLUMNS.filter(c => c.id !== colId);
-  const cardCount = boardCards.filter(c => c.column === colId).length;
-  let msg = 'Delete the "' + col.label + '" board?';
-  if (cardCount > 0) {
-    msg += ' ' + cardCount + ' card' + (cardCount === 1 ? '' : 's') + ' will be moved to "' + remaining[0].label + '".';
-  }
-  if (!confirm(msg)) return;
-  if (cardCount > 0) {
-    boardCards.forEach(c => { if (c.column === colId) setCardColumn(c, remaining[0].id); });
-    saveBoardCards();
-  }
-  BOARD_COLUMNS = remaining;
-  saveBoardColumns();
-  logActivity('deleted board "' + col.label + '"');
-  renderBoard();
-  showToast('Board deleted', 'info');
-}
-
-function renameBoardColumn(colId, event) {
-  if (event) event.stopPropagation();
-  const col = BOARD_COLUMNS.find(c => c.id === colId);
-  if (!col) return;
-  const name = prompt('Rename board:', col.label);
-  if (!name || !name.trim()) return;
-  col.label = name.trim();
-  saveBoardColumns();
-  logActivity('renamed board to "' + col.label + '"');
-  renderBoard();
-  renderGantt();
-  renderJobList();
-  showToast('Board renamed', 'success');
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str || '';
-  return div.innerHTML;
-}
-
-// A job's card follows it into the archive — same as it's already hidden
-// from the Gantt/Calendar/Job Manager once archived, it shouldn't keep
-// occupying a spot on the board. Restoring the job brings it back.
-function isCardFromArchivedJob(card) {
-  if (!card.jobId) return false;
-  const found = findJob(card.jobId);
-  return !!(found && found.job.archived);
-}
-
-// See isJobVisibleToMe() — same job-membership filter, resolved from a
-// board card back to its owning job. A card with no jobId, or one that
-// doesn't resolve to a real job, fails OPEN (stays visible) rather than
-// silently vanishing from the board — same reasoning as
-// isCardFromArchivedJob()'s own early return for that case.
-function isCardVisibleToMe(card) {
-  if (!card.jobId) return true;
-  const found = findJob(card.jobId);
-  if (!found) return true;
-  return isJobVisibleToMe(found.job);
-}
+// addBoardColumn()/deleteBoardColumn()/renameBoardColumn()/
+// isCardFromArchivedJob()/isCardVisibleToMe() moved to src/views/board.ts,
+// and escapeHtml() to src/utils/html.ts (Phase 4b of the architecture
+// roadmap) — see the identical note by genId() above.
 
 // ===== BOARD: RENDER =====
 function renderBoard() {
