@@ -1,9 +1,13 @@
 {
   "scripts": {
+    "build": "esbuild src/main.ts --bundle --outfile=dist/app.bundle.js --format=iife",
+    "typecheck": "tsc --noEmit",
     "test": "playwright test --config=tests/playwright.config.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
     "wrangler": "^4.125.0"
   }
 }

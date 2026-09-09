@@ -3793,6 +3793,12 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   </div>
 </div>
 
+<!-- Built from src/ by `npm run build` (esbuild) — see the architecture
+     roadmap's Phase 2. An IIFE, not a native ES module: everything it
+     exports is assigned onto `window` (src/main.ts) because the rest of
+     this file's inline script, and the Playwright suite, both expect
+     these as bare globals. Must load before the inline block below. -->
+<script src="dist/app.bundle.js"></script>
 <script>
 // Bump this string on every meaningful push (any change worth everyone
 // picking up). checkForNewerVersion() compares it against a freshly-
@@ -3803,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.7';
+const APP_VERSION = '2026-09-09.8';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -4049,21 +4055,10 @@ const COLOR_PRESETS = [
   '#8e7cc3','#c0c0c0','#424242','#6c757d'
 ];
 
-function genId() {
-  if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-}
-
-// A handful of top-level `let`s below parse straight out of localStorage
-// as the script itself loads — before init() even runs — with no
-// try/catch (unlike loadLinkEnabledPref()/etc, which correctly guard the
-// identical localStorage-get→JSON.parse pattern elsewhere in this file). Any manual edit, extension interference, or
-// partial write leaving one of those keys as invalid JSON would throw
-// uncaught at parse time and halt the whole script before it ever
-// reaches init() — a blank, non-functional page with no error shown.
-function safeJsonParse(str, fallback) {
-  try { return JSON.parse(str); } catch (e) { return fallback; }
-}
+// genId()/safeJsonParse() moved to src/utils/id.ts (Phase 2 of the
+// architecture roadmap) — bundled into dist/app.bundle.js and loaded via
+// the <script> tag near the top of <head>, before this block, so both
+// still exist as the bare globals every call site here expects.
 
 function ensureJobAndTaskIds(arr) {
   (arr || []).forEach(function(job, i) {
@@ -5210,34 +5205,9 @@ function buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, ph
 // Darkens a hex color by `amount` (0-1) — used to give the overlap hatch
 // inside a collapsed sub-phase bar two visually distinct shades of the same
 // job color, since every sub-phase segment already shares that one color.
-function darkenColor(hex, amount) {
-  hex = (hex || '#3949ab').replace('#', '');
-  if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
-  const num = parseInt(hex, 16) || 0;
-  const r = Math.max(0, Math.round(((num >> 16) & 255) * (1 - amount)));
-  const g = Math.max(0, Math.round(((num >> 8) & 255) * (1 - amount)));
-  const b = Math.max(0, Math.round((num & 255) * (1 - amount)));
-  return 'rgb(' + r + ',' + g + ',' + b + ')';
-}
-// How far Gantt task bars and board column backgrounds get blended
-// toward white — a gentle pastel effect rather than full saturation.
-const SOFTEN_AMOUNT = 0.18;
-// Blends a color toward white by `amount` (0-1, defaults to
-// SOFTEN_AMOUNT). Returns a hex string (not rgb(), unlike darkenColor
-// above) specifically so it composes with isDarkColor(), which needs a
-// '#rrggbb' string.
-function softenColor(hex, amount) {
-  hex = (hex || '#3949ab').replace('#', '');
-  if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
-  amount = typeof amount === 'number' ? amount : SOFTEN_AMOUNT;
-  const num = parseInt(hex, 16) || 0;
-  const blend = function(c) { return Math.max(0, Math.min(255, Math.round(c + (255 - c) * amount))); };
-  const toHex = function(c) { return c.toString(16).padStart(2, '0'); };
-  const r = blend((num >> 16) & 255);
-  const g = blend((num >> 8) & 255);
-  const b = blend(num & 255);
-  return '#' + toHex(r) + toHex(g) + toHex(b);
-}
+// darkenColor()/softenColor()/SOFTEN_AMOUNT moved to src/utils/color.ts
+// (Phase 2 of the architecture roadmap) — see the identical note by
+// genId() above.
 // Same palette as COLOR_PRESETS (job/task colors), just softened toward
 // pastel — used only for the board column color picker, so picking a
 // board color is its own distinct, intentionally-gentler palette rather
@@ -7283,100 +7253,11 @@ function setMobileView(view) {
   }
 }
 
-function getDaysDiff(d1, d2) {
-  return Math.round((d2 - d1) / 86400000);
-}
-
-// .toISOString().split('T')[0] always formats in UTC, but every date in
-// this app is parsed as LOCAL midnight (new Date(x + 'T00:00:00')) and
-// manipulated with local-time methods (setDate/setMonth/etc) — for any
-// user in a UTC-ahead timezone (most of Europe/Asia/Australia), local
-// midnight falls on the PREVIOUS UTC day, so toISOString() silently wrote
-// back a date one day earlier than what a drag/resize's own tooltip had
-// just shown. Every date-to-string call site in the app (Gantt/Calendar
-// drag-resize, recurring event expansion, day-cell dataset.date, etc.)
-// now goes through this instead — formats using the Date's own local
-// getters, so what's on screen is what gets saved.
-function toIsoDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return y + '-' + m + '-' + day;
-}
-
-// Adding N months via a naive date.setMonth(date.getMonth() + N) overflows
-// into a LATER month than intended whenever the target month is shorter
-// than the current day-of-month — e.g. Aug 31 + 1 month lands on Oct 1,
-// not Sep 30, silently skipping September entirely. That bit both the
-// Calendar's Prev/Next navigation (skipping a whole month whenever the
-// view date fell on the 29th-31st) and monthly-repeating events (an
-// event anchored on the 31st permanently drifted to "the 3rd" of every
-// following month, since each iteration compounds the same overflow).
-// Clamping to the target month's actual last day — the same "recur near
-// the end of short months" behavior Google Calendar/Outlook use — fixes
-// both call sites with one shared helper instead of patching the
-// overflow differently in each place. Returns a new Date; never mutates
-// the one passed in.
-function addMonths(date, delta) {
-  const d = new Date(date);
-  const day = d.getDate();
-  d.setDate(1); // land on a date that exists in every month before changing month
-  d.setMonth(d.getMonth() + delta);
-  const lastDayOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(day, lastDayOfTargetMonth));
-  return d;
-}
-
-// Business-day (Mon-Fri) versions of the above, used only for the Job
-// Manager's Days field — the Gantt itself still positions/sizes bars by
-// calendar days, since a bar's width needs to represent real elapsed time
-// on the timeline regardless of weekends.
-function getBusinessDaysDiff(d1, d2) {
-  const d = new Date(d1); d.setHours(0, 0, 0, 0);
-  const end = new Date(d2); end.setHours(0, 0, 0, 0);
-  if (d > end) return 0;
-  let count = 0;
-  while (d <= end) {
-    const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) count++;
-    d.setDate(d.getDate() + 1);
-  }
-  return count;
-}
-
-function addBusinessDays(startDate, days) {
-  const d = new Date(startDate);
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  let count = 1;
-  while (count < days) {
-    d.setDate(d.getDate() + 1);
-    const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) count++;
-  }
-  return d;
-}
-
-// '14:30' -> '2:30 PM'. Calendar events store time as a plain 24h string
-// from <input type="time">; empty/invalid input just renders nothing.
-function formatTimeLabel(hhmm) {
-  if (!hhmm) return '';
-  const parts = hhmm.split(':');
-  const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
-  if (isNaN(h) || isNaN(m)) return '';
-  const period = h >= 12 ? 'PM' : 'AM';
-  const h12 = ((h + 11) % 12) + 1;
-  return h12 + ':' + String(m).padStart(2, '0') + ' ' + period;
-}
-
-// 'HH:MM' -> minutes since midnight, or null if blank/invalid. Used to
-// position timed calendar events in the week view's hourly grid.
-function timeToMinutes(hhmm) {
-  if (!hhmm) return null;
-  const parts = hhmm.split(':');
-  const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
-  if (isNaN(h) || isNaN(m)) return null;
-  return h * 60 + m;
-}
+// getDaysDiff()/toIsoDate()/addMonths()/getBusinessDaysDiff()/
+// addBusinessDays()/formatTimeLabel()/timeToMinutes() moved to
+// src/utils/date.ts (Phase 2 of the architecture roadmap) — see the
+// identical note by genId() above. toIsoDate() and addMonths() each
+// carry real past-bug history; see that file's comments, not here.
 
 // Shared by renderMonthCalendar/renderWeekCalendar's all-day bar rows —
 // factored out once bar rendering grew due-marker, calendar-event, and
