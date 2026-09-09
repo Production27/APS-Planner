@@ -64,7 +64,14 @@ export interface BoardColumn {
   label: string;
   hideFromSchedule?: boolean;
   defaultChecklist?: unknown[];
+  workflowItemId?: string | null;
   [key: string]: unknown;
+}
+
+export interface WorkflowItem {
+  id: string;
+  label: string;
+  color: string;
 }
 
 export interface FoundJob {

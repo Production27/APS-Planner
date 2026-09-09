@@ -19,6 +19,8 @@ import {
   getDragAfterColumn, syncColumnsFromDOM, handleCardDragStart, handleCardDragEnd, handleColumnDragOver, applyColumnDragOver,
   handleColumnDragLeave, dropNeedsManualOverride, handleColumnDrop, moveCardToColumn, getDragAfterElement, syncBoardCardsFromDOM,
   addBoardColumn, deleteBoardColumn, renameBoardColumn, isCardFromArchivedJob, isCardVisibleToMe,
+  openWorkflowItemsModal, closeWorkflowItemsModal, renderWorkflowItemsBody, toggleWorkflowItemColorPanel, changeWorkflowItemColor,
+  addWorkflowItem, removeWorkflowItem,
 } from './views/board';
 
 declare global {
@@ -65,6 +67,13 @@ declare global {
     isCardFromArchivedJob: typeof isCardFromArchivedJob;
     isCardVisibleToMe: typeof isCardVisibleToMe;
     escapeHtml: typeof escapeHtml;
+    openWorkflowItemsModal: typeof openWorkflowItemsModal;
+    closeWorkflowItemsModal: typeof closeWorkflowItemsModal;
+    renderWorkflowItemsBody: typeof renderWorkflowItemsBody;
+    toggleWorkflowItemColorPanel: typeof toggleWorkflowItemColorPanel;
+    changeWorkflowItemColor: typeof changeWorkflowItemColor;
+    addWorkflowItem: typeof addWorkflowItem;
+    removeWorkflowItem: typeof removeWorkflowItem;
   }
 }
 
@@ -110,3 +119,10 @@ window.renameBoardColumn = renameBoardColumn;
 window.isCardFromArchivedJob = isCardFromArchivedJob;
 window.isCardVisibleToMe = isCardVisibleToMe;
 window.escapeHtml = escapeHtml;
+window.openWorkflowItemsModal = openWorkflowItemsModal;
+window.closeWorkflowItemsModal = closeWorkflowItemsModal;
+window.renderWorkflowItemsBody = renderWorkflowItemsBody;
+window.toggleWorkflowItemColorPanel = toggleWorkflowItemColorPanel;
+window.changeWorkflowItemColor = changeWorkflowItemColor;
+window.addWorkflowItem = addWorkflowItem;
+window.removeWorkflowItem = removeWorkflowItem;

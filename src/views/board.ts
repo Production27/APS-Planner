@@ -11,17 +11,23 @@
 //     deleteBoardColumn/renameBoardColumn/isCardFromArchivedJob/
 //     isCardVisibleToMe): new dedicated tests added alongside this move
 //     (tests/teamsync.spec.js).
+//   Phase 4c — workflow items (openWorkflowItemsModal and friends): same
+//     pattern, new dedicated tests alongside this move.
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
 // confirmChecklistBeforeMove(), slugifyColumnId(), isJobVisibleToMe(),
-// renderGantt(), renderJobList() — stay in index.html on purpose (checklist
-// business rules, or genuinely separate concerns like the Gantt/Job List
-// re-renders a rename triggers). Referenced below as ambient globals: an
-// ordinary top-level `function` declaration already attaches to `window`
-// on its own (unlike `let`/`const`), so none of those needed any change to
-// stay visible here — only genuinely mutated DATA globals do.
-import type { BoardCard, BoardColumn, Job } from '../core/types';
+// renderGantt(), renderJobList(), openModal()/closeModal(),
+// saveWorkflowItems() — stay in index.html on purpose (checklist business
+// rules, modal-chrome plumbing shared by every modal in the app, or
+// genuinely separate concerns like the Gantt/Job List re-renders a rename
+// triggers). Referenced below as ambient globals: an ordinary top-level
+// `function` declaration already attaches to `window` on its own (unlike
+// `let`/`const`), so none of those needed any change to stay visible here
+// — only genuinely mutated DATA globals do.
+import type { BoardCard, BoardColumn, WorkflowItem, Job } from '../core/types';
 import { findJob } from '../core/models';
+import { escapeHtml } from '../utils/html';
+import { genId } from '../utils/id';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -34,10 +40,15 @@ declare global {
   var draggedColId: string | null;
   // eslint-disable-next-line no-var
   var homeExpandedWidgetId: string | null;
+  // eslint-disable-next-line no-var
+  var WORKFLOW_ITEMS: WorkflowItem[];
+  // eslint-disable-next-line no-var
+  var COLOR_PRESETS: string[];
   function setCardColumn(card: BoardCard, newColumnId: string): void;
   function confirmChecklistBeforeMove(card: BoardCard): boolean;
   function saveBoardColumns(): void;
   function saveBoardCards(): void;
+  function saveWorkflowItems(): void;
   function logActivity(text: string): void;
   function showToast(text: string, kind?: string): void;
   function renderBoard(): void;
@@ -46,6 +57,8 @@ declare global {
   function renderHomeWorkflowExpandedBoard(): void;
   function slugifyColumnId(label: string): string;
   function isJobVisibleToMe(job: Job): boolean;
+  function openModal(id: string): void;
+  function closeModal(id: string): void;
 }
 
 // ===== BOARD: COLUMN DRAG & DROP =====
@@ -441,6 +454,112 @@ function isCardVisibleToMe(card: BoardCard): boolean {
   return isJobVisibleToMe(found.job);
 }
 
+// ===== WORKFLOW ITEMS =====
+// Named groups a board can be assigned to (col.workflowItemId), shown as
+// a strip above Board — independent of any column's own label, so the
+// same item can span several adjacently-ordered boards. Managed from
+// this modal rather than per-column like most other board settings, but
+// still stored per-project (same as BOARD_COLUMNS).
+
+function openWorkflowItemsModal(): void {
+  renderWorkflowItemsBody();
+  openModal('workflowItemsModal');
+}
+
+function closeWorkflowItemsModal(): void {
+  closeModal('workflowItemsModal');
+}
+
+function renderWorkflowItemsBody(): void {
+  const container = document.getElementById('workflowItemsBody')!;
+  // Row layout (not the chip pattern Default Checklist/Custom Fields use
+  // elsewhere) since each item needs room for an expandable color picker
+  // underneath — reuses the board column ⋮ menu's own color-toggle/
+  // panel/grid CSS classes verbatim (same swatch palette, COLOR_PRESETS,
+  // same click-to-expand interaction), just scoped to #workflowItemsBody
+  // instead of a column dropdown.
+  const rows = WORKFLOW_ITEMS.map((item) => {
+    const swatches = COLOR_PRESETS.map((c) => {
+      return '<div class="board-col-color-option' + (item.color === c ? ' selected' : '') + '" style="background:' + c + ';" role="radio" aria-checked="' + (item.color === c) + '" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="changeWorkflowItemColor(\'' + item.id + '\', \'' + c + '\', event)"></div>';
+    }).join('');
+    return '<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden;">' +
+      '<div class="board-col-color-toggle" onclick="toggleWorkflowItemColorPanel(\'' + item.id + '\', event)">' +
+        '<span style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+          '<span class="col-color-swatch" id="wfi-swatch-' + item.id + '" style="background:' + item.color + ';flex-shrink:0;"></span>' +
+          escapeHtml(item.label) +
+        '</span>' +
+        '<span style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' +
+          '<span class="col-color-arrow" id="wfi-arrow-' + item.id + '">▾</span>' +
+          '<button onclick="event.stopPropagation(); removeWorkflowItem(\'' + item.id + '\');" style="border:none;background:none;color:var(--text-light);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;">×</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="board-col-color-panel" id="wfi-panel-' + item.id + '">' +
+        '<div class="board-col-color-grid" role="radiogroup" aria-label="' + escapeHtml(item.label) + ' color">' + swatches + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  container.innerHTML = '<div class="manage-field-group">' +
+    (rows || '<span style="font-size:11px;color:#999;">No workflow items yet</span>') +
+    '<div class="manage-field-add-row">' +
+    '<input type="text" id="wfi_new_item" placeholder="Add workflow item..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addWorkflowItem();}">' +
+    '<button class="btn btn-secondary" onclick="addWorkflowItem()">Add</button>' +
+    '</div></div>';
+}
+
+// Mirrors toggleColColorPanel() (board column ⋮ menu) exactly, scoped to
+// this modal instead of a column dropdown so opening one item's picker
+// closes any other item's still-open one, not a board's.
+function toggleWorkflowItemColorPanel(itemId: string, event: Event): void {
+  event.stopPropagation();
+  const panel = document.getElementById('wfi-panel-' + itemId)!;
+  const toggle = event.currentTarget as HTMLElement;
+  const open = !panel.classList.contains('open');
+  document.querySelectorAll('#workflowItemsBody .board-col-color-panel').forEach((p) => p.classList.remove('open'));
+  document.querySelectorAll('#workflowItemsBody .board-col-color-toggle').forEach((t) => t.classList.remove('open'));
+  if (open) {
+    panel.classList.add('open');
+    toggle.classList.add('open');
+  }
+}
+
+function changeWorkflowItemColor(itemId: string, color: string, event: Event): void {
+  event.stopPropagation();
+  const item = WORKFLOW_ITEMS.find((i) => i.id === itemId);
+  if (!item) return;
+  item.color = color;
+  saveWorkflowItems();
+  logActivity('changed workflow item "' + item.label + '" color');
+  renderWorkflowItemsBody();
+  renderBoard();
+  showToast('Color updated', 'success');
+}
+
+function addWorkflowItem(): void {
+  const input = document.getElementById('wfi_new_item') as HTMLInputElement;
+  const text = input.value.trim();
+  if (!text) return;
+  // Cycles through the same swatch palette job/board colors already draw
+  // from, rather than a separate color picker — one less decision for
+  // something that'll usually be picked a handful of times total.
+  const color = COLOR_PRESETS[WORKFLOW_ITEMS.length % COLOR_PRESETS.length];
+  WORKFLOW_ITEMS.push({ id: genId(), label: text, color: color });
+  input.value = '';
+  saveWorkflowItems();
+  renderWorkflowItemsBody();
+  renderBoard();
+}
+
+function removeWorkflowItem(itemId: string): void {
+  WORKFLOW_ITEMS = WORKFLOW_ITEMS.filter((i) => i.id !== itemId);
+  // Boards that were grouped under the deleted item fall back to showing
+  // their own name again — same as any board that was never assigned one.
+  BOARD_COLUMNS.forEach((col) => { if (col.workflowItemId === itemId) col.workflowItemId = null; });
+  saveWorkflowItems();
+  saveBoardColumns();
+  renderWorkflowItemsBody();
+  renderBoard();
+}
+
 export {
   handleColumnDragStart,
   handleColumnDragEnd,
@@ -464,4 +583,11 @@ export {
   renameBoardColumn,
   isCardFromArchivedJob,
   isCardVisibleToMe,
+  openWorkflowItemsModal,
+  closeWorkflowItemsModal,
+  renderWorkflowItemsBody,
+  toggleWorkflowItemColorPanel,
+  changeWorkflowItemColor,
+  addWorkflowItem,
+  removeWorkflowItem,
 };

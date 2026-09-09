@@ -378,6 +378,48 @@ test('board card visibility: isCardFromArchivedJob/isCardVisibleToMe reflect the
   expect(result.noJobIdVisible).toBe(true);
 });
 
+test('workflow items: add, recolor, and remove via the real modal', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await page.evaluate(() => openWorkflowItemsModal());
+  await expect(page.locator('#workflowItemsModal')).toHaveClass(/show/);
+
+  const itemLabel = 'Playwright Workflow Item ' + Date.now();
+  await page.locator('#wfi_new_item').fill(itemLabel);
+  await page.locator('#workflowItemsBody button', { hasText: 'Add' }).click();
+
+  const added = await page.evaluate((label) => WORKFLOW_ITEMS.find((i) => i.label === label), itemLabel);
+  expect(added).toBeTruthy();
+  expect(added.color).toBeTruthy();
+
+  // Recolor — picking a swatch that isn't already selected, so the test
+  // doesn't accidentally "pass" by picking the color it already had.
+  const newColor = await page.evaluate((id) => {
+    const item = WORKFLOW_ITEMS.find((i) => i.id === id);
+    const target = COLOR_PRESETS.find((c) => c !== item.color);
+    changeWorkflowItemColor(id, target, { stopPropagation() {} });
+    return target;
+  }, added.id);
+  const afterRecolor = await page.evaluate((id) => WORKFLOW_ITEMS.find((i) => i.id === id).color, added.id);
+  expect(afterRecolor).toBe(newColor);
+
+  // Remove, and confirm a board that was grouped under it falls back to
+  // showing no workflowItemId rather than a dangling reference.
+  await page.evaluate((id) => {
+    BOARD_COLUMNS[0].workflowItemId = id;
+    removeWorkflowItem(id);
+  }, added.id);
+  const result = await page.evaluate((id) => ({
+    stillExists: WORKFLOW_ITEMS.some((i) => i.id === id),
+    columnStillLinked: BOARD_COLUMNS[0].workflowItemId === id,
+  }), added.id);
+  expect(result.stillExists).toBe(false);
+  expect(result.columnStillLinked).toBe(false);
+});
+
 test('error reporting: an uncaught error and an unhandled rejection both POST a report to the Worker', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
