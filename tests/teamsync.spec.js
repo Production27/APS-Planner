@@ -304,6 +304,66 @@ test('calendar week view: a timed calendar event renders in the hourly grid', as
   await expect(page.locator('.week-timed-event', { hasText: 'Site walkthrough' })).toBeVisible();
 });
 
+test('calendar bar drag: dragging a calendar event bar reschedules it by the dragged number of days', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('calendar'));
+
+  // A job task's own bar in month/week view is always a collapsed
+  // "job-span" cluster (see buildCalendarJobRows()), which is deliberately
+  // read-only/click-to-open, never drag-reschedulable — dragging is only
+  // meaningful here for a standalone calendar event's own bar (or a job's
+  // due-date marker, a separate code path), so that's what this test
+  // drags.
+  const before = await page.evaluate(() => {
+    const evt = {
+      id: genId(), title: 'Concrete pour', start: '2026-09-10', duration: 2,
+      repeat: 'none', repeatUntil: null, color: '#7e57c2', exceptions: {}, visibility: 'all', visibleMembers: [],
+    };
+    calendarEvents.push(evt);
+    calendarViewDate = new Date('2026-09-15T00:00:00');
+    calendarViewMode = 'month';
+    renderCalendar();
+    return { eventId: evt.id, start: evt.start, duration: evt.duration };
+  });
+  expect(before).not.toBeNull();
+
+  const shiftedDays = 3;
+  const result = await page.evaluate(
+    ({ eventId, shiftedDays }) => {
+      const bar = document.querySelector('.cal-event-bar[data-cal-job-id="calevt-job-' + eventId + '"]');
+      if (!bar) return null;
+      const cellWidth = document.querySelector('.cal-day').offsetWidth;
+      // Same reasoning as the gantt drag test below: exercise the
+      // committed handlers directly, bypassing the rAF-coalesced
+      // mousemove wrapper (handleCalBarMouseMove) — the exact per-event
+      // clientX doesn't matter, only the final delta handleCalBarMouseUp
+      // computes from it.
+      handleCalBarMouseDown({ preventDefault() {}, target: bar, clientX: 0 });
+      applyCalBarMouseMove({ clientX: shiftedDays * cellWidth, clientY: 0 });
+      handleCalBarMouseUp({ clientX: shiftedDays * cellWidth });
+      const evt = calendarEvents.find((e) => e.id === eventId);
+      return evt ? { start: evt.start, duration: evt.duration } : null;
+    },
+    { eventId: before.eventId, shiftedDays }
+  );
+
+  const expectedStart = await page.evaluate(
+    ({ start, shiftedDays }) => {
+      const d = new Date(start + 'T00:00:00');
+      d.setDate(d.getDate() + shiftedDays);
+      return toIsoDate(d);
+    },
+    { start: before.start, shiftedDays }
+  );
+
+  expect(result).not.toBeNull();
+  expect(result.start).toBe(expectedStart);
+  expect(result.duration).toBe(before.duration);
+});
+
 test('gantt drag: moving a task bar shifts its dates by the dragged number of days', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

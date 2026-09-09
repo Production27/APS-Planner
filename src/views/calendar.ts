@@ -16,14 +16,25 @@
 //   Phase 5d — the render engine itself: buildCalBarHtml()/
 //     renderMonthCalendar()/renderWeekCalendar()/renderWeekHourGrid()/
 //     calendarOpenJob()/getScheduledItemsForDate()/openDayView()/
-//     renderDayCalendarView(). The swipe/wheel/mouse-drag gesture cluster
-//     (initCalendarDragHandlers and everything it wires up — calSwipe*/
-//     handleCalBar*/animateCalendarWheelChange/handleCalWheel) is
-//     deliberately NOT part of this move: it's untested, timing-sensitive
-//     touch/mouse code in the same category as Gantt's own drag mechanics
-//     (deliberately last of the three views for the same reason), and
-//     stays in index.html until it has dedicated test coverage of its
-//     own, same discipline as everything else in this file.
+//     renderDayCalendarView().
+//   Phase 5e — the bar-drag-to-reschedule logic (handleCalBarMouseDown/
+//     Move/Up, applyCalBarMouseMove): the DATA-MUTATING half of the
+//     drag/gesture cluster — dragging a bar actually changes a task's or
+//     calendar event's dates. Given its own dedicated test (mirroring the
+//     Gantt drag test's pattern: drive the handlers directly against a
+//     real rendered bar, bypassing the rAF/mousemove timing wrapper),
+//     confirmed via break-then-restore, before moving — same discipline
+//     as every risky move this session. The purely-VISUAL swipe/wheel
+//     navigation gesture cluster (initCalendarDragHandlers and everything
+//     it wires up — calSwipeTargets/handleCalSwipeStart/Move/End/
+//     slideCalendarTargets/animateCalendarWheelChange/handleCalWheel) is
+//     deliberately NOT part of this move: it never mutates data (worst
+//     case of a bug there is a glitchy animation, not corrupted dates),
+//     is much harder to meaningfully unit-test (DOM-clone ghost elements,
+//     CSS transitions, touch-gesture timing), and is the same category of
+//     polish work as Gantt's own pinch-zoom/touch handlers — left to
+//     pair with those whenever Gantt's touch gestures are tackled, rather
+//     than being forced into this phase just because it lives nearby.
 //
 // buildCalendarJobRows()/isCalendarJobSpanTaskId() are deliberately NOT
 // part of this file either, despite living right next to functions that
@@ -46,11 +57,12 @@
 // as ambient globals — an ordinary top-level `function` declaration
 // already attaches to `window` on its own (unlike `let`/`const`), so
 // nothing about those needed to change.
-import type { CalendarEvent, CalendarEventOccurrence } from '../core/types';
-import { addMonths, toIsoDate, formatTimeLabel, timeToMinutes } from '../utils/date';
+import type { CalendarEvent, CalendarEventOccurrence, Job } from '../core/types';
+import { addMonths, toIsoDate, formatTimeLabel, timeToMinutes, getDaysDiff } from '../utils/date';
 import { genId } from '../utils/id';
 import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
+import { findJob, findTask, getPhaseCard } from '../core/models';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -77,6 +89,12 @@ declare global {
   var CAL_BAR_GAP: number;
   // eslint-disable-next-line no-var
   var CAL_DAYNUM_H: number;
+  // eslint-disable-next-line no-var
+  var DUE_MARKER_TASK_ID: string;
+  // eslint-disable-next-line no-var
+  var calDragState: CalDragState | null;
+  // eslint-disable-next-line no-var
+  var calSwipeConsumedTap: boolean;
   function getEffectiveRole(): string;
   function getStoredUsername(): string;
   function openModal(id: string): void;
@@ -94,6 +112,45 @@ declare global {
   function isTaskFinished(job: CalJob, task: CalTask): boolean;
   function isDarkColor(hex: string): boolean;
   function editJob(jobId: string, phaseId?: string | null): void;
+  function isCalendarJobSpanTaskId(taskId: unknown): boolean;
+  function getLinkedReferenceJobs(): CalJob[];
+  function jumpToLinkedJobReference(job: CalJob): void;
+  function getJobDueMarkerTask(job: CalJob, phaseId: string | null): CalTask | null;
+  function moveTooltip(e: MouseEvent): void;
+  function hideTooltip(): void;
+  function saveJobs(): void;
+  function renderGantt(): void;
+  function renderJobList(): void;
+  function renderBoard(): void;
+  function refreshJobFormIfOpen(jobId: string): void;
+}
+
+// Everything a bar-drag (handleCalBarMouseDown/Move/Up) needs to carry
+// from mousedown through to mouseup. job/task are CalJob/CalTask (not the
+// stricter Job/Task from core/types) because a drag can start on a real
+// job task, a job's synthesized due-date marker, a calendar-only event, or
+// a collapsed job-span bar — four different shapes, only some of which are
+// "real" Jobs/Tasks; see CalJob/CalTask's own comment below.
+interface CalDragState {
+  jobId: string;
+  taskId: string;
+  job: CalJob;
+  task: CalTask;
+  bar: HTMLElement;
+  dragType: string;
+  startX: number;
+  origLeft: number;
+  origWidth: number;
+  startDateObj: Date;
+  finishDateObj: Date;
+  duration: number;
+  phaseId: string | null;
+  subPhaseId: string | null;
+  isCalendarEvent: boolean;
+  calEventId: string | null;
+  calEventSourceDate: string | null;
+  moved: boolean;
+  cellWidth: number;
 }
 
 // Deliberately loose local types rather than reusing Job/Task from
@@ -1191,6 +1248,309 @@ function renderDayCalendarView(): void {
   renderWeekHourGrid([d], timedRows, today);
 }
 
+// ===== CALENDAR: BAR DRAG-TO-RESCHEDULE =====
+// The data-mutating half of the drag/gesture cluster — see this file's
+// header comment for why the purely-visual swipe/wheel navigation stayed
+// in index.html.
+
+function handleCalBarMouseDown(e: MouseEvent): void {
+  const bar = (e.target as Element).closest('.cal-event-bar') as HTMLElement | null;
+  if (!bar) return;
+  e.preventDefault();
+  const jobId = bar.dataset.calJobId!;
+  const taskId = bar.dataset.calTaskId!;
+
+  // Read-only: a linked reference job's id only exists in its home
+  // project's jobs array, not this one's — findTask()/findJob() below
+  // would find nothing and silently no-op the click. Jump straight to its
+  // home project instead of trying to set up a drag for it.
+  if (bar.dataset.calLinked === '1') {
+    const refJob = getLinkedReferenceJobs().find((j) => j.id === jobId);
+    if (refJob) jumpToLinkedJobReference(refJob);
+    return;
+  }
+
+  let task: CalTask | undefined;
+  let job: CalJob | undefined;
+  let calEventId: string | null = null;
+  let calEventSourceDate: string | null = null;
+  let phaseId: string | null = bar.dataset.calPhaseId || null;
+  let subPhaseId: string | null = bar.dataset.calSubPhaseId || null;
+  if (taskId === DUE_MARKER_TASK_ID) {
+    const jf = findJob(jobId);
+    if (!jf) return;
+    job = jf.job;
+    const dueTask = getJobDueMarkerTask(job, phaseId);
+    if (!dueTask) return;
+    task = dueTask;
+  } else if (isCalendarEventTaskId(taskId)) {
+    const parsed = parseCalendarEventTaskId(taskId);
+    const evt = calendarEvents.find((e) => e.id === parsed.eventId);
+    if (!evt) return;
+    const occ = getCalendarEventOccurrences(evt, null, null).find((o) => o.sourceDate === parsed.sourceDate);
+    if (!occ) return;
+    calEventId = parsed.eventId;
+    calEventSourceDate = parsed.sourceDate;
+    job = { id: 'calevt-job-' + evt.id, name: evt.title };
+    task = { id: taskId, name: evt.title, start: toIsoDate(occ.start), finish: toIsoDate(occ.finish) };
+  } else if (isCalendarJobSpanTaskId(taskId)) {
+    const jf = findJob(jobId);
+    if (!jf) return;
+    job = jf.job;
+    task = { id: taskId, name: job.name, start: bar.dataset.calTaskStart, finish: bar.dataset.calTaskFinish, isJobSpan: true };
+    if (!task.start || !task.finish) return;
+  } else {
+    const found = findTask(jobId, taskId);
+    if (!found) return;
+    task = found.task;
+    job = found.job;
+    phaseId = found.phaseId || null;
+    subPhaseId = found.subPhaseId || null;
+  }
+  if (!task || !job) return;
+
+  // Due-marker and calendar-event bars render no drag-zone sub-elements
+  // (see renderMonthCalendar/renderWeekCalendar) when they're a single-day
+  // marker, so e.target IS the bar and has no data-drag — resolves to
+  // 'move'. Multi-day calendar events DO get resize handles like a normal
+  // task bar, so this still picks up 'left'/'right' for those.
+  const dragType = (e.target as HTMLElement).dataset.drag || 'move';
+  const startX = e.clientX;
+  const origLeft = parseFloat(bar.style.left);
+  const origWidth = parseFloat(bar.style.width);
+
+  const s = new Date(task.start + 'T00:00:00');
+  const f = new Date(task.finish + 'T00:00:00');
+  const duration = getDaysDiff(s, f) + 1;
+
+  calDragState = {
+    jobId, taskId, job, task, bar, dragType, startX, origLeft, origWidth,
+    startDateObj: s, finishDateObj: f, duration, phaseId, subPhaseId,
+    isCalendarEvent: !!calEventId, calEventId, calEventSourceDate,
+    moved: false,
+    // Read once here instead of on every mousemove tick (see
+    // applyCalBarMouseMove()) — a day cell's width can't change mid-drag,
+    // there's nothing to invalidate by caching it up front.
+    cellWidth: (document.querySelector('.cal-day') as HTMLElement | null)?.offsetWidth || 1,
+  };
+
+  if (dragType === 'move') bar.classList.add('cal-dragging');
+  else bar.classList.add('cal-resizing');
+
+  document.addEventListener('mousemove', handleCalBarMouseMove);
+  document.addEventListener('mouseup', handleCalBarMouseUp);
+}
+
+// rAF-coalesced the same way the Gantt drag handlers are (see
+// onBarMoveMove()/applyBarMoveMove()) — a raw mousemove can fire far more
+// often than this can usefully repaint, and every tick was doing a
+// tooltip innerHTML write immediately followed by an offsetWidth/
+// offsetHeight read (see moveTooltip()), forcing a synchronous layout
+// flush of the bar's own pending style writes on every single event
+// instead of once per frame.
+let calBarMoveRafPending = false;
+let calBarMoveLatestEvent: MouseEvent | null = null;
+function handleCalBarMouseMove(e: MouseEvent): void {
+  if (!calDragState) return;
+  calBarMoveLatestEvent = e;
+  if (calBarMoveRafPending) return;
+  calBarMoveRafPending = true;
+  requestAnimationFrame(function () {
+    calBarMoveRafPending = false;
+    if (calDragState && calBarMoveLatestEvent) applyCalBarMouseMove(calBarMoveLatestEvent);
+  });
+}
+
+function applyCalBarMouseMove(e: MouseEvent): void {
+  if (!calDragState) return;
+  // Below Editor: never let the drag actually move anything (and never set
+  // .moved, so a click-drag attempt just resolves as a plain click on
+  // mouseup and opens the event read-only, same as any other click).
+  // Blocking this in handleCalBarMouseDown instead would also block the
+  // click-to-view path that shares the same mousedown handler.
+  // A collapsed job-span bar (see buildCalendarJobRows) represents multiple
+  // real tasks merged into one — there's no single task to reschedule, so
+  // it's read-only the same way, and a click-drag just opens the job.
+  if (!hasMinTier('editor') || (calDragState.task && calDragState.task.isJobSpan)) return;
+  const { bar, dragType, startX, origLeft, origWidth, duration, startDateObj, finishDateObj, job, task, cellWidth } = calDragState;
+  const deltaX = e.clientX - startX;
+  const deltaDays = Math.round(deltaX / cellWidth);
+
+  if (Math.abs(deltaX) > 3) calDragState.moved = true;
+
+  const tt = document.getElementById('tooltip')!;
+
+  if (dragType === 'move') {
+    bar.style.left = (origLeft + deltaDays * cellWidth) + 'px';
+    const newStart = new Date(startDateObj);
+    newStart.setDate(newStart.getDate() + deltaDays);
+    const newFinish = new Date(newStart);
+    newFinish.setDate(newFinish.getDate() + duration - 1);
+    tt.innerHTML = '<div class="tt-title">' + escapeHtml(job.name) + '</div>' +
+      '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' + newStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</span></div>' +
+      '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' + newFinish.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</span></div>';
+    tt.classList.add('show');
+    moveTooltip(e);
+  } else if (dragType === 'right') {
+    const newDuration = Math.max(1, duration + deltaDays);
+    bar.style.width = (origWidth + (newDuration - duration) * cellWidth) + 'px';
+    const newFinish = new Date(startDateObj);
+    newFinish.setDate(newFinish.getDate() + newDuration - 1);
+    tt.innerHTML = '<div class="tt-title">' + escapeHtml(job.name) + '</div>' +
+      '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' + newFinish.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</span></div>' +
+      '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' + newDuration + ' day' + (newDuration > 1 ? 's' : '') + '</span></div>';
+    tt.classList.add('show');
+    moveTooltip(e);
+  } else if (dragType === 'left') {
+    const newDuration = Math.max(1, duration - deltaDays);
+    const clampedDelta = duration - newDuration;
+    bar.style.left = (origLeft + clampedDelta * cellWidth) + 'px';
+    bar.style.width = (origWidth - clampedDelta * cellWidth) + 'px';
+    const newStart = new Date(finishDateObj);
+    newStart.setDate(newStart.getDate() - (newDuration - 1));
+    tt.innerHTML = '<div class="tt-title">' + escapeHtml(job.name) + '</div>' +
+      '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' + newStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</span></div>' +
+      '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' + newDuration + ' day' + (newDuration > 1 ? 's' : '') + '</span></div>';
+    tt.classList.add('show');
+    moveTooltip(e);
+  }
+}
+
+function handleCalBarMouseUp(e: MouseEvent): void {
+  if (!calDragState) return;
+  const { jobId, taskId, job, bar, dragType, moved, duration, startDateObj, finishDateObj, task, isCalendarEvent, calEventId, calEventSourceDate, phaseId } = calDragState;
+  document.removeEventListener('mousemove', handleCalBarMouseMove);
+  document.removeEventListener('mouseup', handleCalBarMouseUp);
+  bar.classList.remove('cal-dragging', 'cal-resizing');
+  hideTooltip();
+
+  const isMobile = window.matchMedia('(max-width: 480px), (max-height: 480px)').matches;
+
+  // A real swipe (see handleCalSwipeEnd, still in index.html) already ran
+  // on this same gesture's touchend, which always fires before the
+  // mousedown/mouseup pair that gets synthesized from a touch — so by the
+  // time we're here, it's already decided this was "swipe the month", not
+  // "tap this bar", even when the finger started right on top of a bar.
+  // Without this, a calendar full of bars would leave nowhere to swipe from.
+  if (isMobile && calSwipeConsumedTap) {
+    calSwipeConsumedTap = false;
+    calDragState = null;
+    return;
+  }
+
+  // Otherwise, on phones, always treat this as "open", never "reschedule"
+  // — regardless of `moved`. A touchscreen tap wobbles more than a mouse
+  // click does, and 3px (the threshold that sets `moved`) is well within
+  // normal finger imprecision, so without this a slightly-off tap could
+  // silently drag a task/event by a day or two instead of opening it.
+  // Rescheduling on mobile goes through that same edit modal's date field
+  // instead, which is reliable either way.
+  if (!moved || isMobile) {
+    if (isCalendarEvent) openEditCalendarEvent(calEventId!, calEventSourceDate || undefined);
+    else calendarOpenJob(jobId, taskId, phaseId);
+    calDragState = null;
+    return;
+  }
+
+  const cellWidth = (document.querySelector('.cal-day') as HTMLElement | null)?.offsetWidth || 1;
+  const deltaX = e.clientX - calDragState.startX;
+  const deltaDays = Math.round(deltaX / cellWidth);
+
+  if (isCalendarEvent) {
+    if (deltaDays !== 0) {
+      let newStart = new Date(startDateObj);
+      let newDuration = duration;
+      if (dragType === 'move') {
+        newStart.setDate(newStart.getDate() + deltaDays);
+      } else if (dragType === 'right') {
+        newDuration = Math.max(1, duration + deltaDays);
+      } else if (dragType === 'left') {
+        newDuration = Math.max(1, duration - deltaDays);
+        newStart = new Date(finishDateObj);
+        newStart.setDate(newStart.getDate() - (newDuration - 1));
+      }
+      const newStartStr = toIsoDate(newStart);
+      const evt = calendarEvents.find((ev) => ev.id === calEventId);
+      if (evt) {
+        // A one-off (non-repeating) event just updates directly. A
+        // repeating series instead records this as a per-occurrence
+        // exception, keyed by the theoretical date it was dragged FROM —
+        // the rest of the series is untouched (see getCalendarEventOccurrences).
+        if (evt.repeat === 'none') {
+          evt.start = newStartStr;
+          evt.duration = newDuration;
+        } else {
+          if (!evt.exceptions) evt.exceptions = {};
+          evt.exceptions[calEventSourceDate!] = { start: newStartStr, time: evt.time, duration: newDuration };
+        }
+        saveCalendarEvents();
+        logActivity((dragType === 'move' ? 'rescheduled' : 'resized') + ' calendar event "' + evt.title + '"');
+        showToast('Event updated', 'success');
+      }
+    }
+    calDragState = null;
+    renderCalendar();
+    return;
+  }
+
+  if (dragType === 'move' && deltaDays !== 0 && taskId === DUE_MARKER_TASK_ID) {
+    const newStart = new Date(startDateObj);
+    newStart.setDate(newStart.getDate() + deltaDays);
+    const card = getPhaseCard(job as Job, phaseId);
+    if (card) {
+      card.due = toIsoDate(newStart);
+      saveJobs();
+      logActivity('rescheduled due date for job "' + job.name + '"');
+      renderGantt();
+      renderJobList();
+      renderBoard();
+      refreshJobFormIfOpen(jobId);
+      showToast('Due date updated', 'success');
+    }
+  } else if (dragType === 'move' && deltaDays !== 0) {
+    const newStart = new Date(startDateObj);
+    newStart.setDate(newStart.getDate() + deltaDays);
+    const newFinish = new Date(newStart);
+    newFinish.setDate(newFinish.getDate() + duration - 1);
+    task.start = toIsoDate(newStart);
+    task.finish = toIsoDate(newFinish);
+    saveJobs();
+    logActivity('rescheduled job "' + task.name + '"');
+    renderGantt();
+    renderJobList();
+    renderBoard();
+    refreshJobFormIfOpen(jobId);
+    showToast('Job dates updated', 'success');
+  } else if (dragType === 'right') {
+    const newDuration = Math.max(1, duration + deltaDays);
+    const newFinish = new Date(startDateObj);
+    newFinish.setDate(newFinish.getDate() + newDuration - 1);
+    task.finish = toIsoDate(newFinish);
+    saveJobs();
+    logActivity('rescheduled job "' + task.name + '"');
+    renderGantt();
+    renderJobList();
+    renderBoard();
+    refreshJobFormIfOpen(jobId);
+    showToast('Finish date updated', 'success');
+  } else if (dragType === 'left') {
+    const newDuration = Math.max(1, duration - deltaDays);
+    const newStart = new Date(finishDateObj);
+    newStart.setDate(newStart.getDate() - (newDuration - 1));
+    task.start = toIsoDate(newStart);
+    saveJobs();
+    logActivity('rescheduled job "' + task.name + '"');
+    renderGantt();
+    renderJobList();
+    renderBoard();
+    refreshJobFormIfOpen(jobId);
+    showToast('Start date updated', 'success');
+  }
+
+  calDragState = null;
+  renderCalendar();
+}
+
 export {
   isCalendarEventTaskId,
   parseCalendarEventTaskId,
@@ -1224,4 +1584,8 @@ export {
   getScheduledItemsForDate,
   openDayView,
   renderDayCalendarView,
+  handleCalBarMouseDown,
+  handleCalBarMouseMove,
+  applyCalBarMouseMove,
+  handleCalBarMouseUp,
 };

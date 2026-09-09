@@ -34,6 +34,7 @@ import {
   setCalendarView, calendarPrev, calendarNext, calendarToday, calendarExitDayView, renderCalendar,
   buildCalBarHtml, renderMonthCalendar, renderWeekCalendar, renderWeekHourGrid, calendarOpenJob,
   getScheduledItemsForDate, openDayView, renderDayCalendarView,
+  handleCalBarMouseDown, handleCalBarMouseMove, applyCalBarMouseMove, handleCalBarMouseUp,
 } from './views/calendar';
 
 declare global {
@@ -132,6 +133,10 @@ declare global {
     getScheduledItemsForDate: typeof getScheduledItemsForDate;
     openDayView: typeof openDayView;
     renderDayCalendarView: typeof renderDayCalendarView;
+    handleCalBarMouseDown: typeof handleCalBarMouseDown;
+    handleCalBarMouseMove: typeof handleCalBarMouseMove;
+    applyCalBarMouseMove: typeof applyCalBarMouseMove;
+    handleCalBarMouseUp: typeof handleCalBarMouseUp;
   }
 }
 
@@ -229,3 +234,7 @@ window.calendarOpenJob = calendarOpenJob;
 window.getScheduledItemsForDate = getScheduledItemsForDate;
 window.openDayView = openDayView;
 window.renderDayCalendarView = renderDayCalendarView;
+window.handleCalBarMouseDown = handleCalBarMouseDown;
+window.handleCalBarMouseMove = handleCalBarMouseMove;
+window.applyCalBarMouseMove = applyCalBarMouseMove;
+window.handleCalBarMouseUp = handleCalBarMouseUp;
