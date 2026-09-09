@@ -3776,7 +3776,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.2';
+const APP_VERSION = '2026-09-09.3';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6592,13 +6592,19 @@ function cancelSettingsMenuAutoClose() {
 document.querySelectorAll('.settings-menu-wrap').forEach(function(el) {
   el.addEventListener('mouseenter', cancelSettingsMenuAutoClose);
   el.addEventListener('mouseleave', function() {
-    if (document.getElementById('settingsDropdown').classList.contains('show')) armSettingsMenuAutoClose();
+    const settingsDropdownForWrap = document.getElementById('settingsDropdown');
+    if (settingsDropdownForWrap && settingsDropdownForWrap.classList.contains('show')) armSettingsMenuAutoClose();
   });
 });
-document.getElementById('settingsDropdown').addEventListener('mouseenter', cancelSettingsMenuAutoClose);
-document.getElementById('settingsDropdown').addEventListener('mouseleave', function() {
-  if (document.getElementById('settingsDropdown').classList.contains('show')) armSettingsMenuAutoClose();
-});
+{
+  const settingsDropdownEl = document.getElementById('settingsDropdown');
+  if (settingsDropdownEl) {
+    settingsDropdownEl.addEventListener('mouseenter', cancelSettingsMenuAutoClose);
+    settingsDropdownEl.addEventListener('mouseleave', function() {
+      if (settingsDropdownEl.classList.contains('show')) armSettingsMenuAutoClose();
+    });
+  }
+}
 
 // Snapshot before the click's own handlers run (mousedown fires first),
 // so the outside-click-closes-the-drawer check below can tell "this click
@@ -16078,49 +16084,64 @@ function showToast(msg, type) {
 }
 
 // ===== EVENTS =====
-document.getElementById('deleteModal').addEventListener('click', function(e) {
-  if (e.target === this) closeDeleteJobModal();
-});
-
-document.getElementById('cardModal').addEventListener('click', function(e) {
-  if (e.target === this) closeCardModal();
-});
-
-document.getElementById('calendarEventModal').addEventListener('click', function(e) {
-  if (e.target === this) closeCalendarEventModal();
-});
-
-document.getElementById('manageFieldsModal').addEventListener('click', function(e) {
-  if (e.target === this) closeManageFields();
-});
-
-document.getElementById('themeModal').addEventListener('click', function(e) {
-  if (e.target === this) closeThemeModal();
-});
+// Every getElementById(...) below is guarded — none of these elements
+// should ever be missing from the markup, but an unguarded
+// getElementById('x').addEventListener(...) throws immediately if one
+// ever is, and inside the shared Escape-key handler further down that
+// used to silently kill every close-call listed AFTER the missing one in
+// the same keypress, not just the one for the missing element.
+{
+  const deleteModal = document.getElementById('deleteModal');
+  if (deleteModal) deleteModal.addEventListener('click', function(e) { if (e.target === this) closeDeleteJobModal(); });
+}
+{
+  const cardModal = document.getElementById('cardModal');
+  if (cardModal) cardModal.addEventListener('click', function(e) { if (e.target === this) closeCardModal(); });
+}
+{
+  const calendarEventModalEl = document.getElementById('calendarEventModal');
+  if (calendarEventModalEl) calendarEventModalEl.addEventListener('click', function(e) { if (e.target === this) closeCalendarEventModal(); });
+}
+{
+  const manageFieldsModalEl = document.getElementById('manageFieldsModal');
+  if (manageFieldsModalEl) manageFieldsModalEl.addEventListener('click', function(e) { if (e.target === this) closeManageFields(); });
+}
+{
+  const themeModalEl = document.getElementById('themeModal');
+  if (themeModalEl) themeModalEl.addEventListener('click', function(e) { if (e.target === this) closeThemeModal(); });
+}
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeDeleteJobModal();
     closeCardModal();
-    if (document.getElementById('calendarEventModal').classList.contains('show')) closeCalendarEventModal();
+    const calendarEventModalEl = document.getElementById('calendarEventModal');
+    if (calendarEventModalEl && calendarEventModalEl.classList.contains('show')) closeCalendarEventModal();
     closeSettingsMenu();
-    if (document.getElementById('manageFieldsModal').classList.contains('show')) closeManageFields();
-    if (document.getElementById('themeModal').classList.contains('show')) closeThemeModal();
+    const manageFieldsModalEl = document.getElementById('manageFieldsModal');
+    if (manageFieldsModalEl && manageFieldsModalEl.classList.contains('show')) closeManageFields();
+    const themeModalEl = document.getElementById('themeModal');
+    if (themeModalEl && themeModalEl.classList.contains('show')) closeThemeModal();
     closeAllMsDropdowns();
     hideDatePopover();
-    if (document.getElementById('jobForm').style.display !== 'none') cancelEdit();
+    const jobFormEl = document.getElementById('jobForm');
+    if (jobFormEl && jobFormEl.style.display !== 'none') cancelEdit();
   }
 });
 
-document.getElementById('headerSubtitle').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
-});
-
-document.getElementById('headerSubtitle').addEventListener('paste', function(e) {
-  e.preventDefault();
-  const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-  document.execCommand('insertText', false, text);
-});
+{
+  const headerSubtitle = document.getElementById('headerSubtitle');
+  if (headerSubtitle) {
+    headerSubtitle.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
+    });
+    headerSubtitle.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, text);
+    });
+  }
+}
 
 // ===== ROOM SYNC (Durable Object backend) =====
 // Replaces Liveblocks — see the migration plan and worker/aps-do-worker.js.
@@ -16340,16 +16361,22 @@ function waitForLoginSubmit() {
     };
   });
 }
-document.getElementById('loginForm').addEventListener('submit', function(e) {
-  e.preventDefault();
-  if (loginFormSubmit) loginFormSubmit();
-});
-document.getElementById('loginPwToggle').addEventListener('click', function() {
-  const passInput = document.getElementById('loginPassword');
-  const showing = this.classList.toggle('showing');
-  passInput.type = showing ? 'text' : 'password';
-  this.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
-});
+{
+  const loginFormEl = document.getElementById('loginForm');
+  if (loginFormEl) loginFormEl.addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (loginFormSubmit) loginFormSubmit();
+  });
+}
+{
+  const loginPwToggleEl = document.getElementById('loginPwToggle');
+  if (loginPwToggleEl) loginPwToggleEl.addEventListener('click', function() {
+    const passInput = document.getElementById('loginPassword');
+    const showing = this.classList.toggle('showing');
+    if (passInput) passInput.type = showing ? 'text' : 'password';
+    this.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+  });
+}
 
 // Shows the login overlay and loops on it until a real token is minted —
 // caches only the username so people aren't asked for it again every visit

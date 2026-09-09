@@ -106,7 +106,41 @@ function filterRoomStateForAttachment(roomState, attachment) {
   return filtered;
 }
 
-function handleUpsertJob(project, msg) {
+// Same identity-spoofing issue as handleLogActivity above, but for
+// comment/reply author fields embedded inside a job — postJobComment()/
+// postJobReply() in index.html stamp `author` from the client's own
+// editable localStorage display name, not a verified identity. Rather
+// than validating the whole job object (the worker deliberately treats
+// job/card content as an otherwise-unvalidated blob — see the
+// architecture notes on that), this only ever touches the two already-
+// load-bearing comments/replies arrays: an entry's author gets
+// overwritten with the WebSocket's own verified identity ONLY when it's
+// genuinely new this write (its id isn't in existingJob's corresponding
+// array) AND it's a live post (`when` is truthy — `when: null` is this
+// codebase's existing marker for an imported/historical note, see
+// ensureJobAndTaskIds() in index.html, and must pass through untouched,
+// same as anything already persisted).
+function sanitizeJobCommentAuthors(job, existingJob, attachment) {
+  if (!Array.isArray(job.comments) || !attachment || !attachment.displayName) return;
+  const existingComments = (existingJob && existingJob.comments) || [];
+  const existingCommentIds = new Set(existingComments.map(function (c) { return c.id; }));
+  const existingReplyIdsByComment = {};
+  existingComments.forEach(function (c) {
+    existingReplyIdsByComment[c.id] = new Set((c.replies || []).map(function (r) { return r.id; }));
+  });
+  job.comments.forEach(function (c) {
+    if (!c) return;
+    if (!existingCommentIds.has(c.id) && c.when) c.author = attachment.displayName;
+    if (Array.isArray(c.replies)) {
+      const existingReplyIds = existingReplyIdsByComment[c.id] || new Set();
+      c.replies.forEach(function (r) {
+        if (r && !existingReplyIds.has(r.id) && r.when) r.author = attachment.displayName;
+      });
+    }
+  });
+}
+
+function handleUpsertJob(project, msg, attachment) {
   const job = msg.job;
   if (!job || !job.id) return { project, changed: false, error: 'upsertJob missing job.id' };
   if (project.deletedIds[job.id]) return { project, changed: false };
@@ -115,6 +149,7 @@ function handleUpsertJob(project, msg) {
   if (existing && (existing.updatedAt || 0) > incomingUpdatedAt) {
     return { project, changed: false, rejected: 'stale' };
   }
+  sanitizeJobCommentAuthors(job, existing, attachment);
   const next = cloneRoomState({ projects: { p: project } }).projects.p;
   next.jobs[job.id] = job;
   next.rev++;
@@ -161,7 +196,7 @@ function handleUpsertCalendarEvent(project, msg) {
 // comment on this function for why that's a deliberate, known, low-
 // priority gap carried over from the pre-migration behavior rather than
 // something newly introduced.
-function handleUpsertProjectBatch(project, msg) {
+function handleUpsertProjectBatch(project, msg, attachment) {
   let next = project;
   let changed = false;
   function ensureCloned() { if (next === project) next = cloneRoomState({ projects: { p: next } }).projects.p; }
@@ -177,6 +212,7 @@ function handleUpsertProjectBatch(project, msg) {
     if (next.deletedIds[job.id]) return;
     const existing = next.jobs[job.id];
     if (existing && (existing.updatedAt || 0) > (job.updatedAt || 0)) return;
+    sanitizeJobCommentAuthors(job, existing, attachment);
     ensureCloned();
     next.jobs[job.id] = job;
     changed = true;
@@ -385,10 +421,10 @@ function applyMessage(state, msg, attachment) {
   let result;
 
   switch (msg.type) {
-    case 'upsertJob': result = handleUpsertJob(project, msg); break;
+    case 'upsertJob': result = handleUpsertJob(project, msg, attachment); break;
     case 'upsertCard': result = handleUpsertCard(project, msg); break;
     case 'upsertCalendarEvent': result = handleUpsertCalendarEvent(project, msg); break;
-    case 'upsertProjectBatch': result = handleUpsertProjectBatch(project, msg); break;
+    case 'upsertProjectBatch': result = handleUpsertProjectBatch(project, msg, attachment); break;
     case 'setBoardColumns': result = handleSetWholeField(project, msg, 'boardColumns'); break;
     case 'setFieldOptions': result = handleSetWholeField(project, msg, 'fieldOptions'); break;
     case 'setHeader': result = handleSetWholeField(project, msg, 'header'); break;
