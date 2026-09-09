@@ -38,6 +38,35 @@ test('job CRUD: creating a job via the UI lands in the underlying data model', a
   expect(savedJobExists).toBe(true);
 });
 
+test('model layer read-back: a job created through the real UI comes back from findJob() with the right shape', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const jobName = 'Model read-back test job ' + Date.now();
+  await page.evaluate(() => addNewJob());
+  await page.locator('#f_job').fill(jobName);
+  await page.evaluate(() => flushAutoSaveJobForm());
+
+  // findJob() is the bundled Phase 3 extraction (src/core/models.ts) —
+  // this confirms the moved function still resolves a job that was just
+  // created through the real save path, with the shape everything else
+  // in the app expects back from it (job.id === the id it was found by,
+  // idx pointing at its real position in the jobs array).
+  const result = await page.evaluate((name) => {
+    const idx = jobs.findIndex((j) => j.name === name);
+    const job = jobs[idx];
+    const found = findJob(job.id);
+    return { idx, found };
+  }, jobName);
+
+  expect(result.found).not.toBeNull();
+  expect(result.found.idx).toBe(result.idx);
+  expect(result.found.job.name).toBe(jobName);
+});
+
 test('regression (Fix 3): isBusyEditing() now covers an in-progress Board drag', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await page.goto(APP_URL);

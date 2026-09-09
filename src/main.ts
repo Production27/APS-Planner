@@ -12,6 +12,7 @@
 import { genId, safeJsonParse } from './utils/id';
 import { getDaysDiff, toIsoDate, addMonths, getBusinessDaysDiff, addBusinessDays, formatTimeLabel, timeToMinutes } from './utils/date';
 import { darkenColor, softenColor, SOFTEN_AMOUNT } from './utils/color';
+import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 
 declare global {
   interface Window {
@@ -27,6 +28,13 @@ declare global {
     darkenColor: typeof darkenColor;
     softenColor: typeof softenColor;
     SOFTEN_AMOUNT: typeof SOFTEN_AMOUNT;
+    findJob: typeof findJob;
+    findTask: typeof findTask;
+    getJobPhases: typeof getJobPhases;
+    getPhaseSubUnits: typeof getPhaseSubUnits;
+    getPhaseCard: typeof getPhaseCard;
+    getJobCards: typeof getJobCards;
+    getPrimaryPhaseCard: typeof getPrimaryPhaseCard;
   }
 }
 
@@ -42,3 +50,10 @@ window.timeToMinutes = timeToMinutes;
 window.darkenColor = darkenColor;
 window.softenColor = softenColor;
 window.SOFTEN_AMOUNT = SOFTEN_AMOUNT;
+window.findJob = findJob;
+window.findTask = findTask;
+window.getJobPhases = getJobPhases;
+window.getPhaseSubUnits = getPhaseSubUnits;
+window.getPhaseCard = getPhaseCard;
+window.getJobCards = getJobCards;
+window.getPrimaryPhaseCard = getPrimaryPhaseCard;

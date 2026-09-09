@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.8';
+const APP_VERSION = '2026-09-09.9';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -4371,26 +4371,8 @@ function flattenCalendarEventsForRange(rangeStart, rangeEnd) {
   return rows;
 }
 
-function findJob(jobId) {
-  for (let i = 0; i < jobs.length; i++) { if (jobs[i].id === jobId) return {job: jobs[i], idx: i}; }
-  return null;
-}
-
-function findTask(jobId, taskId) {
-  const j = findJob(jobId);
-  if (!j) return null;
-  const phases = getJobPhases(j.job);
-  for (let p = 0; p < phases.length; p++) {
-    const subUnits = getPhaseSubUnits(phases[p]);
-    for (let u = 0; u < subUnits.length; u++) {
-      const tasks = subUnits[u].tasks || [];
-      for (let i = 0; i < tasks.length; i++) {
-        if (tasks[i].id === taskId) return { job: j.job, jobIdx: j.idx, task: tasks[i], taskIdx: i, phaseId: phases[p].id, subPhaseId: subUnits[u].id };
-      }
-    }
-  }
-  return null;
-}
+// findJob()/findTask() moved to src/core/models.ts (Phase 3 of the
+// architecture roadmap) — see the identical note by genId() above.
 
 // A job's due date (card.due) isn't a task — it doesn't live in job.tasks
 // and Job Manager never shows it as one — but it still needs to appear on
@@ -4420,48 +4402,9 @@ function getJobDueMarkerTask(job, phaseId) {
 // returns job.phases when present, otherwise a synthetic single-entry
 // array wrapping job.tasks itself (id: null — matches the phaseId a
 // legacy job's one card already has, since it predates this field).
-function getJobPhases(job) {
-  if (job.phases && job.phases.length) return job.phases;
-  return [{ id: null, name: job.name, order: 0, tasks: job.tasks || [], isDefault: true }];
-}
-
-// ===== Sub-phases =====
-// Same pattern one level deeper: a phase is sub-phase-less by default
-// (phase.subPhases absent/empty), and getPhaseSubUnits() is the seam every
-// Gantt/Calendar render path goes through instead of reading phase.tasks
-// directly — mirrors getJobPhases() exactly, including the synthetic
-// single-entry wrap for the common (not split) case. Sub-phases
-// deliberately do NOT get their own board card (unlike phases) — the
-// parent phase keeps its single card regardless, so ensureJobHasCards()/
-// getPhaseCard()/renderBoard() never need to know sub-phases exist at
-// all; only rendering goes one level deeper.
-function getPhaseSubUnits(phase) {
-  if (phase.subPhases && phase.subPhases.length) return phase.subPhases;
-  return [{ id: null, name: phase.name, order: 0, tasks: phase.tasks || [], isDefault: true }];
-}
-
-// Every card belongs to exactly one (job, phase) pair — phaseId is null
-// for a legacy/unphased job's single card, matching getJobPhases()'s
-// synthetic default phase id above. Replaces the old
-// `boardCards.find(c => c.jobId === job.id)` pattern that assumed one
-// card per job everywhere.
-function getPhaseCard(job, phaseId) {
-  const pid = phaseId || null;
-  return boardCards.find(function(c) { return c.jobId === job.id && (c.phaseId || null) === pid; });
-}
-function getJobCards(job) {
-  return boardCards.filter(function(c) { return c.jobId === job.id; });
-}
-// PM/Foreman/PO#/location/etc. (CUSTOM_FIELD_DEFS) are job-wide info, not
-// per-phase — they're stored on a card's customFields (the only place that
-// data has ever lived), so for a phased job they live specifically on the
-// first phase's card, read/written from there regardless of which phase
-// tab is selected in the Job Manager. An unphased job's one card already
-// is that "first phase" card, so this is a no-op change for it.
-function getPrimaryPhaseCard(job) {
-  const phases = getJobPhases(job);
-  return getPhaseCard(job, phases[0] ? phases[0].id : null);
-}
+// getJobPhases()/getPhaseSubUnits()/getPhaseCard()/getJobCards()/
+// getPrimaryPhaseCard() moved to src/core/models.ts (Phase 3 of the
+// architecture roadmap) — see the identical note by genId() above.
 
 // Pure normalizer shared by ensureJobTasksMatchColumns (unphased job) and
 // ensureJobPhasesMatchColumns (each phase) — locks a task list 1:1 to
@@ -5010,7 +4953,15 @@ function ensureCalendarEventIds(arr) {
   return arr;
 }
 
-let jobs = [];
+// `var`, not `let` — this specific global must be a real `window`
+// property (which only `var`/a bare assignment gives you at the top
+// level of a classic script), not just a script-scoped binding, because
+// src/core/models.ts's bundled findJob()/getPhaseCard()/etc. (Phase 3 of
+// the architecture roadmap) read it as an ambient global from a SEPARATE
+// <script> tag. Every read/write in this file works exactly the same
+// either way — this only changes cross-script-tag visibility, not
+// scoping within this file.
+var jobs = [];
 let editingJobId = null;
 let editingTaskId = null;
 // Which phase's tasks/card the Job Manager's grid + description/due/
@@ -5266,7 +5217,8 @@ function isFinishedColumnId(colId) {
   return isFinishedColumn(BOARD_COLUMNS.find(c => c.id === colId));
 }
 
-let boardCards = [];
+// `var`, not `let` — same reasoning as `jobs` above (see its comment).
+var boardCards = [];
 let calendarEvents = [];
 let editingCalendarEventId = null;
 let calendarEventTargetDate = null; // set by openAddCalendarEvent(), read by saveCalendarEventFromModal()
