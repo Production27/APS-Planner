@@ -32,6 +32,8 @@ import {
   toggleCalendarEventVisibilityFields, collectCalendarEventVisibilityMembers, toggleCalendarEventColorPanel,
   updateCalendarEventColorSwatch, buildCalendarEventColorPresets, saveCalendarEventFromModal, deleteCalendarEventFromModal,
   setCalendarView, calendarPrev, calendarNext, calendarToday, calendarExitDayView, renderCalendar,
+  buildCalBarHtml, renderMonthCalendar, renderWeekCalendar, renderWeekHourGrid, calendarOpenJob,
+  getScheduledItemsForDate, openDayView, renderDayCalendarView,
 } from './views/calendar';
 
 declare global {
@@ -122,6 +124,14 @@ declare global {
     calendarToday: typeof calendarToday;
     calendarExitDayView: typeof calendarExitDayView;
     renderCalendar: typeof renderCalendar;
+    buildCalBarHtml: typeof buildCalBarHtml;
+    renderMonthCalendar: typeof renderMonthCalendar;
+    renderWeekCalendar: typeof renderWeekCalendar;
+    renderWeekHourGrid: typeof renderWeekHourGrid;
+    calendarOpenJob: typeof calendarOpenJob;
+    getScheduledItemsForDate: typeof getScheduledItemsForDate;
+    openDayView: typeof openDayView;
+    renderDayCalendarView: typeof renderDayCalendarView;
   }
 }
 
@@ -211,3 +221,11 @@ window.calendarNext = calendarNext;
 window.calendarToday = calendarToday;
 window.calendarExitDayView = calendarExitDayView;
 window.renderCalendar = renderCalendar;
+window.buildCalBarHtml = buildCalBarHtml;
+window.renderMonthCalendar = renderMonthCalendar;
+window.renderWeekCalendar = renderWeekCalendar;
+window.renderWeekHourGrid = renderWeekHourGrid;
+window.calendarOpenJob = calendarOpenJob;
+window.getScheduledItemsForDate = getScheduledItemsForDate;
+window.openDayView = openDayView;
+window.renderDayCalendarView = renderDayCalendarView;

@@ -236,6 +236,74 @@ test('calendar CRUD: add, edit, and delete an event via the modal all land in th
   expect(stillExists).toBe(false);
 });
 
+test('calendar month view: a scheduled job task renders as a positioned bar on the correct day', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('calendar'));
+
+  // Same reasoning as the gantt drag test above: a fresh demo job's tasks
+  // start unscheduled, so schedule one directly through the data model,
+  // then pin calendarViewDate to the same month so the grid it builds
+  // actually contains that date, and re-render through the real
+  // renderCalendar()/renderMonthCalendar()/buildCalBarHtml() pipeline.
+  const info = await page.evaluate(() => {
+    const job = jobs[0];
+    const phase = getJobPhases(job)[0];
+    const sub = getPhaseSubUnits(phase)[0];
+    const t = (sub.tasks || [])[0];
+    if (!t) return null;
+    t.start = '2026-09-10';
+    t.finish = '2026-09-12';
+    calendarViewDate = new Date('2026-09-15T00:00:00');
+    calendarViewMode = 'month';
+    renderCalendar();
+    return { jobId: job.id };
+  });
+  expect(info).not.toBeNull();
+
+  await expect(page.locator('.cal-day[data-date="2026-09-10"]')).toBeAttached();
+  const bar = page.locator('.cal-event-bar[data-cal-job-id="' + info.jobId + '"]');
+  await expect(bar).toBeVisible();
+  await expect(bar).toHaveAttribute('data-cal-task-start', '2026-09-10');
+  // Position comes from real getCell()/offsetLeft measurements against the
+  // rendered grid, not a hardcoded value — a non-empty "left:...px" proves
+  // the lane-packing pass actually ran against real layout, not just that
+  // some bar element exists in the DOM somewhere.
+  await expect(bar).toHaveAttribute('style', /left:\d/);
+});
+
+test('calendar week view: a timed calendar event renders in the hourly grid', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('calendar'));
+
+  await page.evaluate(() => {
+    calendarViewDate = new Date('2026-09-15T00:00:00');
+    calendarEvents.push({
+      id: genId(), title: 'Site walkthrough', start: '2026-09-15', time: '10:30', duration: 1,
+      repeat: 'none', repeatUntil: null, color: '#7e57c2', exceptions: {}, visibility: 'all', visibleMembers: [],
+    });
+    // setCalendarView() (not a direct renderWeekCalendar() call) so this
+    // also exercises the real Prev/Next/view-toggle entry point, not just
+    // the render function in isolation.
+    setCalendarView('week');
+  });
+
+  const evtEl = page.locator('.week-timed-event', { hasText: 'Site walkthrough' });
+  await expect(evtEl).toBeVisible();
+  await expect(evtEl).toHaveAttribute('style', /top:\d/);
+
+  // Day view reuses the same renderWeekHourGrid() renderer for a single
+  // date — switching there should show the identical timed event without
+  // losing it.
+  await page.evaluate(() => setCalendarView('day'));
+  await expect(page.locator('.week-timed-event', { hasText: 'Site walkthrough' })).toBeVisible();
+});
+
 test('gantt drag: moving a task bar shifts its dates by the dragged number of days', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
