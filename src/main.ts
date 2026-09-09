@@ -13,6 +13,7 @@ import { genId, safeJsonParse } from './utils/id';
 import { getDaysDiff, toIsoDate, addMonths, getBusinessDaysDiff, addBusinessDays, formatTimeLabel, timeToMinutes } from './utils/date';
 import { darkenColor, softenColor, SOFTEN_AMOUNT } from './utils/color';
 import { escapeHtml } from './utils/html';
+import { createAutosaveController } from './utils/autosave';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
@@ -21,6 +22,8 @@ import {
   addBoardColumn, deleteBoardColumn, renameBoardColumn, isCardFromArchivedJob, isCardVisibleToMe,
   openWorkflowItemsModal, closeWorkflowItemsModal, renderWorkflowItemsBody, toggleWorkflowItemColorPanel, changeWorkflowItemColor,
   addWorkflowItem, removeWorkflowItem,
+  resolveCardNameTarget, openEditCard, closeCardModal, scheduleCardAutosave, flushCardAutosave, cancelPendingCardAutosave,
+  setCardTitleHint, autoSaveCardForm, initCardFormAutosaveListeners, deleteCardFromModal,
 } from './views/board';
 
 declare global {
@@ -67,6 +70,7 @@ declare global {
     isCardFromArchivedJob: typeof isCardFromArchivedJob;
     isCardVisibleToMe: typeof isCardVisibleToMe;
     escapeHtml: typeof escapeHtml;
+    createAutosaveController: typeof createAutosaveController;
     openWorkflowItemsModal: typeof openWorkflowItemsModal;
     closeWorkflowItemsModal: typeof closeWorkflowItemsModal;
     renderWorkflowItemsBody: typeof renderWorkflowItemsBody;
@@ -74,6 +78,16 @@ declare global {
     changeWorkflowItemColor: typeof changeWorkflowItemColor;
     addWorkflowItem: typeof addWorkflowItem;
     removeWorkflowItem: typeof removeWorkflowItem;
+    resolveCardNameTarget: typeof resolveCardNameTarget;
+    openEditCard: typeof openEditCard;
+    closeCardModal: typeof closeCardModal;
+    scheduleCardAutosave: typeof scheduleCardAutosave;
+    flushCardAutosave: typeof flushCardAutosave;
+    cancelPendingCardAutosave: typeof cancelPendingCardAutosave;
+    setCardTitleHint: typeof setCardTitleHint;
+    autoSaveCardForm: typeof autoSaveCardForm;
+    initCardFormAutosaveListeners: typeof initCardFormAutosaveListeners;
+    deleteCardFromModal: typeof deleteCardFromModal;
   }
 }
 
@@ -119,6 +133,7 @@ window.renameBoardColumn = renameBoardColumn;
 window.isCardFromArchivedJob = isCardFromArchivedJob;
 window.isCardVisibleToMe = isCardVisibleToMe;
 window.escapeHtml = escapeHtml;
+window.createAutosaveController = createAutosaveController;
 window.openWorkflowItemsModal = openWorkflowItemsModal;
 window.closeWorkflowItemsModal = closeWorkflowItemsModal;
 window.renderWorkflowItemsBody = renderWorkflowItemsBody;
@@ -126,3 +141,13 @@ window.toggleWorkflowItemColorPanel = toggleWorkflowItemColorPanel;
 window.changeWorkflowItemColor = changeWorkflowItemColor;
 window.addWorkflowItem = addWorkflowItem;
 window.removeWorkflowItem = removeWorkflowItem;
+window.resolveCardNameTarget = resolveCardNameTarget;
+window.openEditCard = openEditCard;
+window.closeCardModal = closeCardModal;
+window.scheduleCardAutosave = scheduleCardAutosave;
+window.flushCardAutosave = flushCardAutosave;
+window.cancelPendingCardAutosave = cancelPendingCardAutosave;
+window.setCardTitleHint = setCardTitleHint;
+window.autoSaveCardForm = autoSaveCardForm;
+window.initCardFormAutosaveListeners = initCardFormAutosaveListeners;
+window.deleteCardFromModal = deleteCardFromModal;

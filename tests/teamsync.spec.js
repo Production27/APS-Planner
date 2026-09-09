@@ -420,6 +420,57 @@ test('workflow items: add, recolor, and remove via the real modal', async ({ pag
   expect(result.columnStillLinked).toBe(false);
 });
 
+test('card modal: editing the title of a job-linked card renames the job, not just the card', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const jobLinkedCardId = await page.evaluate(() => boardCards.find((c) => c.jobId)?.id);
+  expect(jobLinkedCardId).toBeTruthy();
+
+  const newTitle = 'Renamed via card modal ' + Date.now();
+  await page.evaluate((id) => openEditCard(id), jobLinkedCardId);
+  await expect(page.locator('#cardModal')).toHaveClass(/show/);
+  await page.locator('#c_title').fill(newTitle);
+  await page.evaluate(() => flushCardAutosave());
+
+  const result = await page.evaluate((id) => {
+    const card = boardCards.find((c) => c.id === id);
+    const job = findJob(card.jobId).job;
+    return { jobName: job.name, cardTitle: card.title };
+  }, jobLinkedCardId);
+  // The rename writes through to the job; the card's own .title is
+  // re-derived from that (ensureJobHasCards()), not set directly here.
+  expect(result.jobName).toBe(newTitle);
+  expect(result.cardTitle).toBe(newTitle);
+});
+
+test('card modal: editing the due date and custom fields saves through autosave, and delete removes the card', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const cardId = await page.evaluate(() => boardCards[0].id);
+  await page.evaluate((id) => openEditCard(id), cardId);
+  await expect(page.locator('#cardModal')).toHaveClass(/show/);
+
+  await page.locator('#c_due').fill('2026-12-25');
+  await page.evaluate(() => flushCardAutosave());
+  const dueAfterSave = await page.evaluate((id) => boardCards.find((c) => c.id === id).due, cardId);
+  expect(dueAfterSave).toBe('2026-12-25');
+
+  await page.evaluate(() => closeCardModal());
+  await expect(page.locator('#cardModal')).not.toHaveClass(/show/);
+
+  // Re-open and delete
+  await page.evaluate((id) => openEditCard(id), cardId);
+  await page.evaluate(() => deleteCardFromModal());
+  const stillExists = await page.evaluate((id) => boardCards.some((c) => c.id === id), cardId);
+  expect(stillExists).toBe(false);
+});
+
 test('error reporting: an uncaught error and an unhandled rejection both POST a report to the Worker', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

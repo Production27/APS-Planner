@@ -13,21 +13,29 @@
 //     (tests/teamsync.spec.js).
 //   Phase 4c — workflow items (openWorkflowItemsModal and friends): same
 //     pattern, new dedicated tests alongside this move.
+//   Phase 4d — the card detail modal + its autosave (openEditCard and
+//     friends): same pattern, new dedicated tests alongside this move.
+//     renderBoard(), buildCardEl(), and the checklist system are still
+//     the only pieces of Board left in index.html.
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
 // confirmChecklistBeforeMove(), slugifyColumnId(), isJobVisibleToMe(),
-// renderGantt(), renderJobList(), openModal()/closeModal(),
-// saveWorkflowItems() — stay in index.html on purpose (checklist business
-// rules, modal-chrome plumbing shared by every modal in the app, or
-// genuinely separate concerns like the Gantt/Job List re-renders a rename
-// triggers). Referenced below as ambient globals: an ordinary top-level
-// `function` declaration already attaches to `window` on its own (unlike
-// `let`/`const`), so none of those needed any change to stay visible here
-// — only genuinely mutated DATA globals do.
-import type { BoardCard, BoardColumn, WorkflowItem, Job } from '../core/types';
+// renderGantt(), renderJobList(), renderCalendar(), openModal()/
+// closeModal(), saveWorkflowItems(), hasMinTier(), renderCustomFieldsGrid(),
+// renderTeamFieldsGrid(), renderAttachments(), collectCustomFieldValues(),
+// deleteCardFromShared(), refreshJobFormIfOpen() — stay in index.html on
+// purpose (checklist business rules, modal-chrome/permission/custom-field
+// plumbing shared across many modals, or genuinely separate concerns like
+// the Gantt/Calendar/Job List re-renders a rename triggers). Referenced
+// below as ambient globals: an ordinary top-level `function` declaration
+// already attaches to `window` on its own (unlike `let`/`const`), so none
+// of those needed any change to stay visible here — only genuinely
+// mutated DATA globals do.
+import type { BoardCard, BoardColumn, WorkflowItem, Job, Phase } from '../core/types';
 import { findJob } from '../core/models';
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
+import { createAutosaveController } from '../utils/autosave';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -44,6 +52,12 @@ declare global {
   var WORKFLOW_ITEMS: WorkflowItem[];
   // eslint-disable-next-line no-var
   var COLOR_PRESETS: string[];
+  // eslint-disable-next-line no-var
+  var editingCardId: string | null;
+  // eslint-disable-next-line no-var
+  var draftAttachments: unknown[];
+  // eslint-disable-next-line no-var
+  var activeProjectId: string | null;
   function setCardColumn(card: BoardCard, newColumnId: string): void;
   function confirmChecklistBeforeMove(card: BoardCard): boolean;
   function saveBoardColumns(): void;
@@ -54,11 +68,19 @@ declare global {
   function renderBoard(): void;
   function renderGantt(): void;
   function renderJobList(): void;
+  function renderCalendar(): void;
   function renderHomeWorkflowExpandedBoard(): void;
   function slugifyColumnId(label: string): string;
   function isJobVisibleToMe(job: Job): boolean;
   function openModal(id: string): void;
-  function closeModal(id: string): void;
+  function closeModal(id: string, onClosed?: () => void): void;
+  function hasMinTier(tier: string): boolean;
+  function renderCustomFieldsGrid(customFields: Record<string, unknown>): void;
+  function renderTeamFieldsGrid(customFields: Record<string, unknown>): void;
+  function renderAttachments(): void;
+  function collectCustomFieldValues(): Record<string, unknown>;
+  function deleteCardFromShared(projectId: string | null, cardId: string): void;
+  function refreshJobFormIfOpen(jobId: string): void;
 }
 
 // ===== BOARD: COLUMN DRAG & DROP =====
@@ -560,6 +582,180 @@ function removeWorkflowItem(itemId: string): void {
   renderBoard();
 }
 
+// ===== CARD MODAL =====
+
+// A card's title doesn't own its own value — if it's linked to a job or
+// phase, the title IS that job/phase's real name, and editing it here
+// renames the job/phase directly rather than storing a separate copy
+// that could drift out of sync.
+function resolveCardNameTarget(card: BoardCard): { type: 'card' } | { type: 'job'; job: Job } | { type: 'phase'; job: Job; phase: Phase } {
+  const job = card.jobId ? jobs.find((j) => j.id === card.jobId) : null;
+  if (!job) return { type: 'card' };
+  if (job.phases && job.phases.length) {
+    const phase = job.phases.find((p) => p.id === (card.phaseId || null));
+    if (phase) return { type: 'phase', job: job, phase: phase };
+  }
+  return { type: 'job', job: job };
+}
+
+function openEditCard(id: string): void {
+  // Flush whatever card this modal was previously open on (defensive —
+  // normally you close before opening another).
+  if (editingCardId != null && editingCardId !== id) flushCardAutosave();
+  const card = boardCards.find((c) => String(c.id) === String(id));
+  if (!card) return;
+  // Defense-in-depth matching renderBoard()'s own isCardVisibleToMe()
+  // filter — this function resolves a card straight by id with no job
+  // lookup otherwise, so a stale reference or direct call would bypass
+  // the board's render-time hide entirely without this.
+  if (!isCardVisibleToMe(card)) return;
+  editingCardId = card.id;
+  setCardTitleHint(false);
+  draftAttachments = JSON.parse(JSON.stringify(card.attachments || []));
+  document.getElementById('cardModalTitle')!.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Card';
+  (document.getElementById('cardDeleteBtn') as HTMLElement).style.display = 'inline-flex';
+  const nameTarget = resolveCardNameTarget(card);
+  const titleLabel = document.getElementById('c_title_label')!;
+  if (nameTarget.type === 'phase') {
+    titleLabel.textContent = 'Phase Name *';
+    (document.getElementById('c_title') as HTMLInputElement).value = nameTarget.phase.name;
+  } else if (nameTarget.type === 'job') {
+    titleLabel.textContent = 'Job Name *';
+    (document.getElementById('c_title') as HTMLInputElement).value = nameTarget.job.name;
+  } else {
+    titleLabel.textContent = 'Title *';
+    (document.getElementById('c_title') as HTMLInputElement).value = card.title || '';
+  }
+  (document.getElementById('c_due') as HTMLInputElement).value = card.due || '';
+  renderCustomFieldsGrid(card.customFields || {});
+  renderTeamFieldsGrid(card.customFields || {});
+  renderAttachments();
+  openModal('cardModal');
+}
+
+function closeCardModal(): void {
+  // Flush while the modal is still marked open and editingCardId is still
+  // valid — autoSaveCardForm() bails out once either isn't true.
+  flushCardAutosave();
+  closeModal('cardModal', function () {
+    editingCardId = null;
+    setCardTitleHint(false);
+    draftAttachments = [];
+  });
+}
+
+// ===== CARD MODAL AUTOSAVE =====
+// Replaces the old explicit "Save Card" button. This modal only ever
+// opens via openEditCard() now — the Board's old "+ Add a card"/"+ New
+// Job" buttons are both gone, and jobs are only ever created from Job
+// Manager's own "+ Add Job" — so there's no standalone-card-creation
+// path left; editingCardId is always set while this is open.
+const cardAutosave = createAutosaveController(function () { autoSaveCardForm(); }, 500);
+function scheduleCardAutosave(): void { cardAutosave.schedule(); }
+function flushCardAutosave(): void { cardAutosave.flush(); }
+function cancelPendingCardAutosave(): void {
+  cardAutosave.cancel();
+}
+function setCardTitleHint(show: boolean): void {
+  const hint = document.getElementById('c_title_hint');
+  if (hint) hint.style.display = show ? 'block' : 'none';
+}
+
+function autoSaveCardForm(): void {
+  if (!document.getElementById('cardModal')!.classList.contains('show')) return;
+  if (editingCardId == null) return;
+  const idx = boardCards.findIndex((c) => c.id === editingCardId);
+  if (idx < 0) return;
+
+  const title = (document.getElementById('c_title') as HTMLInputElement).value.trim();
+  setCardTitleHint(!title);
+
+  const cardData: Partial<BoardCard> = {
+    due: (document.getElementById('c_due') as HTMLInputElement).value,
+    customFields: collectCustomFieldValues(),
+    attachments: draftAttachments,
+  };
+  // The Title field doesn't own its own value — see resolveCardNameTarget()'s
+  // own comment. Renaming here writes straight to the job/phase; the next
+  // ensureJobHasCards() pass (inside saveBoardCards() below) re-derives
+  // card.title from that, so cardData.title is only ever set in the
+  // defensive no-job fallback where there's nothing else to rename.
+  let renamedJobOrPhase = false;
+  if (title) {
+    const nameTarget = resolveCardNameTarget(boardCards[idx]);
+    if (nameTarget.type === 'phase') {
+      if (nameTarget.phase.name !== title) { nameTarget.phase.name = title; renamedJobOrPhase = true; }
+    } else if (nameTarget.type === 'job') {
+      if (nameTarget.job.name !== title) { nameTarget.job.name = title; renamedJobOrPhase = true; }
+    } else {
+      cardData.title = title; // never blank out an already-saved title
+    }
+  }
+
+  boardCards[idx] = Object.assign({}, boardCards[idx], cardData);
+  const savedCard = boardCards[idx];
+
+  saveBoardCards();
+  logActivity('updated card "' + savedCard.title + '"');
+  renderBoard();
+  // This card's job might already be open in Job Manager — without this its
+  // description/due/custom fields/checklist/attachments would keep showing
+  // whatever was there when that form was first opened.
+  if (savedCard.jobId) refreshJobFormIfOpen(savedCard.jobId);
+  // A job/phase rename shows up in more places than just the Board — same
+  // refresh set autoSaveJobForm() runs after its own name edits.
+  if (renamedJobOrPhase) { renderJobList(); renderGantt(); renderCalendar(); }
+  // renderBoard() only touches the real (possibly hidden) Board tab's own
+  // DOM — a card edited via the Home widget's own expanded-in-place Board
+  // (see renderHomeWorkflowExpandedBoard()) is a separate render of the
+  // same buildCardEl() cards, so without this the expanded view kept
+  // showing the pre-edit card until the user left Home and came back
+  // (Karl's report: "updated a card in the expanded view... didn't save"
+  // — it did save, just wasn't visible there yet).
+  if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
+}
+
+// Attached once at init, same reasoning as initJobFormAutosaveListeners:
+// addEventListener-based listeners never fire from openEditCard()'s
+// programmatic `.value = ...` population, only from real user input.
+function initCardFormAutosaveListeners(): void {
+  const titleEl = document.getElementById('c_title') as HTMLInputElement;
+  titleEl.addEventListener('input', function () {
+    setCardTitleHint(!titleEl.value.trim());
+    scheduleCardAutosave();
+  });
+  document.getElementById('c_due')!.addEventListener('change', scheduleCardAutosave);
+
+  const grid = document.getElementById('customFieldsGrid')!;
+  grid.addEventListener('input', function (e) { if ((e.target as HTMLElement).dataset.field) scheduleCardAutosave(); });
+  grid.addEventListener('change', function (e) { if ((e.target as HTMLElement).dataset.field) scheduleCardAutosave(); });
+
+  const teamGrid = document.getElementById('teamFieldsGrid')!;
+  teamGrid.addEventListener('input', function (e) { if ((e.target as HTMLElement).dataset.field) scheduleCardAutosave(); });
+  teamGrid.addEventListener('change', function (e) { if ((e.target as HTMLElement).dataset.field) scheduleCardAutosave(); });
+
+  document.getElementById('cardModal')!.addEventListener('focusout', flushCardAutosave);
+}
+
+function deleteCardFromModal(): void {
+  // Defense-in-depth — its trigger button is already data-min-tier gated,
+  // but delete is irreversible enough to warrant a second check here.
+  if (!hasMinTier('editor')) return;
+  if (editingCardId == null) return;
+  // Cancel (not flush) — the card is about to be gone, nothing left to save.
+  cancelPendingCardAutosave();
+  const card = boardCards.find((c) => c.id === editingCardId);
+  if (card) logActivity('deleted card "' + card.title + '"');
+  const cardId = editingCardId;
+  boardCards = boardCards.filter((c) => c.id !== editingCardId);
+  saveBoardCards();
+  deleteCardFromShared(activeProjectId, cardId);
+  renderBoard();
+  if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
+  closeCardModal();
+  showToast('Card deleted', 'info');
+}
+
 export {
   handleColumnDragStart,
   handleColumnDragEnd,
@@ -590,4 +786,14 @@ export {
   changeWorkflowItemColor,
   addWorkflowItem,
   removeWorkflowItem,
+  resolveCardNameTarget,
+  openEditCard,
+  closeCardModal,
+  scheduleCardAutosave,
+  flushCardAutosave,
+  cancelPendingCardAutosave,
+  setCardTitleHint,
+  autoSaveCardForm,
+  initCardFormAutosaveListeners,
+  deleteCardFromModal,
 };

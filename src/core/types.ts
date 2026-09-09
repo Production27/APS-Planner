@@ -56,6 +56,9 @@ export interface BoardCard {
   manualColumn?: string | null;
   manualColumnUntil?: number | null;
   title?: string;
+  due?: string;
+  attachments?: unknown[];
+  customFields?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
