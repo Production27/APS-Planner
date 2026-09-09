@@ -36,6 +36,11 @@ import {
   getScheduledItemsForDate, openDayView, renderDayCalendarView,
   handleCalBarMouseDown, handleCalBarMouseMove, applyCalBarMouseMove, handleCalBarMouseUp,
 } from './views/calendar';
+import {
+  cascadeShiftLaterTasks, startBarResizeRight, startBarResizeLeft, onBarResizeMove, applyBarResizeMove,
+  onBarResizeEnd, startTickResize, onTickResizeMove, applyTickResizeMove, onTickResizeEnd,
+  startBarMove, onBarMoveMove, applyBarMoveMove, onBarMoveEnd,
+} from './views/gantt';
 
 declare global {
   interface Window {
@@ -137,6 +142,20 @@ declare global {
     handleCalBarMouseMove: typeof handleCalBarMouseMove;
     applyCalBarMouseMove: typeof applyCalBarMouseMove;
     handleCalBarMouseUp: typeof handleCalBarMouseUp;
+    cascadeShiftLaterTasks: typeof cascadeShiftLaterTasks;
+    startBarResizeRight: typeof startBarResizeRight;
+    startBarResizeLeft: typeof startBarResizeLeft;
+    onBarResizeMove: typeof onBarResizeMove;
+    applyBarResizeMove: typeof applyBarResizeMove;
+    onBarResizeEnd: typeof onBarResizeEnd;
+    startTickResize: typeof startTickResize;
+    onTickResizeMove: typeof onTickResizeMove;
+    applyTickResizeMove: typeof applyTickResizeMove;
+    onTickResizeEnd: typeof onTickResizeEnd;
+    startBarMove: typeof startBarMove;
+    onBarMoveMove: typeof onBarMoveMove;
+    applyBarMoveMove: typeof applyBarMoveMove;
+    onBarMoveEnd: typeof onBarMoveEnd;
   }
 }
 
@@ -238,3 +257,17 @@ window.handleCalBarMouseDown = handleCalBarMouseDown;
 window.handleCalBarMouseMove = handleCalBarMouseMove;
 window.applyCalBarMouseMove = applyCalBarMouseMove;
 window.handleCalBarMouseUp = handleCalBarMouseUp;
+window.cascadeShiftLaterTasks = cascadeShiftLaterTasks;
+window.startBarResizeRight = startBarResizeRight;
+window.startBarResizeLeft = startBarResizeLeft;
+window.onBarResizeMove = onBarResizeMove;
+window.applyBarResizeMove = applyBarResizeMove;
+window.onBarResizeEnd = onBarResizeEnd;
+window.startTickResize = startTickResize;
+window.onTickResizeMove = onTickResizeMove;
+window.applyTickResizeMove = applyTickResizeMove;
+window.onTickResizeEnd = onTickResizeEnd;
+window.startBarMove = startBarMove;
+window.onBarMoveMove = onBarMoveMove;
+window.applyBarMoveMove = applyBarMoveMove;
+window.onBarMoveEnd = onBarMoveEnd;

@@ -115,7 +115,10 @@ declare global {
   function isCalendarJobSpanTaskId(taskId: unknown): boolean;
   function getLinkedReferenceJobs(): CalJob[];
   function jumpToLinkedJobReference(job: CalJob): void;
-  function getJobDueMarkerTask(job: CalJob, phaseId: string | null): CalTask | null;
+  // Shared verbatim with src/views/gantt.ts's identical ambient
+  // declaration for this same index.html function — see that file's
+  // comment on this line for why the shape must match exactly.
+  function getJobDueMarkerTask(job: { id: string; name: string; [key: string]: unknown }, phaseId: string | null): { id: string; name: string; start?: string; finish?: string; [key: string]: unknown } | null;
   function moveTooltip(e: MouseEvent): void;
   function hideTooltip(): void;
   function saveJobs(): void;

@@ -426,6 +426,61 @@ test('gantt drag: moving a task bar shifts its dates by the dragged number of da
   expect(result.finish).toBe(expected.finish);
 });
 
+test('gantt bar resize: dragging the right edge extends a task and cascades every later task in the sub-unit', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+
+  // Same setup reasoning as the plain bar-move test above, but scheduling
+  // the first TWO tasks in the sub-unit (not just one) so extending the
+  // first one's finish date has a later task to cascade onto.
+  const before = await page.evaluate(() => {
+    const job = jobs[0];
+    const phase = getJobPhases(job)[0];
+    const sub = getPhaseSubUnits(phase)[0];
+    const tasks = (sub.tasks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    const t0 = tasks[0];
+    const t1 = tasks[1];
+    if (!t0 || !t1) return null;
+    t0.start = '2026-09-01';
+    t0.finish = '2026-09-05';
+    t1.start = '2026-09-06';
+    t1.finish = '2026-09-10';
+    renderGantt();
+    return { jobId: job.id, taskId: t0.id, laterTaskId: t1.id };
+  });
+  expect(before).not.toBeNull();
+
+  const extendDays = 3;
+  const result = await page.evaluate(
+    ({ jobId, taskId, laterTaskId, extendDays }) => {
+      const bar = document.querySelector('.task-bar:not(.due-marker-bar)');
+      if (!bar) return null;
+      // Same reasoning as the plain bar-move test above: drive the
+      // committed state change directly, bypassing the rAF-coalesced
+      // mousemove pipeline (applyBarResizeMove) entirely.
+      startBarResizeRight({ preventDefault() {}, stopPropagation() {}, clientX: 0 }, jobId, taskId, bar);
+      barResizeState.currentDuration = barResizeState.initialDuration + extendDays;
+      onBarResizeEnd({});
+      const found = findTask(jobId, taskId);
+      const laterFound = findTask(jobId, laterTaskId);
+      return {
+        finish: found ? found.task.finish : null,
+        laterStart: laterFound ? laterFound.task.start : null,
+        laterFinish: laterFound ? laterFound.task.finish : null,
+      };
+    },
+    { jobId: before.jobId, taskId: before.taskId, laterTaskId: before.laterTaskId, extendDays }
+  );
+
+  expect(result).not.toBeNull();
+  expect(result.finish).toBe('2026-09-08'); // 09-05 extended by 3 days
+  expect(result.laterStart).toBe('2026-09-09'); // 09-06 cascaded by the same 3 days
+  expect(result.laterFinish).toBe('2026-09-13'); // 09-10 cascaded by the same 3 days
+});
+
 test('board column CRUD: add, rename, and delete a column via the real modal/prompt flow', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
