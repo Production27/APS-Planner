@@ -471,6 +471,64 @@ test('card modal: editing the due date and custom fields saves through autosave,
   expect(stillExists).toBe(false);
 });
 
+test('buildCardEl: an overdue card gets the overdue badge, a finished-column card does not', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const overdueCard = { id: 'test-1', column: 'bid', due: '2020-01-01' };
+    const finishedColCard = { id: 'test-2', column: 'complete', due: '2020-01-01' };
+    const notDueYetCard = { id: 'test-3', column: 'bid', due: '2099-01-01' };
+    return {
+      overdue: buildCardEl(overdueCard).querySelector('.board-card-due.overdue') !== null,
+      finishedColNotOverdue: buildCardEl(finishedColCard).querySelector('.board-card-due.overdue') === null,
+      notYetDue: buildCardEl(notDueYetCard).querySelector('.board-card-due.overdue') === null,
+    };
+  });
+  expect(result.overdue).toBe(true);
+  expect(result.finishedColNotOverdue).toBe(true);
+  expect(result.notYetDue).toBe(true);
+});
+
+test('buildCardEl: checklist progress badge reflects done/total counts, including sub-items', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const badgeText = await page.evaluate(() => {
+    const card = {
+      id: 'test-checklist', column: 'bid',
+      checklists: { bid: [{ id: 'i1', text: 'Item 1', done: true }, { id: 'i2', text: 'Item 2', done: false, subItems: [{ done: true }, { done: false }] }] },
+    };
+    const badge = buildCardEl(card).querySelector('.mini-badge');
+    return badge ? badge.textContent.trim() : null;
+  });
+  // 2 of 4 flags done: item1 (done), item2 (not done), sub1 (done), sub2 (not done)
+  expect(badgeText).toContain('2/4');
+});
+
+test('buildCardEl: the attachment count badge only appears when attachments exist', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const withAttachments = { id: 'a1', column: 'bid', attachments: [{ name: 'a.pdf' }, { name: 'b.pdf' }] };
+    const withoutAttachments = { id: 'a2', column: 'bid' };
+    const badges = [...buildCardEl(withAttachments).querySelectorAll('.mini-badge')].map((b) => b.textContent.trim());
+    return {
+      withCount: badges.some((t) => t.includes('2')),
+      withoutBadge: buildCardEl(withoutAttachments).querySelector('.board-card-badges') === null,
+    };
+  });
+  expect(result.withCount).toBe(true);
+  expect(result.withoutBadge).toBe(true);
+});
+
 test('error reporting: an uncaught error and an unhandled rejection both POST a report to the Worker', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

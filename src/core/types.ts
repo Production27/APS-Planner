@@ -57,8 +57,11 @@ export interface BoardCard {
   manualColumnUntil?: number | null;
   title?: string;
   due?: string;
+  color?: string;
   attachments?: unknown[];
   customFields?: Record<string, unknown>;
+  checklists?: Record<string, unknown[]>;
+  checklistAssignees?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -68,6 +71,19 @@ export interface BoardColumn {
   hideFromSchedule?: boolean;
   defaultChecklist?: unknown[];
   workflowItemId?: string | null;
+  color?: string;
+  scheduleDisconnected?: boolean;
+  autoAssignChecklist?: boolean;
+  checklistAssigneeOverride?: string;
+  defaultDuration?: number;
+  stalledAfterDays?: number;
+  [key: string]: unknown;
+}
+
+export interface CustomFieldDef {
+  key: string;
+  label: string;
+  type: string;
   [key: string]: unknown;
 }
 

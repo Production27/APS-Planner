@@ -23,7 +23,7 @@ import {
   openWorkflowItemsModal, closeWorkflowItemsModal, renderWorkflowItemsBody, toggleWorkflowItemColorPanel, changeWorkflowItemColor,
   addWorkflowItem, removeWorkflowItem,
   resolveCardNameTarget, openEditCard, closeCardModal, scheduleCardAutosave, flushCardAutosave, cancelPendingCardAutosave,
-  setCardTitleHint, autoSaveCardForm, initCardFormAutosaveListeners, deleteCardFromModal,
+  setCardTitleHint, autoSaveCardForm, initCardFormAutosaveListeners, deleteCardFromModal, renderBoard, buildCardEl,
 } from './views/board';
 
 declare global {
@@ -88,6 +88,8 @@ declare global {
     autoSaveCardForm: typeof autoSaveCardForm;
     initCardFormAutosaveListeners: typeof initCardFormAutosaveListeners;
     deleteCardFromModal: typeof deleteCardFromModal;
+    renderBoard: typeof renderBoard;
+    buildCardEl: typeof buildCardEl;
   }
 }
 
@@ -151,3 +153,5 @@ window.setCardTitleHint = setCardTitleHint;
 window.autoSaveCardForm = autoSaveCardForm;
 window.initCardFormAutosaveListeners = initCardFormAutosaveListeners;
 window.deleteCardFromModal = deleteCardFromModal;
+window.renderBoard = renderBoard;
+window.buildCardEl = buildCardEl;
