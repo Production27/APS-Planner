@@ -548,7 +548,7 @@
   }
   .timeline-header .week-header {
     position: absolute; top: 0; height: 24px;
-    border-right: 1px solid #e0e0e0; display: flex;
+    border-right: 1px solid var(--border); display: flex;
     align-items: center; justify-content: center;
     font-size: 10px; font-weight: 700; color: var(--primary-light);
     background: #f8f9fa; text-align: center; padding: 2px;
@@ -560,7 +560,7 @@
     position: absolute; top: 24px; height: 34px;
     border-right: 1px solid #e9ecef; display: flex;
     flex-direction: column; align-items: center; justify-content: center;
-    font-size: 10px; color: #666; background: #f8f9fa;
+    font-size: 10px; color: var(--text-light); background: #f8f9fa;
     cursor: pointer; transition: background 0.2s, color 0.2s;
     user-select: none;
   }
@@ -568,7 +568,7 @@
   .timeline-header .day-header .day-num { font-weight: 700; font-size: 11px; }
   .timeline-header .day-header .day-name { font-size: 8px; color: #999; text-transform: uppercase; }
   .timeline-header .day-header.weekend { background: #f0f0f0; color: #aaa; }
-  .timeline-header .day-header.weekend:hover { background: #e0e0e0; }
+  .timeline-header .day-header.weekend:hover { background: var(--border); }
   .timeline-header .day-header.today-header {
     background: #ffebee !important; color: var(--accent) !important;
     font-weight: 700;
@@ -591,7 +591,7 @@
     position: absolute; top: 0; bottom: 0; width: 1px;
     background: #f0f0f0; pointer-events: none;
   }
-  .grid-line.weekend-line { background: #e0e0e0; }
+  .grid-line.weekend-line { background: var(--border); }
   .grid-line.today-line-bg {
     background: rgba(229,57,53,0.06) !important;
     /* Meant to tint from today's column to the actual right edge of the
@@ -627,7 +627,7 @@
   .task-bar.resizing { transition: none; z-index: 60; filter: brightness(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: ew-resize; }
   .task-bar.moving { transition: none; z-index: 60; filter: brightness(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: grabbing; }
   .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; justify-content: center; font-size: 9px; }
-  .task-bar.due-marker-bar { border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935, 0 1px 3px rgba(0,0,0,0.25); }
+  .task-bar.due-marker-bar { border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--accent), 0 1px 3px rgba(0,0,0,0.25); }
   /* Phase-boundary tick on a condensed Jobs/Leads bar — see the
      task.isJobSpan block in renderGantt(). Taller than the bar itself so
      the bottom few pixels "stick down" below it as a small flag marking
@@ -712,7 +712,7 @@
     position: absolute; width: 18px; height: 18px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-size: 9px; cursor: grab; z-index: 82; transition: filter 0.15s;
-    border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935, 0 1px 3px rgba(0,0,0,0.25);
+    border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--accent), 0 1px 3px rgba(0,0,0,0.25);
   }
   .job-span-due-marker:hover { filter: brightness(1.1); }
   .job-span-due-marker.moving { cursor: grabbing; transition: none; }
@@ -723,7 +723,7 @@
   .job-span-due-line { position: absolute; height: 2px; z-index: 63; pointer-events: none; }
   .task-row.due-marker-row { font-style: italic; }
   .task-row.due-marker-row .col-jobs { color: var(--text-light); }
-  .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #e53935; }
+  .cal-event-bar.due-marker { border-radius: 50%; width: 20px !important; min-width: 20px; padding: 0; justify-content: center; display: flex; align-items: center; font-size: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--accent); }
   .cal-event-bar.due-marker .cal-jobname-tag { display: none; }
   .cal-event-bar.calendar-event-bar { border: 1px dashed rgba(255,255,255,0.6); }
   /* Google-Calendar-style rendering for a calendar event once it has a
@@ -1369,13 +1369,13 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-card.manual-override { border-left-style: dashed; box-shadow: 0 2px 5px rgba(0,0,0,0.14), inset 0 0 0 1px rgba(240,173,78,0.5); }
   .board-card-override-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: #fff3e0; color: #b26a00; margin-bottom: 6px; cursor: pointer; }
   .board-card-override-badge:hover { background: #ffe4b3; }
-  body.dark-mode .board-card-override-badge { background: rgba(240,173,78,0.18); color: #f0ad4e; }
+  body.dark-mode .board-card-override-badge { background: rgba(240,173,78,0.18); color: var(--warning); }
   body.dark-mode .board-card-override-badge:hover { background: rgba(240,173,78,0.3); }
   .card-modal-box { max-width: 480px; }
 
   /* Collapsible label color picker */
   .color-toggle-row { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 4px 2px; border-radius: 6px; transition: background 0.15s; }
-  .color-toggle-row:hover { background: #f5f6fa; }
+  .color-toggle-row:hover { background: var(--bg); }
   .color-toggle-row label { margin-bottom: 0 !important; cursor: pointer; }
   .color-toggle-swatch-wrap { display: flex; align-items: center; gap: 8px; }
   .color-toggle-swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0; }
@@ -3759,7 +3759,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-08.4';
+const APP_VERSION = '2026-09-09.1';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
