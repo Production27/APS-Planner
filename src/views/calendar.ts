@@ -5,12 +5,16 @@
 //     directly.
 //   Phase 5b — the calendar-event modal (openAddCalendarEvent and
 //     friends): same pattern as Board's card modal (Phase 4d), new
-//     dedicated tests alongside this move. renderCalendar()/
-//     renderMonthCalendar()/renderWeekCalendar() (the actual DOM-
-//     building) and the swipe/animation drag handlers are at least as
-//     dense and entangled as Board's renderBoard() was, and stay in
-//     index.html for a later, separately-scoped follow-up once they
-//     have their own test coverage.
+//     dedicated tests alongside this move.
+//   Phase 5c — view navigation + the render dispatcher (setCalendarView/
+//     calendarPrev/calendarNext/calendarToday/calendarExitDayView/
+//     renderCalendar itself). renderMonthCalendar()/renderWeekCalendar()/
+//     renderDayCalendarView() (the actual DOM-building) and the swipe/
+//     animation drag handlers are at least as dense and entangled as
+//     Board's renderBoard() was, and stay in index.html for a later,
+//     separately-scoped follow-up once they have their own test coverage
+//     — renderCalendar() just dispatches to them by name, so moving the
+//     dispatcher doesn't require moving what it dispatches to.
 //
 // buildCalendarJobRows()/isCalendarJobSpanTaskId() are deliberately NOT
 // part of this file either, despite living right next to functions that
@@ -22,14 +26,15 @@
 // to revisit once Gantt itself is being extracted.
 //
 // getEffectiveRole()/getStoredUsername()/openModal()/closeModal()/
-// ensureUserRosterLoaded()/saveCalendarEvents()/renderCalendar()/
-// showToast()/logActivity()/hasMinTier()/deleteCalendarEventFromShared()/
-// msDropdownLabelText() stay in index.html on purpose (session/role
-// plumbing, modal-chrome plumbing shared by every modal in the app, or
-// genuinely separate concerns) and are referenced below as ambient
-// globals — an ordinary top-level `function` declaration already
-// attaches to `window` on its own (unlike `let`/`const`), so nothing
-// about those needed to change.
+// ensureUserRosterLoaded()/saveCalendarEvents()/renderMonthCalendar()/
+// renderWeekCalendar()/renderDayCalendarView()/showToast()/logActivity()/
+// hasMinTier()/deleteCalendarEventFromShared()/msDropdownLabelText() stay
+// in index.html on purpose (session/role plumbing, modal-chrome plumbing
+// shared by every modal in the app, or the dense per-mode render
+// functions this file's own renderCalendar() dispatches to) and are
+// referenced below as ambient globals — an ordinary top-level `function`
+// declaration already attaches to `window` on its own (unlike
+// `let`/`const`), so nothing about those needed to change.
 import type { CalendarEvent, CalendarEventOccurrence } from '../core/types';
 import { addMonths, toIsoDate } from '../utils/date';
 import { genId } from '../utils/id';
@@ -50,13 +55,19 @@ declare global {
   var COLOR_PRESETS: string[];
   // eslint-disable-next-line no-var
   var activeProjectId: string | null;
+  // eslint-disable-next-line no-var
+  var calendarViewDate: Date;
+  // eslint-disable-next-line no-var
+  var calendarViewMode: string;
   function getEffectiveRole(): string;
   function getStoredUsername(): string;
   function openModal(id: string): void;
   function closeModal(id: string, onClosed?: () => void): void;
   function ensureUserRosterLoaded(): Promise<void>;
   function saveCalendarEvents(): void;
-  function renderCalendar(): void;
+  function renderMonthCalendar(): void;
+  function renderWeekCalendar(): void;
+  function renderDayCalendarView(): void;
   function showToast(text: string, kind?: string): void;
   function logActivity(text: string): void;
   function hasMinTier(tier: string): boolean;
@@ -391,6 +402,81 @@ function deleteCalendarEventFromModal(): void {
   closeCalendarEventModal();
 }
 
+// ===== CALENDAR: VIEW NAVIGATION + RENDER DISPATCH =====
+
+function setCalendarView(mode: string): void {
+  calendarViewMode = mode;
+  renderCalendar();
+}
+
+function calendarPrev(): void {
+  if (calendarViewMode === 'month') {
+    calendarViewDate = addMonths(calendarViewDate, -1);
+  } else if (calendarViewMode === 'day') {
+    calendarViewDate.setDate(calendarViewDate.getDate() - 1);
+  } else {
+    calendarViewDate.setDate(calendarViewDate.getDate() - 7);
+  }
+  renderCalendar();
+}
+
+function calendarNext(): void {
+  if (calendarViewMode === 'month') {
+    calendarViewDate = addMonths(calendarViewDate, 1);
+  } else if (calendarViewMode === 'day') {
+    calendarViewDate.setDate(calendarViewDate.getDate() + 1);
+  } else {
+    calendarViewDate.setDate(calendarViewDate.getDate() + 7);
+  }
+  renderCalendar();
+}
+
+function calendarToday(): void {
+  calendarViewDate = new Date();
+  renderCalendar();
+}
+
+function calendarExitDayView(): void {
+  calendarViewMode = 'month';
+  renderCalendar();
+}
+
+function renderCalendar(): void {
+  // Exposed on <body> so mobile CSS can key off it — see the
+  // body[data-calendar-mode="week"] #weekHourSection rule, which day mode
+  // must NOT be caught by since it reuses that same element. Set BEFORE
+  // the render calls below, not after — renderWeekCalendar() measures
+  // real cell offsetLeft positions (see its own "left = startCell.
+  // offsetLeft" comment) to place the multi-day job bars, and the week-
+  // only #calendarDays/#calendarWeekdays padding-left:48px that keeps
+  // those columns aligned with the hourly grid (see that rule's own
+  // comment) is keyed off this same attribute — measuring before it was
+  // set left the bars computed against the un-padded (pre-shift) column
+  // positions, so they landed 48px left of where the columns actually
+  // ended up once the padding kicked in.
+  document.body.dataset.calendarMode = calendarViewMode;
+  if (calendarViewMode === 'week') {
+    renderWeekCalendar();
+  } else if (calendarViewMode === 'day') {
+    renderDayCalendarView();
+  } else {
+    renderMonthCalendar();
+  }
+  // Update view toggle buttons
+  const monthBtn = document.getElementById('calViewMonth');
+  const weekBtn = document.getElementById('calViewWeek');
+  if (monthBtn && weekBtn) {
+    const activeStyle = 'background:var(--primary-light);color:white;border-color:var(--primary-light);';
+    const inactiveStyle = 'background:transparent;color:var(--text-light);border-color:transparent;';
+    (monthBtn as HTMLElement).style.cssText = calendarViewMode === 'month' ? activeStyle : inactiveStyle;
+    (weekBtn as HTMLElement).style.cssText = calendarViewMode === 'week' ? activeStyle : inactiveStyle;
+  }
+  const backBtn = document.getElementById('calBackBtn');
+  if (backBtn) (backBtn as HTMLElement).style.display = calendarViewMode === 'day' ? 'inline-flex' : 'none';
+  const addBtn = document.getElementById('calAddEventBtn');
+  if (addBtn) (addBtn as HTMLElement).style.display = calendarViewMode === 'day' ? 'inline-flex' : 'none';
+}
+
 export {
   isCalendarEventTaskId,
   parseCalendarEventTaskId,
@@ -410,4 +496,10 @@ export {
   buildCalendarEventColorPresets,
   saveCalendarEventFromModal,
   deleteCalendarEventFromModal,
+  setCalendarView,
+  calendarPrev,
+  calendarNext,
+  calendarToday,
+  calendarExitDayView,
+  renderCalendar,
 };

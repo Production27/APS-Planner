@@ -98,6 +98,45 @@ test('isCalendarEventVisibleToMe: private and members-only visibility gate corre
   expect(result.nullEventNotVisible).toBe(false);
 });
 
+test('calendarPrev/calendarNext/calendarToday: step by month/week/day depending on the current view mode', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    // renderCalendar() (called at the end of every nav function below)
+    // dispatches to renderMonthCalendar()/renderWeekCalendar()/
+    // renderDayCalendarView(), which live in index.html itself, not this
+    // blank fixture — stub them out since this test only cares about the
+    // date-stepping logic, not the (untested-here-by-design) rendering.
+    window.renderMonthCalendar = () => {};
+    window.renderWeekCalendar = () => {};
+    window.renderDayCalendarView = () => {};
+
+    calendarViewDate = new Date('2026-09-15T00:00:00');
+    calendarViewMode = 'month';
+    calendarNext();
+    const afterMonthNext = toIsoDate(calendarViewDate);
+
+    calendarViewDate = new Date('2026-09-15T00:00:00');
+    calendarViewMode = 'week';
+    calendarNext();
+    const afterWeekNext = toIsoDate(calendarViewDate);
+
+    calendarViewDate = new Date('2026-09-15T00:00:00');
+    calendarViewMode = 'day';
+    calendarPrev();
+    const afterDayPrev = toIsoDate(calendarViewDate);
+
+    calendarViewDate = new Date('2020-01-01T00:00:00'); // deliberately not "today"
+    calendarToday();
+    const isRoughlyToday = Math.abs(calendarViewDate.getTime() - Date.now()) < 5000;
+
+    return { afterMonthNext, afterWeekNext, afterDayPrev, isRoughlyToday };
+  });
+  expect(result.afterMonthNext).toBe('2026-10-15');
+  expect(result.afterWeekNext).toBe('2026-09-22');
+  expect(result.afterDayPrev).toBe('2026-09-14');
+  expect(result.isRoughlyToday).toBe(true);
+});
+
 test('ensureCalendarEventIds: backfills id/repeat/duration/exceptions/color defaults without touching existing values', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {

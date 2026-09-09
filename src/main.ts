@@ -31,6 +31,7 @@ import {
   openAddCalendarEvent, openEditCalendarEvent, closeCalendarEventModal, toggleRepeatUntilField,
   toggleCalendarEventVisibilityFields, collectCalendarEventVisibilityMembers, toggleCalendarEventColorPanel,
   updateCalendarEventColorSwatch, buildCalendarEventColorPresets, saveCalendarEventFromModal, deleteCalendarEventFromModal,
+  setCalendarView, calendarPrev, calendarNext, calendarToday, calendarExitDayView, renderCalendar,
 } from './views/calendar';
 
 declare global {
@@ -115,6 +116,12 @@ declare global {
     buildCalendarEventColorPresets: typeof buildCalendarEventColorPresets;
     saveCalendarEventFromModal: typeof saveCalendarEventFromModal;
     deleteCalendarEventFromModal: typeof deleteCalendarEventFromModal;
+    setCalendarView: typeof setCalendarView;
+    calendarPrev: typeof calendarPrev;
+    calendarNext: typeof calendarNext;
+    calendarToday: typeof calendarToday;
+    calendarExitDayView: typeof calendarExitDayView;
+    renderCalendar: typeof renderCalendar;
   }
 }
 
@@ -198,3 +205,9 @@ window.updateCalendarEventColorSwatch = updateCalendarEventColorSwatch;
 window.buildCalendarEventColorPresets = buildCalendarEventColorPresets;
 window.saveCalendarEventFromModal = saveCalendarEventFromModal;
 window.deleteCalendarEventFromModal = deleteCalendarEventFromModal;
+window.setCalendarView = setCalendarView;
+window.calendarPrev = calendarPrev;
+window.calendarNext = calendarNext;
+window.calendarToday = calendarToday;
+window.calendarExitDayView = calendarExitDayView;
+window.renderCalendar = renderCalendar;

@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-09.16';
+const APP_VERSION = '2026-09-09.17';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -7413,81 +7413,21 @@ function setupScrollSync() {
 }
 
 // ===== CALENDAR TAB =====
-let calendarViewDate = new Date();
-let calendarViewMode = 'month'; // 'month', 'week', or 'day'
+// `var`, not `let` — same cross-script-visibility reasoning as `jobs`
+// elsewhere in this file: src/views/calendar.ts's bundled navigation/
+// dispatch code (Phase 5c) reads/sets these.
+var calendarViewDate = new Date();
+var calendarViewMode = 'month'; // 'month', 'week', or 'day'
 
-function setCalendarView(mode) {
-  calendarViewMode = mode;
-  renderCalendar();
-}
-
-function calendarPrev() {
-  if (calendarViewMode === 'month') {
-    calendarViewDate = addMonths(calendarViewDate, -1);
-  } else if (calendarViewMode === 'day') {
-    calendarViewDate.setDate(calendarViewDate.getDate() - 1);
-  } else {
-    calendarViewDate.setDate(calendarViewDate.getDate() - 7);
-  }
-  renderCalendar();
-}
-
-function calendarNext() {
-  if (calendarViewMode === 'month') {
-    calendarViewDate = addMonths(calendarViewDate, 1);
-  } else if (calendarViewMode === 'day') {
-    calendarViewDate.setDate(calendarViewDate.getDate() + 1);
-  } else {
-    calendarViewDate.setDate(calendarViewDate.getDate() + 7);
-  }
-  renderCalendar();
-}
-
-function calendarToday() {
-  calendarViewDate = new Date();
-  renderCalendar();
-}
+// setCalendarView()/calendarPrev()/calendarNext()/calendarToday()/
+// calendarExitDayView()/renderCalendar() moved to src/views/calendar.ts
+// (Phase 5c of the architecture roadmap) — see the identical note by
+// genId() above.
 
 const CAL_BAR_H = 20;
 let calDragState = null;
 const CAL_BAR_GAP = 3;
 const CAL_DAYNUM_H = 26;
-
-function renderCalendar() {
-  // Exposed on <body> so mobile CSS can key off it — see the
-  // body[data-calendar-mode="week"] #weekHourSection rule, which day mode
-  // must NOT be caught by since it reuses that same element. Set BEFORE
-  // the render calls below, not after — renderWeekCalendar() measures
-  // real cell offsetLeft positions (see its own "left = startCell.
-  // offsetLeft" comment) to place the multi-day job bars, and the week-
-  // only #calendarDays/#calendarWeekdays padding-left:48px that keeps
-  // those columns aligned with the hourly grid (see that rule's own
-  // comment) is keyed off this same attribute — measuring before it was
-  // set left the bars computed against the un-padded (pre-shift) column
-  // positions, so they landed 48px left of where the columns actually
-  // ended up once the padding kicked in.
-  document.body.dataset.calendarMode = calendarViewMode;
-  if (calendarViewMode === 'week') {
-    renderWeekCalendar();
-  } else if (calendarViewMode === 'day') {
-    renderDayCalendarView();
-  } else {
-    renderMonthCalendar();
-  }
-  // Update view toggle buttons
-  const monthBtn = document.getElementById('calViewMonth');
-  const weekBtn = document.getElementById('calViewWeek');
-  if (monthBtn && weekBtn) {
-    const activeStyle = 'background:var(--primary-light);color:white;border-color:var(--primary-light);';
-    const inactiveStyle = 'background:transparent;color:var(--text-light);border-color:transparent;';
-    monthBtn.style.cssText = calendarViewMode === 'month' ? activeStyle : inactiveStyle;
-    weekBtn.style.cssText = calendarViewMode === 'week' ? activeStyle : inactiveStyle;
-  }
-  const backBtn = document.getElementById('calBackBtn');
-  if (backBtn) backBtn.style.display = calendarViewMode === 'day' ? 'inline-flex' : 'none';
-  const addBtn = document.getElementById('calAddEventBtn');
-  if (addBtn) addBtn.style.display = calendarViewMode === 'day' ? 'inline-flex' : 'none';
-}
 
 function renderMonthCalendar() {
   const weekdaysEl = document.getElementById('calendarWeekdays');
@@ -8465,11 +8405,6 @@ function openDayView(dateStr) {
   // such side effect, so browsing through several empty days in a row
   // doesn't keep popping the Add Event modal back open.
   if (!getScheduledItemsForDate(dateStr).length) openAddCalendarEvent(dateStr);
-}
-
-function calendarExitDayView() {
-  calendarViewMode = 'month';
-  renderCalendar();
 }
 
 function renderDayCalendarView() {
