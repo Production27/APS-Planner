@@ -1,39 +1,67 @@
 // Calendar, moved out of index.html across Phase 5 of the architecture
-// roadmap, starting with the same "safest slice first" judgment applied
-// to Board (Phase 3's model layer, Phase 4a's already-tested drag code):
-// this file's initial content is the recurrence-expansion / event-
-// visibility logic — pure, no DOM dependency, easy to test directly —
-// NOT renderCalendar()/renderMonthCalendar()/renderWeekCalendar() (the
-// actual DOM-building, and the swipe/animation drag handlers), which
-// are at least as dense and entangled as Board's renderBoard() was and
-// stay in index.html for a later, separately-scoped follow-up once they
-// have their own test coverage.
+// roadmap in deliberately narrow, separately-verified slices:
+//   Phase 5a — recurrence-expansion / event-visibility logic (this
+//     file's original content): pure, no DOM dependency, easy to test
+//     directly.
+//   Phase 5b — the calendar-event modal (openAddCalendarEvent and
+//     friends): same pattern as Board's card modal (Phase 4d), new
+//     dedicated tests alongside this move. renderCalendar()/
+//     renderMonthCalendar()/renderWeekCalendar() (the actual DOM-
+//     building) and the swipe/animation drag handlers are at least as
+//     dense and entangled as Board's renderBoard() was, and stay in
+//     index.html for a later, separately-scoped follow-up once they
+//     have their own test coverage.
 //
 // buildCalendarJobRows()/isCalendarJobSpanTaskId() are deliberately NOT
-// part of this slice either, despite living right next to the functions
-// below in index.html — they depend on getHiddenTaskOrders()/
+// part of this file either, despite living right next to functions that
+// did move — they depend on getHiddenTaskOrders()/
 // forEachVisibleSubUnit()/buildSubUnitClusters(), which are really
 // Gantt's own task-clustering logic reused here, not Calendar-specific.
 // Moving them now would mean either dragging Gantt's clustering code
 // along for the ride or leaving a half-moved shared dependency — cleaner
 // to revisit once Gantt itself is being extracted.
 //
-// getEffectiveRole()/getStoredUsername() stay in index.html on purpose
-// (session/role plumbing shared across the whole app, not Calendar-
-// specific) and are referenced below as ambient globals — an ordinary
-// top-level `function` declaration already attaches to `window` on its
-// own (unlike `let`/`const`), so nothing about those needed to change.
+// getEffectiveRole()/getStoredUsername()/openModal()/closeModal()/
+// ensureUserRosterLoaded()/saveCalendarEvents()/renderCalendar()/
+// showToast()/logActivity()/hasMinTier()/deleteCalendarEventFromShared()/
+// msDropdownLabelText() stay in index.html on purpose (session/role
+// plumbing, modal-chrome plumbing shared by every modal in the app, or
+// genuinely separate concerns) and are referenced below as ambient
+// globals — an ordinary top-level `function` declaration already
+// attaches to `window` on its own (unlike `let`/`const`), so nothing
+// about those needed to change.
 import type { CalendarEvent, CalendarEventOccurrence } from '../core/types';
 import { addMonths, toIsoDate } from '../utils/date';
 import { genId } from '../utils/id';
+import { escapeHtml } from '../utils/html';
 
 declare global {
   // eslint-disable-next-line no-var
   var calendarEvents: CalendarEvent[];
   // eslint-disable-next-line no-var
   var viewAsUsername: string | null;
+  // eslint-disable-next-line no-var
+  var editingCalendarEventId: string | null;
+  // eslint-disable-next-line no-var
+  var calendarEventTargetDate: string | null;
+  // eslint-disable-next-line no-var
+  var cachedUserRoster: { username: string; displayName: string }[] | null;
+  // eslint-disable-next-line no-var
+  var COLOR_PRESETS: string[];
+  // eslint-disable-next-line no-var
+  var activeProjectId: string | null;
   function getEffectiveRole(): string;
   function getStoredUsername(): string;
+  function openModal(id: string): void;
+  function closeModal(id: string, onClosed?: () => void): void;
+  function ensureUserRosterLoaded(): Promise<void>;
+  function saveCalendarEvents(): void;
+  function renderCalendar(): void;
+  function showToast(text: string, kind?: string): void;
+  function logActivity(text: string): void;
+  function hasMinTier(tier: string): boolean;
+  function deleteCalendarEventFromShared(projectId: string | null, eventId: string): void;
+  function msDropdownLabelText(count: number, emptyText?: string): string;
 }
 
 // Private to this module — nothing outside the functions below ever
@@ -159,6 +187,210 @@ function ensureCalendarEventIds(arr: CalendarEvent[]): CalendarEvent[] {
   return arr;
 }
 
+// ===== CALENDAR EVENT MODAL =====
+
+function openAddCalendarEvent(dateStr: string, timeStr: string): void {
+  editingCalendarEventId = null;
+  calendarEventTargetDate = dateStr;
+  document.getElementById('calendarEventModalTitle')!.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#7e57c2" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#7e57c2"/><rect x="6" y="13" width="3" height="3" fill="#7e57c2"/><rect x="10.5" y="13" width="3" height="3" fill="#7e57c2"/><rect x="15" y="13" width="3" height="3" fill="#7e57c2"/></svg> New Event';
+  (document.getElementById('ceDeleteBtn') as HTMLElement).style.display = 'none';
+  (document.getElementById('ce_title') as HTMLInputElement).value = '';
+  (document.getElementById('ce_title_hint') as HTMLElement).style.display = 'none';
+  (document.getElementById('ce_date') as HTMLInputElement).value = dateStr || '';
+  (document.getElementById('ce_time') as HTMLInputElement).value = timeStr || '';
+  (document.getElementById('ce_duration') as HTMLInputElement).value = '1';
+  (document.getElementById('ce_repeat') as HTMLSelectElement).value = 'none';
+  (document.getElementById('ce_repeat_until') as HTMLInputElement).value = '';
+  (document.getElementById('ce_color') as HTMLInputElement).value = '#7e57c2';
+  updateCalendarEventColorSwatch();
+  document.querySelectorAll('#ceColorPresets .color-preset').forEach((p) => p.classList.remove('selected'));
+  toggleCalendarEventColorPanel(false);
+  toggleRepeatUntilField();
+  (document.getElementById('ce_visibility') as HTMLSelectElement).value = 'all';
+  toggleCalendarEventVisibilityFields([]);
+  openModal('calendarEventModal');
+  setTimeout(function () { document.getElementById('ce_title')!.focus(); }, 50);
+}
+
+// sourceDate is accepted but unused for now — editing via the modal always
+// edits the series definition (evt.start/duration/etc.), not one occurrence.
+// Dragging an occurrence on the calendar (not this modal) is how you create
+// a per-occurrence exception — see handleCalBarMouseUp.
+function openEditCalendarEvent(eventId: string, sourceDate?: string): void {
+  const evt = calendarEvents.find((e) => e.id === eventId);
+  if (!evt) return;
+  // Defense-in-depth matching flattenCalendarEventsForRange()'s own filter
+  // — closes the gap for any entry point that resolves straight to an
+  // eventId without going through a rendered (and thus already-filtered)
+  // calendar bar. See isJobVisibleToMe()/editJob()'s identical guard.
+  if (!isCalendarEventVisibleToMe(evt)) return;
+  editingCalendarEventId = eventId;
+  calendarEventTargetDate = null;
+  document.getElementById('calendarEventModalTitle')!.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Event';
+  (document.getElementById('ceDeleteBtn') as HTMLElement).style.display = 'inline-flex';
+  (document.getElementById('ce_title') as HTMLInputElement).value = evt.title;
+  (document.getElementById('ce_title_hint') as HTMLElement).style.display = 'none';
+  (document.getElementById('ce_date') as HTMLInputElement).value = evt.start;
+  (document.getElementById('ce_time') as HTMLInputElement).value = evt.time || '';
+  (document.getElementById('ce_duration') as HTMLInputElement).value = String(evt.duration || 1);
+  (document.getElementById('ce_repeat') as HTMLSelectElement).value = evt.repeat || 'none';
+  (document.getElementById('ce_repeat_until') as HTMLInputElement).value = evt.repeatUntil || '';
+  (document.getElementById('ce_color') as HTMLInputElement).value = evt.color || '#7e57c2';
+  updateCalendarEventColorSwatch();
+  document.querySelectorAll('#ceColorPresets .color-preset').forEach((p) => {
+    (p as HTMLElement).classList.toggle('selected', (p as HTMLElement).dataset.color === evt.color);
+  });
+  toggleCalendarEventColorPanel(false);
+  toggleRepeatUntilField();
+  (document.getElementById('ce_visibility') as HTMLSelectElement).value = evt.visibility || 'all';
+  toggleCalendarEventVisibilityFields(evt.visibleMembers || []);
+  openModal('calendarEventModal');
+}
+
+function closeCalendarEventModal(): void {
+  closeModal('calendarEventModal', function () {
+    editingCalendarEventId = null;
+    calendarEventTargetDate = null;
+  });
+}
+
+function toggleRepeatUntilField(): void {
+  const repeat = (document.getElementById('ce_repeat') as HTMLSelectElement).value;
+  (document.getElementById('ce_repeat_until_group') as HTMLElement).style.display = (repeat === 'none') ? 'none' : 'block';
+}
+
+// Shows/rebuilds the Members checkbox list (see the Members custom field's
+// identical cf-multiselect pattern, collapsed the same way behind
+// toggleMsDropdown()/msSetAll()) only when Visibility is set to 'members'
+// — same lazy-roster-load-then-rerender idiom as renderCustomFieldsGrid().
+// `preSelected` carries the event's own evt.visibleMembers forward across
+// a re-render (e.g. once the roster finishes loading) so an in-progress
+// selection isn't lost.
+function toggleCalendarEventVisibilityFields(preSelected: string[] | null): void {
+  const visibility = (document.getElementById('ce_visibility') as HTMLSelectElement).value;
+  const group = document.getElementById('ce_visibility_members_group') as HTMLElement;
+  group.style.display = (visibility === 'members') ? 'block' : 'none';
+  if (visibility !== 'members') return;
+  const list = document.getElementById('ce_visibility_members_list')!;
+  const actions = document.getElementById('ce_visibility_members_actions') as HTMLElement | null;
+  const dropdownLabel = document.querySelector('#ceVisibilityMsDropdown .ms-dropdown-toggle span:first-child');
+  const selected = preSelected || collectCalendarEventVisibilityMembers();
+  if (!cachedUserRoster) {
+    list.innerHTML = '<span class="cf-multiselect-loading">Loading team roster…</span>';
+    ensureUserRosterLoaded().then(function () { toggleCalendarEventVisibilityFields(selected); });
+    return;
+  }
+  list.innerHTML = cachedUserRoster.length
+    ? cachedUserRoster.map((u) => {
+        return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>';
+      }).join('')
+    : '<span class="cf-multiselect-empty">No team accounts yet</span>';
+  if (actions) actions.style.display = cachedUserRoster.length ? 'flex' : 'none';
+  if (dropdownLabel) dropdownLabel.textContent = msDropdownLabelText(selected.length);
+}
+
+function collectCalendarEventVisibilityMembers(): string[] {
+  return Array.from(document.querySelectorAll('#ce_visibility_members_list input:checked')).map((el) => (el as HTMLInputElement).value);
+}
+
+function toggleCalendarEventColorPanel(forceOpen: boolean | null): void {
+  const panel = document.getElementById('ceColorPickerPanel')!;
+  const arrow = document.getElementById('ceColorToggleArrow')!;
+  const open = forceOpen != null ? forceOpen : !panel.classList.contains('open');
+  panel.classList.toggle('open', open);
+  arrow.classList.toggle('open', open);
+}
+
+function updateCalendarEventColorSwatch(): void {
+  (document.getElementById('ceColorToggleSwatch') as HTMLElement).style.background = (document.getElementById('ce_color') as HTMLInputElement).value;
+}
+
+function buildCalendarEventColorPresets(): void {
+  const container = document.getElementById('ceColorPresets')!;
+  container.innerHTML = '';
+  COLOR_PRESETS.forEach((c) => {
+    const div = document.createElement('div');
+    div.className = 'color-preset';
+    div.style.background = c;
+    div.dataset.color = c;
+    div.onclick = function () {
+      (document.getElementById('ce_color') as HTMLInputElement).value = c;
+      container.querySelectorAll('.color-preset').forEach((p) => p.classList.remove('selected'));
+      div.classList.add('selected');
+      updateCalendarEventColorSwatch();
+    };
+    container.appendChild(div);
+  });
+}
+
+function saveCalendarEventFromModal(): void {
+  const title = (document.getElementById('ce_title') as HTMLInputElement).value.trim();
+  if (!title) {
+    (document.getElementById('ce_title_hint') as HTMLElement).style.display = 'block';
+    return;
+  }
+  const date = (document.getElementById('ce_date') as HTMLInputElement).value;
+  if (!date) { showToast('Date is required', 'error'); return; }
+  const time = (document.getElementById('ce_time') as HTMLInputElement).value;
+  const duration = Math.max(1, parseInt((document.getElementById('ce_duration') as HTMLInputElement).value, 10) || 1);
+  const repeat = (document.getElementById('ce_repeat') as HTMLSelectElement).value;
+  const repeatUntil = (document.getElementById('ce_repeat_until') as HTMLInputElement).value;
+  const color = (document.getElementById('ce_color') as HTMLInputElement).value;
+  const visibility = (document.getElementById('ce_visibility') as HTMLSelectElement).value;
+  const visibleMembers = visibility === 'members' ? collectCalendarEventVisibilityMembers() : [];
+
+  if (editingCalendarEventId) {
+    const evt = calendarEvents.find((e) => e.id === editingCalendarEventId);
+    if (!evt) return;
+    evt.title = title;
+    evt.start = date;
+    evt.time = time;
+    evt.duration = duration;
+    evt.repeat = repeat;
+    evt.repeatUntil = repeatUntil || null;
+    evt.color = color;
+    evt.visibility = visibility;
+    evt.visibleMembers = visibleMembers;
+    // Backfill only — an event created before this feature (or by someone
+    // else) keeps whoever actually made it; never overwritten by a later
+    // editor just saving other changes.
+    if (!evt.createdBy) evt.createdBy = getStoredUsername();
+    logActivity('updated calendar event "' + title + '"');
+  } else {
+    calendarEvents.push({
+      id: genId(), title: title, start: date, time: time, duration: duration,
+      repeat: repeat, repeatUntil: repeatUntil || null, color: color, exceptions: {},
+      visibility: visibility, visibleMembers: visibleMembers, createdBy: getStoredUsername(),
+    });
+    logActivity('added calendar event "' + title + '"');
+  }
+  saveCalendarEvents();
+  // Re-renders whichever mode is currently active (month/week/day) — if
+  // this modal was opened from inside the day view (see openDayView()),
+  // that's calendarViewMode 'day', so the just-added/edited event shows
+  // up there immediately once this modal closes.
+  renderCalendar();
+  showToast('Event saved', 'success');
+  closeCalendarEventModal();
+}
+
+function deleteCalendarEventFromModal(): void {
+  // Defense-in-depth, matching deleteCardFromModal()'s same pattern — its
+  // trigger button is already data-min-tier gated, but delete is
+  // irreversible enough to warrant a second check here.
+  if (!hasMinTier('editor')) return;
+  if (!editingCalendarEventId) return;
+  const evt = calendarEvents.find((e) => e.id === editingCalendarEventId);
+  if (evt) logActivity('deleted calendar event "' + evt.title + '"');
+  const eventId = editingCalendarEventId;
+  calendarEvents = calendarEvents.filter((e) => e.id !== editingCalendarEventId);
+  saveCalendarEvents();
+  deleteCalendarEventFromShared(activeProjectId, eventId);
+  renderCalendar();
+  showToast('Event deleted', 'info');
+  closeCalendarEventModal();
+}
+
 export {
   isCalendarEventTaskId,
   parseCalendarEventTaskId,
@@ -167,4 +399,15 @@ export {
   isCalendarEventVisibleToMe,
   flattenCalendarEventsForRange,
   ensureCalendarEventIds,
+  openAddCalendarEvent,
+  openEditCalendarEvent,
+  closeCalendarEventModal,
+  toggleRepeatUntilField,
+  toggleCalendarEventVisibilityFields,
+  collectCalendarEventVisibilityMembers,
+  toggleCalendarEventColorPanel,
+  updateCalendarEventColorSwatch,
+  buildCalendarEventColorPresets,
+  saveCalendarEventFromModal,
+  deleteCalendarEventFromModal,
 };

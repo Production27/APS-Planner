@@ -28,6 +28,9 @@ import {
 import {
   isCalendarEventTaskId, parseCalendarEventTaskId, defaultRepeatUntil, getCalendarEventOccurrences,
   isCalendarEventVisibleToMe, flattenCalendarEventsForRange, ensureCalendarEventIds,
+  openAddCalendarEvent, openEditCalendarEvent, closeCalendarEventModal, toggleRepeatUntilField,
+  toggleCalendarEventVisibilityFields, collectCalendarEventVisibilityMembers, toggleCalendarEventColorPanel,
+  updateCalendarEventColorSwatch, buildCalendarEventColorPresets, saveCalendarEventFromModal, deleteCalendarEventFromModal,
 } from './views/calendar';
 
 declare global {
@@ -101,6 +104,17 @@ declare global {
     isCalendarEventVisibleToMe: typeof isCalendarEventVisibleToMe;
     flattenCalendarEventsForRange: typeof flattenCalendarEventsForRange;
     ensureCalendarEventIds: typeof ensureCalendarEventIds;
+    openAddCalendarEvent: typeof openAddCalendarEvent;
+    openEditCalendarEvent: typeof openEditCalendarEvent;
+    closeCalendarEventModal: typeof closeCalendarEventModal;
+    toggleRepeatUntilField: typeof toggleRepeatUntilField;
+    toggleCalendarEventVisibilityFields: typeof toggleCalendarEventVisibilityFields;
+    collectCalendarEventVisibilityMembers: typeof collectCalendarEventVisibilityMembers;
+    toggleCalendarEventColorPanel: typeof toggleCalendarEventColorPanel;
+    updateCalendarEventColorSwatch: typeof updateCalendarEventColorSwatch;
+    buildCalendarEventColorPresets: typeof buildCalendarEventColorPresets;
+    saveCalendarEventFromModal: typeof saveCalendarEventFromModal;
+    deleteCalendarEventFromModal: typeof deleteCalendarEventFromModal;
   }
 }
 
@@ -173,3 +187,14 @@ window.getCalendarEventOccurrences = getCalendarEventOccurrences;
 window.isCalendarEventVisibleToMe = isCalendarEventVisibleToMe;
 window.flattenCalendarEventsForRange = flattenCalendarEventsForRange;
 window.ensureCalendarEventIds = ensureCalendarEventIds;
+window.openAddCalendarEvent = openAddCalendarEvent;
+window.openEditCalendarEvent = openEditCalendarEvent;
+window.closeCalendarEventModal = closeCalendarEventModal;
+window.toggleRepeatUntilField = toggleRepeatUntilField;
+window.toggleCalendarEventVisibilityFields = toggleCalendarEventVisibilityFields;
+window.collectCalendarEventVisibilityMembers = collectCalendarEventVisibilityMembers;
+window.toggleCalendarEventColorPanel = toggleCalendarEventColorPanel;
+window.updateCalendarEventColorSwatch = updateCalendarEventColorSwatch;
+window.buildCalendarEventColorPresets = buildCalendarEventColorPresets;
+window.saveCalendarEventFromModal = saveCalendarEventFromModal;
+window.deleteCalendarEventFromModal = deleteCalendarEventFromModal;
