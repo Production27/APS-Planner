@@ -364,6 +364,45 @@ test('calendar bar drag: dragging a calendar event bar reschedules it by the dra
   expect(result.duration).toBe(before.duration);
 });
 
+test('calendar wheel navigation: a horizontal trackpad scroll pages the month, a vertical one does not', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('calendar'));
+  await page.waitForFunction(() => getActiveTab() === 'calendar');
+  await page.waitForTimeout(500);
+
+  const before = await page.evaluate(() => {
+    calendarViewDate = new Date('2026-09-15T00:00:00');
+    calendarViewMode = 'month';
+    renderCalendar();
+    return toIsoDate(calendarViewDate);
+  });
+
+  // A vertical-dominant wheel event (deltaY > deltaX) must be left alone
+  // entirely — handleCalWheel()'s own discrimination check — so a normal
+  // scroll/zoom wheel over the calendar never accidentally pages it.
+  // deltaX (80) alone clears CAL_WHEEL_THRESHOLD (50), so this only stays
+  // a no-op because of the deltaX-vs-deltaY discrimination check
+  // specifically, not because the accumulated delta was too small.
+  const afterVertical = await page.evaluate(() => {
+    const el = document.getElementById('calendarDays');
+    el.dispatchEvent(new WheelEvent('wheel', { deltaX: 80, deltaY: 200, bubbles: true, cancelable: true }));
+    return toIsoDate(calendarViewDate);
+  });
+  expect(afterVertical).toBe(before);
+
+  // A horizontal-dominant wheel event past CAL_WHEEL_THRESHOLD (50) pages
+  // to the next month via animateCalendarWheelChange()/calendarNext().
+  const afterHorizontal = await page.evaluate(() => {
+    const el = document.getElementById('calendarDays');
+    el.dispatchEvent(new WheelEvent('wheel', { deltaX: 80, deltaY: 5, bubbles: true, cancelable: true }));
+    return toIsoDate(calendarViewDate);
+  });
+  expect(afterHorizontal).toBe('2026-10-15');
+});
+
 test('gantt drag: moving a task bar shifts its dates by the dragged number of days', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

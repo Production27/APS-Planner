@@ -35,6 +35,8 @@ import {
   buildCalBarHtml, renderMonthCalendar, renderWeekCalendar, renderWeekHourGrid, calendarOpenJob,
   getScheduledItemsForDate, openDayView, renderDayCalendarView,
   handleCalBarMouseDown, handleCalBarMouseMove, applyCalBarMouseMove, handleCalBarMouseUp,
+  initCalendarDragHandlers, calSwipeTargets, handleCalSwipeStart, handleCalSwipeMove,
+  slideCalendarTargets, handleCalSwipeEnd, animateCalendarWheelChange, handleCalWheel,
 } from './views/calendar';
 import {
   cascadeShiftLaterTasks, startBarResizeRight, startBarResizeLeft, onBarResizeMove, applyBarResizeMove,
@@ -145,6 +147,14 @@ declare global {
     handleCalBarMouseMove: typeof handleCalBarMouseMove;
     applyCalBarMouseMove: typeof applyCalBarMouseMove;
     handleCalBarMouseUp: typeof handleCalBarMouseUp;
+    initCalendarDragHandlers: typeof initCalendarDragHandlers;
+    calSwipeTargets: typeof calSwipeTargets;
+    handleCalSwipeStart: typeof handleCalSwipeStart;
+    handleCalSwipeMove: typeof handleCalSwipeMove;
+    slideCalendarTargets: typeof slideCalendarTargets;
+    handleCalSwipeEnd: typeof handleCalSwipeEnd;
+    animateCalendarWheelChange: typeof animateCalendarWheelChange;
+    handleCalWheel: typeof handleCalWheel;
     cascadeShiftLaterTasks: typeof cascadeShiftLaterTasks;
     startBarResizeRight: typeof startBarResizeRight;
     startBarResizeLeft: typeof startBarResizeLeft;
@@ -275,6 +285,14 @@ window.handleCalBarMouseDown = handleCalBarMouseDown;
 window.handleCalBarMouseMove = handleCalBarMouseMove;
 window.applyCalBarMouseMove = applyCalBarMouseMove;
 window.handleCalBarMouseUp = handleCalBarMouseUp;
+window.initCalendarDragHandlers = initCalendarDragHandlers;
+window.calSwipeTargets = calSwipeTargets;
+window.handleCalSwipeStart = handleCalSwipeStart;
+window.handleCalSwipeMove = handleCalSwipeMove;
+window.slideCalendarTargets = slideCalendarTargets;
+window.handleCalSwipeEnd = handleCalSwipeEnd;
+window.animateCalendarWheelChange = animateCalendarWheelChange;
+window.handleCalWheel = handleCalWheel;
 window.cascadeShiftLaterTasks = cascadeShiftLaterTasks;
 window.startBarResizeRight = startBarResizeRight;
 window.startBarResizeLeft = startBarResizeLeft;

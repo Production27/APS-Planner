@@ -24,17 +24,23 @@
 //     Gantt drag test's pattern: drive the handlers directly against a
 //     real rendered bar, bypassing the rAF/mousemove timing wrapper),
 //     confirmed via break-then-restore, before moving — same discipline
-//     as every risky move this session. The purely-VISUAL swipe/wheel
-//     navigation gesture cluster (initCalendarDragHandlers and everything
-//     it wires up — calSwipeTargets/handleCalSwipeStart/Move/End/
-//     slideCalendarTargets/animateCalendarWheelChange/handleCalWheel) is
-//     deliberately NOT part of this move: it never mutates data (worst
-//     case of a bug there is a glitchy animation, not corrupted dates),
-//     is much harder to meaningfully unit-test (DOM-clone ghost elements,
-//     CSS transitions, touch-gesture timing), and is the same category of
-//     polish work as Gantt's own pinch-zoom/touch handlers — left to
-//     pair with those whenever Gantt's touch gestures are tackled, rather
-//     than being forced into this phase just because it lives nearby.
+//     as every risky move this session.
+//   Phase 5f — the purely-VISUAL swipe/wheel navigation gesture cluster:
+//     initCalendarDragHandlers/calSwipeTargets/handleCalSwipeStart/Move/
+//     End/slideCalendarTargets/animateCalendarWheelChange/handleCalWheel.
+//     Never mutates data (worst case of a bug here is a glitchy
+//     animation, not a corrupted date) — the same low-risk category as
+//     Gantt's own pinch-zoom/touch cluster (src/views/gantt.ts's Phase
+//     6d), which ended up NOT literally paired with this one in the end
+//     (independent files, no shared code — nothing to actually gain by
+//     delaying either for the other). No prior test coverage existed;
+//     real touch/swipe gestures aren't practically simulable in this
+//     test suite the same way real multi-touch pinch wasn't for Gantt,
+//     so this leans on manual real-browser verification plus one
+//     dedicated test for the desktop ctrl+wheel-free trackpad-scroll
+//     path (handleCalWheel's own deltaX/deltaY discrimination and
+//     threshold/cooldown logic), which IS directly driveable with a
+//     synthetic WheelEvent.
 //
 // buildCalendarJobRows()/isCalendarJobSpanTaskId() are deliberately NOT
 // part of this file either, despite living right next to functions that
@@ -93,8 +99,6 @@ declare global {
   var DUE_MARKER_TASK_ID: string;
   // eslint-disable-next-line no-var
   var calDragState: CalDragState | null;
-  // eslint-disable-next-line no-var
-  var calSwipeConsumedTap: boolean;
   function getEffectiveRole(): string;
   function getStoredUsername(): string;
   function openModal(id: string): void;
@@ -1554,6 +1558,260 @@ function handleCalBarMouseUp(e: MouseEvent): void {
   renderCalendar();
 }
 
+// ===== CALENDAR: SWIPE/WHEEL NAVIGATION (mobile swipe + desktop trackpad) =====
+
+function initCalendarDragHandlers(): void {
+  const daysEl = document.getElementById('calendarDays');
+  if (!daysEl) return;
+  daysEl.removeEventListener('mousedown', handleCalBarMouseDown);
+  daysEl.addEventListener('mousedown', handleCalBarMouseDown);
+
+  // Swipe left/right to go to next/prev month/day, following the finger
+  // live — mobile month & day mode only (see @media(max-width:480px);
+  // week view isn't reachable there, and desktop never gets touch events
+  // in the first place). Attached to both #calendarDays (the grid/agenda
+  // list) and #weekHourSection (day mode's hourly grid below it — see
+  // calSwipeTargets()) so a swipe starting on either one navigates and
+  // slides both together, not just whichever one the finger happened to
+  // land on. passive:true throughout since none of these call
+  // preventDefault — see the touch-action:pan-y rule on .calendar-days
+  // and .week-hour-section, which is what tells the browser to leave
+  // native vertical scroll alone while letting JS own horizontal drags,
+  // rather than the two fighting.
+  const hourEl = document.getElementById('weekHourSection');
+  [daysEl, hourEl].forEach(function (el) {
+    if (!el) return;
+    el.removeEventListener('touchstart', handleCalSwipeStart);
+    el.removeEventListener('touchmove', handleCalSwipeMove);
+    el.removeEventListener('touchend', handleCalSwipeEnd);
+    el.addEventListener('touchstart', handleCalSwipeStart, { passive: true });
+    el.addEventListener('touchmove', handleCalSwipeMove, { passive: true });
+    el.addEventListener('touchend', handleCalSwipeEnd, { passive: true });
+    // Desktop equivalent of the touch swipe above — trackpad two-finger
+    // horizontal scroll pages the calendar, same gesture as swiping on a
+    // phone. { passive: false } since handleCalWheel calls preventDefault
+    // on a horizontal gesture (otherwise a trackpad swipe can also
+    // trigger the browser's own back/forward navigation).
+    el.removeEventListener('wheel', handleCalWheel);
+    el.addEventListener('wheel', handleCalWheel, { passive: false });
+  });
+}
+
+// The elements a swipe drags/slides together — just #calendarDays in month
+// mode, plus #weekHourSection in day mode so the hourly grid moves in
+// lockstep with the all-day list above it (same day, one gesture).
+function calSwipeTargets(): HTMLElement[] {
+  const daysEl = document.getElementById('calendarDays') as HTMLElement | null;
+  if (!daysEl) return [];
+  if (calendarViewMode !== 'day') return [daysEl];
+  const hourEl = document.getElementById('weekHourSection') as HTMLElement | null;
+  return hourEl ? [daysEl, hourEl] : [daysEl];
+}
+
+const CAL_SWIPE_THRESHOLD = 60;
+let calSwipeStartX: number | null = null;
+let calSwipeStartY: number | null = null;
+let calSwipeTracking = false;
+// Set when a real drag (swipe or an aborted one) was recognized, so the
+// mousedown/mouseup pair synthesized from the same touch — which fires
+// right after touchend — knows not to also open whatever bar the finger
+// happened to land on. Read by handleCalBarMouseUp() earlier in this
+// file (Phase 5e) — a plain module-scoped `let` works for that (unlike
+// the cross-script `var`s elsewhere in this file) since both the reader
+// and the only writer (handleCalSwipeEnd() below) now live in this same
+// module; this used to be a real index.html global read here as an
+// ambient declaration, back when this cluster itself was still there.
+let calSwipeConsumedTap = false;
+
+function handleCalSwipeStart(e: TouchEvent): void {
+  // Month and day mode only — week's own hourly grid isn't reachable on
+  // mobile in the first place (see the mobile-only #weekHourSection hide
+  // rule), so there's nothing here to swipe through in that mode.
+  if ((calendarViewMode !== 'month' && calendarViewMode !== 'day') || e.touches.length !== 1) { calSwipeStartX = null; return; }
+  calSwipeStartX = e.touches[0].clientX;
+  calSwipeStartY = e.touches[0].clientY;
+  calSwipeTracking = false;
+}
+
+function handleCalSwipeMove(e: TouchEvent): void {
+  if (calSwipeStartX == null || e.touches.length !== 1) return;
+  const touch = e.touches[0];
+  const deltaX = touch.clientX - calSwipeStartX;
+  const deltaY = touch.clientY - (calSwipeStartY as number);
+  const targets = calSwipeTargets();
+  if (!targets.length) return;
+
+  if (!calSwipeTracking) {
+    // Wait for enough movement to tell a horizontal swipe apart from a
+    // vertical scroll before committing to either — once decided, a
+    // vertical gesture is left alone for native scroll to handle, exactly
+    // as if this listener wasn't here at all.
+    if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
+    if (Math.abs(deltaY) > Math.abs(deltaX)) { calSwipeStartX = null; return; }
+    calSwipeTracking = true;
+    targets.forEach(function (el) { el.style.transition = 'none'; });
+  }
+  targets.forEach(function (el) { el.style.transform = 'translateX(' + deltaX + 'px)'; });
+}
+
+// Slides the outgoing month/day out and the incoming one in as ONE
+// continuous motion, rather than finishing the exit before even starting
+// the entrance (the old approach: animate the live element to outX, wait
+// for that transition to end, THEN swap its content and animate it back
+// in from the opposite edge — two chained transitions back to back read
+// as a pause in the middle instead of a single seamless slide).
+//
+// The live element can't play both halves at once (it only holds one
+// month's content at a time), so a throwaway "ghost" — a snapshot clone
+// of the CURRENT (outgoing) content, pinned via position:fixed exactly
+// over the live element's on-screen rect — plays the exit while the live
+// element is immediately repointed to the new month/day and plays the
+// entrance. Both transitions are started in the same synchronous block,
+// so they run in lockstep and cross paths mid-slide instead of queuing.
+//
+//   targets        - the live elements (calSwipeTargets()) to swap/slide
+//   startTransform - translateX (px) the ghost continues FROM; 0 for a
+//                    fresh/at-rest trigger (wheel), or the drag's own
+//                    live deltaX to pick up exactly where a finger left it
+//   outX           - the far edge (±width) both the ghost's exit and the
+//                    live element's entrance are measured against
+//   goNext         - true = next month/day, false = previous
+//   duration       - CSS transition duration string, e.g. '0.2s'
+function slideCalendarTargets(targets: HTMLElement[], startTransform: number, outX: number, goNext: boolean, duration: string): void {
+  if (!targets.length) { if (goNext) calendarNext(); else calendarPrev(); return; }
+
+  const ghosts = targets.map(function (el) {
+    const rect = el.getBoundingClientRect();
+    const ghost = el.cloneNode(true) as HTMLElement;
+    ghost.removeAttribute('id');
+    ghost.querySelectorAll('[id]').forEach(function (child) { child.removeAttribute('id'); });
+    ghost.style.position = 'fixed';
+    ghost.style.top = rect.top + 'px';
+    ghost.style.left = rect.left + 'px';
+    ghost.style.width = rect.width + 'px';
+    ghost.style.height = rect.height + 'px';
+    ghost.style.margin = '0';
+    ghost.style.zIndex = '400';
+    ghost.style.pointerEvents = 'none';
+    ghost.style.transition = 'none';
+    ghost.style.transform = 'translateX(' + startTransform + 'px)';
+    document.body.appendChild(ghost);
+    return ghost;
+  });
+
+  if (goNext) calendarNext(); else calendarPrev();
+  // calendarNext()/calendarPrev() re-render the same live element(s)'
+  // contents in place — re-query rather than reusing `targets` in case
+  // day mode's own element set changed (e.g. #weekHourSection).
+  const freshTargets = calSwipeTargets();
+  const freshDaysEl = freshTargets[0];
+  if (!freshDaysEl) { ghosts.forEach(function (g) { g.remove(); }); return; }
+
+  // Jump the now-new-content live element out to the opposite edge with
+  // no transition (invisible — the ghost, opaque and higher z-index,
+  // still covers this same spot until the animation below starts), then
+  // let it and the ghost animate toward their final positions together.
+  freshTargets.forEach(function (el) {
+    el.style.transition = 'none';
+    el.style.transform = 'translateX(' + (-outX) + 'px)';
+  });
+  void freshDaysEl.offsetHeight; // force layout so the jump above lands before the transitions below start
+  freshTargets.forEach(function (el) {
+    el.style.transition = 'transform ' + duration + ' ease';
+    el.style.transform = 'translateX(0)';
+  });
+  ghosts.forEach(function (g) {
+    g.style.transition = 'transform ' + duration + ' ease';
+    g.style.transform = 'translateX(' + outX + 'px)';
+  });
+
+  freshDaysEl.addEventListener('transitionend', function cleanup() {
+    freshDaysEl.removeEventListener('transitionend', cleanup);
+    ghosts.forEach(function (g) { g.remove(); });
+  });
+}
+
+function handleCalSwipeEnd(e: TouchEvent): void {
+  const wasTracking = calSwipeTracking;
+  calSwipeTracking = false;
+  if (calSwipeStartX == null) return;
+  const touch = e.changedTouches[0];
+  const deltaX = touch.clientX - calSwipeStartX;
+  calSwipeStartX = null;
+  if (!wasTracking) return;
+
+  // Real dragging happened either way (whether or not it clears the
+  // threshold below) — not a clean tap, so the bar underneath shouldn't
+  // open once the synthesized mouseup for this same touch fires.
+  calSwipeConsumedTap = true;
+
+  const targets = calSwipeTargets();
+  if (!targets.length) return;
+  const daysEl = targets[0];
+
+  if (Math.abs(deltaX) < CAL_SWIPE_THRESHOLD) {
+    // Didn't clear the threshold — spring back to where it started, no
+    // month/day change.
+    targets.forEach(function (el) {
+      el.style.transition = 'transform 0.2s ease';
+      el.style.transform = 'translateX(0)';
+    });
+    return;
+  }
+
+  // Continue in the SAME direction the drag was already moving (a past
+  // bug derived this from a separate "dir" flag that ended up with the
+  // opposite sign of deltaX, so the grid — already sitting at a negative
+  // transform after following a leftward drag — snapped back positive
+  // right as you let go, instead of continuing left).
+  const width = daysEl.getBoundingClientRect().width || window.innerWidth;
+  const outX = deltaX < 0 ? -width : width;
+  const goNext = deltaX < 0; // swiping left continues left — next month/day
+  slideCalendarTargets(targets, deltaX, outX, goNext, '0.2s');
+}
+
+// Same slide-out/slide-in feel as the touch swipe above, but starting
+// fresh from rest instead of continuing a live drag position — this is
+// triggered by a discrete trackpad/wheel gesture (handleCalWheel below),
+// not a finger the user is actively tracking on screen.
+function animateCalendarWheelChange(goNext: boolean): void {
+  const targets = calSwipeTargets();
+  if (!targets.length) { if (goNext) calendarNext(); else calendarPrev(); return; }
+  const daysEl = targets[0];
+  const width = daysEl.getBoundingClientRect().width || window.innerWidth;
+  const outX = goNext ? -width : width;
+  slideCalendarTargets(targets, 0, outX, goNext, '0.18s');
+}
+
+// Desktop equivalent of the mobile touch-swipe (handleCalSwipeStart/Move/
+// End above) — trackpad two-finger horizontal scroll (or a mouse wheel
+// already reporting deltaX, e.g. shift+wheel) pages the calendar
+// forward/back. Wheel events fire many times per physical gesture, so
+// this accumulates deltaX and only acts once past a threshold, then
+// ignores further deltas for a short cooldown so one continued swipe
+// doesn't flip through several pages at once.
+let calWheelAccum = 0;
+let calWheelCooldown = false;
+let calWheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
+const CAL_WHEEL_THRESHOLD = 50;
+function handleCalWheel(e: WheelEvent): void {
+  // Only take over a clearly-horizontal gesture — leave a normal
+  // vertical scroll/zoom wheel alone entirely (it still needs to reach
+  // the hourly grid's own vertical scroll in week/day mode).
+  if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+  e.preventDefault();
+  if (calWheelCooldown) return;
+  calWheelAccum += e.deltaX;
+  if (calWheelIdleTimer !== null) clearTimeout(calWheelIdleTimer);
+  calWheelIdleTimer = setTimeout(function () { calWheelAccum = 0; }, 200);
+  if (Math.abs(calWheelAccum) < CAL_WHEEL_THRESHOLD) return;
+  const goNext = calWheelAccum > 0;
+  calWheelAccum = 0;
+  calWheelCooldown = true;
+  setTimeout(function () { calWheelCooldown = false; }, 450);
+  animateCalendarWheelChange(goNext);
+}
+
 export {
   isCalendarEventTaskId,
   parseCalendarEventTaskId,
@@ -1591,4 +1849,12 @@ export {
   handleCalBarMouseMove,
   applyCalBarMouseMove,
   handleCalBarMouseUp,
+  initCalendarDragHandlers,
+  calSwipeTargets,
+  handleCalSwipeStart,
+  handleCalSwipeMove,
+  slideCalendarTargets,
+  handleCalSwipeEnd,
+  animateCalendarWheelChange,
+  handleCalWheel,
 };
