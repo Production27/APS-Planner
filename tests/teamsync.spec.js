@@ -934,6 +934,259 @@ test('column settings dropdown: opening one column\'s dropdown closes any other 
   expect(result.bOpen).toBe(true);
 });
 
+test('Manage Column Checklist modal: adding and removing a default item persists onto the column and renders in the real modal body', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('board'));
+
+  const result = await page.evaluate(() => {
+    const col = BOARD_COLUMNS[0];
+    openManageColumnChecklist(col.id);
+    const input = document.getElementById('mcc_new_item');
+    input.value = 'Confirm rebar delivery';
+    addColumnChecklistDefaultItem();
+    const afterAdd = {
+      columnHasItem: (col.defaultChecklist || []).some((i) => i.text === 'Confirm rebar delivery'),
+      bodyHtmlHasItem: document.getElementById('manageColumnChecklistBody').innerHTML.includes('Confirm rebar delivery'),
+    };
+    const addedItem = col.defaultChecklist.find((i) => i.text === 'Confirm rebar delivery');
+    removeColumnChecklistDefaultItem(addedItem.id);
+    const afterRemove = (col.defaultChecklist || []).some((i) => i.id === addedItem.id);
+    closeManageColumnChecklist();
+    return { afterAdd, afterRemove };
+  });
+
+  expect(result.afterAdd.columnHasItem).toBe(true);
+  expect(result.afterAdd.bodyHtmlHasItem).toBe(true);
+  expect(result.afterRemove).toBe(false);
+});
+
+test('My Checklist: adding a manual item, marking it done, and deleting it all persist onto the card — a manually-added item is spliced out entirely, not soft-deleted', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    document.body.insertAdjacentHTML('beforeend', '<input id="test_mci_input" value="Order rebar">');
+    addMyChecklistItem(activeProjectId, card.id, card.column, 'test_mci_input');
+    const added = card.checklists[card.column].find((i) => i.text === 'Order rebar');
+    const afterAdd = { found: !!added, done: added && added.done };
+
+    toggleMyChecklistItemDone(activeProjectId, card.id, card.column, added.id);
+    const afterToggle = card.checklists[card.column].find((i) => i.id === added.id).done;
+
+    // deleteMyChecklistItem() REASSIGNS card.checklists[columnId] to a new
+    // filtered array rather than mutating the existing one in place — must
+    // re-read it fresh here rather than reuse an earlier array reference,
+    // or a stale reference would make a real splice look like a no-op.
+    deleteMyChecklistItem(activeProjectId, card.id, card.column, added.id);
+    const afterDelete = card.checklists[card.column].some((i) => i.id === added.id);
+
+    return { afterAdd, afterToggle, afterDelete };
+  });
+
+  expect(result.afterAdd).toEqual({ found: true, done: false });
+  expect(result.afterToggle).toBe(true);
+  expect(result.afterDelete).toBe(false); // spliced out, not left behind with removed:true
+});
+
+test('My Checklist: deleting a template-sourced item soft-deletes it (flags removed) instead of splicing it out, so it can\'t be resurrected', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    const col = BOARD_COLUMNS.find((c) => c.id === card.column);
+    col.defaultChecklist = [{ id: 'tmpl-inspect', text: 'Inspect forms' }];
+    ensureCardChecklists(card);
+    // Simulates a template item that's already been materialized onto this
+    // card (the real path is getChecklistForStageInProject(), already
+    // covered by its own unit tests) — this test is specifically about
+    // deleteMyChecklistItem()'s template-vs-manual branch.
+    card.checklists[card.column] = [{ id: 'tmpl-inspect', text: 'Inspect forms', done: false, assignee: '' }];
+
+    deleteMyChecklistItem(activeProjectId, card.id, card.column, 'tmpl-inspect');
+    const item = card.checklists[card.column].find((i) => i.id === 'tmpl-inspect');
+    return { stillPresent: !!item, removedFlag: item && item.removed };
+  });
+
+  expect(result.stillPresent).toBe(true);
+  expect(result.removedFlag).toBe(true);
+});
+
+test('My Checklist: sub-items can be added, toggled done, and deleted independently of their parent item', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    ensureCardChecklists(card);
+    card.checklists[card.column] = [{ id: 'item-1', text: 'Frame walls', done: false, assignee: '' }];
+
+    document.body.insertAdjacentHTML('beforeend', '<input id="test_sub_input" value="Order lumber">');
+    addMyChecklistSubItem(activeProjectId, card.id, card.column, 'item-1', 'test_sub_input');
+    const item = card.checklists[card.column][0];
+    const afterAdd = { count: (item.subItems || []).length, done: item.subItems[0].done };
+
+    const subId = item.subItems[0].id;
+    toggleMyChecklistSubItemDone(activeProjectId, card.id, card.column, 'item-1', subId);
+    const afterToggle = item.subItems[0].done;
+
+    deleteMyChecklistSubItem(activeProjectId, card.id, card.column, 'item-1', subId);
+    const afterDelete = item.subItems.length;
+
+    return { afterAdd, afterToggle, afterDelete };
+  });
+
+  expect(result.afterAdd).toEqual({ count: 1, done: false });
+  expect(result.afterToggle).toBe(true);
+  expect(result.afterDelete).toBe(0);
+});
+
+test('My Checklist: setMyChecklistItemAssignee adds and removes a username from an item\'s assignee list', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    ensureCardChecklists(card);
+    card.checklists[card.column] = [{ id: 'item-1', text: 'Frame walls', done: false, assignee: [] }];
+
+    setMyChecklistItemAssignee(activeProjectId, card.id, card.column, 'item-1', 'testadmin', true);
+    const afterAssign = card.checklists[card.column][0].assignee.slice();
+
+    setMyChecklistItemAssignee(activeProjectId, card.id, card.column, 'item-1', 'testadmin', false);
+    const afterUnassign = card.checklists[card.column][0].assignee.slice();
+
+    return { afterAssign, afterUnassign };
+  });
+
+  expect(result.afterAssign).toEqual(['testadmin']);
+  expect(result.afterUnassign).toEqual([]);
+});
+
+test('My Checklist: setMyChecklistStageAssignee is blocked below Project Admin, and works for a Project Admin', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    ensureCardChecklists(card);
+
+    currentUserRole = 'editor'; // below projectAdmin — canAssignChecklistStages() must reject
+    setMyChecklistStageAssignee(activeProjectId, card.id, card.column, 'alice', true);
+    const afterEditorAttempt = card.checklistAssignees && card.checklistAssignees[card.column];
+
+    currentUserRole = 'admin';
+    setMyChecklistStageAssignee(activeProjectId, card.id, card.column, 'alice', true);
+    const afterAdmin = card.checklistAssignees[card.column].slice();
+
+    return { afterEditorAttempt, afterAdmin };
+  });
+
+  expect(result.afterEditorAttempt).toBeUndefined();
+  expect(result.afterAdmin).toEqual(['alice']);
+});
+
+test('My Checklist: buildMyChecklistRows only surfaces open items actually assigned to the current user', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    ensureCardChecklists(card);
+    card.checklists[card.column] = [
+      { id: 'mine-open', text: 'Assigned to me, still open', done: false, assignee: ['testadmin'] },
+      { id: 'mine-done', text: 'Assigned to me, already done', done: true, assignee: ['testadmin'] },
+      { id: 'someone-else', text: 'Assigned to someone else', done: false, assignee: ['bob'] },
+    ];
+    const rows = buildMyChecklistRows();
+    return rows.filter((r) => r.card.id === card.id).map((r) => r.item.text);
+  });
+
+  expect(result).toEqual(['Assigned to me, still open']);
+});
+
+test('My Checklist: the real tab renders an assigned item and updates the rail badge count', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('checklist'));
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    ensureCardChecklists(card);
+    card.checklists[card.column] = [{ id: 'render-check', text: 'Confirm rebar delivery', done: false, assignee: ['testadmin'] }];
+    renderMyChecklist();
+    return {
+      bodyHtml: document.getElementById('myChecklistListBody').innerHTML,
+      badgeText: document.getElementById('myChecklistCount').textContent,
+    };
+  });
+
+  expect(result.bodyHtml).toContain('Confirm rebar delivery');
+  expect(Number(result.badgeText)).toBeGreaterThan(0);
+});
+
+test('persistMyChecklistChange: a change to a non-active project\'s checklist is pushed to the server (pushProjectToShared) instead of taking the active project\'s saveJobs() path', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  let ws;
+  await page.routeWebSocket(/\/room\?/, (socket) => {
+    ws = socket;
+    ws.send(JSON.stringify({ type: 'snapshot', projects: {} }));
+    socket.onMessage(() => {}); // just needs to not error; acks aren't required for this check
+  });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const setup = await page.evaluate(() => {
+    // The freshly-seeded "other" project starts with an empty boardCards
+    // array (see enforceFixedProjectSet()'s makeProject() in index.html) —
+    // a minimal synthetic card is enough for resolveMyChecklistCard()'s
+    // own needs (just .id and .column), so this doesn't depend on the app
+    // having organically created one there.
+    const [, otherId] = Object.keys(projects);
+    const otherCard = { id: 'test-card-' + genId(), column: 'bid', checklists: { bid: [{ id: 'i1', text: 'Non-active project item', done: false, assignee: [] }] } };
+    projects[otherId].boardCards.push(otherCard);
+    return { otherId, cardId: otherCard.id, columnId: otherCard.column };
+  });
+
+  // pushProjectToShared() (real import from src/sync/outbound.ts) sends an
+  // 'upsertProjectBatch' over the actual WebSocket — capturing that message
+  // is a more reliable signal than trying to intercept the module-local
+  // import binding persistMyChecklistChange() calls directly.
+  const messages = [];
+  ws.onMessage((raw) => { try { messages.push(JSON.parse(raw)); } catch (e) {} });
+
+  const itemDoneAfter = await page.evaluate(
+    ({ otherId, cardId, columnId }) => {
+      toggleMyChecklistItemDone(otherId, cardId, columnId, 'i1');
+      return projects[otherId].boardCards.find((c) => c.id === cardId).checklists[columnId][0].done;
+    },
+    setup
+  );
+  await new Promise((r) => setTimeout(r, 200));
+
+  const pushedOther = messages.some((m) => m.type === 'upsertProjectBatch' && m.projectId === setup.otherId);
+  expect(itemDoneAfter).toBe(true);
+  expect(pushedOther).toBe(true);
+});
+
 test('board card visibility: isCardFromArchivedJob/isCardVisibleToMe reflect the linked job\'s real state', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

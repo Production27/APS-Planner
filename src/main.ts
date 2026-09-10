@@ -70,7 +70,16 @@ import {
 } from './sync/inbound';
 import {
   ensureCardChecklists, normalizeChecklistAssignees, isChecklistStageVisibleToMe,
-  getOpenChecklistItemsForCard, confirmChecklistBeforeMove,
+  getOpenChecklistItemsForCard, confirmChecklistBeforeMove, canAssignChecklistStages,
+  openManageColumnChecklist, closeManageColumnChecklist, renderManageColumnChecklistBody,
+  addColumnChecklistDefaultItem, removeColumnChecklistDefaultItem, getChecklistForStageInProject,
+  buildMyChecklistRows, myChecklistMsDropdownHtml, renderMyChecklistList, toggleMyChecklistHideDone,
+  myChecklistAddableCards, renderMyChecklistToolbar, renderMyChecklistFilterBar, onMyChecklistContextChange,
+  addMyChecklistItemFromBar, buildMyChecklistJobRows, renderMyChecklist, updateMyChecklistBadge,
+  openMyChecklistItem, resolveMyChecklistCard, persistMyChecklistChange, withMyChecklistItem,
+  toggleMyChecklistItemDone, toggleMyChecklistItemRequired, toggleMyChecklistSubItemDone,
+  addMyChecklistSubItem, deleteMyChecklistSubItem, addMyChecklistItem, deleteMyChecklistItem,
+  setMyChecklistItemAssignee, setMyChecklistStageAssignee,
 } from './views/checklist';
 
 declare global {
@@ -276,6 +285,38 @@ declare global {
     isChecklistStageVisibleToMe: typeof isChecklistStageVisibleToMe;
     getOpenChecklistItemsForCard: typeof getOpenChecklistItemsForCard;
     confirmChecklistBeforeMove: typeof confirmChecklistBeforeMove;
+    canAssignChecklistStages: typeof canAssignChecklistStages;
+    openManageColumnChecklist: typeof openManageColumnChecklist;
+    closeManageColumnChecklist: typeof closeManageColumnChecklist;
+    renderManageColumnChecklistBody: typeof renderManageColumnChecklistBody;
+    addColumnChecklistDefaultItem: typeof addColumnChecklistDefaultItem;
+    removeColumnChecklistDefaultItem: typeof removeColumnChecklistDefaultItem;
+    getChecklistForStageInProject: typeof getChecklistForStageInProject;
+    buildMyChecklistRows: typeof buildMyChecklistRows;
+    myChecklistMsDropdownHtml: typeof myChecklistMsDropdownHtml;
+    renderMyChecklistList: typeof renderMyChecklistList;
+    toggleMyChecklistHideDone: typeof toggleMyChecklistHideDone;
+    myChecklistAddableCards: typeof myChecklistAddableCards;
+    renderMyChecklistToolbar: typeof renderMyChecklistToolbar;
+    renderMyChecklistFilterBar: typeof renderMyChecklistFilterBar;
+    onMyChecklistContextChange: typeof onMyChecklistContextChange;
+    addMyChecklistItemFromBar: typeof addMyChecklistItemFromBar;
+    buildMyChecklistJobRows: typeof buildMyChecklistJobRows;
+    renderMyChecklist: typeof renderMyChecklist;
+    updateMyChecklistBadge: typeof updateMyChecklistBadge;
+    openMyChecklistItem: typeof openMyChecklistItem;
+    resolveMyChecklistCard: typeof resolveMyChecklistCard;
+    persistMyChecklistChange: typeof persistMyChecklistChange;
+    withMyChecklistItem: typeof withMyChecklistItem;
+    toggleMyChecklistItemDone: typeof toggleMyChecklistItemDone;
+    toggleMyChecklistItemRequired: typeof toggleMyChecklistItemRequired;
+    toggleMyChecklistSubItemDone: typeof toggleMyChecklistSubItemDone;
+    addMyChecklistSubItem: typeof addMyChecklistSubItem;
+    deleteMyChecklistSubItem: typeof deleteMyChecklistSubItem;
+    addMyChecklistItem: typeof addMyChecklistItem;
+    deleteMyChecklistItem: typeof deleteMyChecklistItem;
+    setMyChecklistItemAssignee: typeof setMyChecklistItemAssignee;
+    setMyChecklistStageAssignee: typeof setMyChecklistStageAssignee;
   }
 }
 
@@ -480,3 +521,35 @@ window.normalizeChecklistAssignees = normalizeChecklistAssignees;
 window.isChecklistStageVisibleToMe = isChecklistStageVisibleToMe;
 window.getOpenChecklistItemsForCard = getOpenChecklistItemsForCard;
 window.confirmChecklistBeforeMove = confirmChecklistBeforeMove;
+window.canAssignChecklistStages = canAssignChecklistStages;
+window.openManageColumnChecklist = openManageColumnChecklist;
+window.closeManageColumnChecklist = closeManageColumnChecklist;
+window.renderManageColumnChecklistBody = renderManageColumnChecklistBody;
+window.addColumnChecklistDefaultItem = addColumnChecklistDefaultItem;
+window.removeColumnChecklistDefaultItem = removeColumnChecklistDefaultItem;
+window.getChecklistForStageInProject = getChecklistForStageInProject;
+window.buildMyChecklistRows = buildMyChecklistRows;
+window.myChecklistMsDropdownHtml = myChecklistMsDropdownHtml;
+window.renderMyChecklistList = renderMyChecklistList;
+window.toggleMyChecklistHideDone = toggleMyChecklistHideDone;
+window.myChecklistAddableCards = myChecklistAddableCards;
+window.renderMyChecklistToolbar = renderMyChecklistToolbar;
+window.renderMyChecklistFilterBar = renderMyChecklistFilterBar;
+window.onMyChecklistContextChange = onMyChecklistContextChange;
+window.addMyChecklistItemFromBar = addMyChecklistItemFromBar;
+window.buildMyChecklistJobRows = buildMyChecklistJobRows;
+window.renderMyChecklist = renderMyChecklist;
+window.updateMyChecklistBadge = updateMyChecklistBadge;
+window.openMyChecklistItem = openMyChecklistItem;
+window.resolveMyChecklistCard = resolveMyChecklistCard;
+window.persistMyChecklistChange = persistMyChecklistChange;
+window.withMyChecklistItem = withMyChecklistItem;
+window.toggleMyChecklistItemDone = toggleMyChecklistItemDone;
+window.toggleMyChecklistItemRequired = toggleMyChecklistItemRequired;
+window.toggleMyChecklistSubItemDone = toggleMyChecklistSubItemDone;
+window.addMyChecklistSubItem = addMyChecklistSubItem;
+window.deleteMyChecklistSubItem = deleteMyChecklistSubItem;
+window.addMyChecklistItem = addMyChecklistItem;
+window.deleteMyChecklistItem = deleteMyChecklistItem;
+window.setMyChecklistItemAssignee = setMyChecklistItemAssignee;
+window.setMyChecklistStageAssignee = setMyChecklistStageAssignee;

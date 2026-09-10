@@ -155,3 +155,43 @@ test('getOpenChecklistItemsForCard: a stage hidden from the current user never g
   });
   expect(result).toEqual([]);
 });
+
+// Phase CL-d: getChecklistForStageInProject() is a pure function of its
+// own arguments (no ambient globals read), so it's tested directly here
+// rather than against the real app.
+
+test('getChecklistForStageInProject: materializes a column\'s default-checklist template into a fresh stage on first call', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    const checklists = {};
+    const boardCols = [{ id: 'active', label: 'Active', defaultChecklist: [{ id: 'tmpl-1', text: 'Pour footing' }, { id: 'tmpl-2', text: 'Frame walls' }] }];
+    return getChecklistForStageInProject(checklists, 'active', boardCols);
+  });
+  expect(result).toEqual([
+    { id: 'tmpl-1', text: 'Pour footing', done: false, assignee: '' },
+    { id: 'tmpl-2', text: 'Frame walls', done: false, assignee: '' },
+  ]);
+});
+
+test('getChecklistForStageInProject: a second call does not duplicate already-materialized template items, and preserves edits made to them', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    const checklists = {};
+    const boardCols = [{ id: 'active', label: 'Active', defaultChecklist: [{ id: 'tmpl-1', text: 'Pour footing' }] }];
+    const first = getChecklistForStageInProject(checklists, 'active', boardCols);
+    first[0].done = true; // simulate the user checking it off between calls
+    const second = getChecklistForStageInProject(checklists, 'active', boardCols);
+    return { length: second.length, done: second[0].done };
+  });
+  expect(result).toEqual({ length: 1, done: true });
+});
+
+test('getChecklistForStageInProject: a template item that was soft-deleted (removed:true) is not resurrected by a later call', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    const checklists = { active: [{ id: 'tmpl-1', text: 'Pour footing', done: false, removed: true }] };
+    const boardCols = [{ id: 'active', label: 'Active', defaultChecklist: [{ id: 'tmpl-1', text: 'Pour footing' }] }];
+    return getChecklistForStageInProject(checklists, 'active', boardCols);
+  });
+  expect(result).toEqual([{ id: 'tmpl-1', text: 'Pour footing', done: false, removed: true }]);
+});
