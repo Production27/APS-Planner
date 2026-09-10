@@ -28,8 +28,11 @@
 import { escapeHtml } from '../utils/html';
 
 declare global {
+  // Shared verbatim with src/sync/connection.ts's identical ambient
+  // declaration for this same global — see that file's own comment on
+  // this line for why the shape must match exactly.
   // eslint-disable-next-line no-var
-  var roomSocket: { readyState: number; send: (data: string) => void } | null;
+  var roomSocket: { readyState: number; send: (data: string) => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;
   // eslint-disable-next-line no-var
   var activeProjectId: string | null;
   // eslint-disable-next-line no-var

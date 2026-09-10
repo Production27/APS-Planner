@@ -92,6 +92,30 @@ test('regression (Fix 3): isBusyEditing() now covers an in-progress Board drag',
   expect(idleBusy).toBe(false);
 });
 
+test('isBusyEditing(): an open modal (e.g. the card detail modal) also counts as busy', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await page.goto(APP_URL);
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
+
+  // The Fix 3 test above covers the Board/Gantt/Calendar drag-state
+  // branch of isBusyEditing() — this covers the separate open-modal
+  // branch, which wasn't exercised by any existing test before this
+  // move (src/sync/connection.ts, Phase 7b).
+  const result = await page.evaluate(() => {
+    const before = isBusyEditing();
+    const modal = document.getElementById('cardModal');
+    modal.classList.add('show');
+    const whileOpen = isBusyEditing();
+    modal.classList.remove('show');
+    const afterClose = isBusyEditing();
+    return { before, whileOpen, afterClose };
+  });
+
+  expect(result.before).toBe(false);
+  expect(result.whileOpen).toBe(true);
+  expect(result.afterClose).toBe(false);
+});
+
 test('regression (Fix 4): a first-connection failure escalates the sync indicator instead of hanging on "Connecting…"', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page); // real connection succeeds; the scenario below is simulated directly

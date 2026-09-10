@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-10.4';
+const APP_VERSION = '2026-09-10.5';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -12543,116 +12543,27 @@ async function getSessionToken() {
 // `var`, not `let` — src/sync/presence.ts's bundled sendPresenceUpdate()
 // (Phase 7a) reads this.
 var roomSocket = null;
-let roomEverConnected = false; // true once at least one snapshot has been received on this page load
+// `var`, not `let` — src/sync/connection.ts's bundled handleRoomClose()
+// (Phase 7b) reads this, and index.html's own handleRoomMessage() still
+// reads/writes it too.
+var roomEverConnected = false; // true once at least one snapshot has been received on this page load
 let msgSeq = 0;
 // msgId -> { msg, sentAt } — every outbound write sits here until acked,
 // rejected, or errored. Replayed in order on reconnect (see roomSocket's
 // 'open' handler) since a plain WebSocket has no built-in "resend what
 // didn't make it" the way Liveblocks' SDK did.
-const pendingWrites = new Map();
+// `var`, not `const` — src/sync/connection.ts's bundled handleRoomOpen()
+// (Phase 7b) reads this.
+var pendingWrites = new Map();
 let stuckWriteTimer = null;
 let syncPushTimer = null;
 let pendingRemoteRefresh = false;
 
-// Single small dot, bottom-right — replaces the old always-visible
-// "connecting…/saving…/live" text badge, the full-width red top banner,
-// and the stuck-write toast popup. Stays small and quiet at every state
-// (no text, no popups) — but stays visibly PRESENT rather than
-// disappearing entirely once connected, as a first cut of this redesign
-// briefly did: a faint, low-opacity green dot when everything's fine, so
-// there's still an at-a-glance "yes, this is live" to find if you go
-// looking for it, without it demanding attention. Gets more noticeable
-// only once there's something worth knowing: reconnecting (quiet amber,
-// no motion) or an actual problem — offline for a while, or a change
-// stuck unconfirmed (red, gently pulsing). Hovering it shows the
-// specific reason via a native tooltip rather than a popup.
-let syncDotEl = null;
-let offlineSince = null;
-let offlineEscalateTimer = null;
+// initSyncIndicator()/setSyncIndicator()/scheduleOfflineEscalation()/
+// cancelOfflineEscalation()/isBusyEditing() moved to
+// src/sync/connection.ts (Phase 7b of the architecture roadmap) — see
+// the identical note by genId() above.
 
-function initSyncIndicator() {
-  const dot = document.createElement('div');
-  dot.id = 'syncDot';
-  dot.style.cssText = 'position:fixed;bottom:14px;right:14px;z-index:9999;width:9px;height:9px;border-radius:50%;background:#43a047;opacity:0.35;pointer-events:auto;transition:opacity 0.4s ease,background 0.3s ease;box-shadow:0 1px 3px rgba(0,0,0,0.25);';
-  document.body.appendChild(dot);
-  syncDotEl = dot;
-}
-
-// state: 'ok' (faint green — connected, nothing wrong, the default/happy
-// state most of the time), 'connecting' (quiet amber, e.g. initial
-// connect or a fresh disconnect that might recover in a second or two),
-// 'problem' (red, gently pulsing — offline long enough to matter, or a
-// write that hasn't confirmed in 8+ seconds).
-function setSyncIndicator(state, tooltip) {
-  if (!syncDotEl) return;
-  syncDotEl.title = tooltip || (state === 'ok' ? 'Live' : '');
-  if (state === 'ok') {
-    syncDotEl.style.opacity = '0.35';
-    syncDotEl.style.background = '#43a047';
-    syncDotEl.style.animation = 'none';
-    return;
-  }
-  syncDotEl.style.opacity = '0.85';
-  if (state === 'problem') {
-    syncDotEl.style.background = '#e53935';
-    syncDotEl.style.animation = 'syncDotPulse 1.6s ease-in-out infinite';
-  } else {
-    syncDotEl.style.background = '#f0ad4e';
-    syncDotEl.style.animation = 'none';
-  }
-}
-
-// Mirrors the old banner's debounce: a one-second wifi blip shouldn't
-// escalate to the red/pulsing state, only a connection that's actually
-// stayed down for a bit.
-function scheduleOfflineEscalation() {
-  clearTimeout(offlineEscalateTimer);
-  if (!offlineSince) offlineSince = Date.now();
-  offlineEscalateTimer = setTimeout(function() {
-    setSyncIndicator('problem', "You're offline — changes aren't syncing. Try reloading once you're back online.");
-  }, 8000);
-}
-function cancelOfflineEscalation() {
-  clearTimeout(offlineEscalateTimer);
-  offlineEscalateTimer = null;
-  offlineSince = null;
-}
-
-function isBusyEditing() {
-  const openModal = ['cardModal', 'themeModal', 'manageFieldsModal', 'deleteModal', 'calendarEventModal', 'manageColumnChecklistModal'].some(function(id) {
-    const el = document.getElementById(id);
-    return el && el.classList.contains('show');
-  });
-  if (openModal) return true;
-
-  // A Gantt/Calendar bar drag or resize in progress is just as disruptable
-  // by a mid-gesture remote refresh as typing in a form field is: a remote
-  // update replaces `jobs` with freshly-parsed objects and renderGantt()/
-  // renderCalendar() tear down and rebuild every bar element — while the
-  // in-progress drag's state (barMoveState.bar, task references, etc.)
-  // still points at the pre-refresh DOM/objects. Left unguarded, dropping
-  // the drag after that lands on stale objects instead of the fresh ones,
-  // which can end up mutating the wrong task's dates entirely.
-  // draggedCardId/draggedColId are the Board's own drag-in-progress flags
-  // (set/cleared by handleCardDragStart/End, handleColumnDragStart/End) —
-  // same idiom as the Gantt/Calendar flags above, added here so a remote
-  // snapshot mid-drag can't rebuild the board out from under the user the
-  // same way it already can't for a Gantt/Calendar drag.
-  if (barMoveState || tickResizeState || barResizeState || calDragState || draggedCardId || draggedColId) return true;
-
-  const active = document.activeElement;
-  if (active) {
-    if (active.isContentEditable) return true;
-    const tag = active.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-      // Only block if the focused input is actually inside the job form
-      // (or the comments panel beside it, so a mid-draft comment isn't
-      // disrupted by a remote refresh either)
-      if (active.closest && (active.closest('#jobForm') || active.closest('#jobCommentsPanel'))) return true;
-    }
-  }
-  return false;
-}
 
 function queueSharedSync() {
   clearTimeout(syncPushTimer);
@@ -12772,26 +12683,8 @@ async function buildRoomWsUrl() {
   return httpUrl.toString();
 }
 
-// Named (not inline) specifically so each is independently testable
-// without needing a real WebSocket/network connection — see the
-// sandboxed test suite this migration was built with.
-function handleRoomOpen() {
-  setSyncIndicator('ok');
-  cancelOfflineEscalation();
-  // Replay anything that didn't get confirmed before the connection
-  // dropped — the server will just re-apply/re-ack it (upserts are
-  // idempotent by id; a delete/tombstone replay is a harmless no-op if it
-  // already landed; a stale whole-value replay gets correctly rejected +
-  // re-synced the same as any other stale write).
-  pendingWrites.forEach(function(entry) {
-    // Unlike its fire-and-forget siblings elsewhere in this file, this is
-    // resending real unsaved user data — armStuckWriteWatch()'s 8s timer
-    // remains the actual safety net either way, but a silent failure here
-    // shouldn't also be a silent one in the console.
-    try { roomSocket.send(JSON.stringify(entry.msg)); } catch (e) { console.error('Failed to resend pending write on reconnect', entry.msg, e); }
-  });
-  sendPresenceUpdate();
-}
+// handleRoomOpen() moved to src/sync/connection.ts (Phase 7b of the
+// architecture roadmap) — see the identical note by genId() above.
 
 // ===== PRESENCE (who's currently viewing which tab/project) =====
 // Deliberately a fully separate, best-effort system, not routed through
@@ -12824,61 +12717,9 @@ var myPresenceSessionId = genId();
 // src/sync/presence.ts (Phase 7a of the architecture roadmap) — see the
 // identical note by genId() above.
 
-function handleRoomClose(event) {
-  // Close code 4001 = the server force-closed this connection because an
-  // admin changed our role/project assignment (see the Worker's
-  // /internal/kick-user, called from handleUsersUpdate/handleUsersRemove).
-  // The cached token still encodes the OLD permissions and buildRoomWsUrl()
-  // would happily reuse it on a plain reconnect (getSessionToken() only
-  // re-authenticates when the cached token is actually expired) — clearing
-  // it here forces a fresh interactive login instead, so the reconnect
-  // picks up real, current permissions (or correctly fails if removed).
-  if (event && event.code === 4001) {
-    setStoredSessionToken(null);
-    reauthenticateOnce(true);
-  }
-  // Escalate to the offline indicator on ANY close, not just one after a
-  // previously-successful connection — a first-connection failure (cold
-  // start, brief outage right at page load) used to leave the dot stuck on
-  // "Connecting…" forever since roomEverConnected was still false.
-  // scheduleOfflineEscalation() already dedupes via offlineSince/
-  // clearTimeout, so calling it unconditionally here is safe.
-  if (roomEverConnected) {
-    setSyncIndicator('connecting', 'Reconnecting…');
-  }
-  scheduleOfflineEscalation();
-}
-function handleRoomSocketError(err) {
-  console.error('Room socket error', err);
-}
-function handleRoomSocketMessageEvent(event) {
-  try {
-    handleRoomMessage(JSON.parse(event.data));
-  } catch (err) {
-    console.error('handleRoomMessage failed — a remote update may not have fully applied', err);
-  }
-}
-
-async function setupLiveblocksSync() {
-  initSyncIndicator();
-  setSyncIndicator('connecting', 'Connecting…');
-
-  try {
-    const { default: ReconnectingWebSocket } = await import('https://esm.sh/reconnecting-websocket@4.4.0');
-
-    roomSocket = new ReconnectingWebSocket(buildRoomWsUrl, [], { maxRetries: Infinity });
-    roomSocket.addEventListener('open', handleRoomOpen);
-    roomSocket.addEventListener('close', handleRoomClose);
-    roomSocket.addEventListener('error', handleRoomSocketError);
-    roomSocket.addEventListener('message', handleRoomSocketMessageEvent);
-
-    window.addEventListener('offline', function() { scheduleOfflineEscalation(); });
-
-  } catch (err) {
-    console.error('Room sync init failed:', err);
-    setSyncIndicator('problem', 'Sync failed: ' + err.message);
-  }
-}
+// handleRoomClose()/handleRoomSocketError()/handleRoomSocketMessageEvent()/
+// setupLiveblocksSync() moved to src/sync/connection.ts (Phase 7b of the
+// architecture roadmap) — see the identical note by genId() above.
 
 function handleRoomMessage(msg) {
   if (!msg || typeof msg.type !== 'string') return;

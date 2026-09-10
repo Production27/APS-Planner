@@ -49,6 +49,10 @@ import {
 import {
   sendPresenceUpdate, presenceAvatarColor, presenceInitials, presenceAnimDelay, renderPresenceAvatars,
 } from './sync/presence';
+import {
+  initSyncIndicator, setSyncIndicator, scheduleOfflineEscalation, cancelOfflineEscalation, isBusyEditing,
+  handleRoomOpen, handleRoomClose, handleRoomSocketError, handleRoomSocketMessageEvent, setupLiveblocksSync,
+} from './sync/connection';
 
 declare global {
   interface Window {
@@ -192,6 +196,16 @@ declare global {
     presenceInitials: typeof presenceInitials;
     presenceAnimDelay: typeof presenceAnimDelay;
     renderPresenceAvatars: typeof renderPresenceAvatars;
+    initSyncIndicator: typeof initSyncIndicator;
+    setSyncIndicator: typeof setSyncIndicator;
+    scheduleOfflineEscalation: typeof scheduleOfflineEscalation;
+    cancelOfflineEscalation: typeof cancelOfflineEscalation;
+    isBusyEditing: typeof isBusyEditing;
+    handleRoomOpen: typeof handleRoomOpen;
+    handleRoomClose: typeof handleRoomClose;
+    handleRoomSocketError: typeof handleRoomSocketError;
+    handleRoomSocketMessageEvent: typeof handleRoomSocketMessageEvent;
+    setupLiveblocksSync: typeof setupLiveblocksSync;
   }
 }
 
@@ -335,3 +349,13 @@ window.presenceAvatarColor = presenceAvatarColor;
 window.presenceInitials = presenceInitials;
 window.presenceAnimDelay = presenceAnimDelay;
 window.renderPresenceAvatars = renderPresenceAvatars;
+window.initSyncIndicator = initSyncIndicator;
+window.setSyncIndicator = setSyncIndicator;
+window.scheduleOfflineEscalation = scheduleOfflineEscalation;
+window.cancelOfflineEscalation = cancelOfflineEscalation;
+window.isBusyEditing = isBusyEditing;
+window.handleRoomOpen = handleRoomOpen;
+window.handleRoomClose = handleRoomClose;
+window.handleRoomSocketError = handleRoomSocketError;
+window.handleRoomSocketMessageEvent = handleRoomSocketMessageEvent;
+window.setupLiveblocksSync = setupLiveblocksSync;
