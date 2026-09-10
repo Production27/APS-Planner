@@ -28,19 +28,24 @@
 import { escapeHtml } from '../utils/html';
 
 declare global {
-  // Shared verbatim with src/sync/connection.ts's identical ambient
-  // declaration for this same global — see that file's own comment on
-  // this line for why the shape must match exactly.
+  // Shared verbatim with src/sync/connection.ts's and src/sync/outbound.ts's
+  // identical ambient declaration for this same global — see connection.ts's
+  // own comment on this line for why the shape must match exactly.
   // eslint-disable-next-line no-var
-  var roomSocket: { readyState: number; send: (data: string) => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;
+  var roomSocket: { readyState: number; send: (data: string) => void; close: () => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;
   // eslint-disable-next-line no-var
   var activeProjectId: string | null;
   // eslint-disable-next-line no-var
   var latestPresenceUsers: PresenceUser[];
   // eslint-disable-next-line no-var
   var myPresenceSessionId: string;
+  // Widened to `any` values in Phase 7c (see src/sync/outbound.ts's
+  // identical declaration and comment) — that file's push functions read
+  // many more project fields than this file's read-only "what's this
+  // project called" use, and every declaration of the same global must
+  // stay structurally identical.
   // eslint-disable-next-line no-var
-  var projects: Record<string, { name: string; [key: string]: unknown }>;
+  var projects: Record<string, any>;
 }
 
 interface PresenceUser {

@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-10.5';
+const APP_VERSION = '2026-09-10.6';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5177,7 +5177,8 @@ var draggedCardId = null;
 // Same reasoning — relocated here from its old spot right before the
 // column-drag-and-drop code below, which moved to src/views/board.ts.
 var draggedColId = null;
-let localActivityLog = [];
+// `var` — src/sync/outbound.ts's logActivity() (Phase 7c) reads/writes this.
+var localActivityLog = [];
 // `var` — same cross-script-visibility reasoning as `jobs` above:
 // src/views/board.ts's card-modal code (Phase 4d) reads/sets this.
 var draftAttachments = [];
@@ -12238,8 +12239,9 @@ function mergeTombstones(a, b) {
   return merged;
 }
 
-const DISPLAY_NAME_KEY = "gantt_display_name_v1";
-const USERNAME_KEY = "gantt_username_v1";
+// `var` — src/sync/outbound.ts's logout() (Phase 7c) reads these.
+var DISPLAY_NAME_KEY = "gantt_display_name_v1";
+var USERNAME_KEY = "gantt_username_v1";
 // Retired: used to hold the raw password in localStorage indefinitely.
 // Kept only as a key name to scrub (see the boot-time cleanup below) —
 // nothing writes to it anymore.
@@ -12555,103 +12557,18 @@ let msgSeq = 0;
 // `var`, not `const` — src/sync/connection.ts's bundled handleRoomOpen()
 // (Phase 7b) reads this.
 var pendingWrites = new Map();
-let stuckWriteTimer = null;
-let syncPushTimer = null;
 let pendingRemoteRefresh = false;
 
 // initSyncIndicator()/setSyncIndicator()/scheduleOfflineEscalation()/
 // cancelOfflineEscalation()/isBusyEditing() moved to
 // src/sync/connection.ts (Phase 7b of the architecture roadmap) — see
 // the identical note by genId() above.
-
-
-function queueSharedSync() {
-  clearTimeout(syncPushTimer);
-  syncPushTimer = setTimeout(pushLiveblocksState, 300);
-}
-
-// Synchronously pushes any project edit still sitting in the debounced
-// room-sync queue, if one is pending — must run before anything
-// reassigns activeProjectId (switchProject()/enforceProjectScopeForRole())
-// so the still-armed timer can't fire AFTER the flip and misdirect a
-// pending edit at the new project instead of the one it was actually for.
-// pushLiveblocksState() resolves its target via getActiveProject() at
-// FIRE time, with no memory of which project queueSharedSync() was
-// originally armed for — left unflushed, an edit made just before a
-// switch is silently never pushed to the shared room at all (it stays
-// correct in this browser's own localStorage, but the timer that fires
-// 300ms later pushes whatever project is active BY THEN instead).
-function flushPendingRoomPush() {
-  if (syncPushTimer) {
-    clearTimeout(syncPushTimer);
-    syncPushTimer = null;
-    pushLiveblocksState();
-  }
-}
-
-// A page close/refresh within that 300ms window used to lose the edit
-// entirely (a bug fixed earlier, kept fixed here): saved to localStorage
-// synchronously, but the debounced push never fires. Flush any pending
-// push the moment the tab is hidden or about to unload.
-function flushPendingSync() {
-  flushAutoSaveJobForm();
-  flushCardAutosave();
-  flushPendingRoomPush();
-}
-document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'hidden') flushPendingSync();
-});
-window.addEventListener('pagehide', flushPendingSync);
-
-// A full reload rather than a manual in-place reset of every module-level
-// global (currentUserRole, currentAssignedProjectId, roomSocket,
-// pendingWrites, activeProjectId, ...) — reusing the app's own already-
-// proven fresh-boot path is safer than hand-rolling a teardown that has to
-// remember every one of them.
-function logout() {
-  if (!window.confirm('Log out of TeamSync?')) return;
-  flushPendingSync();
-  if (roomSocket) { try { roomSocket.close(); } catch (e) {} }
-  setStoredSessionToken(null);
-  localStorage.removeItem(USERNAME_KEY);
-  localStorage.removeItem(DISPLAY_NAME_KEY);
-  window.location.reload();
-}
-
-// ---- Outbound: send a message, track it until acked ----
-function sendRoomMessage(msg) {
-  msg.msgId = 'm' + (++msgSeq) + '-' + Date.now();
-  pendingWrites.set(msg.msgId, { msg: msg, sentAt: Date.now() });
-  armStuckWriteWatch();
-  if (roomSocket && roomSocket.readyState === 1) {
-    try { roomSocket.send(JSON.stringify(msg)); } catch (err) { console.error('Failed to send room message', err); }
-  }
-  // If the socket isn't open, the message just waits in pendingWrites —
-  // the 'open' handler below replays everything still pending once
-  // (re)connected, so nothing needs to happen here in that case.
-  return msg.msgId;
-}
-
-function armStuckWriteWatch() {
-  if (stuckWriteTimer) return;
-  stuckWriteTimer = setTimeout(function() {
-    stuckWriteTimer = null;
-    if (pendingWrites.size > 0) {
-      console.error('Room sync stuck — ' + pendingWrites.size + ' change(s) not yet confirmed by the server after 8+ seconds.');
-      setSyncIndicator('problem', 'Last change may not have saved — try reloading if this persists.');
-    }
-  }, 8000);
-}
-function clearPendingWrite(msgId) {
-  pendingWrites.delete(msgId);
-  if (pendingWrites.size === 0) {
-    if (stuckWriteTimer) { clearTimeout(stuckWriteTimer); stuckWriteTimer = null; }
-    // Only reached via an ack/rejection, meaning the connection is
-    // currently healthy — resolves a stuck-write indicator if one was
-    // showing, back to the default silent state.
-    setSyncIndicator('ok');
-  }
-}
+//
+// queueSharedSync()/flushPendingRoomPush()/flushPendingSync()/logout()/
+// sendRoomMessage()/armStuckWriteWatch()/clearPendingWrite() (plus
+// stuckWriteTimer/syncPushTimer/msgSeq, now private module state there)
+// moved to src/sync/outbound.ts (Phase 7c of the architecture roadmap) —
+// the OUTBOUND half of sync (sending this browser's own changes out).
 
 // Runs on every WebSocket (re)connect attempt (see buildRoomWsUrl() below,
 // called fresh by ReconnectingWebSocket each try) — re-asserts project
@@ -12783,25 +12700,9 @@ function synthesizeJobFromOrphanCard(card, boardColumns) {
 const ORPHAN_RECOVERY_GRACE_MS = 5000;
 const pendingOrphanRecovery = {};
 
-// True while this project has a local change not yet confirmed by the
-// server — either already sent and awaiting an ack (pendingWrites), or
-// still sitting in the 300ms queueSharedSync() debounce and not even
-// sent yet (syncPushTimer). Both windows matter: a snapshot broadcast can
-// be triggered by anything in the room (another user's edit, this
-// project's own earlier push) and doesn't guarantee it reflects a change
-// just made locally — applying it blindly during either window can race
-// an optimistic local add/edit and wipe it back out before it ever
-// reaches the server (caught during staging testing: a just-added job
-// vanishing). pushLiveblocksState() (what the debounce timer calls) only
-// ever pushes the active project, so the timer only implicates that one.
-// See applyRoomSnapshot()'s use of this below.
-function hasPendingWriteForProject(projectId) {
-  if (syncPushTimer && projectId === activeProjectId) return true;
-  for (const entry of pendingWrites.values()) {
-    if (entry.msg && entry.msg.projectId === projectId) return true;
-  }
-  return false;
-}
+// hasPendingWriteForProject() moved to src/sync/outbound.ts (Phase 7c of
+// the architecture roadmap) — see the identical note by genId() above.
+// Still used below by applyRoomSnapshot().
 
 // Object.assign({}, ..., remoteFieldOpts) below merges JSON parsed
 // straight off the WebSocket — unlike an object literal, JSON.parse
@@ -13171,169 +13072,13 @@ function applyRoomSnapshot(remoteProjects, isFirstSnapshot) {
   triggerPostSnapshotRefresh();
 }
 
-// ---- Outbound pushes ----
-// Deliberately upsert-only (never delete-by-absence) for the same reason
-// this was true before the migration: a local snapshot (proj.jobs, etc.)
-// can be stale relative to the shared room — e.g. this tab deferred
-// merging a teammate's concurrent addition while isBusyEditing() was
-// true, and a save fired in the meantime still reads from those stale
-// globals. Diffing "what's missing from my stale snapshot" and deleting
-// it remotely would silently destroy the teammate's new job/card. Real
-// deletions instead go through deleteJobFromShared()/deleteCardFromShared()/
-// deleteCalendarEventFromShared() as explicit, targeted ops fired at the
-// exact moment the user deletes something.
-function pushProjectToShared(projectId, headerOverride) {
-  const proj = projects[projectId];
-  if (!proj) return;
-  const header = headerOverride || proj.header;
-
-  sendRoomMessage({
-    type: 'upsertProjectBatch',
-    projectId: projectId,
-    name: proj.name,
-    jobs: proj.jobs.map(function(j) { return Object.assign({}, j, { updatedAt: Date.now() }); }),
-    boardCards: proj.boardCards.map(function(c) { return Object.assign({}, c, { updatedAt: Date.now() }); }),
-    calendarEvents: (proj.calendarEvents || []).map(function(e) { return Object.assign({}, e, { updatedAt: Date.now() }); }),
-    header: { title: header.title || proj.name, subtitle: header.subtitle || '', theme: normalizeThemeColor(header.theme) }
-  });
-}
-
-// Removes a project's entry entirely — no UI calls this (project
-// deletion is still disabled app-wide), but it's a real, wired-up server
-// capability now, reachable from a browser console for exactly the kind
-// of one-off admin cleanup this was built for: e.g.
-// removeProjectFromShared('some-stray-project-id').
-function removeProjectFromShared(projectId) {
-  sendRoomMessage({ type: 'removeProject', projectId: projectId });
-}
-
-// A rare sync race (see the comment above enforceFixedProjectSet()'s
-// caller — a stray empty "Untitled Project" reached production once
-// already) can leave a genuinely empty, still-default-named "Untitled
-// Project" sitting in the shared room. This app is fixed to exactly two
-// projects and has no user-facing way to delete one, so instead of
-// leaving it to keep syncing down to every client
-// forever, prune it automatically on every snapshot: remove it locally AND
-// tell the shared room to drop it too (removeProjectFromShared()) so it
-// doesn't just reappear on the next one. Deliberately narrow — only ever
-// touches a project that's BOTH named exactly the untouched default AND
-// has no real data on it, and never the one currently being viewed, so a
-// legitimately (if oddly) named or populated project is never at risk.
-function pruneStrayEmptyProjects() {
-  Object.keys(projects).forEach(function(id) {
-    const p = projects[id];
-    if (!p || p.name !== 'Untitled Project' || id === activeProjectId) return;
-    const isEmpty = (!p.jobs || !p.jobs.length) && (!p.boardCards || !p.boardCards.length) && (!p.calendarEvents || !p.calendarEvents.length);
-    if (!isEmpty) return;
-    console.warn('Pruning a stray empty "Untitled Project" (id ' + id + ')');
-    delete projects[id];
-    saveProjects();
-    removeProjectFromShared(id);
-    updateProjectToggle();
-  });
-}
-
-// Explicit, targeted deletes for one job/card/calendar event — the only
-// things that actually remove a key from the shared data, called at the
-// exact moment the user deletes something. Also tombstones the id, since
-// a stale tab's later routine upsert could otherwise resurrect the very
-// thing just deleted here (see the comment above pushProjectToShared()).
-function deleteFromSharedMap(projectId, mapKey, id) {
-  const keyMap = { jobsMap: 'jobs', boardCardsMap: 'boardCards', calendarEventsMap: 'calendarEvents' };
-  sendRoomMessage({ type: 'deleteFromMap', projectId: projectId, mapKey: keyMap[mapKey] || mapKey, id: id });
-  const proj = projects[projectId];
-  if (proj) proj.deletedIds = mergeTombstones(proj.deletedIds, { [String(id)]: Date.now() });
-}
-function deleteJobFromShared(projectId, jobId) { deleteFromSharedMap(projectId, 'jobsMap', jobId); }
-function deleteCardFromShared(projectId, cardId) { deleteFromSharedMap(projectId, 'boardCardsMap', cardId); }
-function deleteCalendarEventFromShared(projectId, eventId) { deleteFromSharedMap(projectId, 'calendarEventsMap', eventId); }
-
-// Same tombstone-only bookkeeping, for ids with no top-level map entry of
-// their own — like a deleted job phase (nested inside job.phases, which
-// rides along inside the whole job object push).
-function recordTombstone(projectId, id) {
-  sendRoomMessage({ type: 'recordTombstone', projectId: projectId, id: id });
-  const proj = projects[projectId];
-  if (proj) proj.deletedIds = mergeTombstones(proj.deletedIds, { [String(id)]: Date.now() });
-}
-
-// Targeted pushes for the whole-array/object project fields that
-// pushProjectToShared() deliberately doesn't touch on its routine path —
-// fired only from the exact functions that intentionally change these
-// (saveBoardColumns()/saveFieldOptions()), each carrying the field's
-// current known revision so the server can tell a stale write (from a
-// tab that hasn't caught up with someone else's more recent change) from
-// a current one, rather than blindly overwriting either way.
-function pushFieldToShared(projectId, fieldKey, value) {
-  const proj = projects[projectId];
-  if (!proj) return;
-  const typeByField = { boardColumns: 'setBoardColumns', fieldOptions: 'setFieldOptions', header: 'setHeader', workflowItems: 'setWorkflowItems' };
-  const msgType = typeByField[fieldKey];
-  if (!msgType) return;
-  const baseFieldRevision = (proj.fieldRevisions && proj.fieldRevisions[fieldKey]) || 0;
-  sendRoomMessage({ type: msgType, projectId: projectId, value: value, baseFieldRevision: baseFieldRevision });
-  // Optimistically bump the local revision so a rapid second edit before
-  // the ack lands still sends a plausible baseFieldRevision rather than
-  // the same now-stale one twice — if this guess is wrong the server's
-  // rejection (and the snapshot that immediately follows it) corrects it.
-  if (!proj.fieldRevisions) proj.fieldRevisions = { boardColumns: 0, fieldOptions: 0, header: 0, workflowItems: 0 };
-  proj.fieldRevisions[fieldKey] = baseFieldRevision + 1;
-}
-function pushBoardColumnsToShared(projectId) {
-  const proj = projects[projectId];
-  if (proj) pushFieldToShared(projectId, 'boardColumns', proj.boardColumns);
-}
-function pushFieldOptionsToShared(projectId) {
-  const proj = projects[projectId];
-  if (proj) pushFieldToShared(projectId, 'fieldOptions', proj.fieldOptions);
-}
-function pushWorkflowItemsToShared(projectId) {
-  const proj = projects[projectId];
-  if (proj) pushFieldToShared(projectId, 'workflowItems', proj.workflowItems);
-}
-function pushHeaderToShared(projectId) {
-  const proj = projects[projectId];
-  if (proj) pushFieldToShared(projectId, 'header', proj.header);
-}
-
-function logActivity(actionText) {
-  const p = getActiveProject();
-  if (!p) return;
-  const name = getStoredDisplayName() || 'Someone';
-  const entry = { who: name, what: actionText, when: Date.now() };
-
-  // Always keep a local copy so it works even when offline
-  localActivityLog.push(entry);
-  while (localActivityLog.length > 50) localActivityLog.shift();
-
-  sendRoomMessage({ type: 'logActivity', projectId: p.id, who: name, what: actionText, when: entry.when });
-
-  const sidebar = document.getElementById('activitySidebar');
-  if (sidebar && !sidebar.classList.contains('collapsed')) {
-    renderActivityLogSidebar();
-  }
-}
-
-function pushLiveblocksState() {
-  clearTimeout(syncPushTimer);
-  syncPushTimer = null;
-
-  const p = getActiveProject();
-  if (!p) return;
-
-  try {
-    // Read straight from the DOM for the active project's header, since that's
-    // the freshest source (p.header is only updated on blur via saveActiveProject).
-    pushProjectToShared(p.id, {
-      title: document.getElementById('headerTitle').textContent.trim(),
-      subtitle: document.getElementById('headerSubtitle').textContent.trim(),
-      theme: getSavedThemeColor()
-    });
-  } catch (e) {
-    console.error(e);
-    setSyncIndicator('problem', 'Save failed: ' + e.message);
-  }
-}
+// pushProjectToShared()/removeProjectFromShared()/pruneStrayEmptyProjects()/
+// deleteFromSharedMap()/deleteJobFromShared()/deleteCardFromShared()/
+// deleteCalendarEventFromShared()/recordTombstone()/pushFieldToShared()/
+// pushBoardColumnsToShared()/pushFieldOptionsToShared()/
+// pushWorkflowItemsToShared()/pushHeaderToShared()/logActivity()/
+// pushLiveblocksState() moved to src/sync/outbound.ts (Phase 7c of the
+// architecture roadmap) — see the identical note by genId() above.
 
 // Section 6/1 schema-lock plus Section 5's card sync both already run as
 // part of this chain: loadActiveProjectData() normalizes every job's tasks

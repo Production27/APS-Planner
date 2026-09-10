@@ -31,15 +31,14 @@
 import { sendPresenceUpdate } from './presence';
 
 declare global {
-  // Shared verbatim with src/sync/presence.ts's identical ambient
-  // declaration for this same global — TypeScript's global declaration
-  // merging requires every re-declaration to be structurally identical,
-  // not just compatible (the same lesson learned in Phase 6a's
-  // getJobDueMarkerTask). This file needs the richer addEventListener
-  // shape (it's the one that actually constructs the connection), so
-  // both files declare the same superset shape.
+  // Shared verbatim with src/sync/presence.ts's and src/sync/outbound.ts's
+  // identical ambient declaration for this same global — TypeScript's
+  // global declaration merging requires every re-declaration to be
+  // structurally identical, not just compatible (the same lesson learned
+  // in Phase 6a's getJobDueMarkerTask). `close` was added in Phase 7c for
+  // outbound.ts's logout(), which closes the socket directly.
   // eslint-disable-next-line no-var
-  var roomSocket: { readyState: number; send: (data: string) => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;
+  var roomSocket: { readyState: number; send: (data: string) => void; close: () => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;
   // eslint-disable-next-line no-var
   var roomEverConnected: boolean;
   // eslint-disable-next-line no-var

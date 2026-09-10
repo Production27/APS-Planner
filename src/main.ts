@@ -53,6 +53,13 @@ import {
   initSyncIndicator, setSyncIndicator, scheduleOfflineEscalation, cancelOfflineEscalation, isBusyEditing,
   handleRoomOpen, handleRoomClose, handleRoomSocketError, handleRoomSocketMessageEvent, setupLiveblocksSync,
 } from './sync/connection';
+import {
+  queueSharedSync, flushPendingRoomPush, flushPendingSync, logout, sendRoomMessage, armStuckWriteWatch,
+  clearPendingWrite, hasPendingWriteForProject, pushProjectToShared, removeProjectFromShared,
+  pruneStrayEmptyProjects, deleteFromSharedMap, deleteJobFromShared, deleteCardFromShared,
+  deleteCalendarEventFromShared, recordTombstone, pushFieldToShared, pushBoardColumnsToShared,
+  pushFieldOptionsToShared, pushWorkflowItemsToShared, pushHeaderToShared, logActivity, pushLiveblocksState,
+} from './sync/outbound';
 
 declare global {
   interface Window {
@@ -206,6 +213,29 @@ declare global {
     handleRoomSocketError: typeof handleRoomSocketError;
     handleRoomSocketMessageEvent: typeof handleRoomSocketMessageEvent;
     setupLiveblocksSync: typeof setupLiveblocksSync;
+    queueSharedSync: typeof queueSharedSync;
+    flushPendingRoomPush: typeof flushPendingRoomPush;
+    flushPendingSync: typeof flushPendingSync;
+    logout: typeof logout;
+    sendRoomMessage: typeof sendRoomMessage;
+    armStuckWriteWatch: typeof armStuckWriteWatch;
+    clearPendingWrite: typeof clearPendingWrite;
+    hasPendingWriteForProject: typeof hasPendingWriteForProject;
+    pushProjectToShared: typeof pushProjectToShared;
+    removeProjectFromShared: typeof removeProjectFromShared;
+    pruneStrayEmptyProjects: typeof pruneStrayEmptyProjects;
+    deleteFromSharedMap: typeof deleteFromSharedMap;
+    deleteJobFromShared: typeof deleteJobFromShared;
+    deleteCardFromShared: typeof deleteCardFromShared;
+    deleteCalendarEventFromShared: typeof deleteCalendarEventFromShared;
+    recordTombstone: typeof recordTombstone;
+    pushFieldToShared: typeof pushFieldToShared;
+    pushBoardColumnsToShared: typeof pushBoardColumnsToShared;
+    pushFieldOptionsToShared: typeof pushFieldOptionsToShared;
+    pushWorkflowItemsToShared: typeof pushWorkflowItemsToShared;
+    pushHeaderToShared: typeof pushHeaderToShared;
+    logActivity: typeof logActivity;
+    pushLiveblocksState: typeof pushLiveblocksState;
   }
 }
 
@@ -359,3 +389,26 @@ window.handleRoomClose = handleRoomClose;
 window.handleRoomSocketError = handleRoomSocketError;
 window.handleRoomSocketMessageEvent = handleRoomSocketMessageEvent;
 window.setupLiveblocksSync = setupLiveblocksSync;
+window.queueSharedSync = queueSharedSync;
+window.flushPendingRoomPush = flushPendingRoomPush;
+window.flushPendingSync = flushPendingSync;
+window.logout = logout;
+window.sendRoomMessage = sendRoomMessage;
+window.armStuckWriteWatch = armStuckWriteWatch;
+window.clearPendingWrite = clearPendingWrite;
+window.hasPendingWriteForProject = hasPendingWriteForProject;
+window.pushProjectToShared = pushProjectToShared;
+window.removeProjectFromShared = removeProjectFromShared;
+window.pruneStrayEmptyProjects = pruneStrayEmptyProjects;
+window.deleteFromSharedMap = deleteFromSharedMap;
+window.deleteJobFromShared = deleteJobFromShared;
+window.deleteCardFromShared = deleteCardFromShared;
+window.deleteCalendarEventFromShared = deleteCalendarEventFromShared;
+window.recordTombstone = recordTombstone;
+window.pushFieldToShared = pushFieldToShared;
+window.pushBoardColumnsToShared = pushBoardColumnsToShared;
+window.pushFieldOptionsToShared = pushFieldOptionsToShared;
+window.pushWorkflowItemsToShared = pushWorkflowItemsToShared;
+window.pushHeaderToShared = pushHeaderToShared;
+window.logActivity = logActivity;
+window.pushLiveblocksState = pushLiveblocksState;
