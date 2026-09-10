@@ -1027,3 +1027,124 @@ test('cross-project isolation: a project-restricted account cannot switch to the
   expect(result.afterEnforce).toBe(assignedId);
   expect(result.afterSwitchAttempt).toBe(assignedId);
 });
+
+test('applyRoomSnapshot: a snapshot from a teammate is merged into local data', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  let ws;
+  await page.routeWebSocket(/\/room\?/, (socket) => {
+    ws = socket;
+    ws.send(JSON.stringify({ type: 'snapshot', projects: {} }));
+    // Ack every write this client sends, same as a real server would —
+    // enforceFixedProjectSet()'s first-snapshot bootstrap pushes both
+    // seeded projects, and without acking those, hasPendingWriteForProject()
+    // would stay true forever and mask the merge this test is checking.
+    socket.onMessage((raw) => {
+      try {
+        const msg = JSON.parse(raw);
+        if (msg.msgId) socket.send(JSON.stringify({ type: 'ack', msgId: msg.msgId }));
+      } catch (e) {}
+    });
+  });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const before = await page.evaluate(() => {
+    const proj = getActiveProject();
+    return { projectId: proj.id, jobCountBefore: proj.jobs.length };
+  });
+  await expect.poll(() => page.evaluate(({ projectId }) => !hasPendingWriteForProject(projectId), before)).toBe(true);
+
+  // Build a snapshot that looks like what the server actually sends: every
+  // existing project (skipping one would make applyRoomSnapshot's
+  // pruneRemovedProjects() treat it as deleted — not what this test is
+  // about), each keyed by id with a jobs MAP (not array, matching the
+  // real wire shape Object.values() unwraps). The target project gets one
+  // extra job a "teammate" added; the untouched project is echoed back
+  // as-is so its own local jobs survive unaffected.
+  const remoteProjects = await page.evaluate(
+    ({ projectId }) => {
+      const jid = 'teammate-job-' + genId();
+      const out = {};
+      Object.keys(projects).forEach((id) => {
+        const p = projects[id];
+        const jobsMap = {};
+        (id === projectId ? p.jobs.concat([{ id: jid, name: 'Added by a teammate', tasks: [] }]) : p.jobs)
+          .forEach((j) => { jobsMap[j.id] = j; });
+        out[id] = { name: p.name, jobs: jobsMap };
+      });
+      return out;
+    },
+    before
+  );
+  ws.send(JSON.stringify({ type: 'snapshot', projects: remoteProjects }));
+
+  await page.waitForTimeout(200);
+
+  const after = await page.evaluate(() => {
+    const proj = getActiveProject();
+    return { jobCountAfter: proj.jobs.length, hasTeammateJob: proj.jobs.some((j) => j.name === 'Added by a teammate') };
+  });
+
+  expect(after.jobCountAfter).toBe(before.jobCountBefore + 1);
+  expect(after.hasTeammateJob).toBe(true);
+});
+
+test('applyRoomSnapshot: a snapshot arriving while this project has an unacked local write does not clobber the optimistic local change', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  let ws;
+  await page.routeWebSocket(/\/room\?/, (socket) => {
+    ws = socket;
+    ws.send(JSON.stringify({ type: 'snapshot', projects: {} }));
+  });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const jobName = 'Optimistic local job ' + Date.now();
+  await page.evaluate(() => addNewJob());
+  await page.locator('#f_job').fill(jobName);
+  await page.evaluate(() => flushAutoSaveJobForm());
+  // Force the debounced push to fire NOW rather than waiting 300ms, so the
+  // write is sitting in pendingWrites (sent, not yet acked) by the time
+  // the snapshot below arrives — exactly the race window
+  // hasPendingWriteForProject() exists to guard (see its own comment in
+  // src/sync/outbound.ts and applyRoomSnapshot()'s in src/sync/inbound.ts).
+  await page.evaluate(() => flushPendingRoomPush());
+
+  const state = await page.evaluate(() => {
+    const proj = getActiveProject();
+    return {
+      projectId: proj.id,
+      hasPendingWrite: hasPendingWriteForProject(proj.id),
+      otherProjectIds: Object.keys(projects).filter((id) => id !== proj.id),
+    };
+  });
+  expect(state.hasPendingWrite).toBe(true);
+
+  // Simulate the server broadcasting a fresh snapshot in the same window —
+  // triggered by anything else in the room, not necessarily related to
+  // this write — that does NOT yet reflect the job just added locally
+  // (the real server always includes it once this write is acked, but
+  // this snapshot is deliberately stale, modeling the race described in
+  // hasPendingWriteForProject()'s own comment). Every project must be
+  // present (see the merge test above) or pruneRemovedProjects() would
+  // delete the untouched one.
+  const remoteProjects = await page.evaluate(
+    ({ projectId, otherProjectIds }) => {
+      const out = {};
+      out[projectId] = { name: projects[projectId].name }; // no `jobs` at all — the stale state
+      otherProjectIds.forEach((id) => { out[id] = { name: projects[id].name }; });
+      return out;
+    },
+    state
+  );
+  ws.send(JSON.stringify({ type: 'snapshot', projects: remoteProjects }));
+
+  await page.waitForTimeout(200);
+
+  const survived = await page.evaluate((name) => {
+    const proj = getActiveProject();
+    return proj.jobs.some((j) => j.name === name);
+  }, jobName);
+
+  expect(survived).toBe(true);
+});

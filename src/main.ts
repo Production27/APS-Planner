@@ -60,6 +60,10 @@ import {
   deleteCalendarEventFromShared, recordTombstone, pushFieldToShared, pushBoardColumnsToShared,
   pushFieldOptionsToShared, pushWorkflowItemsToShared, pushHeaderToShared, logActivity, pushLiveblocksState,
 } from './sync/outbound';
+import {
+  handleRoomMessage, synthesizeJobFromOrphanCard, safeMergeInto, scheduleOrphanRecovery, healOrphanedJobCards,
+  healOrphanedPhaseCards, healOrphanedCardsForProject, applyRoomSnapshot, refreshActiveProjectFromShared,
+} from './sync/inbound';
 
 declare global {
   interface Window {
@@ -236,6 +240,15 @@ declare global {
     pushHeaderToShared: typeof pushHeaderToShared;
     logActivity: typeof logActivity;
     pushLiveblocksState: typeof pushLiveblocksState;
+    handleRoomMessage: typeof handleRoomMessage;
+    synthesizeJobFromOrphanCard: typeof synthesizeJobFromOrphanCard;
+    safeMergeInto: typeof safeMergeInto;
+    scheduleOrphanRecovery: typeof scheduleOrphanRecovery;
+    healOrphanedJobCards: typeof healOrphanedJobCards;
+    healOrphanedPhaseCards: typeof healOrphanedPhaseCards;
+    healOrphanedCardsForProject: typeof healOrphanedCardsForProject;
+    applyRoomSnapshot: typeof applyRoomSnapshot;
+    refreshActiveProjectFromShared: typeof refreshActiveProjectFromShared;
   }
 }
 
@@ -412,3 +425,12 @@ window.pushWorkflowItemsToShared = pushWorkflowItemsToShared;
 window.pushHeaderToShared = pushHeaderToShared;
 window.logActivity = logActivity;
 window.pushLiveblocksState = pushLiveblocksState;
+window.handleRoomMessage = handleRoomMessage;
+window.synthesizeJobFromOrphanCard = synthesizeJobFromOrphanCard;
+window.safeMergeInto = safeMergeInto;
+window.scheduleOrphanRecovery = scheduleOrphanRecovery;
+window.healOrphanedJobCards = healOrphanedJobCards;
+window.healOrphanedPhaseCards = healOrphanedPhaseCards;
+window.healOrphanedCardsForProject = healOrphanedCardsForProject;
+window.applyRoomSnapshot = applyRoomSnapshot;
+window.refreshActiveProjectFromShared = refreshActiveProjectFromShared;

@@ -48,7 +48,11 @@ declare global {
   var projects: Record<string, any>;
 }
 
-interface PresenceUser {
+// Exported (Phase 7d) so src/sync/inbound.ts's handleRoomMessage() can
+// reuse this exact named type for its own identical `latestPresenceUsers`
+// ambient declaration, rather than duplicating an inline shape that could
+// silently drift out of sync with this one.
+export interface PresenceUser {
   sessionId?: string;
   username?: string;
   displayName?: string;
