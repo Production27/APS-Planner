@@ -81,6 +81,9 @@ import {
   addMyChecklistSubItem, deleteMyChecklistSubItem, addMyChecklistItem, deleteMyChecklistItem,
   setMyChecklistItemAssignee, setMyChecklistStageAssignee,
 } from './views/checklist';
+import {
+  getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
+} from './views/home';
 
 declare global {
   interface Window {
@@ -317,6 +320,13 @@ declare global {
     deleteMyChecklistItem: typeof deleteMyChecklistItem;
     setMyChecklistItemAssignee: typeof setMyChecklistItemAssignee;
     setMyChecklistStageAssignee: typeof setMyChecklistStageAssignee;
+    getActiveTab: typeof getActiveTab;
+    switchTabMorphed: typeof switchTabMorphed;
+    homeWidgetGoTo: typeof homeWidgetGoTo;
+    clearHomeTabMorphNames: typeof clearHomeTabMorphNames;
+    switchTab: typeof switchTab;
+    toggleJobRail: typeof toggleJobRail;
+    setMobileView: typeof setMobileView;
   }
 }
 
@@ -553,3 +563,10 @@ window.addMyChecklistItem = addMyChecklistItem;
 window.deleteMyChecklistItem = deleteMyChecklistItem;
 window.setMyChecklistItemAssignee = setMyChecklistItemAssignee;
 window.setMyChecklistStageAssignee = setMyChecklistStageAssignee;
+window.getActiveTab = getActiveTab;
+window.switchTabMorphed = switchTabMorphed;
+window.homeWidgetGoTo = homeWidgetGoTo;
+window.clearHomeTabMorphNames = clearHomeTabMorphNames;
+window.switchTab = switchTab;
+window.toggleJobRail = toggleJobRail;
+window.setMobileView = setMobileView;

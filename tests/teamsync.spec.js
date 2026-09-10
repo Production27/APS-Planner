@@ -1577,3 +1577,107 @@ test('applyRoomSnapshot: a snapshot arriving while this project has an unacked l
 
   expect(survived).toBe(true);
 });
+
+test('getActiveTab: reports the currently active panel, and defaults to home when nothing is active', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await page.goto(APP_URL);
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    switchTab('board');
+    const onBoard = getActiveTab();
+    document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+    const withNoneActive = getActiveTab();
+    return { onBoard, withNoneActive };
+  });
+
+  expect(result.onBoard).toBe('board');
+  expect(result.withNoneActive).toBe('home');
+});
+
+test('switchTabMorphed: clicking the tab you\'re already on navigates to Home instead of no-op\'ing ("turn off the tab you\'re in")', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  // switchTabMorphed() is asynchronous (it runs the real switch inside a
+  // View Transitions API callback) — getActiveTab() read in the same
+  // synchronous tick still reports the OLD tab (a known characteristic
+  // documented back in Phase 5d of the original architecture roadmap).
+  // Each step here is its own evaluate() + waitForFunction() instead of
+  // one combined evaluate(), so the transition genuinely settles between
+  // the two switchTabMorphed() calls.
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+  const onGantt = await page.evaluate(() => getActiveTab());
+
+  await page.evaluate(() => switchTabMorphed('gantt')); // already there — should bounce to home, not no-op
+  await page.waitForFunction(() => getActiveTab() === 'home');
+  const afterSecondClick = await page.evaluate(() => getActiveTab());
+
+  expect(onGantt).toBe('gantt');
+  expect(afterSecondClick).toBe('home');
+});
+
+test('switchTab: activates exactly one panel/rail-tab pair and deactivates every other one', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    switchTab('calendar');
+    const activePanels = Array.from(document.querySelectorAll('.tab-panel.active')).map((p) => p.id);
+    const activeRailTabs = Array.from(document.querySelectorAll('.rail-tab.active')).map((b) => b.id);
+    return { activePanels, activeRailTabs };
+  });
+
+  expect(result.activePanels).toEqual(['panel-calendar']);
+  expect(result.activeRailTabs).toEqual(['tab-calendar']);
+});
+
+test('toggleJobRail: toggles the job-rail-open body class and the toggle button\'s active state/title together', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await page.goto(APP_URL);
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const before = document.body.classList.contains('job-rail-open');
+    toggleJobRail();
+    const afterOpen = {
+      bodyOpen: document.body.classList.contains('job-rail-open'),
+      btnActive: document.getElementById('jobRailToggleBtn').classList.contains('active'),
+    };
+    toggleJobRail();
+    const afterClose = document.body.classList.contains('job-rail-open');
+    return { before, afterOpen, afterClose };
+  });
+
+  expect(result.before).toBe(false);
+  expect(result.afterOpen).toEqual({ bodyOpen: true, btnActive: true });
+  expect(result.afterClose).toBe(false);
+});
+
+test('setMobileView: tapping the already-active view goes to Home, and switching to Calendar while in week mode clamps to month', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    setMobileView('board');
+    const firstTap = document.body.dataset.mobileView;
+    setMobileView('board'); // already active — should bounce to home
+    const secondTap = document.body.dataset.mobileView;
+
+    calendarViewMode = 'week';
+    setMobileView('calendar');
+    return { firstTap, secondTap, viewModeAfter: calendarViewMode, mobileViewAfter: document.body.dataset.mobileView };
+  });
+
+  expect(result.firstTap).toBe('board');
+  expect(result.secondTap).toBe('home');
+  expect(result.viewModeAfter).toBe('month');
+  expect(result.mobileViewAfter).toBe('calendar');
+});
