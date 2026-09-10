@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-10.3';
+const APP_VERSION = '2026-09-10.4';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5423,7 +5423,9 @@ let fieldOptions = {};
 // ===== PROJECT MANAGEMENT =====
 const PROJECTS_KEY = 'aps-planner:projects-v2';
 const ACTIVE_PROJECT_KEY = 'aps-planner:active-project-v2';
-let projects = {};
+// `var`, not `let` — src/sync/presence.ts's bundled renderPresenceAvatars()
+// (Phase 7a) reads this.
+var projects = {};
 // `var` — same cross-script-visibility reasoning as `jobs` above:
 // src/views/board.ts's deleteCardFromModal() (Phase 4d) reads this.
 var activeProjectId = null;
@@ -12538,7 +12540,9 @@ async function getSessionToken() {
 }
 
 // ---- Connection state ----
-let roomSocket = null;
+// `var`, not `let` — src/sync/presence.ts's bundled sendPresenceUpdate()
+// (Phase 7a) reads this.
+var roomSocket = null;
 let roomEverConnected = false; // true once at least one snapshot has been received on this page load
 let msgSeq = 0;
 // msgId -> { msg, sentAt } — every outbound write sits here until acked,
@@ -12800,7 +12804,9 @@ function handleRoomOpen() {
 // way a single-canvas app like Figma has — a lightweight "who's here,
 // which tab are they on" indicator gets most of the value without that
 // problem.
-let latestPresenceUsers = [];
+// `var`, not `let` — src/sync/presence.ts's bundled renderPresenceAvatars()
+// (Phase 7a) reads/writes this.
+var latestPresenceUsers = [];
 // Random per-page-load id, NOT the logged-in username, so this client can
 // reliably recognize its own entry in the broadcast presence list.
 // username doesn't work for that: the server records username: null for
@@ -12809,63 +12815,15 @@ let latestPresenceUsers = [];
 // username would then never match (or, with two team-password logins at
 // once, would match the WRONG one), which is exactly what caused a real
 // user to see their own avatar as a phantom second person on the board.
-const myPresenceSessionId = genId();
+// `var`, not `const` — same cross-script-visibility reasoning: Phase 7a's
+// bundled presence code reads this.
+var myPresenceSessionId = genId();
 
-function sendPresenceUpdate() {
-  if (!roomSocket || roomSocket.readyState !== 1) return;
-  const tabEl = document.querySelector('.rail-tab.active');
-  const view = tabEl ? tabEl.id.replace('tab-', '') : null;
-  try {
-    roomSocket.send(JSON.stringify({ type: 'setPresence', view: view, projectId: activeProjectId || null, sessionId: myPresenceSessionId }));
-  } catch (e) { /* best-effort — a missed update just means a stale avatar briefly */ }
-}
-// Periodic re-affirm so the server can prune a ghost presence entry (a tab
-// closed without a clean WebSocket close) instead of it lingering as a
-// phantom bubble until someone manually finds and closes the stale tab —
-// this happened live twice before this heartbeat existed. A stopped tab's
-// entry simply stops getting refreshed and ages out server-side; nothing
-// special has to happen client-side for cleanup.
-setInterval(sendPresenceUpdate, 25000);
+// sendPresenceUpdate()/presenceAvatarColor()/presenceInitials()/
+// presenceAnimDelay()/renderPresenceAvatars() moved to
+// src/sync/presence.ts (Phase 7a of the architecture roadmap) — see the
+// identical note by genId() above.
 
-const PRESENCE_AVATAR_COLORS = ['#3949ab', '#00897b', '#c62828', '#f0ad4e', '#7e57c2', '#00acc1', '#8d6e63', '#5c6bc0'];
-function presenceAvatarColor(key) {
-  key = key || '';
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-  return PRESENCE_AVATAR_COLORS[hash % PRESENCE_AVATAR_COLORS.length];
-}
-function presenceInitials(displayName) {
-  const parts = (displayName || '?').trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-const PRESENCE_VIEW_LABELS = { gantt: 'Gantt Chart', board: 'Board', calendar: 'Calendar' };
-
-// Deterministic per-user delay (not random-per-render, which would make
-// the pulse visibly jitter/restart every time presence re-broadcasts) so
-// a row of several avatars breathes at slightly different offsets
-// instead of in rigid unison, without ever changing for the same person.
-function presenceAnimDelay(key) {
-  key = key || '';
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = (hash * 17 + key.charCodeAt(i)) >>> 0;
-  return (hash % 26) / 10; // 0.0s-2.5s
-}
-
-function renderPresenceAvatars() {
-  const el = document.getElementById('presenceAvatars');
-  if (!el) return;
-  const others = latestPresenceUsers.filter(function(u) { return u.sessionId !== myPresenceSessionId; });
-  el.innerHTML = others.map(function(u) {
-    const name = u.displayName || u.username || 'Someone';
-    const proj = u.projectId && projects[u.projectId] ? projects[u.projectId].name : '';
-    const view = u.view ? (PRESENCE_VIEW_LABELS[u.view] || u.view) : '';
-    const whereLabel = [view, proj].filter(Boolean).join(' — ');
-    const title = whereLabel ? (name + ' — ' + whereLabel) : name;
-    const delayKey = u.sessionId || u.username || name;
-    return '<span class="presence-avatar" style="background:' + presenceAvatarColor(u.username || name) + ';animation-delay:' + presenceAnimDelay(delayKey) + 's;" title="' + escapeHtml(title) + '">' + escapeHtml(presenceInitials(name)) + '</span>';
-  }).join('');
-}
 function handleRoomClose(event) {
   // Close code 4001 = the server force-closed this connection because an
   // admin changed our role/project assignment (see the Worker's

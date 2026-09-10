@@ -46,6 +46,9 @@ import {
   handleGanttTouchMove, handleGanttTouchEnd, handleGanttWheelZoom, zoomGanttCentered, zoomIn, zoomOut,
   resetZoom, fitToView,
 } from './views/gantt';
+import {
+  sendPresenceUpdate, presenceAvatarColor, presenceInitials, presenceAnimDelay, renderPresenceAvatars,
+} from './sync/presence';
 
 declare global {
   interface Window {
@@ -184,6 +187,11 @@ declare global {
     zoomOut: typeof zoomOut;
     resetZoom: typeof resetZoom;
     fitToView: typeof fitToView;
+    sendPresenceUpdate: typeof sendPresenceUpdate;
+    presenceAvatarColor: typeof presenceAvatarColor;
+    presenceInitials: typeof presenceInitials;
+    presenceAnimDelay: typeof presenceAnimDelay;
+    renderPresenceAvatars: typeof renderPresenceAvatars;
   }
 }
 
@@ -322,3 +330,8 @@ window.zoomIn = zoomIn;
 window.zoomOut = zoomOut;
 window.resetZoom = resetZoom;
 window.fitToView = fitToView;
+window.sendPresenceUpdate = sendPresenceUpdate;
+window.presenceAvatarColor = presenceAvatarColor;
+window.presenceInitials = presenceInitials;
+window.presenceAnimDelay = presenceAnimDelay;
+window.renderPresenceAvatars = renderPresenceAvatars;
