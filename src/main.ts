@@ -40,6 +40,9 @@ import {
   cascadeShiftLaterTasks, startBarResizeRight, startBarResizeLeft, onBarResizeMove, applyBarResizeMove,
   onBarResizeEnd, startTickResize, onTickResizeMove, applyTickResizeMove, onTickResizeEnd,
   startBarMove, onBarMoveMove, applyBarMoveMove, onBarMoveEnd, buildVisibleTaskRows, renderGantt,
+  scrollToToday, ganttTouchDist, setGanttDayWidthAnchored, requestGanttZoom, handleGanttTouchStart,
+  handleGanttTouchMove, handleGanttTouchEnd, handleGanttWheelZoom, zoomGanttCentered, zoomIn, zoomOut,
+  resetZoom, fitToView,
 } from './views/gantt';
 
 declare global {
@@ -158,6 +161,19 @@ declare global {
     onBarMoveEnd: typeof onBarMoveEnd;
     buildVisibleTaskRows: typeof buildVisibleTaskRows;
     renderGantt: typeof renderGantt;
+    scrollToToday: typeof scrollToToday;
+    ganttTouchDist: typeof ganttTouchDist;
+    setGanttDayWidthAnchored: typeof setGanttDayWidthAnchored;
+    requestGanttZoom: typeof requestGanttZoom;
+    handleGanttTouchStart: typeof handleGanttTouchStart;
+    handleGanttTouchMove: typeof handleGanttTouchMove;
+    handleGanttTouchEnd: typeof handleGanttTouchEnd;
+    handleGanttWheelZoom: typeof handleGanttWheelZoom;
+    zoomGanttCentered: typeof zoomGanttCentered;
+    zoomIn: typeof zoomIn;
+    zoomOut: typeof zoomOut;
+    resetZoom: typeof resetZoom;
+    fitToView: typeof fitToView;
   }
 }
 
@@ -275,3 +291,16 @@ window.applyBarMoveMove = applyBarMoveMove;
 window.onBarMoveEnd = onBarMoveEnd;
 window.buildVisibleTaskRows = buildVisibleTaskRows;
 window.renderGantt = renderGantt;
+window.scrollToToday = scrollToToday;
+window.ganttTouchDist = ganttTouchDist;
+window.setGanttDayWidthAnchored = setGanttDayWidthAnchored;
+window.requestGanttZoom = requestGanttZoom;
+window.handleGanttTouchStart = handleGanttTouchStart;
+window.handleGanttTouchMove = handleGanttTouchMove;
+window.handleGanttTouchEnd = handleGanttTouchEnd;
+window.handleGanttWheelZoom = handleGanttWheelZoom;
+window.zoomGanttCentered = zoomGanttCentered;
+window.zoomIn = zoomIn;
+window.zoomOut = zoomOut;
+window.resetZoom = resetZoom;
+window.fitToView = fitToView;

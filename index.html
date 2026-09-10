@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-10.1';
+const APP_VERSION = '2026-09-10.2';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -7623,169 +7623,13 @@ var barMoveState = null;
 var tickResizeState = null;
 
 
-function scrollToToday() {
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  computeDateRange();
-  const todayIdx = getDaysDiff(startDate, today);
-  const timelineBody = document.getElementById('timelineBody');
+// scrollToToday()/ganttTouchDist()/setGanttDayWidthAnchored()/
+// requestGanttZoom()/handleGanttTouchStart()/handleGanttTouchMove()/
+// handleGanttTouchEnd()/handleGanttWheelZoom()/zoomGanttCentered()/
+// zoomIn()/zoomOut()/resetZoom()/fitToView() moved to src/views/gantt.ts
+// (Phase 6d of the architecture roadmap) — see the identical note by
+// genId() above.
 
-  if (todayIdx < 0 || todayIdx >= getDaysDiff(startDate, endDate) + 1) {
-    showToast('Today is outside the project date range', 'info');
-    return;
-  }
-
-  const targetLeft = Math.max(0, todayIdx * dayWidth - timelineBody.clientWidth / 2 + dayWidth / 2);
-  timelineBody.scrollLeft = targetLeft;
-}
-
-// ===== GANTT PINCH-TO-ZOOM =====
-// Mobile-only (see .gantt-zoom-btn's mobile hide rule, which removes the
-// +/-/reset buttons there in favor of this) — desktop keeps the buttons
-// since there's no pinch gesture available to a mouse. Two input paths
-// land here: real multi-touch (phones/tablets —
-// handleGanttTouchStart/Move/End below) and the wheel event a trackpad's
-// pinch gesture synthesizes with ctrlKey set on both macOS and Windows
-// precision touchpads (handleGanttWheelZoom), so a laptop trackpad pinch
-// works the same way without an actual touchscreen — this one desktop
-// input path stays even though the buttons came back, since a trackpad
-// pinch is a strictly nicer way to zoom than clicking + repeatedly.
-//
-// The touch path deliberately does NOT call renderGantt() on every
-// touchmove the way the first version of this did. A touch's move/end
-// events are dispatched to whatever element was actually under the
-// finger at touchstart (commonly a specific bar/cell inside
-// #timelineGrid, not the container the listener is bound to) — the FIRST
-// renderGantt() rebuilds that element's innerHTML and detaches the
-// original node the browser is tracking the gesture against, and most
-// mobile browsers simply stop delivering further touchmove/touchend for
-// a touch once its original target is gone. In testing that showed up as
-// "pinch does nothing": the very first frame silently broke the rest of
-// the gesture. Fixed by keeping touchmove purely visual — a CSS
-// scaleX() preview on #timelineGrid, which repaints without touching the
-// DOM tree at all — and only running the real renderGantt() once, at
-// touchend, after the gesture (and its original touch targets) is done
-// mattering.
-const GANTT_ZOOM_MIN = 14, GANTT_ZOOM_MAX = 80;
-let ganttPinchStartDist = null;
-let ganttPinchStartDayWidth = null;
-let ganttPinchAnchorX = null;
-let ganttPinchScale = 1;
-let ganttZoomRafPending = false;
-let ganttZoomPendingWidth = null;
-let ganttZoomAnchorX = null;
-
-function ganttTouchDist(touches) {
-  return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-}
-
-// Shared commit path for both input methods: clamp, bail if it's a no-op,
-// otherwise re-render at the new width and correct scrollLeft so whatever
-// day was under the anchor point lands back under that same screen point
-// instead of the zoom recentering on the timeline's left edge.
-function setGanttDayWidthAnchored(newDayWidth, anchorClientX) {
-  const clamped = Math.max(GANTT_ZOOM_MIN, Math.min(GANTT_ZOOM_MAX, Math.round(newDayWidth)));
-  if (clamped === dayWidth) return;
-  const timelineBody = document.getElementById('timelineBody');
-  const anchorOffset = anchorClientX - timelineBody.getBoundingClientRect().left;
-  const dayPos = (timelineBody.scrollLeft + anchorOffset) / dayWidth;
-  dayWidth = clamped;
-  renderGantt();
-  // renderGantt() ends by calling restoreScrollPosition(), which restores
-  // the PRE-zoom scrollLeft but only on the next animation frame (see its
-  // own comment) — asserting the anchored scrollLeft synchronously here
-  // would just get clobbered a frame later, snapping back to the old
-  // position (visibly "zooming toward the left edge" on a single click,
-  // since there's no follow-up frame to mask it the way a continuous
-  // wheel/pinch gesture's rapid re-zooms do). Scheduling this in its own
-  // rAF — registered after renderGantt()'s already-pending one — runs it
-  // afterward instead, so this is the value that actually sticks.
-  requestAnimationFrame(function() {
-    const newScrollLeft = dayPos * dayWidth - anchorOffset;
-    timelineBody.scrollLeft = newScrollLeft;
-    setHeaderScroll(newScrollLeft);
-  });
-}
-
-// Wheel/trackpad path only — a wheel event has no persistent "original
-// target" the way a touch sequence does (each tick just hits whatever's
-// currently under the cursor), so re-rendering mid-gesture here doesn't
-// have the touch path's problem. Still coalesced to at most one
-// renderGantt() per animation frame purely for perf, since a trackpad
-// can fire wheel ticks much faster than this chart can usefully re-render.
-function requestGanttZoom(newDayWidth, anchorClientX) {
-  ganttZoomPendingWidth = newDayWidth;
-  ganttZoomAnchorX = anchorClientX;
-  if (ganttZoomRafPending) return;
-  ganttZoomRafPending = true;
-  requestAnimationFrame(function() {
-    ganttZoomRafPending = false;
-    setGanttDayWidthAnchored(ganttZoomPendingWidth, ganttZoomAnchorX);
-  });
-}
-
-function handleGanttTouchStart(e) {
-  if (e.touches.length === 2) {
-    ganttPinchStartDist = ganttTouchDist(e.touches);
-    ganttPinchStartDayWidth = dayWidth;
-    ganttPinchAnchorX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-    ganttPinchScale = 1;
-    const grid = document.getElementById('timelineGrid');
-    if (grid) {
-      grid.style.transformOrigin = (ganttPinchAnchorX - grid.getBoundingClientRect().left) + 'px 0';
-    }
-  }
-}
-function handleGanttTouchMove(e) {
-  if (e.touches.length !== 2 || ganttPinchStartDist == null) return;
-  e.preventDefault();
-  const rawScale = ganttTouchDist(e.touches) / ganttPinchStartDist;
-  // Clamp the SCALE (not dayWidth, which doesn't change until touchend)
-  // so the live preview can't stretch past what touchend would actually
-  // commit to.
-  ganttPinchScale = Math.max(GANTT_ZOOM_MIN / ganttPinchStartDayWidth, Math.min(GANTT_ZOOM_MAX / ganttPinchStartDayWidth, rawScale));
-  const grid = document.getElementById('timelineGrid');
-  if (grid) grid.style.transform = 'scaleX(' + ganttPinchScale + ')';
-}
-function handleGanttTouchEnd(e) {
-  if (e.touches.length >= 2 || ganttPinchStartDist == null) return;
-  const grid = document.getElementById('timelineGrid');
-  if (grid) { grid.style.transform = ''; grid.style.transformOrigin = ''; }
-  setGanttDayWidthAnchored(ganttPinchStartDayWidth * ganttPinchScale, ganttPinchAnchorX);
-  ganttPinchStartDist = null;
-  ganttPinchStartDayWidth = null;
-}
-// ctrlKey is how both macOS and Windows report a trackpad pinch as a
-// wheel event — a plain scroll wheel/two-finger-pan never sets it, so
-// this leaves ordinary wheel scrolling of the timeline completely alone.
-function handleGanttWheelZoom(e) {
-  if (!e.ctrlKey) return;
-  e.preventDefault();
-  requestGanttZoom(dayWidth * Math.exp(-e.deltaY * 0.01), e.clientX);
-}
-
-// Desktop-only zoom buttons (see .gantt-zoom-btn) — anchored on the
-// visible timeline viewport's own horizontal center (there's no cursor
-// position to anchor on the way the wheel/pinch paths have one), reusing
-// the same setGanttDayWidthAnchored() commit path so the day currently in
-// the middle of the screen stays there instead of the zoom appearing to
-// pull everything toward the left edge.
-function zoomGanttCentered(newDayWidth) {
-  const timelineBody = document.getElementById('timelineBody');
-  const rect = timelineBody.getBoundingClientRect();
-  setGanttDayWidthAnchored(newDayWidth, rect.left + rect.width / 2);
-}
-function zoomIn() { zoomGanttCentered(dayWidth + 6); }
-function zoomOut() { zoomGanttCentered(dayWidth - 6); }
-function resetZoom() { zoomGanttCentered(34); }
-
-function fitToView() {
-  const containerWidth = document.getElementById('timelineBody').clientWidth - 20;
-  computeDateRange();
-  const totalDays = getDaysDiff(startDate, endDate) + 1;
-  const fitted = Math.max(Math.floor(containerWidth / totalDays), 14);
-  zoomGanttCentered(fitted);
-}
 
 // ===== DATE POPOVER =====
 function showDatePopover(e, date) {

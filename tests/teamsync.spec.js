@@ -582,6 +582,68 @@ test('regression: hovering two different Gantt date headers shows each one\'s ow
   expect(popoverLater).toBe(expectedLater);
 });
 
+test('gantt zoom: zoomIn/zoomOut/resetZoom step dayWidth and clamp to [14, 80]', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+  await page.waitForTimeout(1500);
+
+  const result = await page.evaluate(() => {
+    dayWidth = 34;
+    zoomIn();
+    const afterIn = dayWidth;
+    zoomOut();
+    zoomOut();
+    const afterOut = dayWidth;
+    resetZoom();
+    const afterReset = dayWidth;
+    // Clamping: pushing zoomOut far past the floor should settle at
+    // GANTT_ZOOM_MIN (14), not keep going negative or hit 0.
+    for (let i = 0; i < 15; i++) zoomOut();
+    const clampedLow = dayWidth;
+    for (let i = 0; i < 20; i++) zoomIn();
+    const clampedHigh = dayWidth;
+    return { afterIn, afterOut, afterReset, clampedLow, clampedHigh };
+  });
+
+  expect(result.afterIn).toBe(40); // 34 + 6
+  expect(result.afterOut).toBe(28); // 40 - 6 - 6
+  expect(result.afterReset).toBe(34);
+  expect(result.clampedLow).toBe(14);
+  expect(result.clampedHigh).toBe(80);
+});
+
+test('gantt zoom: fitToView computes a dayWidth that fits the whole visible date range in the container', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+  await page.waitForTimeout(1500);
+
+  const result = await page.evaluate(() => {
+    const job = jobs[0];
+    const phase = getJobPhases(job)[0];
+    const sub = getPhaseSubUnits(phase)[0];
+    const t = (sub.tasks || [])[0];
+    t.start = '2026-09-01';
+    t.finish = '2026-09-10';
+    renderGantt();
+    fitToView();
+    computeDateRange();
+    const totalDays = getDaysDiff(startDate, endDate) + 1;
+    const containerWidth = document.getElementById('timelineBody').clientWidth - 20;
+    const expectedFitted = Math.max(Math.floor(containerWidth / totalDays), 14);
+    return { dayWidth, expectedFitted };
+  });
+
+  expect(result.dayWidth).toBe(result.expectedFitted);
+});
+
 test('board column CRUD: add, rename, and delete a column via the real modal/prompt flow', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
