@@ -84,7 +84,11 @@ import {
 import {
   getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
   applyHomeReflowTracks, toggleHomeWidgetExpand, buildHomeOverdueRows, buildHomeStalledRows, buildHomeStageSummary,
-  buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows,
+  buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows, renderHomeGreeting,
+  renderHomeChecklistWidget, renderHomeChecklistWidgetExpanded, getDismissedHomeWidgetAlerts,
+  isHomeWidgetAlertDismissed, dismissHomeWidgetAlert, renderHomeWidgetAlert, renderHomeOverdueWidget,
+  renderHomeCalendarExpanded, renderHomeCalendarMiniMonth, renderHomeWorkflowMiniBoard,
+  renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget,
 } from './views/home';
 
 declare global {
@@ -337,6 +341,19 @@ declare global {
     buildHomeTodayScheduleRows: typeof buildHomeTodayScheduleRows;
     buildHomeUpcomingScheduleRows: typeof buildHomeUpcomingScheduleRows;
     buildHomeGanttUnclosedRows: typeof buildHomeGanttUnclosedRows;
+    renderHomeGreeting: typeof renderHomeGreeting;
+    renderHomeChecklistWidget: typeof renderHomeChecklistWidget;
+    renderHomeChecklistWidgetExpanded: typeof renderHomeChecklistWidgetExpanded;
+    getDismissedHomeWidgetAlerts: typeof getDismissedHomeWidgetAlerts;
+    isHomeWidgetAlertDismissed: typeof isHomeWidgetAlertDismissed;
+    dismissHomeWidgetAlert: typeof dismissHomeWidgetAlert;
+    renderHomeWidgetAlert: typeof renderHomeWidgetAlert;
+    renderHomeOverdueWidget: typeof renderHomeOverdueWidget;
+    renderHomeCalendarExpanded: typeof renderHomeCalendarExpanded;
+    renderHomeCalendarMiniMonth: typeof renderHomeCalendarMiniMonth;
+    renderHomeWorkflowMiniBoard: typeof renderHomeWorkflowMiniBoard;
+    renderHomeWorkflowExpandedBoard: typeof renderHomeWorkflowExpandedBoard;
+    renderHomeTodayScheduleWidget: typeof renderHomeTodayScheduleWidget;
   }
 }
 
@@ -588,3 +605,16 @@ window.buildHomeStageSummary = buildHomeStageSummary;
 window.buildHomeTodayScheduleRows = buildHomeTodayScheduleRows;
 window.buildHomeUpcomingScheduleRows = buildHomeUpcomingScheduleRows;
 window.buildHomeGanttUnclosedRows = buildHomeGanttUnclosedRows;
+window.renderHomeGreeting = renderHomeGreeting;
+window.renderHomeChecklistWidget = renderHomeChecklistWidget;
+window.renderHomeChecklistWidgetExpanded = renderHomeChecklistWidgetExpanded;
+window.getDismissedHomeWidgetAlerts = getDismissedHomeWidgetAlerts;
+window.isHomeWidgetAlertDismissed = isHomeWidgetAlertDismissed;
+window.dismissHomeWidgetAlert = dismissHomeWidgetAlert;
+window.renderHomeWidgetAlert = renderHomeWidgetAlert;
+window.renderHomeOverdueWidget = renderHomeOverdueWidget;
+window.renderHomeCalendarExpanded = renderHomeCalendarExpanded;
+window.renderHomeCalendarMiniMonth = renderHomeCalendarMiniMonth;
+window.renderHomeWorkflowMiniBoard = renderHomeWorkflowMiniBoard;
+window.renderHomeWorkflowExpandedBoard = renderHomeWorkflowExpandedBoard;
+window.renderHomeTodayScheduleWidget = renderHomeTodayScheduleWidget;

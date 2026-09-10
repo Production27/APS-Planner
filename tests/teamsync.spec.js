@@ -1774,3 +1774,132 @@ test('window resize: auto-collapses an expanded widget once the window narrows p
   expect(result.expandedAfter).toBeNull();
   expect(result.stageBodyExpandedView).toBe(false);
 });
+
+test('renderHomeOverdueWidget: overdue/today/soon cards produce three separately-tiered dismissible alerts', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  // Two separate single-card scenarios (rather than one job of each tier
+  // together) so a bucket that's off by one card still shows up as a
+  // present/absent alert instead of an unchanged count — e.g. a
+  // today<->soon classification swap wouldn't change either tier's count
+  // when exactly one card sits in each, but it would flip which alert
+  // exists when only one non-overdue card is seeded at a time.
+  const todayOnly = await page.evaluate(() => {
+    const cards = boardCards.filter(function (c) { return !isFinishedColumnId(c.column); });
+    const today = new Date(new Date().toDateString());
+    cards[0].due = toIsoDate(new Date(today.getTime() - 2 * 86400000)); // overdue
+    cards[1].due = toIsoDate(today); // due today, nothing due "soon"
+    const html = renderHomeOverdueWidget(buildHomeOverdueRows());
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const todayEl = container.querySelector('#homeAlert-calendar-today');
+    return {
+      overdueText: container.querySelector('#homeAlert-calendar-overdue .home-widget-alert-text').textContent,
+      todayText: todayEl ? todayEl.querySelector('.home-widget-alert-text').textContent : null,
+      todayTierClass: todayEl ? todayEl.className : null,
+      soonAbsent: !container.querySelector('#homeAlert-calendar-soon'),
+    };
+  });
+
+  expect(todayOnly.overdueText).toBe('1 job overdue');
+  expect(todayOnly.todayText).toBe('1 job due today');
+  expect(todayOnly.todayTierClass).toContain('tier-today');
+  expect(todayOnly.soonAbsent).toBe(true);
+
+  const soonOnly = await page.evaluate(() => {
+    const cards = boardCards.filter(function (c) { return !isFinishedColumnId(c.column); });
+    const today = new Date(new Date().toDateString());
+    cards.forEach(function (c) { c.due = ''; }); // clear the previous test's dates
+    cards[0].due = toIsoDate(new Date(today.getTime() + 2 * 86400000)); // due soon, nothing overdue/today
+    const html = renderHomeOverdueWidget(buildHomeOverdueRows());
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const soonEl = container.querySelector('#homeAlert-calendar-soon');
+    return {
+      todayAbsent: !container.querySelector('#homeAlert-calendar-today'),
+      soonText: soonEl ? soonEl.querySelector('.home-widget-alert-text').textContent : null,
+      soonTierClass: soonEl ? soonEl.className : null,
+    };
+  });
+
+  expect(soonOnly.todayAbsent).toBe(true);
+  expect(soonOnly.soonText).toBe('1 job due soon');
+  expect(soonOnly.soonTierClass).toContain('tier-soon');
+});
+
+test('dismissHomeWidgetAlert: dismissing an alert hides it and persists across re-render, but a changed underlying set brings a new alert back', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const card = boardCards.find(function (c) { return !isFinishedColumnId(c.column); });
+    const today = new Date(new Date().toDateString());
+    card.due = toIsoDate(new Date(today.getTime() - 2 * 86400000));
+    const beforeDismiss = renderHomeOverdueWidget(buildHomeOverdueRows()).includes('homeAlert-calendar-overdue');
+
+    // dismissHomeWidgetAlert() itself only removes a live DOM element and
+    // writes localStorage — it doesn't re-render, so simulate the render
+    // pipeline's own next call afterward via isHomeWidgetAlertDismissed().
+    const rows1 = buildHomeOverdueRows();
+    const signature1 = rows1.filter(function (r) { return r.isOverdue; }).map(function (r) { return r.card.id; }).slice().sort().join(',');
+    dismissHomeWidgetAlert({ stopPropagation: function () {} }, 'calendar-overdue', signature1);
+    const afterDismissSameData = renderHomeOverdueWidget(buildHomeOverdueRows()).includes('homeAlert-calendar-overdue');
+
+    // Now a second card also becomes overdue — the alert's ids (and so its
+    // signature) changed, so the old dismissal shouldn't suppress it.
+    const secondCard = boardCards.find(function (c) { return !isFinishedColumnId(c.column) && c.id !== card.id; });
+    secondCard.due = toIsoDate(new Date(today.getTime() - 1 * 86400000));
+    const afterSetChanged = renderHomeOverdueWidget(buildHomeOverdueRows()).includes('homeAlert-calendar-overdue');
+
+    return { beforeDismiss, afterDismissSameData, afterSetChanged };
+  });
+
+  expect(result.beforeDismiss).toBe(true);
+  expect(result.afterDismissSameData).toBe(false);
+  expect(result.afterSetChanged).toBe(true);
+});
+
+test('renderHomeWorkflowMiniBoard: renders one bar per board column with counts matching real card placement', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('home'));
+  await page.waitForFunction(() => getActiveTab() === 'home');
+
+  const result = await page.evaluate(() => {
+    const firstColId = BOARD_COLUMNS[0].id;
+    const expectedCount = boardCards.filter(function (c) { return c.column === firstColId; }).length;
+    renderHomeWorkflowMiniBoard();
+    const bar = document.querySelector('.wsm-bar-col[data-column="' + firstColId + '"] .wsm-bar-count');
+    return { expectedCount: expectedCount, renderedCount: bar ? Number(bar.textContent) : null };
+  });
+
+  expect(result.expectedCount).toBeGreaterThan(0);
+  expect(result.renderedCount).toBe(result.expectedCount);
+});
+
+test('renderHomeTodayScheduleWidget: flags a job whose schedule is fully done but still sitting in a non-finished column via the gantt-unclosed alert', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const job = jobs.find(function (j) { return !j.archived && j.tasks && j.tasks.length; });
+    const yesterday = toIsoDate(new Date(Date.now() - 86400000));
+    job.tasks.forEach(function (t) { t.start = yesterday; t.finish = yesterday; });
+    const html = renderHomeTodayScheduleWidget(buildHomeTodayScheduleRows());
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const alertText = container.querySelector('#homeAlert-gantt-unclosed .home-widget-alert-text');
+    return { alertText: alertText ? alertText.textContent : null };
+  });
+
+  expect(result.alertText).toMatch(/finished, not closed out/);
+});
