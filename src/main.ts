@@ -90,7 +90,7 @@ import {
   renderHomeCalendarExpanded, renderHomeCalendarMiniMonth, renderHomeWorkflowMiniBoard,
   renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget, buildHomeJobChatFeed,
   renderHomeJobChatComposeOptions, renderHomeJobChatItem, renderHomeJobChat, postHomeJobChatComment,
-  toggleHomeReplyBox, addHomeJobReply, handleHomeReplyKey,
+  toggleHomeReplyBox, addHomeJobReply, handleHomeReplyKey, renderHomeDashboard,
 } from './views/home';
 
 declare global {
@@ -364,6 +364,7 @@ declare global {
     toggleHomeReplyBox: typeof toggleHomeReplyBox;
     addHomeJobReply: typeof addHomeJobReply;
     handleHomeReplyKey: typeof handleHomeReplyKey;
+    renderHomeDashboard: typeof renderHomeDashboard;
   }
 }
 
@@ -636,3 +637,4 @@ window.postHomeJobChatComment = postHomeJobChatComment;
 window.toggleHomeReplyBox = toggleHomeReplyBox;
 window.addHomeJobReply = addHomeJobReply;
 window.handleHomeReplyKey = handleHomeReplyKey;
+window.renderHomeDashboard = renderHomeDashboard;

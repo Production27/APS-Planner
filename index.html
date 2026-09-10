@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-10.16';
+const APP_VERSION = '2026-09-10.17';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -9845,15 +9845,6 @@ function renderActivityLog() { renderActivityLogSidebar(); }
 // BOARD_COLOR_PRESETS above.
 var DEFAULT_STALLED_AFTER_DAYS = 14;
 
-// Window width (in days) for the Home dashboard's mini-Gantt "Today's
-// Schedule" strip — read both by renderHomeTodayScheduleWidget() (moved
-// into src/views/home.ts) and by renderHomeDashboard() below (still here,
-// not yet extracted). `var`, not `const` — same cross-script-visibility
-// reasoning as DEFAULT_STALLED_AFTER_DAYS above: a `const` physically
-// moved into home.ts's bundled module would be private to that module's
-// own closure, invisible to this script.
-var HOME_MINI_GANTT_WINDOW_DAYS = 7;
-
 
 // homeGreetingPhrase()/renderHomeGreeting()/renderHomeChecklistWidget()/
 // renderHomeChecklistWidgetExpanded()/HOME_ALERT_DISMISS_KEY/
@@ -9885,60 +9876,11 @@ onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200);
 // Job Chat widget, Phase HD-e of the Home-dashboard extraction) moved to
 // src/views/home.ts — see the identical note by genId() above.
 
-function renderHomeDashboard() {
-  const panel = document.getElementById('panel-home');
-  if (!panel) return;
-  // Keeps .home-grid's own inline column widths (see
-  // applyHomeReflowTracks()) in sync on every Home render, not just when
-  // actually expanding/collapsing a widget — critically including the
-  // very FIRST render, before any expand click has ever happened. Without
-  // this, that first click transitions from the plain CSS default
-  // (1fr 0.8fr 1fr, a stylesheet rule, not an inline style) straight to
-  // the computed pixel widths applyHomeReflowTracks() uses — grid track
-  // lists can only animate smoothly between two values of the SAME kind
-  // (fr<->fr or px<->px), so that fr->px jump has no valid interpolation
-  // path and Chrome falls back to snapping partway through the duration
-  // instead of animating (verified against an isolated repro — Karl's
-  // own "I just lost the transition" report). Establishing a pixel
-  // baseline here means every later transition, including that first
-  // one, is px->px.
-  applyHomeReflowTracks();
-  const checklistRows = buildMyChecklistRows();
-  const overdueRows = buildHomeOverdueRows();
-  const greetingEl = document.getElementById('homeGreeting');
-  if (greetingEl) greetingEl.innerHTML = renderHomeGreeting();
-  const checklistBody = document.getElementById('homeChecklistBody');
-  if (checklistBody) checklistBody.innerHTML = homeExpandedWidgetId === 'checklist' ? renderHomeChecklistWidgetExpanded(checklistRows) : renderHomeChecklistWidget(checklistRows);
-  const overdueBody = document.getElementById('homeOverdueBody');
-  if (overdueBody) {
-    if (homeExpandedWidgetId === 'calendar') renderHomeCalendarExpanded(overdueRows, overdueBody);
-    else overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
-  }
-  if (document.getElementById('homeStageBody')) {
-    renderHomeWorkflowMiniBoard();
-    if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
-  }
-  const todayBody = document.getElementById('homeTodayBody');
-  const todayWidgetEl = document.getElementById('homeWidgetToday');
-  if (todayBody) {
-    const ganttExpanded = homeExpandedWidgetId === 'gantt';
-    const windowDays = ganttExpanded ? 13 : HOME_MINI_GANTT_WINDOW_DAYS;
-    if (todayWidgetEl) todayWidgetEl.style.setProperty('--home-gantt-days', windowDays);
-    let rows;
-    if (ganttExpanded) {
-      const todayMidnight = new Date(new Date().toDateString());
-      const half = Math.floor(windowDays / 2);
-      const windowStart = new Date(todayMidnight.getTime() - half * 86400000);
-      const windowEnd = new Date(windowStart.getTime() + windowDays * 86400000);
-      rows = buildHomeUpcomingScheduleRows(windowStart, windowEnd);
-    } else {
-      rows = buildHomeTodayScheduleRows();
-    }
-    todayBody.innerHTML = renderHomeTodayScheduleWidget(rows, windowDays, ganttExpanded ? 'Nothing scheduled in this window.' : null);
-  }
-  renderHomeJobChat();
-  applyPermissionGating();
-}
+// renderHomeDashboard()/HOME_MINI_GANTT_WINDOW_DAYS (Phase HD-f, the last
+// phase of the Home-dashboard extraction) moved to src/views/home.ts —
+// see the identical note by genId() above. This closes out the entire
+// Home-dashboard extraction: src/views/home.ts is now the sole home of
+// the Home dashboard, matching Board/Calendar/Gantt/Checklist.
 
 // Groups BOARD_COLUMNS into contiguous runs sharing the same
 // workflowItemId — an unassigned column never merges with an adjacent

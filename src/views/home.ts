@@ -59,15 +59,26 @@
 //     here to feed buildCalBarHtml()/buildCalendarJobRows() are typed
 //     `any` at the boundary — consistent with this whole project's
 //     "verbatim port, tighten only when trivial" discipline.
-//   Phase HD-e (this addition) — the Home Job Chat widget, a small
-//     self-contained feature (buildHomeJobChatFeed/
-//     renderHomeJobChatComposeOptions/renderHomeJobChatItem/
-//     renderHomeJobChat/postHomeJobChatComment/toggleHomeReplyBox/
-//     addHomeJobReply/handleHomeReplyKey). `job.comments` stays typed
-//     loosely (`any[]`) at this boundary rather than adding a real
-//     Comment interface to core/types.ts just for this one still-JS
-//     feature — same "tighten only when trivial" call as the Calendar
-//     bar shapes in HD-d above.
+//   Phase HD-e — the Home Job Chat widget, a small self-contained
+//     feature (buildHomeJobChatFeed/renderHomeJobChatComposeOptions/
+//     renderHomeJobChatItem/renderHomeJobChat/postHomeJobChatComment/
+//     toggleHomeReplyBox/addHomeJobReply/handleHomeReplyKey).
+//     `job.comments` stays typed loosely (`any[]`) at this boundary
+//     rather than adding a real Comment interface to core/types.ts just
+//     for this one still-JS feature — same "tighten only when trivial"
+//     call as the Calendar bar shapes in HD-d above.
+//   Phase HD-f (this addition, the LAST phase) — renderHomeDashboard()
+//     itself, the dispatcher tying every widget together, same as
+//     renderBoard()/renderGantt() being the densest/last piece of their
+//     own extractions. This closes out the entire Home-dashboard
+//     extraction and the original index.html view layer as a whole:
+//     Board/Calendar/Gantt/Sync/Checklist/Home are now all fully in
+//     src/. HOME_MINI_GANTT_WINDOW_DAYS (an ambient `var` in index.html
+//     since HD-d, because renderHomeDashboard() there was its other
+//     reader) becomes a genuinely local `const` now that both readers
+//     live in this one module — see that constant's own comment below.
+//     `buildMyChecklistRows` becomes a real import from checklist.ts
+//     (no circularity: checklist.ts doesn't import from home.ts).
 import type { BoardCard, BoardColumn, Job, WorkflowItem } from '../core/types';
 import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
 import { escapeHtml } from '../utils/html';
@@ -79,7 +90,7 @@ import {
   isCalendarEventTaskId, parseCalendarEventTaskId, openEditCalendarEvent, calendarOpenJob,
 } from './calendar';
 import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor } from './board';
-import { renderMyChecklist } from './checklist';
+import { renderMyChecklist, buildMyChecklistRows } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
 
 declare global {
@@ -91,10 +102,6 @@ declare global {
   // eslint-disable-next-line no-var
   var calendarViewMode: string;
   function cancelEdit(): void;
-  // Shared verbatim with src/sync/inbound.ts's identical ambient
-  // declaration for this same function — this file's own Phase HD-f
-  // (a later phase) will replace this with a real local implementation.
-  function renderHomeDashboard(): void;
   // Shared verbatim with src/views/board.ts's identical ambient
   // declaration for this same global.
   // eslint-disable-next-line no-var
@@ -1262,17 +1269,10 @@ function renderHomeWorkflowExpandedBoard(): void {
 // on purpose so today lands exactly in the middle column rather than
 // off-center.
 //
-// Stays a real `var` in index.html (declared ambiently here) rather than
-// moving fully into this module: index.html's still-there
-// renderHomeDashboard() (Phase HD-f, not yet extracted) reads it too, and
-// a `const` moved into this bundled module would be private to home.ts's
-// own closure — invisible to index.html's inline script. See the
-// identical rationale already documented for homeExpandedWidgetId/
-// DEFAULT_STALLED_AFTER_DAYS.
-declare global {
-  // eslint-disable-next-line no-var
-  var HOME_MINI_GANTT_WINDOW_DAYS: number;
-}
+// A genuinely local `const` now (not an index.html `var`) — Phase HD-f
+// moved renderHomeDashboard(), its only other reader, into this same
+// module, so nothing outside home.ts needs to see this anymore.
+const HOME_MINI_GANTT_WINDOW_DAYS = 7;
 function renderHomeTodayScheduleWidget(rows: HomeScheduleRow[], windowDays?: number, emptyLabel?: string): string {
   windowDays = windowDays || HOME_MINI_GANTT_WINDOW_DAYS;
   const unclosedRows = buildHomeGanttUnclosedRows();
@@ -1470,6 +1470,61 @@ function handleHomeReplyKey(event: KeyboardEvent, jobId: string, commentId: stri
   }
 }
 
+function renderHomeDashboard(): void {
+  const panel = document.getElementById('panel-home');
+  if (!panel) return;
+  // Keeps .home-grid's own inline column widths (see
+  // applyHomeReflowTracks()) in sync on every Home render, not just when
+  // actually expanding/collapsing a widget — critically including the
+  // very FIRST render, before any expand click has ever happened. Without
+  // this, that first click transitions from the plain CSS default
+  // (1fr 0.8fr 1fr, a stylesheet rule, not an inline style) straight to
+  // the computed pixel widths applyHomeReflowTracks() uses — grid track
+  // lists can only animate smoothly between two values of the SAME kind
+  // (fr<->fr or px<->px), so that fr->px jump has no valid interpolation
+  // path and Chrome falls back to snapping partway through the duration
+  // instead of animating (verified against an isolated repro — Karl's
+  // own "I just lost the transition" report). Establishing a pixel
+  // baseline here means every later transition, including that first
+  // one, is px->px.
+  applyHomeReflowTracks();
+  const checklistRows = buildMyChecklistRows();
+  const overdueRows = buildHomeOverdueRows();
+  const greetingEl = document.getElementById('homeGreeting');
+  if (greetingEl) greetingEl.innerHTML = renderHomeGreeting();
+  const checklistBody = document.getElementById('homeChecklistBody');
+  if (checklistBody) checklistBody.innerHTML = homeExpandedWidgetId === 'checklist' ? renderHomeChecklistWidgetExpanded(checklistRows) : renderHomeChecklistWidget(checklistRows);
+  const overdueBody = document.getElementById('homeOverdueBody');
+  if (overdueBody) {
+    if (homeExpandedWidgetId === 'calendar') renderHomeCalendarExpanded(overdueRows, overdueBody);
+    else overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
+  }
+  if (document.getElementById('homeStageBody')) {
+    renderHomeWorkflowMiniBoard();
+    if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
+  }
+  const todayBody = document.getElementById('homeTodayBody');
+  const todayWidgetEl = document.getElementById('homeWidgetToday');
+  if (todayBody) {
+    const ganttExpanded = homeExpandedWidgetId === 'gantt';
+    const windowDays = ganttExpanded ? 13 : HOME_MINI_GANTT_WINDOW_DAYS;
+    if (todayWidgetEl) todayWidgetEl.style.setProperty('--home-gantt-days', String(windowDays));
+    let rows: HomeScheduleRow[];
+    if (ganttExpanded) {
+      const todayMidnight = new Date(new Date().toDateString());
+      const half = Math.floor(windowDays / 2);
+      const windowStart = new Date(todayMidnight.getTime() - half * 86400000);
+      const windowEnd = new Date(windowStart.getTime() + windowDays * 86400000);
+      rows = buildHomeUpcomingScheduleRows(windowStart, windowEnd);
+    } else {
+      rows = buildHomeTodayScheduleRows();
+    }
+    todayBody.innerHTML = renderHomeTodayScheduleWidget(rows, windowDays, ganttExpanded ? 'Nothing scheduled in this window.' : undefined);
+  }
+  renderHomeJobChat();
+  applyPermissionGating();
+}
+
 export {
   getActiveTab,
   switchTabMorphed,
@@ -1507,4 +1562,5 @@ export {
   toggleHomeReplyBox,
   addHomeJobReply,
   handleHomeReplyKey,
+  renderHomeDashboard,
 };

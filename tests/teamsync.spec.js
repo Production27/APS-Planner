@@ -1998,3 +1998,40 @@ test('toggleHomeReplyBox/addHomeJobReply: replying to a comment via the real UI 
   expect(result.replies[0].author).toBe('Test Admin');
   expect(result.taCleared).toBe(true);
 });
+
+test('renderHomeDashboard: dispatches the Calendar widget to its real expanded month grid when expanded, and back to the compact mini-month when collapsed', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const compactBefore = await page.evaluate(() => {
+    // renderHomeOverdueWidget() shows its empty state (no .home-mini-cal-grid
+    // at all) when nothing is overdue/due-soon — seed one so the compact
+    // path actually renders the mini-month grid this test is checking for.
+    const card = boardCards.find(function (c) { return !isFinishedColumnId(c.column); });
+    card.due = toIsoDate(new Date());
+    renderHomeDashboard();
+    return !!document.querySelector('#homeOverdueBody .home-mini-cal-grid');
+  });
+
+  const expandedState = await page.evaluate(() => {
+    toggleHomeWidgetExpand('calendar');
+    renderHomeDashboard();
+    return {
+      hasCompactGrid: !!document.querySelector('#homeOverdueBody .home-mini-cal-grid'),
+      hasRealMonthGrid: !!document.querySelector('#homeOverdueBody .calendar-days'),
+    };
+  });
+
+  const compactAfter = await page.evaluate(() => {
+    toggleHomeWidgetExpand('calendar'); // collapse back
+    renderHomeDashboard();
+    return !!document.querySelector('#homeOverdueBody .home-mini-cal-grid');
+  });
+
+  expect(compactBefore).toBe(true);
+  expect(expandedState.hasCompactGrid).toBe(false);
+  expect(expandedState.hasRealMonthGrid).toBe(true);
+  expect(compactAfter).toBe(true);
+});
