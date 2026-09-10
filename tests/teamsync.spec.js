@@ -218,6 +218,50 @@ test('board drag-and-drop: dropping a card on a new column updates its stored co
   expect(result.newColumn).not.toBe(result.originalColumn);
 });
 
+test('confirmChecklistBeforeMove: declining the confirmation leaves a card with open checklist items in its original column', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  // Explicit dialog handler, not Playwright's default auto-dismiss — same
+  // "isolate the guard, don't rely on an unrelated default" lesson as the
+  // Complete/Invoiced column-delete test above. Dismissing here is what a
+  // real "Move it anyway?" -> Cancel click does.
+  page.on('dialog', (d) => d.dismiss());
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    const originalColumn = card.column;
+    const targetColumnId = BOARD_COLUMNS.find((c) => c.id !== originalColumn).id;
+    card.checklists = { [originalColumn]: [{ id: 'i1', text: 'Unfinished item', done: false }] };
+    moveCardToColumn(card.id, targetColumnId);
+    return { originalColumn, columnAfter: boardCards.find((c) => c.id === card.id).column };
+  });
+
+  expect(result.columnAfter).toBe(result.originalColumn);
+});
+
+test('confirmChecklistBeforeMove: accepting the confirmation moves the card despite open checklist items', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  page.on('dialog', (d) => d.accept());
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    const originalColumn = card.column;
+    const targetColumnId = BOARD_COLUMNS.find((c) => c.id !== originalColumn).id;
+    card.checklists = { [originalColumn]: [{ id: 'i1', text: 'Unfinished item', done: false }] };
+    moveCardToColumn(card.id, targetColumnId);
+    return { targetColumnId, columnAfter: boardCards.find((c) => c.id === card.id).column };
+  });
+
+  expect(result.columnAfter).toBe(result.targetColumnId);
+});
+
 test('calendar CRUD: add, edit, and delete an event via the modal all land in the underlying data model', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

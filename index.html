@@ -3809,7 +3809,7 @@ font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-10.8';
+const APP_VERSION = '2026-09-10.9';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -9625,67 +9625,18 @@ function submitAddColumn() {
 // renderBoard()/buildCardEl() moved to src/views/board.ts (Phase 4e of
 // the architecture roadmap) — see the identical note by genId() above.
 // This closes out Board's own view code; the checklist system it calls
-// into (ensureCardChecklists, isChecklistStageVisibleToMe, etc., right
-// below) stays here as its own separate, cross-cutting concern.
+// into moved separately to src/views/checklist.ts across its own
+// cross-cutting extraction (see that file's own header) — most recently
+// getOpenChecklistItemsForCard()/confirmChecklistBeforeMove() (Phase
+// CL-b).
 
 // Column drag/reorder (handleColumnDragStart/End, handleColumnReorderOver/
-// Leave/Drop, getDragAfterColumn, syncColumnsFromDOM) and card drag/drop
+// Leave/Drop, getDragAfterColumn, syncColumnsFromDOM), card drag/drop
 // (handleCardDragStart/End, handleColumnDragOver/applyColumnDragOver/
-// handleColumnDragLeave, dropNeedsManualOverride) moved to
-// src/views/board.ts (Phase 4 of the architecture roadmap) — see the
-// identical note by genId() above. getOpenChecklistItemsForCard() and
-// confirmChecklistBeforeMove() right below stayed here on purpose (see
-// board.ts's own top-of-file comment for why).
-
-// Open (not-done) checklist items on a card's CURRENT stage, respecting
-// per-stage visibility the same way buildCardEl()'s progress badge does —
-// feeds confirmChecklistBeforeMove() below, used by both drag-and-drop
-// (handleColumnDrop) and the mobile column <select> (moveCardToColumn) to
-// warn before a card leaves a stage with unfinished items still on it. A
-// checklist that's easy to ignore on a separate tab doesn't get used;
-// tying it to the actual moment the job moves on is what makes it a real
-// pause point instead of a suggestion.
-function getOpenChecklistItemsForCard(card) {
-  ensureCardChecklists(card);
-  if (!isChecklistStageVisibleToMe(card.checklistAssignees, card.column)) return [];
-  const stageCol = BOARD_COLUMNS.find(function(c) { return c.id === card.column; });
-  const templ = (stageCol && stageCol.defaultChecklist) || [];
-  const stored = (card.checklists && card.checklists[card.column]) || [];
-  const storedIds = stored.map(function(i) { return i.id; });
-  const checklist = stored.filter(function(i) { return !i.removed; }).concat(
-    templ.filter(function(d) { return storedIds.indexOf(d.id) === -1; }).map(function(d) { return { id: d.id, text: d.text, done: false, assignee: '' }; })
-  );
-  // Once any item on this stage has been flagged required (the "killer
-  // item" set — see toggleMyChecklistItemRequired()), only THOSE gate a
-  // move; a stage nobody's triaged yet still gates on everything so this
-  // never silently goes quiet just because required flags haven't been
-  // set up.
-  const hasRequired = checklist.some(function(i) { return i.required; });
-  const gating = hasRequired ? checklist.filter(function(i) { return i.required; }) : checklist;
-  const open = [];
-  gating.forEach(function(item) {
-    if (!item.done) open.push(item.text);
-    (item.subItems || []).forEach(function(sub) {
-      if (!sub.done) open.push(item.text + ' → ' + sub.text);
-    });
-  });
-  return open;
-}
-
-// Soft gate, not a hard block — a confirm dialog naming what's still open
-// so leaving a stage with unfinished items is a deliberate choice, not an
-// invisible default. Returns true (nothing to confirm, or user accepted).
-function confirmChecklistBeforeMove(card) {
-  const open = getOpenChecklistItemsForCard(card);
-  if (!open.length) return true;
-  const preview = open.slice(0, 5).map(function(t) { return '- ' + t; }).join('\n');
-  const more = open.length > 5 ? '\n...and ' + (open.length - 5) + ' more' : '';
-  return window.confirm('"' + card.title + '" still has ' + open.length + ' open checklist item' + (open.length === 1 ? '' : 's') + ' on this stage:\n\n' + preview + more + '\n\nMove it anyway?');
-}
-
+// handleColumnDragLeave, dropNeedsManualOverride), and
 // handleColumnDrop()/moveCardToColumn()/getDragAfterElement()/
-// syncBoardCardsFromDOM() moved to src/views/board.ts (Phase 4) — see
-// the note above by getOpenChecklistItemsForCard().
+// syncBoardCardsFromDOM() moved to src/views/board.ts (Phase 4 of the
+// architecture roadmap) — see the identical note by genId() above.
 
 // ===== COLUMN SETTINGS DROPDOWN =====
 function isDarkColor(hex) {

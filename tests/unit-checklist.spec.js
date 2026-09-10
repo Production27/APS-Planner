@@ -98,3 +98,60 @@ test('isChecklistStageVisibleToMe: while "viewing as" someone, visibility resolv
   });
   expect(result).toBe(true);
 });
+
+// Phase CL-b: Board's card-move gate.
+
+test('getOpenChecklistItemsForCard: with no required items, every unfinished item (and sub-item) gates the move', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    getEffectiveRole = () => 'member';
+    getStoredUsername = () => 'alice';
+    viewAsUsername = null;
+    BOARD_COLUMNS = [{ id: 'active', label: 'Active', defaultChecklist: [{ id: 'tmpl-1', text: 'Template item (not yet stored)' }] }];
+    const card = {
+      id: 'c1', column: 'active',
+      checklists: { active: [
+        { id: 'i1', text: 'Pour footing', done: false },
+        { id: 'i2', text: 'Frame walls', done: true, subItems: [{ id: 's1', text: 'Order lumber', done: false }] },
+      ] },
+    };
+    return getOpenChecklistItemsForCard(card);
+  });
+  expect(result).toEqual(['Pour footing', 'Frame walls → Order lumber', 'Template item (not yet stored)']);
+});
+
+test('getOpenChecklistItemsForCard: once any item is flagged required, only required items gate the move', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    getEffectiveRole = () => 'member';
+    getStoredUsername = () => 'alice';
+    viewAsUsername = null;
+    BOARD_COLUMNS = [{ id: 'active', label: 'Active' }];
+    const card = {
+      id: 'c1', column: 'active',
+      checklists: { active: [
+        { id: 'i1', text: 'Not required, ignored once anything is required', done: false },
+        { id: 'i2', text: 'Required and open', done: false, required: true },
+      ] },
+    };
+    return getOpenChecklistItemsForCard(card);
+  });
+  expect(result).toEqual(['Required and open']);
+});
+
+test('getOpenChecklistItemsForCard: a stage hidden from the current user never gates the move', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    getEffectiveRole = () => 'member';
+    getStoredUsername = () => 'someone-else';
+    viewAsUsername = null;
+    BOARD_COLUMNS = [{ id: 'active', label: 'Active' }];
+    const card = {
+      id: 'c1', column: 'active',
+      checklistAssignees: { active: ['alice'] },
+      checklists: { active: [{ id: 'i1', text: 'Open item', done: false }] },
+    };
+    return getOpenChecklistItemsForCard(card);
+  });
+  expect(result).toEqual([]);
+});

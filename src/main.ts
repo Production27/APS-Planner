@@ -64,7 +64,10 @@ import {
   handleRoomMessage, synthesizeJobFromOrphanCard, safeMergeInto, scheduleOrphanRecovery, healOrphanedJobCards,
   healOrphanedPhaseCards, healOrphanedCardsForProject, applyRoomSnapshot, refreshActiveProjectFromShared,
 } from './sync/inbound';
-import { ensureCardChecklists, normalizeChecklistAssignees, isChecklistStageVisibleToMe } from './views/checklist';
+import {
+  ensureCardChecklists, normalizeChecklistAssignees, isChecklistStageVisibleToMe,
+  getOpenChecklistItemsForCard, confirmChecklistBeforeMove,
+} from './views/checklist';
 
 declare global {
   interface Window {
@@ -253,6 +256,8 @@ declare global {
     ensureCardChecklists: typeof ensureCardChecklists;
     normalizeChecklistAssignees: typeof normalizeChecklistAssignees;
     isChecklistStageVisibleToMe: typeof isChecklistStageVisibleToMe;
+    getOpenChecklistItemsForCard: typeof getOpenChecklistItemsForCard;
+    confirmChecklistBeforeMove: typeof confirmChecklistBeforeMove;
   }
 }
 
@@ -441,3 +446,5 @@ window.refreshActiveProjectFromShared = refreshActiveProjectFromShared;
 window.ensureCardChecklists = ensureCardChecklists;
 window.normalizeChecklistAssignees = normalizeChecklistAssignees;
 window.isChecklistStageVisibleToMe = isChecklistStageVisibleToMe;
+window.getOpenChecklistItemsForCard = getOpenChecklistItemsForCard;
+window.confirmChecklistBeforeMove = confirmChecklistBeforeMove;

@@ -19,13 +19,12 @@
 //     deliberately NOT part of "Board" — it's cross-cutting (also used
 //     by Job Manager and its own dedicated tab) — see src/views/
 //     checklist.ts's own header for its separate, later phasing.
-//     ensureCardChecklists()/isChecklistStageVisibleToMe() are real
-//     imports from there now (checklist.ts's Phase CL-a); this file still
-//     calls confirmChecklistBeforeMove() as an ambient ahead of
-//     checklist.ts's own Phase CL-b move.
+//     ensureCardChecklists()/isChecklistStageVisibleToMe()/
+//     confirmChecklistBeforeMove() are all real imports from there now
+//     (checklist.ts's Phases CL-a/CL-b).
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
-// confirmChecklistBeforeMove(), slugifyColumnId(), isJobVisibleToMe(),
+// slugifyColumnId(), isJobVisibleToMe(),
 // renderGantt(), renderJobList(), renderCalendar(), openModal()/
 // closeModal(), saveWorkflowItems(), hasMinTier(), renderCustomFieldsGrid(),
 // renderTeamFieldsGrid(), renderAttachments(), collectCustomFieldValues(),
@@ -46,7 +45,7 @@ import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
 import { darkenColor } from '../utils/color';
-import { ensureCardChecklists, isChecklistStageVisibleToMe } from './checklist';
+import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -80,7 +79,6 @@ declare global {
   // eslint-disable-next-line no-var
   var CUSTOM_FIELD_DEFS: CustomFieldDef[];
   function setCardColumn(card: BoardCard, newColumnId: string): void;
-  function confirmChecklistBeforeMove(card: BoardCard): boolean;
   function saveBoardColumns(): void;
   function saveBoardCards(): void;
   function saveWorkflowItems(): void;

@@ -53,6 +53,40 @@ export interface Job {
   [key: string]: unknown;
 }
 
+// Tightened (Phase CL-b of the checklist-system extraction) from the
+// original `unknown[]`/`unknown[]` now that src/views/checklist.ts's own
+// functions read specific fields off these — same "tighten when a later
+// phase actually needs it" philosophy as this file's header comment.
+// `assignee` stays `unknown`: legacy data can still carry a single
+// username string where current code always writes an array (see
+// normalizeChecklistAssignees() in src/views/checklist.ts).
+export interface ChecklistSubItem {
+  id: string;
+  text: string;
+  done: boolean;
+  [key: string]: unknown;
+}
+
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+  required?: boolean;
+  removed?: boolean;
+  assignee?: unknown;
+  subItems?: ChecklistSubItem[];
+  [key: string]: unknown;
+}
+
+// A column's default-checklist TEMPLATE only ever carries {id, text} —
+// materialized into a full ChecklistItem (done/assignee added) the first
+// time a card's stage actually needs it (see getOpenChecklistItemsForCard()/
+// getChecklistForStageInProject() in src/views/checklist.ts).
+export interface ChecklistDefaultItem {
+  id: string;
+  text: string;
+}
+
 export interface BoardCard {
   id: string;
   jobId?: string;
@@ -66,7 +100,7 @@ export interface BoardCard {
   color?: string;
   attachments?: unknown[];
   customFields?: Record<string, unknown>;
-  checklists?: Record<string, unknown[]>;
+  checklists?: Record<string, ChecklistItem[]>;
   checklistAssignees?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -75,7 +109,7 @@ export interface BoardColumn {
   id: string;
   label: string;
   hideFromSchedule?: boolean;
-  defaultChecklist?: unknown[];
+  defaultChecklist?: ChecklistDefaultItem[];
   workflowItemId?: string | null;
   color?: string;
   scheduleDisconnected?: boolean;
