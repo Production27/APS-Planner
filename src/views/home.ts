@@ -15,24 +15,34 @@
 //     extraction, and it's what every later Home-specific phase
 //     (widget expand mechanics, the actual dashboard content,
 //     renderHomeDashboard() itself) builds on.
-//   Phase HD-b (this addition) — widget expand/collapse mechanics:
-//     HOME_EXPAND_WIDGET_ID/HOME_REFLOW_TRACK/applyHomeReflowTracks/
-//     toggleHomeWidgetExpand, plus the window resize listener that keeps
-//     the grid's reflow in sync. homeExpandedWidgetId itself stays a
-//     `var` in index.html (same as every other cross-script mutable
-//     PRIMITIVE this whole project has hit) — src/views/board.ts already
-//     ambiently declares it (several of its own functions re-render the
-//     workflow mini-board when it's the one expanded), and this file's
-//     own ambient declaration below must stay structurally identical to
-//     that one, not become a real local declaration: esbuild bundles
-//     every source file into ONE shared IIFE scope, so a `var` moved
-//     INTO a .ts module would just become private to that module's own
-//     closure inside the bundle, not a real `window` property board.ts's
-//     bundled code could still see — unlike a genuinely object-typed
-//     global (a Map, an array), reassigning a bare string/null primitive
-//     needs the real declaration to stay wherever every reader/writer can
-//     see it as an actual global, which for a cross-file primitive still
-//     means index.html's own top-level classic-script scope.
+//   Phase HD-b — widget expand/collapse mechanics: HOME_EXPAND_WIDGET_ID/
+//     HOME_REFLOW_TRACK/applyHomeReflowTracks/toggleHomeWidgetExpand,
+//     plus the window resize listener that keeps the grid's reflow in
+//     sync. homeExpandedWidgetId itself stays a `var` in index.html
+//     (same as every other cross-script mutable PRIMITIVE this whole
+//     project has hit) — src/views/board.ts already ambiently declares
+//     it (several of its own functions re-render the workflow mini-board
+//     when it's the one expanded), and this file's own ambient
+//     declaration below must stay structurally identical to that one,
+//     not become a real local declaration: esbuild bundles every source
+//     file into ONE shared IIFE scope, so a `var` moved INTO a .ts
+//     module would just become private to that module's own closure
+//     inside the bundle, not a real `window` property board.ts's bundled
+//     code could still see — unlike a genuinely object-typed global (a
+//     Map, an array), reassigning a bare string/null primitive needs the
+//     real declaration to stay wherever every reader/writer can see it
+//     as an actual global, which for a cross-file primitive still means
+//     index.html's own top-level classic-script scope.
+//   Phase HD-c (this addition) — the widget DATA builders: pure
+//     functions (jobs/cards in, row arrays out) with no rendering —
+//     buildHomeOverdueRows/buildHomeStalledRows/buildHomeStageSummary/
+//     buildHomeTodayScheduleRows/buildHomeUpcomingScheduleRows/
+//     buildHomeGanttUnclosedRows. DEFAULT_STALLED_AFTER_DAYS stays a
+//     `var` in index.html (same reasoning as homeExpandedWidgetId above
+//     — src/views/board.ts's bundled setColumnStalledThreshold() reads
+//     it directly), ambiently declared here instead of moved.
+import type { BoardCard, BoardColumn, Job } from '../core/types';
+import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
 import { renderGantt } from './gantt';
 import { renderCalendar, initCalendarDragHandlers } from './calendar';
 import { renderBoard } from './board';
@@ -57,6 +67,23 @@ declare global {
   // declaration for this same global.
   // eslint-disable-next-line no-var
   var homeExpandedWidgetId: string | null;
+  // Shared verbatim with src/views/checklist.ts's/board.ts's identical
+  // ambient declarations for these same globals/functions.
+  // eslint-disable-next-line no-var
+  var boardCards: BoardCard[];
+  // eslint-disable-next-line no-var
+  var BOARD_COLUMNS: BoardColumn[];
+  function isJobVisibleToMe(job: Job): boolean;
+  function isFinishedColumnId(colId: string): boolean;
+  // Shared verbatim with src/core/models.ts's identical ambient
+  // declaration for this same global.
+  // eslint-disable-next-line no-var
+  var jobs: Job[];
+  // Shared verbatim with src/views/board.ts's identical ambient
+  // declaration for this same global — see this file's own Phase HD-c
+  // header note for why it stays a real `var` in index.html.
+  // eslint-disable-next-line no-var
+  var DEFAULT_STALLED_AFTER_DAYS: number;
 }
 
 // Which Home widget represents each tab — Home widget headers (icon +
@@ -383,6 +410,281 @@ window.addEventListener('resize', function () {
   }
 });
 
+// ===== HOME DASHBOARD =====
+// Personal landing-tab dashboard, always the default tab (no per-user
+// preference) — a greeting banner, a stat-tile row, then four widgets
+// summarizing the active
+// project: my open checklist items, overdue/due-soon jobs, a per-stage
+// board bar chart, and (Project Admin+ only) recent activity. Everything
+// here reads data other tabs already own; the only mutation reused is
+// toggleMyChecklistItemDone() itself, so checking an item off from Home
+// behaves identically to doing it from My Checklist.
+
+const HOME_DUE_SOON_DAYS = 7;
+
+interface HomeOverdueRow {
+  job: Job;
+  card: BoardCard;
+  label: string;
+  dueDate: Date;
+  isOverdue: boolean;
+  isToday: boolean;
+}
+
+// Same visibility/archived gate buildMyChecklistRows() uses, deliberately
+// WITHOUT its isChecklistStageVisibleToMe() check — that's a checklist-
+// privacy control, unrelated to a job's due date. Excludes cards already
+// in a finished-trigger column (isFinishedColumnId()), same columns
+// buildCardEl()'s own overdue badge excludes.
+function buildHomeOverdueRows(): HomeOverdueRow[] {
+  const todayMidnight = new Date(new Date().toDateString());
+  const dueSoonCutoff = new Date(todayMidnight.getTime() + HOME_DUE_SOON_DAYS * 86400000);
+  const rows: HomeOverdueRow[] = [];
+  boardCards.forEach(function (card) {
+    if (!card.column || !card.due) return;
+    if (isFinishedColumnId(card.column)) return;
+    const found = findJob(card.jobId as string);
+    if (!found || found.job.archived) return;
+    const job = found.job;
+    if (!isJobVisibleToMe(job)) return;
+    const dueDate = new Date(card.due as string + 'T00:00:00');
+    const isOverdue = dueDate < todayMidnight;
+    const isDueSoon = !isOverdue && dueDate <= dueSoonCutoff;
+    if (!isOverdue && !isDueSoon) return;
+    // Splits the "due soon" half into its own today/later tiers for the
+    // widget's own alert (see renderHomeOverdueWidget(), a later phase) —
+    // unused by anything that only cared about isOverdue before this, so
+    // adding it here is additive, not a shape change.
+    const isToday = !isOverdue && dueDate.getTime() === todayMidnight.getTime();
+    const phases = getJobPhases(job);
+    const phase = phases.find(function (p) { return (p.id || null) === (card.phaseId || null); });
+    const label = job.name + (phases.length > 1 && phase && !phase.isDefault ? ' — ' + phase.name : '');
+    rows.push({ job: job, card: card, label: label, dueDate: dueDate, isOverdue: isOverdue, isToday: isToday });
+  });
+  rows.sort(function (a, b) {
+    if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+    return a.dueDate.getTime() - b.dueDate.getTime();
+  });
+  return rows;
+}
+
+interface HomeStalledRow {
+  job: Job;
+  card: BoardCard;
+  label: string;
+  daysInStage: number;
+  columnLabel: string;
+}
+
+// A genuinely different signal from buildHomeOverdueRows() above — time
+// spent in the CURRENT stage (card.columnEnteredAt, stamped by
+// setCardColumn()) rather than a due date. A card with no
+// columnEnteredAt yet (predates that field, hasn't changed columns
+// since) is treated as "unknown, not stalled" rather than backfilled —
+// it'll get a real timestamp the next time it actually moves. Same
+// finished-trigger/archived/visibility gates as buildHomeOverdueRows().
+function buildHomeStalledRows(): HomeStalledRow[] {
+  const now = Date.now();
+  const rows: HomeStalledRow[] = [];
+  boardCards.forEach(function (card) {
+    if (!card.column || !card.columnEnteredAt) return;
+    if (isFinishedColumnId(card.column)) return;
+    const found = findJob(card.jobId as string);
+    if (!found || found.job.archived) return;
+    const job = found.job;
+    if (!isJobVisibleToMe(job)) return;
+    const col = BOARD_COLUMNS.find(function (c) { return c.id === card.column; });
+    const thresholdDays = (col && col.stalledAfterDays as number) || DEFAULT_STALLED_AFTER_DAYS;
+    const daysInStage = Math.floor((now - (card.columnEnteredAt as number)) / 86400000);
+    if (daysInStage < thresholdDays) return;
+    const phases = getJobPhases(job);
+    const phase = phases.find(function (p) { return (p.id || null) === (card.phaseId || null); });
+    const label = job.name + (phases.length > 1 && phase && !phase.isDefault ? ' — ' + phase.name : '');
+    rows.push({ job: job, card: card, label: label, daysInStage: daysInStage, columnLabel: col ? col.label : card.column });
+  });
+  rows.sort(function (a, b) { return b.daysInStage - a.daysInStage; });
+  return rows;
+}
+
+interface HomeStageSummaryRow {
+  id: string;
+  label: string;
+  count: number;
+}
+
+// Counts visible boardCards per stage, mapped onto BOARD_COLUMNS in board
+// order so every stage shows (including zero-count ones) rather than only
+// stages that happen to have a card right now.
+function buildHomeStageSummary(): HomeStageSummaryRow[] {
+  const counts: Record<string, number> = {};
+  boardCards.forEach(function (card) {
+    if (!card.column) return;
+    const found = findJob(card.jobId as string);
+    if (!found || found.job.archived) return;
+    if (!isJobVisibleToMe(found.job)) return;
+    counts[card.column] = (counts[card.column] || 0) + 1;
+  });
+  return BOARD_COLUMNS.map(function (col) {
+    return { id: col.id, label: col.label, count: counts[col.id] || 0 };
+  });
+}
+
+interface HomeScheduleRow {
+  job: Job;
+  phaseId: string | null;
+  subPhaseId: string | null;
+  taskName: string;
+  label: string;
+  phaseName: string;
+  start: Date;
+  finish: Date;
+  taskColor: string;
+}
+
+// Every Gantt task from a visible job whose date range includes today —
+// replaces the old admin-gated activity feed with something everyone can
+// see (Gantt itself carries no tier restriction, same as Board/Calendar)
+// and that's forward-looking ("what should be happening today") rather
+// than a log of what already happened. pct is how far today falls
+// through the task's start->finish window, for the mini progress bar.
+function buildHomeTodayScheduleRows(): HomeScheduleRow[] {
+  const todayMidnight = new Date(new Date().toDateString());
+  const rows: HomeScheduleRow[] = [];
+  jobs.forEach(function (job) {
+    if (job.archived) return;
+    if (!isJobVisibleToMe(job)) return;
+    const phases = getJobPhases(job);
+    phases.forEach(function (phase) {
+      // getPhaseSubUnits(), not phase.tasks directly — once a phase is
+      // split into sub-phases, its real tasks live in
+      // phase.subPhases[i].tasks and phase.tasks itself goes stale/empty
+      // (see getPhaseSubUnits()'s own comment: every Gantt/Calendar
+      // render path already goes through this same seam instead of
+      // reading phase.tasks directly). Reading phase.tasks here meant
+      // any task inside an actual sub-phase silently never showed up in
+      // this widget at all, regardless of its dates.
+      getPhaseSubUnits(phase).forEach(function (subUnit) {
+        (subUnit.tasks || []).forEach(function (task) {
+          if (!task.start || !task.finish) return;
+          const start = new Date(task.start + 'T00:00:00');
+          const finish = new Date(task.finish + 'T00:00:00');
+          if (isNaN(start.getTime()) || isNaN(finish.getTime())) return;
+          if (todayMidnight < start || todayMidnight > finish) return;
+          const phaseName = phases.length > 1 && !phase.isDefault ? phase.name : '';
+          const subPhaseName = !subUnit.isDefault ? subUnit.name : '';
+          const nameParts = [phaseName, subPhaseName].filter(Boolean);
+          const label = job.name + (nameParts.length ? ' — ' + nameParts.join(' — ') : '');
+          rows.push({
+            job: job, phaseId: phase.id, subPhaseId: subUnit.id, taskName: task.name || 'Untitled task',
+            label: label, phaseName: nameParts.join(' — '), start: start, finish: finish,
+            // Same fallback chain the Gantt bars themselves use (task's
+            // own color, else its job's, else the app default).
+            taskColor: task.color || job.color || '#3949ab'
+          });
+        });
+      });
+    });
+  });
+  rows.sort(function (a, b) { return a.label.localeCompare(b.label); });
+  return rows;
+}
+
+// Same shape/traversal as buildHomeTodayScheduleRows() above, but for the
+// expanded-in-place widget's wider window (see toggleHomeWidgetExpand()):
+// any task whose span overlaps [windowStart, windowEnd) at all, not just
+// ones covering today specifically — the compact widget's narrower
+// "must include today" filter would otherwise leave the wider strip
+// mostly empty on either side of the middle column.
+function buildHomeUpcomingScheduleRows(windowStart: Date, windowEnd: Date): HomeScheduleRow[] {
+  const rows: HomeScheduleRow[] = [];
+  jobs.forEach(function (job) {
+    if (job.archived) return;
+    if (!isJobVisibleToMe(job)) return;
+    const phases = getJobPhases(job);
+    phases.forEach(function (phase) {
+      getPhaseSubUnits(phase).forEach(function (subUnit) {
+        (subUnit.tasks || []).forEach(function (task) {
+          if (!task.start || !task.finish) return;
+          const start = new Date(task.start + 'T00:00:00');
+          const finish = new Date(task.finish + 'T00:00:00');
+          if (isNaN(start.getTime()) || isNaN(finish.getTime())) return;
+          if (finish < windowStart || start >= windowEnd) return;
+          const phaseName = phases.length > 1 && !phase.isDefault ? phase.name : '';
+          const subPhaseName = !subUnit.isDefault ? subUnit.name : '';
+          const nameParts = [phaseName, subPhaseName].filter(Boolean);
+          const label = job.name + (nameParts.length ? ' — ' + nameParts.join(' — ') : '');
+          rows.push({
+            job: job, phaseId: phase.id, subPhaseId: subUnit.id, taskName: task.name || 'Untitled task',
+            label: label, phaseName: nameParts.join(' — '), start: start, finish: finish,
+            taskColor: task.color || job.color || '#3949ab'
+          });
+        });
+      });
+    });
+  });
+  rows.sort(function (a, b) { return a.start.getTime() - b.start.getTime() || a.label.localeCompare(b.label); });
+  return rows;
+}
+
+interface HomeGanttUnclosedRow {
+  job: Job;
+  card: BoardCard;
+  label: string;
+}
+
+// Feeds the Gantt widget's own "needs attention" alert (see
+// renderHomeTodayScheduleWidget(), a later phase) — NOT "any task is
+// behind schedule" (that read as noisy — a single slipped task is normal
+// mid-job), but Karl's own, narrower bar: the entire phase's schedule has
+// finished (every one of its tasks' effective due dates has already
+// passed) and its board card STILL hasn't been moved into a
+// finished-trigger column (see isFinishedColumnId() /
+// toggleColumnFinishedTrigger()) — the schedule says done, the board
+// disagrees. Same per-card loop buildHomeOverdueRows()/
+// buildHomeStalledRows() already use, not a per-job/per-task one, so a
+// job with several phases/cards is judged phase by phase — one phase
+// finishing without its card moving is already worth flagging on its
+// own, it doesn't need to wait for every other phase in the job to also
+// finish first.
+function buildHomeGanttUnclosedRows(): HomeGanttUnclosedRow[] {
+  const todayMidnight = new Date(new Date().toDateString());
+  const rows: HomeGanttUnclosedRow[] = [];
+  boardCards.forEach(function (card) {
+    if (!card.column) return;
+    if (isFinishedColumnId(card.column)) return;
+    const found = findJob(card.jobId as string);
+    if (!found || found.job.archived) return;
+    const job = found.job;
+    if (!isJobVisibleToMe(job)) return;
+    const phases = getJobPhases(job);
+    const phase = phases.find(function (p) { return (p.id || null) === (card.phaseId || null); });
+    if (!phase) return;
+    // Effective due date per task — finish, falling back to start when a
+    // task never got one (same fallback the original per-task version
+    // used, Karl's own call). A task with neither, or any task still due
+    // today or later, means this phase isn't confirmed done yet — bails
+    // out (allDone = false) rather than guessing.
+    let taskCount = 0;
+    let allDone = true;
+    getPhaseSubUnits(phase).forEach(function (subUnit) {
+      (subUnit.tasks || []).forEach(function (task) {
+        const dueStr = task.finish || task.start;
+        const dueDate = dueStr ? new Date(dueStr + 'T00:00:00') : null;
+        if (!dueDate || isNaN(dueDate.getTime())) { allDone = false; return; }
+        taskCount++;
+        if (dueDate >= todayMidnight) allDone = false;
+      });
+    });
+    // No tasks at all isn't "done" — there was nothing to schedule
+    // against, so there's nothing to say finished.
+    if (!taskCount || !allDone) return;
+    const label = job.name + (phases.length > 1 && !phase.isDefault ? ' — ' + phase.name : '');
+    rows.push({ job: job, card: card, label: label });
+  });
+  rows.sort(function (a, b) { return a.label.localeCompare(b.label); });
+  return rows;
+}
+
 export {
   getActiveTab,
   switchTabMorphed,
@@ -393,4 +695,10 @@ export {
   setMobileView,
   applyHomeReflowTracks,
   toggleHomeWidgetExpand,
+  buildHomeOverdueRows,
+  buildHomeStalledRows,
+  buildHomeStageSummary,
+  buildHomeTodayScheduleRows,
+  buildHomeUpcomingScheduleRows,
+  buildHomeGanttUnclosedRows,
 };

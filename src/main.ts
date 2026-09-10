@@ -83,7 +83,8 @@ import {
 } from './views/checklist';
 import {
   getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
-  applyHomeReflowTracks, toggleHomeWidgetExpand,
+  applyHomeReflowTracks, toggleHomeWidgetExpand, buildHomeOverdueRows, buildHomeStalledRows, buildHomeStageSummary,
+  buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows,
 } from './views/home';
 
 declare global {
@@ -330,6 +331,12 @@ declare global {
     setMobileView: typeof setMobileView;
     applyHomeReflowTracks: typeof applyHomeReflowTracks;
     toggleHomeWidgetExpand: typeof toggleHomeWidgetExpand;
+    buildHomeOverdueRows: typeof buildHomeOverdueRows;
+    buildHomeStalledRows: typeof buildHomeStalledRows;
+    buildHomeStageSummary: typeof buildHomeStageSummary;
+    buildHomeTodayScheduleRows: typeof buildHomeTodayScheduleRows;
+    buildHomeUpcomingScheduleRows: typeof buildHomeUpcomingScheduleRows;
+    buildHomeGanttUnclosedRows: typeof buildHomeGanttUnclosedRows;
   }
 }
 
@@ -575,3 +582,9 @@ window.toggleJobRail = toggleJobRail;
 window.setMobileView = setMobileView;
 window.applyHomeReflowTracks = applyHomeReflowTracks;
 window.toggleHomeWidgetExpand = toggleHomeWidgetExpand;
+window.buildHomeOverdueRows = buildHomeOverdueRows;
+window.buildHomeStalledRows = buildHomeStalledRows;
+window.buildHomeStageSummary = buildHomeStageSummary;
+window.buildHomeTodayScheduleRows = buildHomeTodayScheduleRows;
+window.buildHomeUpcomingScheduleRows = buildHomeUpcomingScheduleRows;
+window.buildHomeGanttUnclosedRows = buildHomeGanttUnclosedRows;
