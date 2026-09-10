@@ -83,6 +83,7 @@ import {
 } from './views/checklist';
 import {
   getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
+  applyHomeReflowTracks, toggleHomeWidgetExpand,
 } from './views/home';
 
 declare global {
@@ -327,6 +328,8 @@ declare global {
     switchTab: typeof switchTab;
     toggleJobRail: typeof toggleJobRail;
     setMobileView: typeof setMobileView;
+    applyHomeReflowTracks: typeof applyHomeReflowTracks;
+    toggleHomeWidgetExpand: typeof toggleHomeWidgetExpand;
   }
 }
 
@@ -570,3 +573,5 @@ window.clearHomeTabMorphNames = clearHomeTabMorphNames;
 window.switchTab = switchTab;
 window.toggleJobRail = toggleJobRail;
 window.setMobileView = setMobileView;
+window.applyHomeReflowTracks = applyHomeReflowTracks;
+window.toggleHomeWidgetExpand = toggleHomeWidgetExpand;

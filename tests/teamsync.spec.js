@@ -1681,3 +1681,96 @@ test('setMobileView: tapping the already-active view goes to Home, and switching
   expect(result.viewModeAfter).toBe('month');
   expect(result.mobileViewAfter).toBe('calendar');
 });
+
+test('toggleHomeWidgetExpand: expanding a widget marks it (and only it) as expanded, and toggling it again collapses back to idle', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    toggleHomeWidgetExpand('board');
+    const afterExpand = {
+      expandedId: homeExpandedWidgetId,
+      boardHasClass: document.getElementById('homeWidgetWorkflow').classList.contains('is-expanded'),
+      checklistHasClass: document.getElementById('homeWidgetChecklist').classList.contains('is-expanded'),
+      stageBodyExpandedView: document.getElementById('homeStageBody').classList.contains('is-expanded-view'),
+    };
+    toggleHomeWidgetExpand('board'); // same key again — collapses back to idle
+    const afterCollapse = {
+      expandedId: homeExpandedWidgetId,
+      boardHasClass: document.getElementById('homeWidgetWorkflow').classList.contains('is-expanded'),
+    };
+    return { afterExpand, afterCollapse };
+  });
+
+  expect(result.afterExpand).toEqual({ expandedId: 'board', boardHasClass: true, checklistHasClass: false, stageBodyExpandedView: true });
+  expect(result.afterCollapse).toEqual({ expandedId: null, boardHasClass: false });
+});
+
+test('toggleHomeWidgetExpand: is a no-op below the 900px desktop breakpoint', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.setViewportSize({ width: 700, height: 800 });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const expandedId = await page.evaluate(() => {
+    toggleHomeWidgetExpand('board');
+    return homeExpandedWidgetId;
+  });
+
+  expect(expandedId).toBeNull();
+});
+
+test('applyHomeReflowTracks: computes real pixel grid tracks, and collapses Job Chat to a thin strip when a corner widget is expanded', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('home'));
+  await page.waitForFunction(() => getActiveTab() === 'home');
+
+  const result = await page.evaluate(() => {
+    applyHomeReflowTracks();
+    const idleColumns = getComputedStyle(document.querySelector('#panel-home .home-grid')).gridTemplateColumns;
+
+    toggleHomeWidgetExpand('gantt'); // a corner widget, not Job Chat's own center column
+    const jobChatCollapsed = document.getElementById('homeWidgetJobChat').classList.contains('is-collapsed-thin');
+    const expandedColumns = getComputedStyle(document.querySelector('#panel-home .home-grid')).gridTemplateColumns;
+
+    return {
+      idleColumnCount: idleColumns.split(' ').length,
+      idleIsPixels: /^[\d.]+px( [\d.]+px)*$/.test(idleColumns),
+      jobChatCollapsed,
+      expandedColumnCount: expandedColumns.split(' ').length,
+    };
+  });
+
+  expect(result.idleColumnCount).toBe(3);
+  expect(result.idleIsPixels).toBe(true);
+  expect(result.jobChatCollapsed).toBe(true);
+  expect(result.expandedColumnCount).toBe(3);
+});
+
+test('window resize: auto-collapses an expanded widget once the window narrows past the mobile breakpoint', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await page.evaluate(() => toggleHomeWidgetExpand('board'));
+  const expandedBefore = await page.evaluate(() => homeExpandedWidgetId);
+
+  await page.setViewportSize({ width: 700, height: 800 });
+  await page.waitForTimeout(300); // the resize listener's own debounce/settle work
+
+  const result = await page.evaluate(() => ({
+    expandedAfter: homeExpandedWidgetId,
+    stageBodyExpandedView: document.getElementById('homeStageBody').classList.contains('is-expanded-view'),
+  }));
+
+  expect(expandedBefore).toBe('board');
+  expect(result.expandedAfter).toBeNull();
+  expect(result.stageBodyExpandedView).toBe(false);
+});
