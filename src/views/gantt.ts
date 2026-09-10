@@ -946,8 +946,16 @@ function renderGantt(): void {
       dayDiv.style.width = dayWidth + 'px';
       dayDiv.innerHTML = '<span class="day-num">' + current.getDate() + '</span><span class="day-name">' + dayNames[current.getDay()] + '</span>';
       dayDiv.dataset.date = toIsoDate(current);
-      dayDiv.addEventListener('click', (e) => showDatePopover(e, current));
-      dayDiv.addEventListener('mouseenter', (e) => showDatePopover(e, current));
+      // A per-iteration snapshot, not `current` itself — `current` is one
+      // Date object mutated in place for the rest of this loop
+      // (current.setDate(...) below), so every day's closure would
+      // otherwise share that same object and see whatever date it holds
+      // by the time a user actually hovers/clicks, not the date this
+      // specific header was built for. Real bug, caught when this file
+      // was first ported here (Phase 6c) — fixed on Karl's go-ahead.
+      const dayDate = new Date(current);
+      dayDiv.addEventListener('click', (e) => showDatePopover(e, dayDate));
+      dayDiv.addEventListener('mouseenter', (e) => showDatePopover(e, dayDate));
       dayDiv.addEventListener('mouseleave', hideDatePopover);
       header.appendChild(dayDiv);
 

@@ -547,6 +547,41 @@ test('gantt bar drag (real mouse events): dragging a bar body moves its dates, e
   expect(result.finish).toBe('2026-09-18'); // 09-20 shifted the same 2 days
 });
 
+test('regression: hovering two different Gantt date headers shows each one\'s own date, not always the last', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+  await page.waitForTimeout(1500);
+
+  // Real bug found while porting buildDateHeader() to src/views/gantt.ts
+  // (Phase 6c): the loop's `current` Date is one object mutated in place
+  // across every iteration, so every day-header's click/mouseenter
+  // closure captured the SAME object — by the time a user actually
+  // hovered one, `current` already held the loop's final date, so every
+  // header showed the same (wrong, last-in-range) popover date. Fixed by
+  // snapshotting a fresh Date per iteration before wiring the listeners.
+  const todayHeader = page.locator('.day-header.today-header');
+  const todayDate = await todayHeader.getAttribute('data-date');
+  await todayHeader.hover();
+  const popoverToday = await page.locator('#datePopover h5').textContent();
+
+  // Three cells over — still a header rendered by the SAME loop, so this
+  // is exactly the scenario the shared-mutable-object bug broke.
+  const laterHeader = todayHeader.locator('xpath=following-sibling::div[@class="day-header"][3]');
+  const laterDate = await laterHeader.getAttribute('data-date');
+  await laterHeader.hover();
+  const popoverLater = await page.locator('#datePopover h5').textContent();
+
+  expect(todayDate).not.toBe(laterDate);
+  const expectedToday = await page.evaluate((iso) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }), todayDate);
+  const expectedLater = await page.evaluate((iso) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }), laterDate);
+  expect(popoverToday).toBe(expectedToday);
+  expect(popoverLater).toBe(expectedLater);
+});
+
 test('board column CRUD: add, rename, and delete a column via the real modal/prompt flow', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
