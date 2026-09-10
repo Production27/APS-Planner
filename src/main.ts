@@ -88,7 +88,9 @@ import {
   renderHomeChecklistWidget, renderHomeChecklistWidgetExpanded, getDismissedHomeWidgetAlerts,
   isHomeWidgetAlertDismissed, dismissHomeWidgetAlert, renderHomeWidgetAlert, renderHomeOverdueWidget,
   renderHomeCalendarExpanded, renderHomeCalendarMiniMonth, renderHomeWorkflowMiniBoard,
-  renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget,
+  renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget, buildHomeJobChatFeed,
+  renderHomeJobChatComposeOptions, renderHomeJobChatItem, renderHomeJobChat, postHomeJobChatComment,
+  toggleHomeReplyBox, addHomeJobReply, handleHomeReplyKey,
 } from './views/home';
 
 declare global {
@@ -354,6 +356,14 @@ declare global {
     renderHomeWorkflowMiniBoard: typeof renderHomeWorkflowMiniBoard;
     renderHomeWorkflowExpandedBoard: typeof renderHomeWorkflowExpandedBoard;
     renderHomeTodayScheduleWidget: typeof renderHomeTodayScheduleWidget;
+    buildHomeJobChatFeed: typeof buildHomeJobChatFeed;
+    renderHomeJobChatComposeOptions: typeof renderHomeJobChatComposeOptions;
+    renderHomeJobChatItem: typeof renderHomeJobChatItem;
+    renderHomeJobChat: typeof renderHomeJobChat;
+    postHomeJobChatComment: typeof postHomeJobChatComment;
+    toggleHomeReplyBox: typeof toggleHomeReplyBox;
+    addHomeJobReply: typeof addHomeJobReply;
+    handleHomeReplyKey: typeof handleHomeReplyKey;
   }
 }
 
@@ -618,3 +628,11 @@ window.renderHomeCalendarMiniMonth = renderHomeCalendarMiniMonth;
 window.renderHomeWorkflowMiniBoard = renderHomeWorkflowMiniBoard;
 window.renderHomeWorkflowExpandedBoard = renderHomeWorkflowExpandedBoard;
 window.renderHomeTodayScheduleWidget = renderHomeTodayScheduleWidget;
+window.buildHomeJobChatFeed = buildHomeJobChatFeed;
+window.renderHomeJobChatComposeOptions = renderHomeJobChatComposeOptions;
+window.renderHomeJobChatItem = renderHomeJobChatItem;
+window.renderHomeJobChat = renderHomeJobChat;
+window.postHomeJobChatComment = postHomeJobChatComment;
+window.toggleHomeReplyBox = toggleHomeReplyBox;
+window.addHomeJobReply = addHomeJobReply;
+window.handleHomeReplyKey = handleHomeReplyKey;

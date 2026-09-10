@@ -59,6 +59,15 @@
 //     here to feed buildCalBarHtml()/buildCalendarJobRows() are typed
 //     `any` at the boundary — consistent with this whole project's
 //     "verbatim port, tighten only when trivial" discipline.
+//   Phase HD-e (this addition) — the Home Job Chat widget, a small
+//     self-contained feature (buildHomeJobChatFeed/
+//     renderHomeJobChatComposeOptions/renderHomeJobChatItem/
+//     renderHomeJobChat/postHomeJobChatComment/toggleHomeReplyBox/
+//     addHomeJobReply/handleHomeReplyKey). `job.comments` stays typed
+//     loosely (`any[]`) at this boundary rather than adding a real
+//     Comment interface to core/types.ts just for this one still-JS
+//     feature — same "tighten only when trivial" call as the Calendar
+//     bar shapes in HD-d above.
 import type { BoardCard, BoardColumn, Job, WorkflowItem } from '../core/types';
 import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
 import { escapeHtml } from '../utils/html';
@@ -128,6 +137,12 @@ declare global {
   var CAL_BAR_H: number;
   // eslint-disable-next-line no-var
   var CAL_BAR_GAP: number;
+  // Shared verbatim with src/views/checklist.ts's/board.ts's identical
+  // ambient declaration for this same function.
+  function applyPermissionGating(): void;
+  function formatCommentWhen(when: number | undefined): string;
+  function postJobComment(jobId: string, text: string, important: boolean): any;
+  function postJobReply(jobId: string, commentId: string, text: string | false): any;
 }
 
 // Which Home widget represents each tab — Home widget headers (icon +
@@ -1319,6 +1334,142 @@ function renderHomeTodayScheduleWidget(rows: HomeScheduleRow[], windowDays?: num
     '</div>';
 }
 
+// ===== HOME JOB CHAT WIDGET =====
+// Aggregates every visible, non-archived job's own comments (the exact
+// array the job drawer's Comments panel already reads and writes — no
+// separate data model, no new sync path) into one combined, newest-first
+// feed. "Visible" reuses isJobVisibleToMe() — the same Members-based rule
+// governing everything else, so this never shows a comment on a job
+// someone isn't otherwise allowed to see. Archived jobs drop out
+// entirely (not just capped/hidden-by-default) per Karl's own call —
+// same lifecycle boundary "archived" already means everywhere else in
+// this app.
+interface HomeJobChatRow {
+  job: Job;
+  comment: any;
+}
+function buildHomeJobChatFeed(): HomeJobChatRow[] {
+  const rows: HomeJobChatRow[] = [];
+  jobs.forEach(function (job) {
+    if (job.archived) return;
+    if (!isJobVisibleToMe(job)) return;
+    ((job.comments as any[]) || []).forEach(function (c) { rows.push({ job: job, comment: c }); });
+  });
+  rows.sort(function (a, b) { return (b.comment.when || 0) - (a.comment.when || 0); });
+  return rows;
+}
+
+function renderHomeJobChatComposeOptions(): void {
+  const select = document.getElementById('homeJobChatJobPicker') as HTMLSelectElement | null;
+  if (!select) return;
+  const prevValue = select.value;
+  const visibleJobs = jobs.filter(function (j) { return !j.archived && isJobVisibleToMe(j); })
+    .slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+  select.innerHTML = visibleJobs.map(function (j) {
+    return '<option value="' + j.id + '">' + escapeHtml(j.name) + '</option>';
+  }).join('');
+  // Re-selects whatever was picked before this refresh (a new comment
+  // arriving elsewhere shouldn't reset who you're about to message) —
+  // falls back to the list's own first option otherwise.
+  if (visibleJobs.some(function (j) { return j.id === prevValue; })) select.value = prevValue;
+}
+
+// Same shape as renderJobCommentItem() (the drawer's own per-comment
+// markup) plus one addition — a .job-chat-source chip naming which job
+// this is, since a single job's own comment thread never needed to say
+// that before. Reply UI uses its own "home-" id prefix
+// (toggleHomeReplyBox()/addHomeJobReply(), not toggleReplyBox()/
+// addJobReply()) because the drawer's comment list and this feed can
+// both be present in the DOM at once (tab panels stay mounted, just
+// hidden) — sharing ids would mean duplicate ids on the page and
+// document.getElementById() picking whichever one happened to come
+// first, not necessarily the one actually clicked.
+function renderHomeJobChatItem(job: Job, c: any): string {
+  const replies = (c.replies || []).slice().sort(function (a: any, b: any) { return (a.when || 0) - (b.when || 0); });
+  const repliesHtml = replies.map(function (r: any) {
+    return '<div class="job-comment-reply-item">' +
+      '<div class="job-comment-meta">' +
+        '<span class="job-comment-author" title="' + escapeHtml(r.author || 'Someone') + '">' + escapeHtml(r.author || 'Someone') + '</span>' +
+        '<span style="display:flex;align-items:center;gap:4px;">' +
+          '<span class="job-comment-when">' + formatCommentWhen(r.when) + '</span>' +
+          '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobReply(\'' + job.id + '\', \'' + c.id + '\', \'' + r.id + '\')" title="Delete reply">×</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="job-comment-text">' + escapeHtml(r.text) + '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="job-comment-item">' +
+    '<div class="job-comment-meta">' +
+      '<span style="display:flex;align-items:center;">' +
+        '<span class="job-chat-source" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="editJob(\'' + job.id + '\')" title="Open ' + escapeHtml(job.name) + '"><span class="job-chat-source-dot" style="background:' + (job.color || '#3949ab') + ';"></span>' + escapeHtml(job.name) + '</span>' +
+        (c.important ? '<span class="job-comment-important-badge" title="Marked important">●</span>' : '') +
+        '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
+      '</span>' +
+      '<span style="display:flex;align-items:center;gap:4px;">' +
+        '<span class="job-comment-when">' + formatCommentWhen(c.when) + '</span>' +
+        '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
+      '</span>' +
+    '</div>' +
+    '<div class="job-comment-text">' + escapeHtml(c.text) + '</div>' +
+    (replies.length ? '<div class="job-comment-replies">' + repliesHtml + '</div>' : '') +
+    '<button class="job-comment-reply-btn" onclick="toggleHomeReplyBox(\'' + c.id + '\', event)">Reply' + (replies.length ? ' (' + replies.length + ')' : '') + '</button>' +
+    '<div class="job-comment-reply-input-row" id="home-reply-row-' + c.id + '">' +
+      '<textarea id="home-reply-ta-' + c.id + '" data-min-tier="commenter" placeholder="Write a reply..." onkeydown="handleHomeReplyKey(event, \'' + job.id + '\', \'' + c.id + '\')"></textarea>' +
+      '<button class="btn btn-primary" data-min-tier="commenter" style="align-self:flex-end;padding:4px 10px;font-size:12px;" onclick="addHomeJobReply(\'' + job.id + '\', \'' + c.id + '\')">Post Reply</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderHomeJobChat(): void {
+  const listEl = document.getElementById('homeJobChatList');
+  if (!listEl) return;
+  renderHomeJobChatComposeOptions();
+  const rows = buildHomeJobChatFeed();
+  listEl.innerHTML = rows.length
+    ? rows.map(function (row) { return renderHomeJobChatItem(row.job, row.comment); }).join('')
+    : '<div class="job-comments-empty">No comments yet.</div>';
+  applyPermissionGating(); // rebuilt on every feed refresh, outside renderAll()'s own sweep
+}
+
+function postHomeJobChatComment(): void {
+  const select = document.getElementById('homeJobChatJobPicker') as HTMLSelectElement | null;
+  const input = document.getElementById('homeJobChatInput') as HTMLTextAreaElement | null;
+  if (!select || !input || !select.value) return;
+  const posted = postJobComment(select.value, input.value, false);
+  if (posted) input.value = '';
+}
+
+// home-reply-row-/home-reply-ta- prefixed variants of toggleReplyBox()/
+// addJobReply() above — see renderHomeJobChatItem()'s own comment for
+// why this feed can't just reuse those ids directly. The actual "post a
+// reply" logic is still the one shared postJobReply() helper.
+function toggleHomeReplyBox(commentId: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const row = document.getElementById('home-reply-row-' + commentId) as HTMLElement | null;
+  if (!row) return;
+  const isOpen = row.style.display === 'flex';
+  document.querySelectorAll('#homeJobChatList .job-comment-reply-input-row').forEach(function (r) { (r as HTMLElement).style.display = 'none'; });
+  if (!isOpen) {
+    row.style.display = 'flex';
+    const ta = document.getElementById('home-reply-ta-' + commentId);
+    if (ta) ta.focus();
+  }
+}
+
+function addHomeJobReply(jobId: string, commentId: string): void {
+  const ta = document.getElementById('home-reply-ta-' + commentId) as HTMLTextAreaElement | null;
+  const posted = postJobReply(jobId, commentId, ta ? ta.value : false);
+  if (posted && ta) ta.value = '';
+}
+
+function handleHomeReplyKey(event: KeyboardEvent, jobId: string, commentId: string): void {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    addHomeJobReply(jobId, commentId);
+  }
+}
+
 export {
   getActiveTab,
   switchTabMorphed,
@@ -1348,4 +1499,12 @@ export {
   renderHomeWorkflowMiniBoard,
   renderHomeWorkflowExpandedBoard,
   renderHomeTodayScheduleWidget,
+  buildHomeJobChatFeed,
+  renderHomeJobChatComposeOptions,
+  renderHomeJobChatItem,
+  renderHomeJobChat,
+  postHomeJobChatComment,
+  toggleHomeReplyBox,
+  addHomeJobReply,
+  handleHomeReplyKey,
 };

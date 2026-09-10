@@ -1903,3 +1903,98 @@ test('renderHomeTodayScheduleWidget: flags a job whose schedule is fully done bu
 
   expect(result.alertText).toMatch(/finished, not closed out/);
 });
+
+test('buildHomeJobChatFeed: aggregates comments across visible non-archived jobs, newest first, excluding an archived job\'s comments', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const [jobA, jobB, jobC] = jobs;
+    // Demo/fixture jobs may already carry their own seeded comments — clear
+    // every other job's so this feed is deterministic and only reflects
+    // the three rows this test actually sets up.
+    jobs.forEach(function (j) { if (j !== jobA && j !== jobB && j !== jobC) j.comments = []; });
+    jobA.comments = [{ id: 'c-old', author: 'Alice', text: 'older comment', when: 1000 }];
+    jobB.comments = [{ id: 'c-new', author: 'Bob', text: 'newer comment', when: 2000 }];
+    jobC.comments = [{ id: 'c-archived', author: 'Carl', text: 'should not appear', when: 3000 }];
+    const originalArchived = jobC.archived;
+    jobC.archived = true;
+    const rows = buildHomeJobChatFeed();
+    jobC.archived = originalArchived; // restore for any later assertions in this test
+    return rows.map(function (r) { return r.comment.id; });
+  });
+
+  expect(result).toEqual(['c-new', 'c-old']);
+});
+
+test('postHomeJobChatComment: posting via the real Home Job Chat UI adds a comment to the picked job and renders it in the feed', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('home'));
+  await page.waitForFunction(() => getActiveTab() === 'home');
+  await page.evaluate(() => localStorage.setItem('gantt_display_name_v1', 'Test Admin'));
+
+  const targetJobId = await page.evaluate(() => {
+    renderHomeJobChat();
+    const select = document.getElementById('homeJobChatJobPicker');
+    return select.value;
+  });
+
+  await page.fill('#homeJobChatInput', 'A brand new job chat message');
+  await page.click('button[onclick="postHomeJobChatComment()"]');
+
+  const result = await page.evaluate((jobId) => {
+    const found = findJob(jobId);
+    const comments = found.job.comments || [];
+    return {
+      lastComment: comments[comments.length - 1],
+      inputCleared: document.getElementById('homeJobChatInput').value === '',
+      listHtml: document.getElementById('homeJobChatList').textContent,
+    };
+  }, targetJobId);
+
+  expect(result.lastComment.text).toBe('A brand new job chat message');
+  expect(result.lastComment.author).toBe('Test Admin');
+  expect(result.inputCleared).toBe(true);
+  expect(result.listHtml).toContain('A brand new job chat message');
+});
+
+test('toggleHomeReplyBox/addHomeJobReply: replying to a comment via the real UI persists the reply onto the comment', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('home'));
+  await page.waitForFunction(() => getActiveTab() === 'home');
+  await page.evaluate(() => localStorage.setItem('gantt_display_name_v1', 'Test Admin'));
+
+  const jobId = await page.evaluate(() => {
+    jobs[0].comments = [{ id: 'reply-target', author: 'Alice', text: 'original comment', when: Date.now() }];
+    renderHomeJobChat();
+    return jobs[0].id;
+  });
+
+  await page.click('#homeJobChatList .job-comment-reply-btn');
+  const rowVisible = await page.evaluate(() => document.getElementById('home-reply-row-reply-target').style.display === 'flex');
+  await page.fill('#home-reply-ta-reply-target', 'a real reply');
+  await page.evaluate(() => addHomeJobReply(jobs[0].id, 'reply-target'));
+
+  const result = await page.evaluate((jid) => {
+    const found = findJob(jid);
+    const comment = found.job.comments.find(function (c) { return c.id === 'reply-target'; });
+    return {
+      replies: comment.replies,
+      taCleared: document.getElementById('home-reply-ta-reply-target').value === '',
+    };
+  }, jobId);
+
+  expect(rowVisible).toBe(true);
+  expect(result.replies).toHaveLength(1);
+  expect(result.replies[0].text).toBe('a real reply');
+  expect(result.replies[0].author).toBe('Test Admin');
+  expect(result.taCleared).toBe(true);
+});
