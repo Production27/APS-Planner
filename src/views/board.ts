@@ -22,6 +22,20 @@
 //     ensureCardChecklists()/isChecklistStageVisibleToMe()/
 //     confirmChecklistBeforeMove() are all real imports from there now
 //     (checklist.ts's Phases CL-a/CL-b).
+//   Phase CL-c (this addition, part of the checklist-system extraction's
+//     folded-in side-finding, not the checklist system itself) — the
+//     "column settings dropdown" (⋮ menu): isDarkColor/toggleColSettings/
+//     toggleColColorPanel/changeColumnColor/closeAllColSettings/
+//     toggleColumnScheduleVisibility/toggleColumnScheduleSync/
+//     toggleColumnFinishedTrigger/setColumnWorkflowItem/
+//     toggleColumnAutoAssignChecklist/setColumnChecklistAssignee/
+//     setColumnDefaultDuration/setColumnStalledThreshold/reconnectCard.
+//     This was simply never done back in Phase 4 — discovered while
+//     surveying the checklist system (two of these are checklist toggles),
+//     and Karl chose to fold the whole cluster in now rather than
+//     context-switch back to a separate future Board pass. isDarkColor()
+//     was ambiently duplicated here AND in calendar.ts before this; it's
+//     a real function here now, calendar.ts still declares it ambiently.
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
 // slugifyColumnId(), isJobVisibleToMe(),
@@ -31,15 +45,18 @@
 // deleteCardFromShared(), refreshJobFormIfOpen(), syncCardColumns(),
 // isFinishedColumn(), isFinishedColumnId(), displayNameForUsername(),
 // applyPermissionGating(), renderBoardWorkflowStrip(),
-// ensureUserRosterLoaded() — stay in index.html on purpose (checklist
-// business rules, modal-chrome/permission/custom-field plumbing shared
-// across many modals, or genuinely separate concerns like the Gantt/
-// Calendar/Job List re-renders a rename triggers, or Home/schedule-
-// derived column placement). Referenced below as ambient globals: an
-// ordinary top-level `function` declaration already attaches to `window`
-// on its own (unlike `let`/`const`), so none of those needed any change
-// to stay visible here — only genuinely mutated DATA globals do.
-import type { BoardCard, BoardColumn, WorkflowItem, Job, Phase, CustomFieldDef } from '../core/types';
+// ensureUserRosterLoaded(), saveJobs(), renderHomeDashboard(),
+// ensureJobTasksMatchColumns(), renderFixedTaskGrid() — stay in
+// index.html on purpose (checklist business rules, modal-chrome/
+// permission/custom-field plumbing shared across many modals, or
+// genuinely separate concerns like the Gantt/Calendar/Job List
+// re-renders a rename triggers, or Home/schedule-derived column
+// placement, or Job Manager's own fixed-task-grid rendering). Referenced
+// below as ambient globals: an ordinary top-level `function` declaration
+// already attaches to `window` on its own (unlike `let`/`const`), so none
+// of those needed any change to stay visible here — only genuinely
+// mutated DATA globals do.
+import type { BoardCard, BoardColumn, WorkflowItem, Job, Task, Phase, CustomFieldDef } from '../core/types';
 import { findJob } from '../core/models';
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
@@ -78,7 +95,21 @@ declare global {
   var DEFAULT_STALLED_AFTER_DAYS: number;
   // eslint-disable-next-line no-var
   var CUSTOM_FIELD_DEFS: CustomFieldDef[];
+  // Shared verbatim with src/core/models.ts's/src/sync/inbound.ts's
+  // identical ambient declarations for these same globals.
+  // eslint-disable-next-line no-var
+  var jobs: Job[];
+  // eslint-disable-next-line no-var
+  var editingJobId: string | null;
   function setCardColumn(card: BoardCard, newColumnId: string): void;
+  // Shared verbatim with src/views/calendar.ts's/gantt.ts's identical
+  // ambient declaration for this same function.
+  function saveJobs(): void;
+  // Shared verbatim with src/sync/inbound.ts's identical ambient
+  // declaration for this same function.
+  function renderHomeDashboard(): void;
+  function ensureJobTasksMatchColumns(job: Job): void;
+  function renderFixedTaskGrid(taskList: Task[]): void;
   function saveBoardColumns(): void;
   function saveBoardCards(): void;
   function saveWorkflowItems(): void;
@@ -106,7 +137,6 @@ declare global {
   function applyPermissionGating(): void;
   function renderBoardWorkflowStrip(): void;
   function ensureUserRosterLoaded(): Promise<void>;
-  function isDarkColor(hex: string): boolean;
 }
 
 // ===== BOARD: COLUMN DRAG & DROP =====
@@ -1075,6 +1105,232 @@ function buildCardEl(card: BoardCard): HTMLElement {
   return el;
 }
 
+// ===== BOARD: COLUMN SETTINGS DROPDOWN (⋮ menu) =====
+function isDarkColor(hex: string): boolean {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  // Relative luminance formula
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.5;
+}
+
+function toggleColSettings(colId: string, event: Event): void {
+  event.stopPropagation();
+  const dropdown = document.getElementById('col-settings-' + colId)!;
+  const isOpen = dropdown.classList.contains('show');
+  closeAllColSettings();
+  if (!isOpen) dropdown.classList.add('show');
+}
+
+function toggleColColorPanel(colId: string, event: Event): void {
+  event.stopPropagation();
+  const panel = document.getElementById('col-panel-' + colId)!;
+  const toggle = event.currentTarget as HTMLElement;
+  const open = !panel.classList.contains('open');
+  // Close other color panels first
+  document.querySelectorAll('.board-col-color-panel').forEach((p) => p.classList.remove('open'));
+  document.querySelectorAll('.board-col-color-toggle').forEach((t) => t.classList.remove('open'));
+  if (open) {
+    panel.classList.add('open');
+    toggle.classList.add('open');
+  }
+}
+
+function changeColumnColor(colId: string, color: string, event: Event): void {
+  event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (col) {
+    if (color) {
+      col.color = color;
+      logActivity('changed board "' + col.label + '" color');
+      showToast('Board color updated', 'success');
+    } else {
+      delete col.color;
+      logActivity('reset board "' + col.label + '" color');
+      showToast('Board color reset to default', 'info');
+    }
+    // Task colors mirror their column, so a column recolor needs to
+    // propagate to every job's matching task (and the Gantt/board bars
+    // that read task.color).
+    jobs.forEach(function (job) { ensureJobTasksMatchColumns(job); });
+    saveJobs();
+    saveBoardColumns();
+    renderBoard();
+    renderGantt();
+    if (editingJobId) {
+      const found = findJob(editingJobId);
+      if (found) renderFixedTaskGrid(found.job.tasks || []);
+    }
+  }
+  closeAllColSettings();
+}
+
+function closeAllColSettings(): void {
+  document.querySelectorAll('.board-col-settings-dropdown').forEach((d) => d.classList.remove('show'));
+}
+
+// A hidden board still exists as a real column — jobs still get a task for
+// it and its dates/notes are preserved untouched. This just controls
+// whether that column's task shows up: as a row/bar on the Gantt, a row on
+// the Calendar, and (since it can't be scheduled from either of those while
+// hidden) as an editable row in the Job Manager's fixed grid too. Un-hide
+// the board to see and edit it again everywhere.
+function toggleColumnScheduleVisibility(colId: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  col.hideFromSchedule = !col.hideFromSchedule;
+  saveBoardColumns();
+  logActivity((col.hideFromSchedule ? 'hid' : 'showed') + ' board "' + col.label + '" on the Gantt/Calendar/Job Manager');
+  renderBoard();
+  renderGantt();
+  renderCalendar();
+  if (editingJobId) {
+    const found = findJob(editingJobId);
+    if (found) renderFixedTaskGrid(found.job.tasks || []);
+  }
+  showToast('"' + col.label + '" ' + (col.hideFromSchedule ? 'hidden from' : 'shown on') + ' the Gantt, Calendar & Job Manager', 'success');
+  closeAllColSettings();
+}
+
+// While a board is disconnected, deriveColumnForTasks() leaves any card that's
+// currently sitting in it alone — no expiry, unlike a normal manual drag's
+// 24h override. Dragging the card into a different, connected board is the
+// only way out (handleColumnDrop just sets card.column like any other move).
+function toggleColumnScheduleSync(colId: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  col.scheduleDisconnected = !col.scheduleDisconnected;
+  saveBoardColumns();
+  logActivity((col.scheduleDisconnected ? 'disconnected' : 'reconnected') + ' board "' + col.label + '" from the schedule');
+  renderBoard();
+  showToast('"' + col.label + '" ' + (col.scheduleDisconnected ? 'disconnected from' : 'reconnected to') + ' the schedule', 'success');
+  closeAllColSettings();
+}
+
+// See isFinishedColumn() for the default (Complete/Invoiced count even
+// when this has never been touched) — toggling always writes an explicit
+// true/false here, on any column, which then wins over that default.
+function toggleColumnFinishedTrigger(colId: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  const next = !isFinishedColumn(col);
+  col.isFinished = next;
+  saveBoardColumns();
+  logActivity((next ? 'marked' : 'unmarked') + ' board "' + col.label + '" as a finished trigger');
+  renderBoard();
+  renderHomeDashboard();
+  showToast('"' + col.label + '" ' + (next ? 'now marks jobs finished' : 'no longer marks jobs finished'), 'success');
+  closeAllColSettings();
+}
+
+// Not itself a toggle, same reasoning as setColumnChecklistAssignee()
+// below — fires from the <select>'s own onchange, so no re-render/close
+// here (renderBoardWorkflowStrip() below picks up the change on its own
+// next natural render, e.g. the next card move/edit; a full renderBoard()
+// here would just close the dropdown mid-pick for no benefit).
+function setColumnWorkflowItem(colId: string, itemId: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  col.workflowItemId = itemId || null;
+  saveBoardColumns();
+  const item = WORKFLOW_ITEMS.find(function (i) { return i.id === itemId; });
+  logActivity('set board "' + col.label + '" workflow item to ' + (item ? item.label : 'None'));
+  renderBoardWorkflowStrip();
+  showToast('Workflow item updated', 'success');
+}
+
+// See runColumnEntryActions() (index.html) for what this actually does
+// when a card lands here — materializes the column's Default Checklist
+// onto the card immediately (rather than lazily, the first time someone
+// happens to open My Checklist or the card) and assigns it, turning it
+// into a real action item right away instead of sitting inert.
+function toggleColumnAutoAssignChecklist(colId: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  col.autoAssignChecklist = !col.autoAssignChecklist;
+  saveBoardColumns();
+  logActivity((col.autoAssignChecklist ? 'enabled' : 'disabled') + ' checklist action-items for board "' + col.label + '"');
+  renderBoard();
+  showToast('"' + col.label + '" ' + (col.autoAssignChecklist ? 'now sends' : 'no longer sends') + ' checklist action items', 'success');
+  closeAllColSettings();
+}
+
+// Not itself a toggle — overwrites col.checklistAssigneeOverride with
+// whatever the "Assign To" <select> was set to; '' means "Auto" (falls
+// back to the card's own Foreman, then PM, at runColumnEntryActions()
+// time). Deliberately doesn't re-render/close the dropdown, unlike the
+// toggles above — this fires from the <select>'s own onchange, and a
+// disruptive re-render right as someone's picking an option would be
+// worse than just leaving it as a quiet save+toast.
+function setColumnChecklistAssignee(colId: string, username: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  col.checklistAssigneeOverride = username || '';
+  saveBoardColumns();
+  const label = username ? displayNameForUsername(username) : 'Auto (card\'s Foreman/PM)';
+  logActivity('set board "' + col.label + '" checklist action-item assignee to ' + label);
+  showToast('Checklist assignee updated', 'success');
+}
+
+// Drives the auto-fill in renderFixedTaskGrid's startInput handler — setting
+// only a start date for this board's task defaults its duration to this
+// value instead of the app-wide DEFAULT_TASK_DURATION_DAYS fallback. Patches
+// the input in place (rather than a full renderBoard()) so the dropdown
+// stays open and the field reflects the clamped/normalized value.
+function setColumnDefaultDuration(colId: string, value: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  const days = parseInt(value, 10);
+  col.defaultDuration = (days && days > 0) ? days : DEFAULT_TASK_DURATION_DAYS;
+  saveBoardColumns();
+  if (event && event.target) (event.target as HTMLInputElement).value = String(col.defaultDuration);
+  logActivity('set board "' + col.label + '" default duration to ' + col.defaultDuration + ' day' + (col.defaultDuration === 1 ? '' : 's'));
+  showToast('Default duration updated', 'success');
+}
+
+// Feeds buildHomeStalledRows()'s threshold check (DEFAULT_STALLED_AFTER_DAYS
+// is the fallback when this has never been set) — patches the input in
+// place rather than a full renderBoard(), same reasoning as
+// setColumnDefaultDuration() above, so the dropdown stays open.
+function setColumnStalledThreshold(colId: string, value: string, event?: Event): void {
+  if (event) event.stopPropagation();
+  const col = BOARD_COLUMNS.find((c) => c.id === colId);
+  if (!col) return;
+  const days = parseInt(value, 10);
+  col.stalledAfterDays = (days && days > 0) ? days : DEFAULT_STALLED_AFTER_DAYS;
+  saveBoardColumns();
+  if (event && event.target) (event.target as HTMLInputElement).value = String(col.stalledAfterDays);
+  logActivity('set board "' + col.label + '" stalled-after threshold to ' + col.stalledAfterDays + ' day' + (col.stalledAfterDays === 1 ? '' : 's'));
+  renderHomeDashboard();
+  renderBoardWorkflowStrip();
+  showToast('Stalled threshold updated', 'success');
+}
+
+// A manual drag pins a card to its dropped column for 24h (see
+// handleColumnDrop); this lets the user clear that pin immediately instead
+// of waiting it out or re-saving the job in Job Manager just to force a
+// re-sync.
+function reconnectCard(cardId: string, event?: Event): void {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  const card = boardCards.find(function (c) { return String(c.id) === String(cardId); });
+  if (!card) return;
+  card.manualColumn = null;
+  card.manualColumnUntil = null;
+  saveBoardCards();
+  logActivity('reconnected "' + card.title + '" to the schedule');
+  renderBoard();
+  if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
+  showToast('Card reconnected to schedule', 'success');
+}
+
 export {
   handleColumnDragStart,
   handleColumnDragEnd,
@@ -1117,4 +1373,18 @@ export {
   deleteCardFromModal,
   renderBoard,
   buildCardEl,
+  isDarkColor,
+  toggleColSettings,
+  toggleColColorPanel,
+  changeColumnColor,
+  closeAllColSettings,
+  toggleColumnScheduleVisibility,
+  toggleColumnScheduleSync,
+  toggleColumnFinishedTrigger,
+  setColumnWorkflowItem,
+  toggleColumnAutoAssignChecklist,
+  setColumnChecklistAssignee,
+  setColumnDefaultDuration,
+  setColumnStalledThreshold,
+  reconnectCard,
 };

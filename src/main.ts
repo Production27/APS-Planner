@@ -24,6 +24,10 @@ import {
   addWorkflowItem, removeWorkflowItem,
   resolveCardNameTarget, openEditCard, closeCardModal, scheduleCardAutosave, flushCardAutosave, cancelPendingCardAutosave,
   setCardTitleHint, autoSaveCardForm, initCardFormAutosaveListeners, deleteCardFromModal, renderBoard, buildCardEl,
+  isDarkColor, toggleColSettings, toggleColColorPanel, changeColumnColor, closeAllColSettings,
+  toggleColumnScheduleVisibility, toggleColumnScheduleSync, toggleColumnFinishedTrigger, setColumnWorkflowItem,
+  toggleColumnAutoAssignChecklist, setColumnChecklistAssignee, setColumnDefaultDuration, setColumnStalledThreshold,
+  reconnectCard,
 } from './views/board';
 import {
   isCalendarEventTaskId, parseCalendarEventTaskId, defaultRepeatUntil, getCalendarEventOccurrences,
@@ -133,6 +137,20 @@ declare global {
     deleteCardFromModal: typeof deleteCardFromModal;
     renderBoard: typeof renderBoard;
     buildCardEl: typeof buildCardEl;
+    isDarkColor: typeof isDarkColor;
+    toggleColSettings: typeof toggleColSettings;
+    toggleColColorPanel: typeof toggleColColorPanel;
+    changeColumnColor: typeof changeColumnColor;
+    closeAllColSettings: typeof closeAllColSettings;
+    toggleColumnScheduleVisibility: typeof toggleColumnScheduleVisibility;
+    toggleColumnScheduleSync: typeof toggleColumnScheduleSync;
+    toggleColumnFinishedTrigger: typeof toggleColumnFinishedTrigger;
+    setColumnWorkflowItem: typeof setColumnWorkflowItem;
+    toggleColumnAutoAssignChecklist: typeof toggleColumnAutoAssignChecklist;
+    setColumnChecklistAssignee: typeof setColumnChecklistAssignee;
+    setColumnDefaultDuration: typeof setColumnDefaultDuration;
+    setColumnStalledThreshold: typeof setColumnStalledThreshold;
+    reconnectCard: typeof reconnectCard;
     isCalendarEventTaskId: typeof isCalendarEventTaskId;
     parseCalendarEventTaskId: typeof parseCalendarEventTaskId;
     defaultRepeatUntil: typeof defaultRepeatUntil;
@@ -323,6 +341,20 @@ window.initCardFormAutosaveListeners = initCardFormAutosaveListeners;
 window.deleteCardFromModal = deleteCardFromModal;
 window.renderBoard = renderBoard;
 window.buildCardEl = buildCardEl;
+window.isDarkColor = isDarkColor;
+window.toggleColSettings = toggleColSettings;
+window.toggleColColorPanel = toggleColColorPanel;
+window.changeColumnColor = changeColumnColor;
+window.closeAllColSettings = closeAllColSettings;
+window.toggleColumnScheduleVisibility = toggleColumnScheduleVisibility;
+window.toggleColumnScheduleSync = toggleColumnScheduleSync;
+window.toggleColumnFinishedTrigger = toggleColumnFinishedTrigger;
+window.setColumnWorkflowItem = setColumnWorkflowItem;
+window.toggleColumnAutoAssignChecklist = toggleColumnAutoAssignChecklist;
+window.setColumnChecklistAssignee = setColumnChecklistAssignee;
+window.setColumnDefaultDuration = setColumnDefaultDuration;
+window.setColumnStalledThreshold = setColumnStalledThreshold;
+window.reconnectCard = reconnectCard;
 window.isCalendarEventTaskId = isCalendarEventTaskId;
 window.parseCalendarEventTaskId = parseCalendarEventTaskId;
 window.defaultRepeatUntil = defaultRepeatUntil;

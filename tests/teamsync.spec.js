@@ -802,6 +802,138 @@ test('board column CRUD: the Complete and Invoiced columns cannot be deleted', a
   expect(after).toBe(before);
 });
 
+test('column settings dropdown: isDarkColor classifies known light/dark hex colors correctly', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await page.goto(APP_URL);
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => ({
+    black: isDarkColor('#000000'),
+    white: isDarkColor('#ffffff'),
+    indigo: isDarkColor('#3949ab'), // this app's own default accent — dark enough for white text
+  }));
+  expect(result).toEqual({ black: true, white: false, indigo: true });
+});
+
+test('column settings dropdown: changing a column\'s color propagates to every job task in that column, and resetting clears it', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const col = BOARD_COLUMNS[0];
+    const fakeEvent = { stopPropagation() {} };
+    changeColumnColor(col.id, '#ff5722', fakeEvent);
+    const afterSet = col.color;
+    changeColumnColor(col.id, '', fakeEvent);
+    return { afterSet, afterReset: col.color };
+  });
+
+  expect(result.afterSet).toBe('#ff5722');
+  expect(result.afterReset).toBeUndefined();
+});
+
+test('column settings dropdown: schedule visibility, schedule sync, and finished-trigger toggles flip their own column flags independently', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const col = BOARD_COLUMNS[0];
+    const before = { hideFromSchedule: !!col.hideFromSchedule, scheduleDisconnected: !!col.scheduleDisconnected, isFinished: isFinishedColumn(col) };
+    toggleColumnScheduleVisibility(col.id);
+    toggleColumnScheduleSync(col.id);
+    toggleColumnFinishedTrigger(col.id);
+    const after = { hideFromSchedule: !!col.hideFromSchedule, scheduleDisconnected: !!col.scheduleDisconnected, isFinished: isFinishedColumn(col) };
+    return { before, after };
+  });
+
+  expect(result.after.hideFromSchedule).toBe(!result.before.hideFromSchedule);
+  expect(result.after.scheduleDisconnected).toBe(!result.before.scheduleDisconnected);
+  expect(result.after.isFinished).toBe(!result.before.isFinished);
+});
+
+test('column settings dropdown: workflow item, checklist auto-assign/assignee, and default-duration/stalled-threshold settings all persist onto the column', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const col = BOARD_COLUMNS[0];
+    const item = WORKFLOW_ITEMS[0] || { id: 'wf-test', label: 'Test Item' };
+    if (!WORKFLOW_ITEMS.length) WORKFLOW_ITEMS.push(item);
+
+    setColumnWorkflowItem(col.id, item.id);
+    const beforeAutoAssign = !!col.autoAssignChecklist;
+    toggleColumnAutoAssignChecklist(col.id);
+    setColumnChecklistAssignee(col.id, 'testadmin');
+    // Invalid values fall back to the app-wide defaults, not NaN/0.
+    setColumnDefaultDuration(col.id, 'not-a-number');
+    setColumnStalledThreshold(col.id, '9');
+
+    return {
+      workflowItemId: col.workflowItemId,
+      autoAssignChecklist: { before: beforeAutoAssign, after: !!col.autoAssignChecklist },
+      checklistAssigneeOverride: col.checklistAssigneeOverride,
+      defaultDuration: col.defaultDuration,
+      expectedDefaultDuration: DEFAULT_TASK_DURATION_DAYS,
+      stalledAfterDays: col.stalledAfterDays,
+    };
+  });
+
+  expect(result.workflowItemId).toBeTruthy();
+  expect(result.autoAssignChecklist.after).toBe(!result.autoAssignChecklist.before);
+  expect(result.checklistAssigneeOverride).toBe('testadmin');
+  expect(result.defaultDuration).toBe(result.expectedDefaultDuration);
+  expect(result.stalledAfterDays).toBe(9);
+});
+
+test('reconnectCard: clears a card\'s manual-column pin', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const result = await page.evaluate(() => {
+    const card = boardCards[0];
+    card.manualColumn = 'active';
+    card.manualColumnUntil = Date.now() + 86400000;
+    reconnectCard(card.id);
+    return { manualColumn: card.manualColumn, manualColumnUntil: card.manualColumnUntil };
+  });
+
+  expect(result.manualColumn).toBeNull();
+  expect(result.manualColumnUntil).toBeNull();
+});
+
+test('column settings dropdown: opening one column\'s dropdown closes any other that was already open', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('board'));
+
+  const result = await page.evaluate(() => {
+    const [colA, colB] = BOARD_COLUMNS;
+    const fakeEvent = { stopPropagation() {} };
+    toggleColSettings(colA.id, fakeEvent);
+    const aOpenFirst = document.getElementById('col-settings-' + colA.id).classList.contains('show');
+    toggleColSettings(colB.id, fakeEvent);
+    return {
+      aOpenFirst,
+      aOpenAfterB: document.getElementById('col-settings-' + colA.id).classList.contains('show'),
+      bOpen: document.getElementById('col-settings-' + colB.id).classList.contains('show'),
+    };
+  });
+
+  expect(result.aOpenFirst).toBe(true);
+  expect(result.aOpenAfterB).toBe(false);
+  expect(result.bOpen).toBe(true);
+});
+
 test('board card visibility: isCardFromArchivedJob/isCardVisibleToMe reflect the linked job\'s real state', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
