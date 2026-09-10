@@ -15,14 +15,17 @@
 //   Phase 4e — renderBoard()/buildCardEl() themselves, the last real
 //     piece of Board: same pattern. The checklist system (ensureCard-
 //     Checklists/isChecklistStageVisibleToMe/getChecklistForStageInProject/
-//     toggleMyChecklistItemRequired and the whole "My Checklist" tab) is
+//     toggleMyChecklistItemRequired and the whole "My Checklist" tab) was
 //     deliberately NOT part of "Board" — it's cross-cutting (also used
-//     by Job Manager and its own dedicated tab), so it stays in
-//     index.html as its own future, separately-scoped concern.
+//     by Job Manager and its own dedicated tab) — see src/views/
+//     checklist.ts's own header for its separate, later phasing.
+//     ensureCardChecklists()/isChecklistStageVisibleToMe() are real
+//     imports from there now (checklist.ts's Phase CL-a); this file still
+//     calls confirmChecklistBeforeMove() as an ambient ahead of
+//     checklist.ts's own Phase CL-b move.
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
-// confirmChecklistBeforeMove(), ensureCardChecklists(),
-// isChecklistStageVisibleToMe(), slugifyColumnId(), isJobVisibleToMe(),
+// confirmChecklistBeforeMove(), slugifyColumnId(), isJobVisibleToMe(),
 // renderGantt(), renderJobList(), renderCalendar(), openModal()/
 // closeModal(), saveWorkflowItems(), hasMinTier(), renderCustomFieldsGrid(),
 // renderTeamFieldsGrid(), renderAttachments(), collectCustomFieldValues(),
@@ -43,6 +46,7 @@ import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
 import { darkenColor } from '../utils/color';
+import { ensureCardChecklists, isChecklistStageVisibleToMe } from './checklist';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -77,8 +81,6 @@ declare global {
   var CUSTOM_FIELD_DEFS: CustomFieldDef[];
   function setCardColumn(card: BoardCard, newColumnId: string): void;
   function confirmChecklistBeforeMove(card: BoardCard): boolean;
-  function ensureCardChecklists(card: BoardCard): void;
-  function isChecklistStageVisibleToMe(assignees: Record<string, unknown> | undefined, columnId: string): boolean;
   function saveBoardColumns(): void;
   function saveBoardCards(): void;
   function saveWorkflowItems(): void;
