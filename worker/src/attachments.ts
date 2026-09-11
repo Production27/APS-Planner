@@ -14,14 +14,14 @@
 // (file.type.startsWith('image/'), see index.html's attachment upload)
 // minus svg+xml, rather than an arbitrary allowlist, so real photo
 // attachments keep rendering as thumbnails exactly as before.
-import { jsonResponse } from './http.js';
-import { resolveIdentityFromToken, resolveCaller } from './users.js';
+import { jsonResponse } from './http.ts';
+import { resolveIdentityFromToken, resolveCaller } from './users.ts';
 
-export function isSafeInlineImageType(type) {
+export function isSafeInlineImageType(type: unknown): boolean {
   return typeof type === "string" && type.indexOf("image/") === 0 && type !== "image/svg+xml";
 }
 
-export async function handleAttachmentUpload(request, env, corsHeaders, url) {
+export async function handleAttachmentUpload(request: Request, env: Env, corsHeaders: Record<string, string>, url: URL): Promise<Response> {
   // Credentials via headers, not query params — this request's body IS
   // the raw file (streamed straight into R2 below), so there's no JSON
   // body to put them in the way every other POST endpoint does, and a
@@ -45,7 +45,7 @@ export async function handleAttachmentUpload(request, env, corsHeaders, url) {
   return jsonResponse({ key, name }, 200, corsHeaders);
 }
 
-export async function handleAttachmentDownload(request, env, corsHeaders, url) {
+export async function handleAttachmentDownload(request: Request, env: Env, corsHeaders: Record<string, string>, url: URL): Promise<Response> {
   const identity = await resolveIdentityFromToken(env, url.searchParams.get("token"));
   if (!identity) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 
@@ -68,8 +68,8 @@ export async function handleAttachmentDownload(request, env, corsHeaders, url) {
   });
 }
 
-export async function handleAttachmentDelete(request, env, corsHeaders) {
-  let body;
+export async function handleAttachmentDelete(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: { token?: string; key?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const identity = await resolveCaller(env, body);
   if (!identity) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);

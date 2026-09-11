@@ -3,12 +3,14 @@
 // worker/aps-room-do.js — including the honest caveat about what could
 // and couldn't be tested without a real Durable Objects runtime — was
 // removed in commit a4da847) ---
-import { verifyRoomToken } from './room-token.js';
-import { tierAtLeast } from './tiers.js';
+import { verifyRoomToken } from './room-token.ts';
+import { tierAtLeast } from './tiers.ts';
 import {
   emptyRoomState, MESSAGE_TIER_REQUIREMENTS,
   filterRoomStateForAttachment, filterUpsertProjectBatchByTier, applyMessage
-} from './room-state.js';
+} from './room-state.ts';
+import type { UpsertProjectBatchMessage } from './room-state.ts';
+import type { RoomState, RoomMessage, Attachment } from './types.ts';
 
 // A presence entry is dropped from the broadcast if its connection hasn't
 // sent a setPresence heartbeat in this long — well above the client's
@@ -16,8 +18,22 @@ import {
 // brief network hiccup) don't cause a false prune.
 const PRESENCE_STALE_MS = 90 * 1000;
 
+// What serializeAttachment()/deserializeAttachment() actually stores on
+// each WebSocket — the connect-time identity plus presence fields that
+// get updated on every setPresence heartbeat.
+interface RoomAttachment extends Attachment {
+  view: string | null;
+  projectId: string | null;
+  sessionId?: string | null;
+  lastSeen?: number;
+}
+
 export class ApsRoom {
-  constructor(state, env) {
+  state: DurableObjectState;
+  env: Env;
+  roomState: RoomState | null;
+
+  constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
     this.roomState = null;
@@ -27,18 +43,18 @@ export class ApsRoom {
     }
   }
 
-  async loadRoomState() {
+  async loadRoomState(): Promise<RoomState> {
     if (this.roomState) return this.roomState;
-    const stored = await this.state.storage.get('room');
+    const stored = await this.state.storage.get<RoomState>('room');
     this.roomState = stored || emptyRoomState();
     return this.roomState;
   }
 
-  async persist() {
+  async persist(): Promise<void> {
     await this.state.storage.put('room', this.roomState);
   }
 
-  async fetch(request) {
+  async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === '/internal/export') {
@@ -47,7 +63,7 @@ export class ApsRoom {
     }
 
     if (url.pathname === '/internal/import' && request.method === 'POST') {
-      let imported;
+      let imported: RoomState;
       try {
         imported = await request.json();
       } catch (e) {
@@ -75,7 +91,7 @@ export class ApsRoom {
       const targetUsername = url.searchParams.get('username') || '';
       let kicked = 0;
       for (const ws of this.state.getWebSockets()) {
-        const a = ws.deserializeAttachment();
+        const a = ws.deserializeAttachment() as RoomAttachment | null;
         if (a && a.username === targetUsername) {
           try { ws.close(4001, 'Permissions changed — please sign in again'); } catch (e) {}
           kicked++;
@@ -91,7 +107,7 @@ export class ApsRoom {
     return new Response('Not found', { status: 404 });
   }
 
-  async handleWebSocketUpgrade(request) {
+  async handleWebSocketUpgrade(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const token = url.searchParams.get('token');
     const identity = await verifyRoomToken(this.env.ROOM_TOKEN_SECRET, token);
@@ -107,10 +123,18 @@ export class ApsRoom {
     // view/projectId start null (see handlePresenceMessage below) and
     // live in this SAME attachment as identity specifically so they
     // survive hibernation too — a plain instance field would not.
-    server.serializeAttachment({ username: identity.username, displayName: identity.displayName, role: identity.role, assignedProjectId: identity.assignedProjectId || null, view: null, projectId: null });
+    const attachment: RoomAttachment = {
+      username: identity.username as string,
+      displayName: identity.displayName as string,
+      role: identity.role as string,
+      assignedProjectId: (identity.assignedProjectId as string) || null,
+      view: null,
+      projectId: null
+    };
+    server.serializeAttachment(attachment);
 
     const roomState = await this.loadRoomState();
-    const scoped = filterRoomStateForAttachment(roomState, identity);
+    const scoped = filterRoomStateForAttachment(roomState, attachment);
     server.send(JSON.stringify(Object.assign({ type: 'snapshot' }, scoped)));
     this.broadcastPresence();
 
@@ -144,8 +168,8 @@ export class ApsRoom {
   // lastSeen never goes stale; one that stops updating gets quietly
   // dropped from the broadcast list on the next presence event, without
   // needing to actually close the underlying socket.
-  handlePresenceMessage(ws, msg) {
-    const attachment = ws.deserializeAttachment() || {};
+  handlePresenceMessage(ws: WebSocket, msg: { view?: unknown; projectId?: unknown; sessionId?: unknown }): void {
+    const attachment = (ws.deserializeAttachment() || {}) as RoomAttachment;
     ws.serializeAttachment(Object.assign({}, attachment, {
       view: typeof msg.view === 'string' ? msg.view : null,
       projectId: typeof msg.projectId === 'string' ? msg.projectId : null,
@@ -155,11 +179,11 @@ export class ApsRoom {
     this.broadcastPresence();
   }
 
-  broadcastPresence() {
+  broadcastPresence(): void {
     const now = Date.now();
-    const users = [];
+    const users: { username: string; displayName: string; view: string | null; projectId: string | null; sessionId: string | null }[] = [];
     for (const ws of this.state.getWebSockets()) {
-      const a = ws.deserializeAttachment();
+      const a = ws.deserializeAttachment() as RoomAttachment | null;
       if (!a) continue;
       if (a.lastSeen && (now - a.lastSeen) > PRESENCE_STALE_MS) continue;
       users.push({ username: a.username, displayName: a.displayName, view: a.view || null, projectId: a.projectId || null, sessionId: a.sessionId || null });
@@ -170,8 +194,8 @@ export class ApsRoom {
     }
   }
 
-  async webSocketMessage(ws, message) {
-    let msg;
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    let msg: RoomMessage;
     try {
       const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
       msg = JSON.parse(text);
@@ -190,11 +214,11 @@ export class ApsRoom {
     // Content-write authorization: the token was already verified at
     // connect time (handleWebSocketUpgrade()) and its role/assignedProjectId
     // captured in the WebSocket's own attachment, so no per-message KV
-    // round-trip is needed — resolveCaller() (users.js) already accepts
+    // round-trip is needed — resolveCaller() (users.ts) already accepts
     // up-to-token-TTL staleness for the same reason. A message with no
     // matching attachment (shouldn't happen post-upgrade, but don't trust it
     // blindly) is treated as unauthorized.
-    const attachment = ws.deserializeAttachment();
+    const attachment = ws.deserializeAttachment() as RoomAttachment | null;
     const requiredTier = msg && MESSAGE_TIER_REQUIREMENTS[msg.type];
     if (requiredTier && (!attachment || !tierAtLeast(attachment.role, requiredTier))) {
       ws.send(JSON.stringify({ type: 'error', msgId: msg && msg.msgId, message: 'Forbidden: requires ' + requiredTier + ' or higher' }));
@@ -214,7 +238,7 @@ export class ApsRoom {
       return;
     }
     if (msg && msg.type === 'upsertProjectBatch' && attachment) {
-      msg = filterUpsertProjectBatchByTier(msg, roomState.projects[msg.projectId], attachment.role);
+      msg = Object.assign({ type: msg.type }, filterUpsertProjectBatchByTier(msg as unknown as UpsertProjectBatchMessage, roomState.projects[msg.projectId as string], attachment.role)) as RoomMessage;
     }
 
     const result = applyMessage(roomState, msg, attachment);
@@ -229,7 +253,7 @@ export class ApsRoom {
       // something newer — send fresh data immediately rather than leaving
       // their local view wrong until the next unrelated broadcast.
       ws.send(JSON.stringify(Object.assign({ type: 'rejected', msgId: msg.msgId }, result.rejected)));
-      ws.send(JSON.stringify(Object.assign({ type: 'snapshot' }, filterRoomStateForAttachment(this.roomState, attachment))));
+      ws.send(JSON.stringify(Object.assign({ type: 'snapshot' }, filterRoomStateForAttachment(this.roomState as RoomState, attachment))));
       return;
     }
     if (result.ack) ws.send(JSON.stringify(result.ack));
@@ -244,24 +268,24 @@ export class ApsRoom {
   // Per-socket, not one shared payload — two connections can have
   // different assignedProjectId scoping (see filterRoomStateForAttachment()),
   // so what each one is allowed to receive can differ.
-  broadcastSnapshot() {
+  broadcastSnapshot(): void {
     const sockets = this.state.getWebSockets();
     for (const ws of sockets) {
-      const attachment = ws.deserializeAttachment();
-      const scoped = filterRoomStateForAttachment(this.roomState, attachment);
+      const attachment = ws.deserializeAttachment() as RoomAttachment | null;
+      const scoped = filterRoomStateForAttachment(this.roomState as RoomState, attachment);
       const payload = JSON.stringify(Object.assign({ type: 'snapshot' }, scoped));
       try { ws.send(payload); } catch (e) { /* dead socket, webSocketClose() cleans up */ }
     }
   }
 
-  async webSocketClose(ws, code, reason, wasClean) {
+  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     try { ws.close(code, reason); } catch (e) {}
     // So everyone else's presence list drops this person promptly
     // instead of waiting for the next unrelated broadcast.
     this.broadcastPresence();
   }
 
-  async webSocketError(ws, error) {
+  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
     console.error('APS room websocket error:', error);
   }
 }

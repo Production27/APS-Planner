@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isSafeInlineImageType } from './attachments.js';
+import { isSafeInlineImageType } from './attachments.ts';
 
 test('isSafeInlineImageType accepts ordinary image types', () => {
   assert.equal(isSafeInlineImageType('image/png'), true);

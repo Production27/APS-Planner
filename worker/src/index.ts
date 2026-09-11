@@ -11,14 +11,14 @@
 // ==========================================
 //
 // Replaces Liveblocks entirely with a single Durable Object (ApsRoom,
-// defined in room-do.js and re-exported below). Cloudflare requires a
+// defined in room-do.ts and re-exported below). Cloudflare requires a
 // Durable Object's class to live in the same DEPLOYED script as the
 // binding that references it — but that's a bundling requirement, not a
 // source-file one: wrangler bundles a Worker's local ES module imports
 // into one script automatically (confirmed via Cloudflare's own Durable
 // Objects docs). This file is just the URL router — see the git log for
 // the rest of the worker split's history, and the sibling files in this
-// directory for every other piece. users.js is carried over byte-for-byte
+// directory for every other piece. users.ts is carried over byte-for-byte
 // unchanged from aps-liveblocks-worker.js — confirmed independent of
 // Liveblocks by exploration before this migration started.
 //
@@ -34,29 +34,29 @@
 //
 // Attachments (card/job file uploads) live in R2 under an attachments/
 // prefix in the SAME BACKUP_BUCKET, rather than inline base64 in the
-// synced data — see attachments.js. This was a late addition to the
+// synced data — see attachments.ts. This was a late addition to the
 // original Liveblocks migration, decided after noticing the original
 // design (one JSON blob per room, broadcast on every change) would
 // otherwise grow unboundedly with every photo/PDF someone attaches.
 
-import { getRoomStub } from './room-stub.js';
-import { handleAuth } from './auth.js';
-import { runBackup, handleTriggerBackup, handleListBackups, handleDownloadBackup, handleRestoreBackup } from './backup.js';
+import { getRoomStub } from './room-stub.ts';
+import { handleAuth } from './auth.ts';
+import { runBackup, handleTriggerBackup, handleListBackups, handleDownloadBackup, handleRestoreBackup } from './backup.ts';
 import {
   handleUsersList, handleUsersRoster, handleUsersAdd,
   handleUsersUpdate, handleUsersRemove, handleUsersResetPassword
-} from './users-admin.js';
-import { handleAttachmentUpload, handleAttachmentDownload, handleAttachmentDelete } from './attachments.js';
-import { handleReportError, handleErrorsList } from './errors.js';
-export { ApsRoom } from './room-do.js';
+} from './users-admin.ts';
+import { handleAttachmentUpload, handleAttachmentDownload, handleAttachmentDelete } from './attachments.ts';
+import { handleReportError, handleErrorsList } from './errors.ts';
+export { ApsRoom } from './room-do.ts';
 
 // --- WORKER ENTRYPOINTS ---
 export default {
-  async scheduled(controller, env, ctx) {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     await runBackup(env);
   },
 
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",

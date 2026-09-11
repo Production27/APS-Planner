@@ -2,7 +2,9 @@
   "scripts": {
     "build": "esbuild src/main.ts --bundle --outfile=dist/app.bundle.js --format=iife",
     "typecheck": "tsc --noEmit",
-    "test": "playwright test --config=tests/playwright.config.js"
+    "typecheck:worker": "cd worker && npx wrangler types && npx tsc --noEmit",
+    "test": "playwright test --config=tests/playwright.config.js",
+    "test:worker": "node --test worker/src/*.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

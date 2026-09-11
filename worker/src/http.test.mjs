@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { jsonResponse } from './http.js';
+import { jsonResponse } from './http.ts';
 
 test('jsonResponse sets status, content-type, and merges in the given headers', async () => {
   const res = jsonResponse({ ok: true }, 201, { 'X-Custom': 'yes' });

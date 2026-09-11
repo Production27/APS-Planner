@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { signRoomToken, verifyRoomToken } from './room-token.js';
+import { signRoomToken, verifyRoomToken } from './room-token.ts';
 
 test('signRoomToken/verifyRoomToken: a token signed with the right secret verifies and returns its payload', async () => {
   const token = await signRoomToken('test-secret', { username: 'alice', role: 'admin' });

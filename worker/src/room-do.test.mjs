@@ -8,7 +8,7 @@
 // socket-like objects, which plain objects can stand in for just fine.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApsRoom } from './room-do.js';
+import { ApsRoom } from './room-do.ts';
 
 function makeFakeState(wsList = []) {
   const store = new Map();

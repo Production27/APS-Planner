@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getRoomStub } from './room-stub.js';
+import { getRoomStub } from './room-stub.ts';
 
 test('getRoomStub always resolves the same fixed room name, regardless of caller', () => {
   const seenNames = [];

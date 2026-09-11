@@ -9,7 +9,7 @@ import {
   handleUpsertJob, handleUpsertCard,
   handleUpsertProjectBatch, handleSetWholeField,
   applyMessage, removeProject
-} from './room-state.js';
+} from './room-state.ts';
 
 function freshProject() {
   return blankProject('Test Project');

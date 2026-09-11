@@ -1,11 +1,12 @@
 // --- USER MANAGEMENT HANDLERS (unchanged) ---
-import { jsonResponse } from './http.js';
-import { VALID_TIERS } from './tiers.js';
-import { getRoomStub } from './room-stub.js';
+import { jsonResponse } from './http.ts';
+import { VALID_TIERS } from './tiers.ts';
+import { getRoomStub } from './room-stub.ts';
 import {
   getUser, putUser, deleteUser, listAllUsers,
   hashPasswordPBKDF2, genSaltHex, normalizeUsername, resolveCaller
-} from './users.js';
+} from './users.ts';
+import type { Identity, UserRecord } from './types.ts';
 
 // Re-checked fresh from KV rather than trusted off the token: an
 // admin-gated endpoint must not honor a caller demoted after their token
@@ -13,15 +14,15 @@ import {
 // admin-only handler below so a future one can't accidentally skip the
 // fresh recheck the way handleUsersList and handleUsersResetPassword
 // used to (both trusted caller.role straight off the token until this).
-export async function requireAdmin(env, caller, corsHeaders) {
+export async function requireAdmin(env: Env, caller: Identity | null, corsHeaders: Record<string, string>): Promise<{ error?: Response; user?: UserRecord }> {
   if (!caller) return { error: jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders) };
   const user = await getUser(env, caller.username);
   if (!user || user.role !== "admin") return { error: jsonResponse({ error: "Admin access required" }, 403, corsHeaders) };
   return { user };
 }
 
-export async function handleUsersList(request, env, corsHeaders) {
-  let body;
+export async function handleUsersList(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: { token?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
   const admin = await requireAdmin(env, caller, corsHeaders);
@@ -35,8 +36,8 @@ export async function handleUsersList(request, env, corsHeaders) {
 // logged-in team member needs to pick a teammate from, not just admins.
 // Strips role/createdAt/etc. down to just {username, displayName} so it
 // can't be used as a lightweight admin-only-data leak.
-export async function handleUsersRoster(request, env, corsHeaders) {
-  let body;
+export async function handleUsersRoster(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: { token?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
@@ -44,8 +45,18 @@ export async function handleUsersRoster(request, env, corsHeaders) {
   return jsonResponse({ users: users.map(function(u) { return { username: u.username, displayName: u.displayName, isLead: !!u.isLead }; }) }, 200, corsHeaders);
 }
 
-export async function handleUsersAdd(request, env, corsHeaders) {
-  let body;
+interface UsersAddBody {
+  token?: string;
+  newUsername?: string;
+  newPassword?: string;
+  newDisplayName?: string;
+  newRole?: string;
+  newAssignedProjectId?: string;
+  newIsLead?: boolean;
+}
+
+export async function handleUsersAdd(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: UsersAddBody;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
   const admin = await requireAdmin(env, caller, corsHeaders);
@@ -55,7 +66,7 @@ export async function handleUsersAdd(request, env, corsHeaders) {
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
   const newDisplayName = (typeof body.newDisplayName === "string" && body.newDisplayName.trim())
     ? body.newDisplayName.trim().slice(0, 60) : newUsername;
-  const newRole = VALID_TIERS.includes(body.newRole) ? body.newRole : "editor";
+  const newRole = body.newRole && VALID_TIERS.includes(body.newRole) ? body.newRole : "editor";
   // Only meaningful for non-admin tiers — an admin is never project-scoped.
   const newAssignedProjectId = (newRole !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
     ? body.newAssignedProjectId : null;
@@ -86,6 +97,22 @@ export async function handleUsersAdd(request, env, corsHeaders) {
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
 
+interface RoleProjectChangeBody {
+  newRole?: string;
+  newAssignedProjectId?: string | null;
+}
+
+// Pure decision logic pulled out of handleUsersUpdate() below so it's
+// independently testable — an isLead-only edit shouldn't force a
+// reconnect, only an actual role/project change should.
+export function computeRoleProjectChange(target: UserRecord, body: RoleProjectChangeBody): { roleChanged: boolean; projectChanged: boolean; newAssignedProjectId: string | null } {
+  const roleChanged = target.role !== body.newRole;
+  const newAssignedProjectId = (body.newRole !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
+    ? body.newAssignedProjectId : null;
+  const projectChanged = target.assignedProjectId !== newAssignedProjectId;
+  return { roleChanged, projectChanged, newAssignedProjectId };
+}
+
 // Admin-only: reassign an EXISTING account's tier and/or project scope
 // without deleting/recreating it (which would also force a password reset).
 // Same shape as handleUsersResetPassword below, plus handleUsersRemove's
@@ -95,25 +122,20 @@ export async function handleUsersAdd(request, env, corsHeaders) {
 // until its token naturally expires (see ApsRoom's /internal/kick-user
 // for why closing the socket is what actually matters here, not this
 // call itself failing or succeeding).
-export async function kickUserFromRoom(env, targetUsername) {
+export async function kickUserFromRoom(env: Env, targetUsername: string): Promise<void> {
   try {
     await getRoomStub(env).fetch('https://internal/internal/kick-user?username=' + encodeURIComponent(targetUsername), { method: 'POST' });
   } catch (e) { /* best-effort */ }
 }
 
-// Pure decision logic pulled out of handleUsersUpdate() below so it's
-// independently testable — an isLead-only edit shouldn't force a
-// reconnect, only an actual role/project change should.
-export function computeRoleProjectChange(target, body) {
-  const roleChanged = target.role !== body.newRole;
-  const newAssignedProjectId = (body.newRole !== "admin" && typeof body.newAssignedProjectId === "string" && body.newAssignedProjectId)
-    ? body.newAssignedProjectId : null;
-  const projectChanged = target.assignedProjectId !== newAssignedProjectId;
-  return { roleChanged, projectChanged, newAssignedProjectId };
+interface UsersUpdateBody extends RoleProjectChangeBody {
+  token?: string;
+  targetUsername?: string;
+  newIsLead?: boolean;
 }
 
-export async function handleUsersUpdate(request, env, corsHeaders) {
-  let body;
+export async function handleUsersUpdate(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: UsersUpdateBody;
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
   const admin = await requireAdmin(env, caller, corsHeaders);
@@ -123,7 +145,7 @@ export async function handleUsersUpdate(request, env, corsHeaders) {
   const target = await getUser(env, targetUsername);
   if (!target) return jsonResponse({ error: "User not found" }, 404, corsHeaders);
 
-  if (!VALID_TIERS.includes(body.newRole)) {
+  if (!body.newRole || !VALID_TIERS.includes(body.newRole)) {
     return jsonResponse({ error: "Invalid role" }, 400, corsHeaders);
   }
   if (body.newAssignedProjectId !== null && body.newAssignedProjectId !== undefined && typeof body.newAssignedProjectId !== "string") {
@@ -153,8 +175,8 @@ export async function handleUsersUpdate(request, env, corsHeaders) {
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
 
-export async function handleUsersRemove(request, env, corsHeaders) {
-  let body;
+export async function handleUsersRemove(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: { token?: string; targetUsername?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
   const admin = await requireAdmin(env, caller, corsHeaders);
@@ -177,8 +199,8 @@ export async function handleUsersRemove(request, env, corsHeaders) {
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
 
-export async function handleUsersResetPassword(request, env, corsHeaders) {
-  let body;
+export async function handleUsersResetPassword(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: { token?: string; targetUsername?: string; newPassword?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);

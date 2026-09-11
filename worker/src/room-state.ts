@@ -1,7 +1,8 @@
 // --- ROOM STATE REDUCER (pure logic — this file is the sole source
 // of truth for it; an earlier design-iteration copy that used to live at
 // worker/aps-room-state.js was removed in commit a4da847) ---
-import { tierAtLeast } from './tiers.js';
+import { tierAtLeast } from './tiers.ts';
+import type { RoomState, Project, Job, BoardCard, CalendarEvent, Attachment, RoomMessage, ActivityLogEntry } from './types.ts';
 
 export const TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const ACTIVITY_LOG_CAP = 50;
@@ -16,18 +17,18 @@ export const ACTIVITY_LOG_CAP = 50;
 // client-side (`|| []`/`|| {}` patterns); only a wrong-typed PRESENT value
 // was previously able to slip through and corrupt shared state for every
 // connected teammate.
-export function isPlainObject(v) {
+export function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
-export function isArrayIfPresent(v) {
+export function isArrayIfPresent(v: unknown): boolean {
   return v === undefined || Array.isArray(v);
 }
-export function isPlainObjectIfPresent(v) {
+export function isPlainObjectIfPresent(v: unknown): boolean {
   return v === undefined || isPlainObject(v);
 }
 
-export function mergeTombstones(a, b) {
-  const merged = Object.assign({}, a || {}, b || {});
+export function mergeTombstones(a: Record<string, number> | undefined, b: Record<string, number> | undefined): Record<string, number> {
+  const merged: Record<string, number> = Object.assign({}, a || {}, b || {});
   const cutoff = Date.now() - TOMBSTONE_TTL_MS;
   Object.keys(merged).forEach(function (id) {
     if (!merged[id] || merged[id] < cutoff) delete merged[id];
@@ -35,7 +36,7 @@ export function mergeTombstones(a, b) {
   return merged;
 }
 
-export function blankProject(name) {
+export function blankProject(name?: string | null): Project {
   return {
     name: name || 'Untitled Project',
     jobs: {},
@@ -51,18 +52,18 @@ export function blankProject(name) {
   };
 }
 
-export function cloneRoomState(state) {
+export function cloneRoomState<T>(state: T): T {
   return JSON.parse(JSON.stringify(state));
 }
 
-export function ensureProject(state, projectId, seedName) {
+export function ensureProject(state: RoomState, projectId: string, seedName?: string | null): RoomState {
   if (state.projects[projectId]) return state;
   const next = cloneRoomState(state);
   next.projects[projectId] = blankProject(seedName);
   return next;
 }
 
-export function emptyRoomState() {
+export function emptyRoomState(): RoomState {
   return { projects: {} };
 }
 
@@ -75,9 +76,9 @@ export function emptyRoomState() {
 // fixed set of project ids it always has (see FIXED_PROJECT_NAMES/
 // enforceFixedProjectSet() in index.html) — omitting the key would
 // exercise that create-if-missing path instead.
-export function filterRoomStateForAttachment(roomState, attachment) {
+export function filterRoomStateForAttachment(roomState: RoomState, attachment: Attachment | null | undefined): RoomState {
   if (!attachment || attachment.role === "admin" || !attachment.assignedProjectId) return roomState;
-  const filtered = { projects: {} };
+  const filtered: RoomState = { projects: {} };
   Object.keys(roomState.projects).forEach(function (pid) {
     filtered.projects[pid] = pid === attachment.assignedProjectId
       ? roomState.projects[pid]
@@ -100,11 +101,11 @@ export function filterRoomStateForAttachment(roomState, attachment) {
 // codebase's existing marker for an imported/historical note, see
 // ensureJobAndTaskIds() in index.html, and must pass through untouched,
 // same as anything already persisted).
-export function sanitizeJobCommentAuthors(job, existingJob, attachment) {
+export function sanitizeJobCommentAuthors(job: Job, existingJob: Job | undefined, attachment: Attachment | null | undefined): void {
   if (!Array.isArray(job.comments) || !attachment || !attachment.displayName) return;
   const existingComments = (existingJob && existingJob.comments) || [];
   const existingCommentIds = new Set(existingComments.map(function (c) { return c.id; }));
-  const existingReplyIdsByComment = {};
+  const existingReplyIdsByComment: Record<string, Set<string>> = {};
   existingComments.forEach(function (c) {
     existingReplyIdsByComment[c.id] = new Set((c.replies || []).map(function (r) { return r.id; }));
   });
@@ -120,7 +121,16 @@ export function sanitizeJobCommentAuthors(job, existingJob, attachment) {
   });
 }
 
-export function handleUpsertJob(project, msg, attachment) {
+export interface HandlerResult {
+  project: Project;
+  changed: boolean;
+  error?: string;
+  rejected?: 'stale';
+  currentFieldRevision?: number;
+  newFieldRevision?: number;
+}
+
+export function handleUpsertJob(project: Project, msg: { job?: Job }, attachment?: Attachment | null): HandlerResult {
   const job = msg.job;
   if (!job || !job.id) return { project, changed: false, error: 'upsertJob missing job.id' };
   if (!isArrayIfPresent(job.tasks) || !isArrayIfPresent(job.phases)) {
@@ -139,7 +149,7 @@ export function handleUpsertJob(project, msg, attachment) {
   return { project: next, changed: true };
 }
 
-export function handleUpsertCard(project, msg) {
+export function handleUpsertCard(project: Project, msg: { card?: BoardCard }): HandlerResult {
   const card = msg.card;
   if (!card || !card.id) return { project, changed: false, error: 'upsertCard missing card.id' };
   if (!isArrayIfPresent(card.attachments) || !isPlainObjectIfPresent(card.checklists)) {
@@ -157,7 +167,7 @@ export function handleUpsertCard(project, msg) {
   return { project: next, changed: true };
 }
 
-export function handleUpsertCalendarEvent(project, msg) {
+export function handleUpsertCalendarEvent(project: Project, msg: { event?: CalendarEvent }): HandlerResult {
   const event = msg.event;
   if (!event || !event.id) return { project, changed: false, error: 'upsertCalendarEvent missing event.id' };
   if (!isPlainObjectIfPresent(event.exceptions) || !isArrayIfPresent(event.visibleMembers)) {
@@ -175,6 +185,14 @@ export function handleUpsertCalendarEvent(project, msg) {
   return { project: next, changed: true };
 }
 
+export interface UpsertProjectBatchMessage {
+  name?: string;
+  jobs?: Job[];
+  boardCards?: BoardCard[];
+  calendarEvents?: CalendarEvent[];
+  header?: Record<string, unknown>;
+}
+
 // The client's routine (debounced) save batches every job/card/calendar-
 // event in the active project into ONE message rather than one per item —
 // keeps a save touching a few dozen items down to one storage write and
@@ -184,7 +202,7 @@ export function handleUpsertCalendarEvent(project, msg) {
 // setHeader's baseFieldRevision) — a deliberate, known, low-priority gap
 // carried over from the pre-migration behavior rather than something
 // newly introduced.
-export function handleUpsertProjectBatch(project, msg, attachment) {
+export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBatchMessage, attachment?: Attachment | null): HandlerResult {
   let next = project;
   let changed = false;
   function ensureCloned() { if (next === project) next = cloneRoomState({ projects: { p: next } }).projects.p; }
@@ -240,26 +258,27 @@ export function handleUpsertProjectBatch(project, msg, attachment) {
   return { project: next, changed: true };
 }
 
-export function deepEqual(a, b) {
+export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a !== typeof b || a === null || b === null) return a === b;
   if (typeof a !== 'object') return false;
   if (Array.isArray(a) !== Array.isArray(b)) return false;
-  if (Array.isArray(a)) {
+  if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) { if (!deepEqual(a[i], b[i])) return false; }
     return true;
   }
-  const aKeys = Object.keys(a), bKeys = Object.keys(b);
+  const aObj = a as Record<string, unknown>, bObj = b as Record<string, unknown>;
+  const aKeys = Object.keys(aObj), bKeys = Object.keys(bObj);
   if (aKeys.length !== bKeys.length) return false;
   for (const k of aKeys) {
-    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
-    if (!deepEqual(a[k], b[k])) return false;
+    if (!Object.prototype.hasOwnProperty.call(bObj, k)) return false;
+    if (!deepEqual(aObj[k], bObj[k])) return false;
   }
   return true;
 }
 
-export function fieldsChangedExcluding(a, b, ignoreKeys) {
+export function fieldsChangedExcluding(a: Record<string, unknown>, b: Record<string, unknown>, ignoreKeys: string[]): boolean {
   const aKeys = Object.keys(a).filter(function (k) { return ignoreKeys.indexOf(k) === -1; });
   const bKeys = Object.keys(b).filter(function (k) { return ignoreKeys.indexOf(k) === -1; });
   if (aKeys.length !== bKeys.length) return true;
@@ -281,21 +300,21 @@ export function fieldsChangedExcluding(a, b, ignoreKeys) {
 // least 'commenter' — this only narrows further, per-item, so a commenter
 // can't smuggle a non-comment edit and an editor can't smuggle a
 // brand-new job/card/event past the type-level floor above.
-export function filterUpsertProjectBatchByTier(msg, storedProject, role) {
-  const stored = storedProject || { jobs: {}, boardCards: {}, calendarEvents: {}, name: null, header: null };
+export function filterUpsertProjectBatchByTier(msg: UpsertProjectBatchMessage, storedProject: Project | undefined, role: string): UpsertProjectBatchMessage {
+  const stored = storedProject || { jobs: {}, boardCards: {}, calendarEvents: {}, name: undefined, header: undefined } as Partial<Project>;
 
-  function filterMap(items, storedMap, extraIgnoreKeys) {
+  function filterMap<T extends { id: string | number }>(items: T[] | undefined, storedMap: Record<string, unknown>, extraIgnoreKeys: string[]): T[] {
     return (items || []).filter(function (item) {
       if (!item || !item.id) return false;
       const existing = storedMap[item.id];
       if (!existing) return tierAtLeast(role, 'projectAdmin');
-      const realChange = fieldsChangedExcluding(item, existing, ['updatedAt'].concat(extraIgnoreKeys || []));
+      const realChange = fieldsChangedExcluding(item as unknown as Record<string, unknown>, existing as Record<string, unknown>, ['updatedAt'].concat(extraIgnoreKeys || []));
       if (!realChange) return tierAtLeast(role, 'commenter');
       return tierAtLeast(role, 'editor');
     });
   }
 
-  const out = Object.assign({}, msg, {
+  const out: UpsertProjectBatchMessage = Object.assign({}, msg, {
     jobs: filterMap(msg.jobs, stored.jobs || {}, ['comments']),
     boardCards: filterMap(msg.boardCards, stored.boardCards || {}, []),
     calendarEvents: filterMap(msg.calendarEvents, stored.calendarEvents || {}, [])
@@ -314,7 +333,7 @@ export function filterUpsertProjectBatchByTier(msg, storedProject, role) {
 export const SET_WHOLE_FIELD_ARRAY_FIELDS = ['boardColumns', 'workflowItems'];
 export const SET_WHOLE_FIELD_OBJECT_FIELDS = ['fieldOptions', 'header'];
 
-export function handleSetWholeField(project, msg, fieldName) {
+export function handleSetWholeField(project: Project, msg: { baseFieldRevision?: number; value?: unknown }, fieldName: keyof Project['fieldRevisions']): HandlerResult {
   const currentRev = project.fieldRevisions[fieldName] || 0;
   const baseRev = typeof msg.baseFieldRevision === 'number' ? msg.baseFieldRevision : -1;
   if (baseRev < currentRev) {
@@ -327,27 +346,28 @@ export function handleSetWholeField(project, msg, fieldName) {
     return { project, changed: false, error: 'setWholeField: ' + fieldName + ' must be a plain object' };
   }
   const next = cloneRoomState({ projects: { p: project } }).projects.p;
-  next[fieldName] = msg.value;
+  (next as Record<string, unknown>)[fieldName] = msg.value;
   next.fieldRevisions[fieldName] = currentRev + 1;
   next.rev++;
   return { project: next, changed: true, newFieldRevision: currentRev + 1 };
 }
 
-export function handleDeleteFromMap(project, msg) {
+export function handleDeleteFromMap(project: Project, msg: { mapKey?: string; id: string | number }): HandlerResult {
   const mapKey = msg.mapKey;
   const id = String(msg.id);
-  if (['jobs', 'boardCards', 'calendarEvents'].indexOf(mapKey) === -1) {
+  if (!mapKey || ['jobs', 'boardCards', 'calendarEvents'].indexOf(mapKey) === -1) {
     return { project, changed: false, error: 'deleteFromMap: invalid mapKey' };
   }
   const next = cloneRoomState({ projects: { p: project } }).projects.p;
-  delete next[mapKey][id];
-  delete next[mapKey][msg.id];
+  const map = next[mapKey as 'jobs' | 'boardCards' | 'calendarEvents'] as Record<string, unknown>;
+  delete map[id];
+  delete map[String(msg.id)];
   next.deletedIds = mergeTombstones(next.deletedIds, { [id]: Date.now() });
   next.rev++;
   return { project: next, changed: true };
 }
 
-export function handleRecordTombstone(project, msg) {
+export function handleRecordTombstone(project: Project, msg: { id: string | number }): HandlerResult {
   const id = String(msg.id);
   const next = cloneRoomState({ projects: { p: project } }).projects.p;
   next.deletedIds = mergeTombstones(next.deletedIds, { [id]: Date.now() });
@@ -363,10 +383,11 @@ export function handleRecordTombstone(project, msg) {
 // teammate. Same reasoning for `when`: Date.now() is always server time,
 // never the client's claim, since a log a caller can backdate isn't much
 // of an audit trail.
-export function handleLogActivity(project, msg, attachment) {
+export function handleLogActivity(project: Project, msg: { who?: string; what?: string }, attachment?: Attachment | null): HandlerResult {
   const next = cloneRoomState({ projects: { p: project } }).projects.p;
   const who = (attachment && attachment.displayName) || msg.who || 'Someone';
-  next.activityLog.push({ who: who, what: msg.what || '', when: Date.now() });
+  const entry: ActivityLogEntry = { who: who, what: msg.what || '', when: Date.now() };
+  next.activityLog.push(entry);
   while (next.activityLog.length > ACTIVITY_LOG_CAP) next.activityLog.shift();
   next.rev++;
   return { project: next, changed: true };
@@ -380,7 +401,7 @@ export function handleLogActivity(project, msg, attachment) {
 // here (setPresence is short-circuited earlier; anything unrecognized)
 // fall through unchanged to applyMessage()'s own 'unknown message type'
 // error — this table only ever narrows, never grants new capability.
-export const MESSAGE_TIER_REQUIREMENTS = {
+export const MESSAGE_TIER_REQUIREMENTS: Record<string, string> = {
   upsertProjectBatch: 'commenter',
   logActivity: 'commenter',
   upsertJob: 'editor',
@@ -396,7 +417,15 @@ export const MESSAGE_TIER_REQUIREMENTS = {
   removeProject: 'admin'
 };
 
-export function applyMessage(state, msg, attachment) {
+export interface ApplyMessageResult {
+  state: RoomState;
+  changed: boolean;
+  error?: string;
+  rejected?: { reason: string; currentFieldRevision?: number };
+  ack?: { type: string; msgId?: number; newFieldRevision?: number };
+}
+
+export function applyMessage(state: RoomState, msg: RoomMessage, attachment?: Attachment | null): ApplyMessageResult {
   if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') {
     return { state, changed: false, error: 'malformed message' };
   }
@@ -416,25 +445,25 @@ export function applyMessage(state, msg, attachment) {
     };
   }
 
-  let working = ensureProject(state, msg.projectId, msg.seedProjectName);
+  let working = ensureProject(state, msg.projectId, msg.seedProjectName as string | undefined);
   const project = working.projects[msg.projectId];
-  let result;
+  let result: HandlerResult;
 
   switch (msg.type) {
-    case 'upsertJob': result = handleUpsertJob(project, msg, attachment); break;
-    case 'upsertCard': result = handleUpsertCard(project, msg); break;
-    case 'upsertCalendarEvent': result = handleUpsertCalendarEvent(project, msg); break;
-    case 'upsertProjectBatch': result = handleUpsertProjectBatch(project, msg, attachment); break;
-    case 'setBoardColumns': result = handleSetWholeField(project, msg, 'boardColumns'); break;
-    case 'setFieldOptions': result = handleSetWholeField(project, msg, 'fieldOptions'); break;
-    case 'setHeader': result = handleSetWholeField(project, msg, 'header'); break;
-    case 'setWorkflowItems': result = handleSetWholeField(project, msg, 'workflowItems'); break;
-    case 'deleteFromMap': result = handleDeleteFromMap(project, msg); break;
-    case 'recordTombstone': result = handleRecordTombstone(project, msg); break;
-    case 'logActivity': result = handleLogActivity(project, msg, attachment); break;
+    case 'upsertJob': result = handleUpsertJob(project, msg as { job?: Job }, attachment); break;
+    case 'upsertCard': result = handleUpsertCard(project, msg as { card?: BoardCard }); break;
+    case 'upsertCalendarEvent': result = handleUpsertCalendarEvent(project, msg as { event?: CalendarEvent }); break;
+    case 'upsertProjectBatch': result = handleUpsertProjectBatch(project, msg as UpsertProjectBatchMessage, attachment); break;
+    case 'setBoardColumns': result = handleSetWholeField(project, msg as { baseFieldRevision?: number; value?: unknown }, 'boardColumns'); break;
+    case 'setFieldOptions': result = handleSetWholeField(project, msg as { baseFieldRevision?: number; value?: unknown }, 'fieldOptions'); break;
+    case 'setHeader': result = handleSetWholeField(project, msg as { baseFieldRevision?: number; value?: unknown }, 'header'); break;
+    case 'setWorkflowItems': result = handleSetWholeField(project, msg as { baseFieldRevision?: number; value?: unknown }, 'workflowItems'); break;
+    case 'deleteFromMap': result = handleDeleteFromMap(project, msg as unknown as { mapKey?: string; id: string | number }); break;
+    case 'recordTombstone': result = handleRecordTombstone(project, msg as unknown as { id: string | number }); break;
+    case 'logActivity': result = handleLogActivity(project, msg as { who?: string; what?: string }, attachment); break;
     case 'renameProject': {
       const next = cloneRoomState({ projects: { p: project } }).projects.p;
-      next.name = msg.name || next.name;
+      next.name = (msg.name as string) || next.name;
       next.rev++;
       result = { project: next, changed: true };
       break;
@@ -462,11 +491,16 @@ export function applyMessage(state, msg, attachment) {
   };
 }
 
+export interface RemoveProjectResult {
+  state: RoomState;
+  changed: boolean;
+}
+
 // Removes a project entirely — a real capability now (used once to clean
 // up a stray empty project a client-side bug created; see the fix in
 // applyRoomSnapshot()'s isFirstSnapshot handling in index.html). Project
 // deletion is still not exposed anywhere in the app's own UI otherwise.
-export function removeProject(state, projectId) {
+export function removeProject(state: RoomState, projectId: string): RemoveProjectResult {
   if (!state.projects[projectId]) return { state, changed: false };
   const next = cloneRoomState(state);
   delete next.projects[projectId];

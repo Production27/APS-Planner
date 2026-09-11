@@ -1,21 +1,21 @@
 // --- AUTH HANDLER — mints a signed room token rather than calling
 // Liveblocks (long gone). Credential checking (resolveIdentity, in
-// users.js) is completely unchanged; only what happens after a
+// users.ts) is completely unchanged; only what happens after a
 // successful check is different. ---
-import { jsonResponse } from './http.js';
-import { signRoomToken } from './room-token.js';
+import { jsonResponse } from './http.ts';
+import { signRoomToken } from './room-token.ts';
 import {
   normalizeUsername, resolveIdentity,
   AUTH_MAX_FAILURES_PER_USERNAME, AUTH_MAX_FAILURES_PER_IP,
   getAuthFailureCount, bumpAuthFailure
-} from './users.js';
+} from './users.ts';
 
-export async function handleAuth(request, env, corsHeaders, ctx) {
+export async function handleAuth(request: Request, env: Env, corsHeaders: Record<string, string>, ctx: ExecutionContext | undefined): Promise<Response> {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
   }
 
-  let body;
+  let body: { username?: string; password?: string; name?: string };
   try {
     body = await request.json();
   } catch (e) {
@@ -33,7 +33,7 @@ export async function handleAuth(request, env, corsHeaders, ctx) {
     return jsonResponse({ error: "Too many attempts — try again in a few minutes." }, 429, corsHeaders);
   }
 
-  const identity = await resolveIdentity(env, body.username, body.password, body.name);
+  const identity = await resolveIdentity(env, body.username as string, body.password, body.name);
   if (!identity) {
     const bump = Promise.all([bumpAuthFailure(env, usernameFailKey), bumpAuthFailure(env, ipFailKey)]);
     if (ctx) ctx.waitUntil(bump); else await bump;

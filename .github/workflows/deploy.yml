@@ -26,6 +26,13 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - name: Typecheck and unit-test the worker
+        run: |
+          cd worker
+          npx wrangler types
+          npx tsc --noEmit
+          cd ..
+          node --test worker/src/*.test.mjs
       # GitHub's ubuntu-latest runners come with Google Chrome (the real
       # browser, not Playwright's own bundled Chromium) pre-installed,
       # with its own apt source configured. We never use it — only

@@ -4,8 +4,8 @@ import {
   normalizeUsername, normalizeUserRecord,
   genSaltHex, hashPasswordPBKDF2,
   resolveIdentityFromToken
-} from './users.js';
-import { signRoomToken } from './room-token.js';
+} from './users.ts';
+import { signRoomToken } from './room-token.ts';
 
 test('normalizeUsername trims and lowercases, and tolerates non-strings', () => {
   assert.equal(normalizeUsername('  Alice  '), 'alice');

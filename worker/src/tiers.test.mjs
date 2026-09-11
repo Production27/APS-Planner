@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { VALID_TIERS, tierAtLeast } from './tiers.js';
+import { VALID_TIERS, tierAtLeast } from './tiers.ts';
 
 test('tierAtLeast: a higher or equal tier passes, a lower tier fails', () => {
   assert.equal(tierAtLeast('admin', 'editor'), true);

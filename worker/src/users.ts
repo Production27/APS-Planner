@@ -1,20 +1,21 @@
 // --- USER ACCOUNTS (byte-for-byte unchanged from
 // aps-liveblocks-worker.js — confirmed independent of Liveblocks by
 // exploration before this migration started) ---
-import { verifyRoomToken } from './room-token.js';
+import { verifyRoomToken } from './room-token.ts';
+import type { UserRecord, Identity } from './types.ts';
 
-export function bytesToHex(bytes) {
+export function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
 }
-export function hexToBytes(hex) {
+export function hexToBytes(hex: string): Uint8Array {
   const arr = new Uint8Array(hex.length / 2);
   for (let i = 0; i < arr.length; i++) arr[i] = parseInt(hex.substr(i * 2, 2), 16);
   return arr;
 }
-export function genSaltHex() {
+export function genSaltHex(): string {
   return bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
 }
-export async function hashPasswordPBKDF2(password, saltHex) {
+export async function hashPasswordPBKDF2(password: string, saltHex: string): Promise<string> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]
@@ -27,7 +28,7 @@ export async function hashPasswordPBKDF2(password, saltHex) {
   return bytesToHex(new Uint8Array(bits));
 }
 
-export function normalizeUsername(username) {
+export function normalizeUsername(username: unknown): string {
   return (typeof username === "string" ? username : "").trim().toLowerCase();
 }
 
@@ -37,39 +38,49 @@ export function normalizeUsername(username) {
 // there's no separate one-off migration script to run. assignedProjectId
 // defaults to null (unrestricted — sees both fixed projects) for anyone who
 // predates the field entirely.
-export function normalizeUserRecord(u) {
+export function normalizeUserRecord(u: UserRecord | null | undefined): UserRecord | null | undefined {
   if (!u) return u;
   if (u.role === "member") u.role = "editor";
   if (u.assignedProjectId === undefined) u.assignedProjectId = null;
   return u;
 }
 
-export async function getUser(env, username) {
+export async function getUser(env: Env, username: string): Promise<UserRecord | null> {
   const key = normalizeUsername(username);
   if (!key) return null;
   const raw = await env.USERS_KV.get("user:" + key);
-  return raw ? normalizeUserRecord(JSON.parse(raw)) : null;
+  return raw ? (normalizeUserRecord(JSON.parse(raw)) as UserRecord) : null;
 }
-export async function putUser(env, user) {
+export async function putUser(env: Env, user: UserRecord): Promise<void> {
   await env.USERS_KV.put("user:" + normalizeUsername(user.username), JSON.stringify(user));
 }
-export async function deleteUser(env, username) {
+export async function deleteUser(env: Env, username: string): Promise<void> {
   await env.USERS_KV.delete("user:" + normalizeUsername(username));
 }
-export async function listAllUsers(env) {
+
+export interface RosterEntry {
+  username: string;
+  displayName: string;
+  role: string;
+  assignedProjectId: string | null;
+  createdAt: number;
+  isLead: boolean;
+}
+
+export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
   const list = await env.USERS_KV.list({ prefix: "user:" });
-  const users = [];
+  const users: RosterEntry[] = [];
   for (const k of list.keys) {
     const raw = await env.USERS_KV.get(k.name);
     if (!raw) continue;
-    const u = normalizeUserRecord(JSON.parse(raw));
+    const u = normalizeUserRecord(JSON.parse(raw)) as UserRecord;
     users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead });
   }
   users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   return users;
 }
 
-export async function verifyCredentials(env, username, password) {
+export async function verifyCredentials(env: Env, username: string, password: string | undefined): Promise<UserRecord | null> {
   const user = await getUser(env, username);
   if (!user || !password) return null;
   const hash = await hashPasswordPBKDF2(password, user.salt);
@@ -82,7 +93,7 @@ export async function verifyCredentials(env, username, password) {
 // fallbackName is kept as a parameter (unused) rather than removed from
 // every call site across this file for a change that's otherwise purely
 // subtractive.
-export async function resolveIdentity(env, username, password, fallbackName) {
+export async function resolveIdentity(env: Env, username: string, password: string | undefined, fallbackName?: string): Promise<Identity | null> {
   if (!username) return null;
   const user = await verifyCredentials(env, username, password);
   if (!user) return null;
@@ -90,22 +101,22 @@ export async function resolveIdentity(env, username, password, fallbackName) {
 }
 
 // Resolves identity from a signed room token (see signRoomToken/
-// verifyRoomToken in room-token.js) instead of re-verifying a password
+// verifyRoomToken in room-token.ts) instead of re-verifying a password
 // against KV. Returns the same shape as resolveIdentity() so every
 // downstream call site is agnostic to which path produced it.
-export async function resolveIdentityFromToken(env, token) {
+export async function resolveIdentityFromToken(env: Env, token: string | null | undefined): Promise<Identity | null> {
   const payload = await verifyRoomToken(env.ROOM_TOKEN_SECRET, token);
   if (!payload || !payload.username) return null;
-  return { username: payload.username, displayName: payload.displayName, role: payload.role, assignedProjectId: payload.assignedProjectId || null };
+  return { username: payload.username as string, displayName: payload.displayName as string, role: payload.role as string, assignedProjectId: (payload.assignedProjectId as string) || null };
 }
 
 // Single entry point every authenticated JSON-body endpoint uses.
-// handleAuth() (the /auth login endpoint, in auth.js) is the only
+// handleAuth() (the /auth login endpoint, in auth.ts) is the only
 // remaining place a raw password is verified — everything past it runs
 // on the token that mints. (The legacy username+password fallback this
 // used to also accept was removed once every client had picked up the
 // token-based build.)
-export async function resolveCaller(env, body) {
+export async function resolveCaller(env: Env, body: { token?: string } | null | undefined): Promise<Identity | null> {
   return resolveIdentityFromToken(env, body && body.token);
 }
 
@@ -122,12 +133,12 @@ export const AUTH_LOCKOUT_WINDOW_SECONDS = 900; // 15 minutes
 export const AUTH_MAX_FAILURES_PER_USERNAME = 10;
 export const AUTH_MAX_FAILURES_PER_IP = 30;
 
-export async function getAuthFailureCount(env, key) {
+export async function getAuthFailureCount(env: Env, key: string): Promise<number> {
   const raw = await env.USERS_KV.get(key);
   const n = raw ? parseInt(raw, 10) : 0;
   return isNaN(n) ? 0 : n;
 }
-export async function bumpAuthFailure(env, key) {
+export async function bumpAuthFailure(env: Env, key: string): Promise<void> {
   const n = (await getAuthFailureCount(env, key)) + 1;
   await env.USERS_KV.put(key, String(n), { expirationTtl: AUTH_LOCKOUT_WINDOW_SECONDS });
 }

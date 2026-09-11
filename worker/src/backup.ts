@@ -6,17 +6,39 @@
 // version (v3: jobs/boardCards/calendarEvents as arrays, deletedIds,
 // boardColumns, fieldOptions, header) for continuity with existing
 // backups and index.html's importData().
-import { jsonResponse } from './http.js';
-import { getRoomStub } from './room-stub.js';
-import { resolveCaller } from './users.js';
+import { jsonResponse } from './http.ts';
+import { getRoomStub } from './room-stub.ts';
+import { resolveCaller } from './users.ts';
+import type { RoomState, Project, Job, BoardCard, CalendarEvent } from './types.ts';
 
-export function roomStateToAppFormat(roomState) {
-  const projects = {};
+// The external backup FILE shape — an array-based projection of the
+// room's own map-based Project shape, unchanged from the Liveblocks era
+// for continuity with existing backups and index.html's importData().
+export interface AppFormatProject {
+  id?: string;
+  name: string;
+  jobs: Job[];
+  boardColumns: unknown[];
+  boardCards: BoardCard[];
+  calendarEvents: CalendarEvent[];
+  fieldOptions: Record<string, unknown>;
+  deletedIds: Record<string, number>;
+  header: Record<string, unknown>;
+}
+
+export interface AppFormat {
+  version: number;
+  projects: Record<string, AppFormatProject>;
+  activeProjectId: string | null;
+}
+
+export function roomStateToAppFormat(roomState: RoomState): AppFormat {
+  const projects: Record<string, AppFormatProject> = {};
   for (const [projId, proj] of Object.entries(roomState.projects || {})) {
     projects[projId] = {
       id: projId,
       name: proj.name || 'Untitled Project',
-      jobs: Object.values(proj.jobs || {}).sort((a, b) => (a.order || 0) - (b.order || 0)),
+      jobs: Object.values(proj.jobs || {}).sort((a, b) => ((a.order as number) || 0) - ((b.order as number) || 0)),
       boardColumns: proj.boardColumns || [],
       boardCards: Object.values(proj.boardCards || {}),
       calendarEvents: Object.values(proj.calendarEvents || {}),
@@ -28,14 +50,14 @@ export function roomStateToAppFormat(roomState) {
   return { version: 3, projects, activeProjectId: Object.keys(projects)[0] || null };
 }
 
-export function appFormatToRoomState(appData) {
-  const projects = {};
+export function appFormatToRoomState(appData: { projects?: Record<string, Partial<AppFormatProject>> }): RoomState {
+  const projects: Record<string, Project> = {};
   for (const [projId, proj] of Object.entries(appData.projects || {})) {
-    const jobsObj = {};
+    const jobsObj: Record<string, Job> = {};
     (proj.jobs || []).forEach(function (j) { if (j && j.id) jobsObj[j.id] = j; });
-    const cardsObj = {};
+    const cardsObj: Record<string, BoardCard> = {};
     (proj.boardCards || []).forEach(function (c) { if (c && c.id !== undefined && c.id !== null) cardsObj[String(c.id)] = c; });
-    const eventsObj = {};
+    const eventsObj: Record<string, CalendarEvent> = {};
     (proj.calendarEvents || []).forEach(function (ev) { if (ev && ev.id !== undefined && ev.id !== null) eventsObj[String(ev.id)] = ev; });
     projects[projId] = {
       name: proj.name || 'Untitled Project',
@@ -54,11 +76,11 @@ export function appFormatToRoomState(appData) {
   return { projects };
 }
 
-export async function runBackup(env) {
+export async function runBackup(env: Env): Promise<string> {
   const stub = getRoomStub(env);
   const res = await stub.fetch('https://internal/internal/export');
   if (!res.ok) throw new Error(`Room export failed: ${res.status}`);
-  const roomState = await res.json();
+  const roomState = await res.json() as RoomState;
   const appData = roomStateToAppFormat(roomState);
   const timestamp = new Date().toISOString();
   const key = `backups/aps-planner-${timestamp}.json`;
@@ -69,7 +91,7 @@ export async function runBackup(env) {
 
   try {
     const list = await env.BACKUP_BUCKET.list({ prefix: "backups/" });
-    const sorted = list.objects.sort((a, b) => new Date(b.uploaded) - new Date(a.uploaded));
+    const sorted = list.objects.sort((a, b) => new Date(b.uploaded).getTime() - new Date(a.uploaded).getTime());
     for (let i = 30; i < sorted.length; i++) {
       await env.BACKUP_BUCKET.delete(sorted[i].key);
     }
@@ -81,12 +103,12 @@ export async function runBackup(env) {
   return key;
 }
 
-export async function runRestore(env, backupKey) {
+export async function runRestore(env: Env, backupKey: string): Promise<{ restoredFrom: string }> {
   const stub = getRoomStub(env);
 
   const backupObj = await env.BACKUP_BUCKET.get(backupKey);
   if (!backupObj) throw new Error(`Backup not found in bucket: ${backupKey}`);
-  const appData = JSON.parse(await backupObj.text());
+  const appData = JSON.parse(await backupObj.text()) as AppFormat;
   if (!appData || (appData.version !== 2 && appData.version !== 3) || !appData.projects) {
     throw new Error("Backup file doesn't look like a valid v2/v3 export (missing 'projects').");
   }
@@ -94,7 +116,7 @@ export async function runRestore(env, backupKey) {
   // Safety snapshot of current state before we touch anything.
   const currentRes = await stub.fetch('https://internal/internal/export');
   if (currentRes.ok) {
-    const currentRoomState = await currentRes.json();
+    const currentRoomState = await currentRes.json() as RoomState;
     const currentAppData = roomStateToAppFormat(currentRoomState);
     const safetyKey = `backups/pre-restore-safety-${new Date().toISOString()}.json`;
     await env.BACKUP_BUCKET.put(safetyKey, JSON.stringify(currentAppData, null, 2), {
@@ -124,9 +146,9 @@ export async function runRestore(env, backupKey) {
 // account's own credentials — same resolveIdentity() every other
 // authenticated endpoint uses, just requiring username+password instead of
 // a single shared secret.
-export async function checkAdminAuth(request, env) {
+export async function checkAdminAuth(request: Request, env: Env): Promise<boolean> {
   try {
-    const body = await request.clone().json();
+    const body = await request.clone().json() as { token?: string };
     const caller = await resolveCaller(env, body);
     return !!(caller && caller.role === "admin");
   } catch (e) {
@@ -137,10 +159,10 @@ export async function checkAdminAuth(request, env) {
 // The four route handlers below were previously inlined directly in the
 // router's fetch() body rather than wrapped in named functions like every
 // other route — pulled out here as a pure mechanical extract-function (no
-// logic change) so index.js can eventually be a uniform one-line-per-route
+// logic change) so index.ts can eventually be a uniform one-line-per-route
 // dispatcher, same as every other route.
 
-export async function handleTriggerBackup(request, env, corsHeaders) {
+export async function handleTriggerBackup(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   if (!(await checkAdminAuth(request, env))) {
     return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
   }
@@ -153,13 +175,13 @@ export async function handleTriggerBackup(request, env, corsHeaders) {
   }
 }
 
-export async function handleListBackups(request, env, corsHeaders) {
+export async function handleListBackups(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   if (!(await checkAdminAuth(request, env))) {
     return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
   }
   const list = await env.BACKUP_BUCKET.list({ prefix: "backups/" });
   const backups = list.objects
-    .sort((a, b) => new Date(b.uploaded) - new Date(a.uploaded))
+    .sort((a, b) => new Date(b.uploaded).getTime() - new Date(a.uploaded).getTime())
     .map(o => ({
       key: o.key,
       size: o.size,
@@ -174,8 +196,8 @@ export async function handleListBackups(request, env, corsHeaders) {
 // Worker access logs on every download. The client now fetch()es this
 // (instead of window.open(), which can't send a POST body) and turns
 // the response into a local download itself.
-export async function handleDownloadBackup(request, env, corsHeaders) {
-  let body;
+export async function handleDownloadBackup(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: { token?: string; key?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const dlCaller = await resolveCaller(env, body);
   if (!dlCaller || dlCaller.role !== "admin") {
@@ -198,8 +220,8 @@ export async function handleDownloadBackup(request, env, corsHeaders) {
 
 // Same reasoning as handleDownloadBackup above — POST + JSON body instead
 // of the admin password sitting in a GET query string.
-export async function handleRestoreBackup(request, env, corsHeaders) {
-  let body;
+export async function handleRestoreBackup(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: { token?: string; key?: string; confirm?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const restoreCaller = await resolveCaller(env, body);
   if (!restoreCaller || restoreCaller.role !== "admin") {
