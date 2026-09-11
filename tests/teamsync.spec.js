@@ -2102,3 +2102,55 @@ test('renderHomeDashboard: dispatches the Calendar widget to its real expanded m
   expect(expandedState.hasRealMonthGrid).toBe(true);
   expect(compactAfter).toBe(true);
 });
+
+test('maintenance mode: a non-admin sees the full-screen overlay when it is active', async ({ page }) => {
+  await seedSession(page, { role: 'viewer' });
+  await mockRoomWebSocket(page);
+  await page.route(WORKER_ORIGIN + '/maintenance-status*', (route) => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: true, message: 'Testing a maintenance window.' }) });
+  });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await expect(page.locator('#maintenanceOverlay')).toHaveClass(/show/);
+  await expect(page.locator('#maintenanceOverlayMessage')).toHaveText('Testing a maintenance window.');
+});
+
+test('maintenance mode: an admin does not see the overlay even while it is active', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.route(WORKER_ORIGIN + '/maintenance-status*', (route) => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: true, message: 'Testing a maintenance window.' }) });
+  });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  // Give the poll a moment to land, then confirm it deliberately did NOT block.
+  await page.waitForTimeout(300);
+  await expect(page.locator('#maintenanceOverlay')).not.toHaveClass(/show/);
+});
+
+test('maintenance mode admin toggle: turning it on sends the right request and updates the panel', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.route(WORKER_ORIGIN + '/maintenance-status*', (route) => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ active: false, message: '' }) });
+  });
+  let capturedBody = null;
+  await page.route(WORKER_ORIGIN + '/maintenance-status/set', (route) => {
+    capturedBody = route.request().postDataJSON();
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, status: { active: true, message: capturedBody.message } }) });
+  });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await page.evaluate(() => { toggleSettingsMenu(); toggleMaintenancePanel(); });
+  await page.locator('#maintenanceMessageInput').fill('Back in 15 minutes for a data migration.');
+  await expect(page.locator('#maintenanceEnableBtn')).toHaveText('Turn On Maintenance Mode');
+  await page.locator('#maintenanceEnableBtn').click();
+
+  expect(capturedBody.active).toBe(true);
+  expect(capturedBody.message).toBe('Back in 15 minutes for a data migration.');
+  await expect(page.locator('#maintenanceToggle')).toHaveClass(/active/);
+  await expect(page.locator('#maintenanceEnableBtn')).toHaveText('Turn Off Maintenance Mode');
+});
