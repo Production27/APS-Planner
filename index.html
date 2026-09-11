@@ -10097,7 +10097,8 @@ document.addEventListener('keydown', function(e) {
 }
 
 // ===== ROOM SYNC (Durable Object backend) =====
-// Replaces Liveblocks — see the migration plan and worker/aps-do-worker.js.
+// Replaces Liveblocks — see the migration plan and worker/src/ (formerly
+// one file, worker/aps-do-worker.js, split into modules — see git log).
 // No more Live*/CRDT types: the server is authoritative (a Durable Object
 // processes one message at a time, so there's no true concurrent-write
 // race to resolve), and every push/pull below just deals in plain JSON.

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "aps-planner-staging",
-  "main": "aps-do-worker.js",
+  "main": "src/index.js",
   "account_id": "db3e99d72e71b2d451e20061e3ff3625",
   "compatibility_date": "2026-08-01",
 

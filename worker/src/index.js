@@ -1,54 +1,54 @@
 // ==========================================
-// APS Planner — Worker (Durable Objects backend)
+// APS Planner — Worker (Durable Objects backend) — entry point
 // LIVE — this is what's actually deployed at aps-planner-staging
 // (confirmed via `wrangler deployments list` against this file's own git
-// history). This file is the sole source of truth for everything in it —
-// the old pre-migration Liveblocks-based worker, its README, and a set of
-// design-iteration reference files this used to point readers to were all
-// removed in commit a4da847 ("Remove stale unused worker reference
-// files"); deploys go through wrangler.jsonc's wrangler-based pipeline.
+// history). This directory (worker/src/) is the sole source of truth for
+// everything in it — the old pre-migration Liveblocks-based worker, its
+// README, and a set of design-iteration reference files this used to
+// point readers to were all removed in commit a4da847 ("Remove stale
+// unused worker reference files"); deploys go through wrangler.jsonc's
+// wrangler-based pipeline.
 // ==========================================
 //
-// Replaces Liveblocks entirely with a single Durable Object (ApsRoom, now
-// defined in worker/src/room-do.js and re-exported below). Cloudflare
-// requires a Durable Object's class to live in the same DEPLOYED script
-// as the binding that references it — but that's a bundling requirement,
-// not a source-file one: wrangler bundles a Worker's local ES module
-// imports into one script automatically (confirmed via Cloudflare's own
-// Durable Objects docs). This file is now down to just the URL router —
-// see the git log for the rest of the split's history, and worker/src/
-// for every other piece. The user-accounts section (worker/src/users.js)
-// is carried over byte-for-byte unchanged from aps-liveblocks-worker.js —
-// confirmed independent of Liveblocks by exploration before this
-// migration started.
+// Replaces Liveblocks entirely with a single Durable Object (ApsRoom,
+// defined in room-do.js and re-exported below). Cloudflare requires a
+// Durable Object's class to live in the same DEPLOYED script as the
+// binding that references it — but that's a bundling requirement, not a
+// source-file one: wrangler bundles a Worker's local ES module imports
+// into one script automatically (confirmed via Cloudflare's own Durable
+// Objects docs). This file is just the URL router — see the git log for
+// the rest of the worker split's history, and the sibling files in this
+// directory for every other piece. users.js is carried over byte-for-byte
+// unchanged from aps-liveblocks-worker.js — confirmed independent of
+// Liveblocks by exploration before this migration started.
 //
-// New bindings this file needs beyond what's already configured:
+// Bindings this worker needs (configured in wrangler.jsonc/the dashboard):
 //   APS_ROOM        Durable Object namespace, class name "ApsRoom",
 //                    pointing at this same script.
 //   ROOM_TOKEN_SECRET  Secret (Settings -> Variables and Secrets) — any
 //                    long random string, used to sign/verify room
 //                    connection tokens. Generate once, never reuse
 //                    TEAM_PASSWORD or LIVEBLOCKS_SECRET_KEY for this.
-// Everything else (BACKUP_BUCKET, USERS_KV, TEAM_PASSWORD) is reused
-// as-is from the current worker.
+//   BACKUP_BUCKET, USERS_KV, TEAM_PASSWORD — reused as-is from the
+//                    original Liveblocks-era worker.
 //
-// Attachments (card/job file uploads) now live in R2 under an
-// attachments/ prefix in the SAME BACKUP_BUCKET, rather than inline
-// base64 in the synced data — see the attachment endpoints below. This
-// was a late addition to the migration, decided after noticing the
-// original design (one JSON blob per room, broadcast on every change)
-// would otherwise grow unboundedly with every photo/PDF someone attaches.
+// Attachments (card/job file uploads) live in R2 under an attachments/
+// prefix in the SAME BACKUP_BUCKET, rather than inline base64 in the
+// synced data — see attachments.js. This was a late addition to the
+// original Liveblocks migration, decided after noticing the original
+// design (one JSON blob per room, broadcast on every change) would
+// otherwise grow unboundedly with every photo/PDF someone attaches.
 
-import { getRoomStub } from './src/room-stub.js';
-import { handleAuth } from './src/auth.js';
-import { runBackup, handleTriggerBackup, handleListBackups, handleDownloadBackup, handleRestoreBackup } from './src/backup.js';
+import { getRoomStub } from './room-stub.js';
+import { handleAuth } from './auth.js';
+import { runBackup, handleTriggerBackup, handleListBackups, handleDownloadBackup, handleRestoreBackup } from './backup.js';
 import {
   handleUsersList, handleUsersRoster, handleUsersAdd,
   handleUsersUpdate, handleUsersRemove, handleUsersResetPassword
-} from './src/users-admin.js';
-import { handleAttachmentUpload, handleAttachmentDownload, handleAttachmentDelete } from './src/attachments.js';
-import { handleReportError, handleErrorsList } from './src/errors.js';
-export { ApsRoom } from './src/room-do.js';
+} from './users-admin.js';
+import { handleAttachmentUpload, handleAttachmentDownload, handleAttachmentDelete } from './attachments.js';
+import { handleReportError, handleErrorsList } from './errors.js';
+export { ApsRoom } from './room-do.js';
 
 // --- WORKER ENTRYPOINTS ---
 export default {
