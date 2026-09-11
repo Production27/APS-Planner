@@ -26,6 +26,26 @@ export function isArrayIfPresent(v: unknown): boolean {
 export function isPlainObjectIfPresent(v: unknown): boolean {
   return v === undefined || isPlainObject(v);
 }
+// One level deeper than isArrayIfPresent: also rejects an array containing
+// a null/primitive element, which the client's own rendering code (task.start,
+// item.id, etc. — see the phases/checklists callers below) dereferences with
+// no defensive fallback, same "wrong-but-present type" crash risk the
+// original shape guards above exist to prevent, just one level further in.
+export function isArrayOfPlainObjectsIfPresent(v: unknown): boolean {
+  if (v === undefined) return true;
+  if (!Array.isArray(v)) return false;
+  return v.every(isPlainObject);
+}
+// card.checklists is a per-column dictionary of item arrays
+// (buildMyChecklistRows() in checklist.ts does `stored.map(i => i.id)` on
+// each column's value with no defensive check) — isPlainObjectIfPresent
+// alone only confirms the dictionary itself is an object, not that each
+// column's value is actually an item array.
+export function isChecklistsShapeIfPresent(v: unknown): boolean {
+  if (v === undefined) return true;
+  if (!isPlainObject(v)) return false;
+  return Object.values(v).every(isArrayOfPlainObjectsIfPresent);
+}
 
 export function mergeTombstones(a: Record<string, number> | undefined, b: Record<string, number> | undefined): Record<string, number> {
   const merged: Record<string, number> = Object.assign({}, a || {}, b || {});
@@ -133,8 +153,8 @@ export interface HandlerResult {
 export function handleUpsertJob(project: Project, msg: { job?: Job }, attachment?: Attachment | null): HandlerResult {
   const job = msg.job;
   if (!job || !job.id) return { project, changed: false, error: 'upsertJob missing job.id' };
-  if (!isArrayIfPresent(job.tasks) || !isArrayIfPresent(job.phases)) {
-    return { project, changed: false, error: 'upsertJob: tasks/phases must be arrays if present' };
+  if (!isArrayOfPlainObjectsIfPresent(job.tasks) || !isArrayOfPlainObjectsIfPresent(job.phases)) {
+    return { project, changed: false, error: 'upsertJob: tasks/phases must be arrays of objects if present' };
   }
   if (project.deletedIds[job.id]) return { project, changed: false };
   const existing = project.jobs[job.id];
@@ -152,7 +172,7 @@ export function handleUpsertJob(project: Project, msg: { job?: Job }, attachment
 export function handleUpsertCard(project: Project, msg: { card?: BoardCard }): HandlerResult {
   const card = msg.card;
   if (!card || !card.id) return { project, changed: false, error: 'upsertCard missing card.id' };
-  if (!isArrayIfPresent(card.attachments) || !isPlainObjectIfPresent(card.checklists)) {
+  if (!isArrayIfPresent(card.attachments) || !isChecklistsShapeIfPresent(card.checklists)) {
     return { project, changed: false, error: 'upsertCard: attachments/checklists have wrong shape' };
   }
   if (project.deletedIds[String(card.id)]) return { project, changed: false };
@@ -215,7 +235,7 @@ export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBat
 
   (msg.jobs || []).forEach(function (job) {
     if (!job || !job.id) return;
-    if (!isArrayIfPresent(job.tasks) || !isArrayIfPresent(job.phases)) return;
+    if (!isArrayOfPlainObjectsIfPresent(job.tasks) || !isArrayOfPlainObjectsIfPresent(job.phases)) return;
     if (next.deletedIds[job.id]) return;
     const existing = next.jobs[job.id];
     if (existing && (existing.updatedAt || 0) > (job.updatedAt || 0)) return;
@@ -227,7 +247,7 @@ export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBat
 
   (msg.boardCards || []).forEach(function (card) {
     if (!card || !card.id) return;
-    if (!isArrayIfPresent(card.attachments) || !isPlainObjectIfPresent(card.checklists)) return;
+    if (!isArrayIfPresent(card.attachments) || !isChecklistsShapeIfPresent(card.checklists)) return;
     if (next.deletedIds[String(card.id)]) return;
     const existing = next.boardCards[card.id];
     if (existing && (existing.updatedAt || 0) > (card.updatedAt || 0)) return;
