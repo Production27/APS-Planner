@@ -21,7 +21,7 @@ import {
   handleColumnDragLeave, dropNeedsManualOverride, handleColumnDrop, moveCardToColumn, getDragAfterElement, syncBoardCardsFromDOM,
   addBoardColumn, deleteBoardColumn, renameBoardColumn, isCardFromArchivedJob, isCardVisibleToMe,
   openWorkflowItemsModal, closeWorkflowItemsModal, renderWorkflowItemsBody, toggleWorkflowItemColorPanel, changeWorkflowItemColor,
-  addWorkflowItem, removeWorkflowItem,
+  addWorkflowItem, removeWorkflowItem, handleColorSwatchKeydown,
   resolveCardNameTarget, openEditCard, closeCardModal, scheduleCardAutosave, flushCardAutosave, cancelPendingCardAutosave,
   setCardTitleHint, autoSaveCardForm, initCardFormAutosaveListeners, deleteCardFromModal, renderBoard, buildCardEl,
   isDarkColor, toggleColSettings, toggleColColorPanel, changeColumnColor, closeAllColSettings,
@@ -145,6 +145,7 @@ declare global {
     changeWorkflowItemColor: typeof changeWorkflowItemColor;
     addWorkflowItem: typeof addWorkflowItem;
     removeWorkflowItem: typeof removeWorkflowItem;
+    handleColorSwatchKeydown: typeof handleColorSwatchKeydown;
     resolveCardNameTarget: typeof resolveCardNameTarget;
     openEditCard: typeof openEditCard;
     closeCardModal: typeof closeCardModal;
@@ -418,6 +419,7 @@ window.toggleWorkflowItemColorPanel = toggleWorkflowItemColorPanel;
 window.changeWorkflowItemColor = changeWorkflowItemColor;
 window.addWorkflowItem = addWorkflowItem;
 window.removeWorkflowItem = removeWorkflowItem;
+window.handleColorSwatchKeydown = handleColorSwatchKeydown;
 window.resolveCardNameTarget = resolveCardNameTarget;
 window.openEditCard = openEditCard;
 window.closeCardModal = closeCardModal;

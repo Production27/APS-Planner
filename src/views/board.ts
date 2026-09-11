@@ -548,6 +548,54 @@ function closeWorkflowItemsModal(): void {
   closeModal('workflowItemsModal');
 }
 
+// Shared by both color-swatch grids in this file (column colors and
+// workflow-item colors) — real roving tabindex + arrow-key navigation,
+// completing the ARIA radiogroup pattern the static `role="radio"`/
+// `aria-checked` markup already started. Only the selected swatch is a
+// tab stop (tabindex 0); arrow keys move focus (and the roving tab stop)
+// among swatches WITHOUT selecting them — Enter/Space (already handled
+// below, unchanged from before this fix) is what actually commits a
+// choice. This deliberately does NOT match strict native <input
+// type="radio"> semantics (where arrow keys select immediately): both
+// changeColumnColor() and changeWorkflowItemColor() close the whole
+// settings panel as their last step, so auto-selecting on every single
+// arrow press would close the picker after the first key press, making
+// it impossible to arrow through more than one swatch.
+function swatchKeyboardAttrs(selected: boolean): string {
+  return ' tabindex="' + (selected ? '0' : '-1') + '" onkeydown="handleColorSwatchKeydown(event)"';
+}
+
+function handleColorSwatchKeydown(event: KeyboardEvent): void {
+  const target = event.target as HTMLElement;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    target.click();
+    return;
+  }
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(event.key) === -1) return;
+  event.preventDefault();
+  const grid = target.closest('.board-col-color-grid') as HTMLElement | null;
+  if (!grid) return;
+  const swatches = Array.from(grid.querySelectorAll('.board-col-color-option')) as HTMLElement[];
+  const currentIndex = swatches.indexOf(target);
+  if (currentIndex === -1) return;
+  // A real CSS grid (grid-template-columns: repeat(7, 1fr)) resolves to
+  // N space-separated tracks in the computed style — reads the actual
+  // column count rather than hardcoding it, so this stays correct if
+  // the CSS ever changes.
+  const columnCount = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+  let nextIndex = currentIndex;
+  if (event.key === 'ArrowLeft') nextIndex = currentIndex - 1;
+  else if (event.key === 'ArrowRight') nextIndex = currentIndex + 1;
+  else if (event.key === 'ArrowUp') nextIndex = currentIndex - columnCount;
+  else if (event.key === 'ArrowDown') nextIndex = currentIndex + columnCount;
+  if (nextIndex < 0 || nextIndex >= swatches.length) return;
+
+  swatches[currentIndex].setAttribute('tabindex', '-1');
+  swatches[nextIndex].setAttribute('tabindex', '0');
+  swatches[nextIndex].focus();
+}
+
 function renderWorkflowItemsBody(): void {
   const container = document.getElementById('workflowItemsBody')!;
   // Row layout (not the chip pattern Default Checklist/Custom Fields use
@@ -558,7 +606,7 @@ function renderWorkflowItemsBody(): void {
   // instead of a column dropdown.
   const rows = WORKFLOW_ITEMS.map((item) => {
     const swatches = COLOR_PRESETS.map((c) => {
-      return '<div class="board-col-color-option' + (item.color === c ? ' selected' : '') + '" style="background:' + c + ';" role="radio" aria-checked="' + (item.color === c) + '" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="changeWorkflowItemColor(\'' + item.id + '\', \'' + c + '\', event)"></div>';
+      return '<div class="board-col-color-option' + (item.color === c ? ' selected' : '') + '" style="background:' + c + ';" role="radio" aria-checked="' + (item.color === c) + '"' + swatchKeyboardAttrs(item.color === c) + ' onclick="changeWorkflowItemColor(\'' + item.id + '\', \'' + c + '\', event)"></div>';
     }).join('');
     return '<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden;">' +
       '<div class="board-col-color-toggle" onclick="toggleWorkflowItemColorPanel(\'' + item.id + '\', event)">' +
@@ -572,7 +620,7 @@ function renderWorkflowItemsBody(): void {
         '</span>' +
       '</div>' +
       '<div class="board-col-color-panel" id="wfi-panel-' + item.id + '">' +
-        '<div class="board-col-color-grid" role="radiogroup" aria-label="' + escapeHtml(item.label) + ' color">' + swatches + '</div>' +
+        '<div class="board-col-color-grid" id="wfi-colorgrid-' + item.id + '" role="radiogroup" aria-label="' + escapeHtml(item.label) + ' color">' + swatches + '</div>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -941,18 +989,11 @@ function renderBoard(): void {
     }
     const colorGrid = document.getElementById('col-colors-' + col.id);
     if (colorGrid) {
-      // role="radio"/aria-checked (matching the radiogroup container in
-      // the static template above) rather than a full roving-tabindex
-      // implementation — every swatch is its own tab stop and
-      // Enter/Space-activatable, which closes the actual keyboard-
-      // reachability gap; arrow-key-moves-selection is the more complete
-      // native radio-group pattern but isn't needed for that.
-      const swatchKbd = ' tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}"';
       colorGrid.innerHTML =
-        '<div class="board-col-color-option' + (!col.color ? ' selected' : '') + '" style="background:linear-gradient(135deg,#f5f5f5 0%,#e0e0e0 100%);position:relative;" role="radio" aria-checked="' + (!col.color) + '"' + swatchKbd + ' onclick="changeColumnColor(\'' + col.id + '\', \'' + '\', event)" title="Default (no color)">' +
+        '<div class="board-col-color-option' + (!col.color ? ' selected' : '') + '" style="background:linear-gradient(135deg,#f5f5f5 0%,#e0e0e0 100%);position:relative;" role="radio" aria-checked="' + (!col.color) + '"' + swatchKeyboardAttrs(!col.color) + ' onclick="changeColumnColor(\'' + col.id + '\', \'' + '\', event)" title="Default (no color)">' +
         '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#888;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span></div>' +
         BOARD_COLOR_PRESETS.map((c) =>
-        '<div class="board-col-color-option' + (col.color === c ? ' selected' : '') + '" style="background:' + c + ';" role="radio" aria-checked="' + (col.color === c) + '"' + swatchKbd + ' onclick="changeColumnColor(\'' + col.id + '\', \'' + c + '\', event)"></div>'
+        '<div class="board-col-color-option' + (col.color === c ? ' selected' : '') + '" style="background:' + c + ';" role="radio" aria-checked="' + (col.color === c) + '"' + swatchKeyboardAttrs(col.color === c) + ' onclick="changeColumnColor(\'' + col.id + '\', \'' + c + '\', event)"></div>'
       ).join('');
     }
   });
@@ -1359,6 +1400,7 @@ export {
   renderWorkflowItemsBody,
   toggleWorkflowItemColorPanel,
   changeWorkflowItemColor,
+  handleColorSwatchKeydown,
   addWorkflowItem,
   removeWorkflowItem,
   resolveCardNameTarget,

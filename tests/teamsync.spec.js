@@ -934,6 +934,73 @@ test('column settings dropdown: opening one column\'s dropdown closes any other 
   expect(result.bOpen).toBe(true);
 });
 
+test('column color swatches: arrow keys move roving tabindex/focus without selecting; Enter commits the focused swatch', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('board'));
+  await page.waitForTimeout(500); // switchTabMorphed's transition is async — see its own note elsewhere in this suite
+
+  const colId = await page.evaluate(() => {
+    const col = BOARD_COLUMNS[0];
+    delete col.color; // start from the "no color" (first) swatch, deterministic
+    renderBoard();
+    toggleColSettings(col.id, { stopPropagation() {} });
+    return col.id;
+  });
+  await page.locator('#col-settings-' + colId + ' .board-col-color-toggle').click();
+
+  const grid = page.locator('#col-colors-' + colId);
+  const swatches = grid.locator('.board-col-color-option');
+  const swatchCount = await swatches.count();
+  expect(swatchCount).toBeGreaterThan(1);
+
+  // Only the selected ("no color") swatch should be a tab stop initially.
+  await expect(swatches.nth(0)).toHaveAttribute('tabindex', '0');
+  await expect(swatches.nth(1)).toHaveAttribute('tabindex', '-1');
+
+  await swatches.nth(0).focus();
+  await page.keyboard.press('ArrowRight');
+
+  // Focus and the roving tab stop move to the second swatch — but the
+  // underlying data must NOT have changed yet. Arrow keys deliberately
+  // don't auto-select here: changeColumnColor() closes the whole settings
+  // panel as its last step, so selecting on every arrow press would close
+  // the picker after the very first key press.
+  const afterArrowRight = await page.evaluate((cid) => ({
+    activeIsSecondSwatch: document.activeElement === document.querySelectorAll('#col-colors-' + cid + ' .board-col-color-option')[1],
+    columnColor: BOARD_COLUMNS.find((c) => c.id === cid).color,
+  }), colId);
+  expect(afterArrowRight.activeIsSecondSwatch).toBe(true);
+  expect(afterArrowRight.columnColor).toBeUndefined();
+  await expect(swatches.nth(0)).toHaveAttribute('tabindex', '-1');
+  await expect(swatches.nth(1)).toHaveAttribute('tabindex', '0');
+
+  // ArrowDown moves by the grid's real column count, not just +1 —
+  // confirms the computed grid-template-columns count, not a hardcoded
+  // guess, drives navigation. Still no selection change.
+  await page.keyboard.press('ArrowDown');
+  const columnCount = await grid.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
+  const afterArrowDown = await page.evaluate((cid) => {
+    const els = document.querySelectorAll('#col-colors-' + cid + ' .board-col-color-option');
+    return { activeIndex: Array.from(els).indexOf(document.activeElement), columnColor: BOARD_COLUMNS.find((c) => c.id === cid).color };
+  }, colId);
+  expect(afterArrowDown.activeIndex).toBe(1 + columnCount);
+  expect(afterArrowDown.columnColor).toBeUndefined();
+
+  // Enter commits whatever swatch is currently focused — the same
+  // pre-existing activation this widget already had, now reachable after
+  // arrowing to any swatch in the grid, not just the one that started
+  // with a tab stop.
+  await page.keyboard.press('Enter');
+  const afterEnter = await page.evaluate(({ cid, idx }) => ({
+    color: BOARD_COLUMNS.find((c) => c.id === cid).color,
+    expectedColor: BOARD_COLOR_PRESETS[idx],
+  }), { cid: colId, idx: columnCount });
+  expect(afterEnter.color).toBe(afterEnter.expectedColor);
+});
+
 test('Manage Column Checklist modal: adding and removing a default item persists onto the column and renders in the real modal body', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
