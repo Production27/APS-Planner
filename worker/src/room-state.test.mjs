@@ -1,19 +1,15 @@
-// Unit tests for the pure reducer functions in aps-do-worker.js. Node's
-// built-in test runner, no new dependency — run with:
-//   node --test worker/aps-do-worker.test.mjs
-//
-// Scope: only the new shape guards this fix adds, plus a small baseline
-// safety net for the pre-existing idempotency/staleness behavior these
-// guards sit next to. NOT a full worker test suite — no storage/WebSocket/
-// crypto mocking, no applyMessage()/webSocketMessage() end-to-end coverage.
+// Unit tests for the pure room-state reducer. Node's built-in test runner,
+// no new dependency — run with:
+//   node --test worker/src/room-state.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isPlainObject, isArrayIfPresent, isPlainObjectIfPresent,
-  ensureProject, blankProject,
+  ensureProject, blankProject, emptyRoomState,
   handleUpsertJob, handleUpsertCard,
-  handleUpsertProjectBatch, handleSetWholeField
-} from './aps-do-worker.js';
+  handleUpsertProjectBatch, handleSetWholeField,
+  applyMessage, removeProject
+} from './room-state.js';
 
 function freshProject() {
   return blankProject('Test Project');
@@ -141,4 +137,66 @@ test('ensureProject does not reset an already-created project', () => {
 
   const afterSecondCall = ensureProject(afterCreate, 'p1', 'Seed Name');
   assert.equal(afterSecondCall.projects['p1'].name, 'Renamed Locally');
+});
+
+// ── applyMessage dispatch table (new — Phase W2) ──
+
+test('applyMessage rejects a malformed message (no type)', () => {
+  const result = applyMessage(emptyRoomState(), { projectId: 'p1' });
+  assert.equal(result.changed, false);
+  assert.ok(result.error);
+});
+
+test('applyMessage rejects a message missing projectId', () => {
+  const result = applyMessage(emptyRoomState(), { type: 'upsertJob', job: { id: 'job-1' } });
+  assert.equal(result.changed, false);
+  assert.ok(result.error);
+});
+
+test('applyMessage rejects an unrecognized message type', () => {
+  const result = applyMessage(emptyRoomState(), { type: 'bogusType', projectId: 'p1' });
+  assert.equal(result.changed, false);
+  assert.match(result.error, /unknown message type/);
+});
+
+test('applyMessage dispatches upsertJob, creating the project on demand and acking with msgId', () => {
+  const result = applyMessage(emptyRoomState(), {
+    type: 'upsertJob', projectId: 'p1', seedProjectName: 'New Project', msgId: 42,
+    job: { id: 'job-1', updatedAt: 100 }
+  }, null);
+  assert.equal(result.changed, true);
+  assert.equal(result.state.projects['p1'].jobs['job-1'].id, 'job-1');
+  assert.equal(result.ack.msgId, 42);
+});
+
+test('applyMessage renameProject updates the project name and bumps rev', () => {
+  const seeded = ensureProject(emptyRoomState(), 'p1', 'Old Name');
+  const result = applyMessage(seeded, { type: 'renameProject', projectId: 'p1', name: 'New Name', msgId: 7 });
+  assert.equal(result.changed, true);
+  assert.equal(result.state.projects['p1'].name, 'New Name');
+  assert.equal(result.state.projects['p1'].rev, 1);
+});
+
+test('applyMessage removeProject is special-cased ahead of ensureProject (does not fabricate a project first)', () => {
+  const seeded = ensureProject(emptyRoomState(), 'p1', 'To Delete');
+  const result = applyMessage(seeded, { type: 'removeProject', projectId: 'p1', msgId: 9 });
+  assert.equal(result.changed, true);
+  assert.equal(result.state.projects['p1'], undefined);
+  assert.equal(result.ack.msgId, 9);
+});
+
+// ── removeProject (new — Phase W2) ──
+
+test('removeProject deletes an existing project', () => {
+  const seeded = ensureProject(emptyRoomState(), 'p1', 'Test');
+  const result = removeProject(seeded, 'p1');
+  assert.equal(result.changed, true);
+  assert.equal(result.state.projects['p1'], undefined);
+});
+
+test('removeProject is a no-op for a project that does not exist', () => {
+  const state = emptyRoomState();
+  const result = removeProject(state, 'nonexistent');
+  assert.equal(result.changed, false);
+  assert.equal(result.state, state);
 });
