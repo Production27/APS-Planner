@@ -48,6 +48,7 @@ import {
 } from './users-admin.ts';
 import { handleAttachmentUpload, handleAttachmentDownload, handleAttachmentDelete } from './attachments.ts';
 import { handleReportError, handleErrorsList } from './errors.ts';
+import { handleMaintenanceStatus, handleSetMaintenanceStatus } from './maintenance.ts';
 export { ApsRoom } from './room-do.ts';
 
 // --- WORKER ENTRYPOINTS ---
@@ -129,6 +130,14 @@ export default {
     }
     if (url.pathname === "/errors/list" && request.method === "POST") {
       return handleErrorsList(request, env, corsHeaders);
+    }
+
+    // Public, no auth — see maintenance.ts's own comment on why.
+    if (url.pathname === "/maintenance-status" && request.method === "GET") {
+      return handleMaintenanceStatus(request, env, corsHeaders);
+    }
+    if (url.pathname === "/maintenance-status/set" && request.method === "POST") {
+      return handleSetMaintenanceStatus(request, env, corsHeaders);
     }
 
     if (url.pathname === "/attachments/upload" && request.method === "POST") {
