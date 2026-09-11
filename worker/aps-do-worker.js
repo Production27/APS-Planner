@@ -2,10 +2,11 @@
 // APS Planner — Worker (Durable Objects backend)
 // LIVE — this is what's actually deployed at aps-planner-staging
 // (confirmed via `wrangler deployments list` against this file's own git
-// history). worker/aps-liveblocks-worker.js and this file's README.md
-// describe the OLD pre-migration Liveblocks-based worker and its
-// hand-paste deploy process — both stale, superseded by this file and
-// wrangler.jsonc's wrangler-based deploy.
+// history). This file is the sole source of truth for everything in it —
+// the old pre-migration Liveblocks-based worker, its README, and a set of
+// design-iteration reference files this used to point readers to were all
+// removed in commit a4da847 ("Remove stale unused worker reference
+// files"); deploys go through wrangler.jsonc's wrangler-based pipeline.
 // ==========================================
 //
 // Replaces Liveblocks entirely with a single Durable Object (ApsRoom,
@@ -34,9 +35,9 @@
 // original design (one JSON blob per room, broadcast on every change)
 // would otherwise grow unboundedly with every photo/PDF someone attaches.
 
-// --- 1. ROOM STATE REDUCER (pure logic — see worker/aps-room-state.js
-// in the repo for the source-of-truth copy with full design-rationale
-// comments; inlined here verbatim since Workers has no local import) ---
+// --- 1. ROOM STATE REDUCER (pure logic — this file is the sole source
+// of truth for it; an earlier design-iteration copy that used to live at
+// worker/aps-room-state.js was removed in commit a4da847) ---
 
 const TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ACTIVITY_LOG_CAP = 50;
@@ -45,6 +46,26 @@ const ACTIVITY_LOG_CAP = 50;
 // heartbeat interval so a couple of missed beats (backgrounded tab,
 // brief network hiccup) don't cause a false prune.
 const PRESENCE_STALE_MS = 90 * 1000;
+
+// Shape guards for handleUpsertJob/handleUpsertCard/handleUpsertCalendarEvent/
+// handleUpsertProjectBatch/handleSetWholeField below. These deliberately do
+// NOT validate content (see the "otherwise-unvalidated blob" comment on
+// sanitizeJobCommentAuthors() further down) — only that a field client
+// rendering code loops over with `.forEach`/`.map` and no defensive
+// fallback for a wrong-but-present type is actually the array/object shape
+// that code assumes. A field's total ABSENCE is already handled fine
+// client-side (`|| []`/`|| {}` patterns); only a wrong-typed PRESENT value
+// was previously able to slip through and corrupt shared state for every
+// connected teammate.
+function isPlainObject(v) {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+function isArrayIfPresent(v) {
+  return v === undefined || Array.isArray(v);
+}
+function isPlainObjectIfPresent(v) {
+  return v === undefined || isPlainObject(v);
+}
 
 function mergeTombstones(a, b) {
   const merged = Object.assign({}, a || {}, b || {});
@@ -143,6 +164,9 @@ function sanitizeJobCommentAuthors(job, existingJob, attachment) {
 function handleUpsertJob(project, msg, attachment) {
   const job = msg.job;
   if (!job || !job.id) return { project, changed: false, error: 'upsertJob missing job.id' };
+  if (!isArrayIfPresent(job.tasks) || !isArrayIfPresent(job.phases)) {
+    return { project, changed: false, error: 'upsertJob: tasks/phases must be arrays if present' };
+  }
   if (project.deletedIds[job.id]) return { project, changed: false };
   const existing = project.jobs[job.id];
   const incomingUpdatedAt = job.updatedAt || 0;
@@ -159,6 +183,9 @@ function handleUpsertJob(project, msg, attachment) {
 function handleUpsertCard(project, msg) {
   const card = msg.card;
   if (!card || !card.id) return { project, changed: false, error: 'upsertCard missing card.id' };
+  if (!isArrayIfPresent(card.attachments) || !isPlainObjectIfPresent(card.checklists)) {
+    return { project, changed: false, error: 'upsertCard: attachments/checklists have wrong shape' };
+  }
   if (project.deletedIds[String(card.id)]) return { project, changed: false };
   const existing = project.boardCards[card.id];
   const incomingUpdatedAt = card.updatedAt || 0;
@@ -174,6 +201,9 @@ function handleUpsertCard(project, msg) {
 function handleUpsertCalendarEvent(project, msg) {
   const event = msg.event;
   if (!event || !event.id) return { project, changed: false, error: 'upsertCalendarEvent missing event.id' };
+  if (!isPlainObjectIfPresent(event.exceptions) || !isArrayIfPresent(event.visibleMembers)) {
+    return { project, changed: false, error: 'upsertCalendarEvent: exceptions/visibleMembers have wrong shape' };
+  }
   if (project.deletedIds[String(event.id)]) return { project, changed: false };
   const existing = project.calendarEvents[event.id];
   const incomingUpdatedAt = event.updatedAt || 0;
@@ -192,10 +222,9 @@ function handleUpsertCalendarEvent(project, msg) {
 // one broadcast instead of dozens of each. Each item inside still gets
 // its own independent staleness check. header is intentionally NOT
 // staleness-protected here (unlike setBoardColumns/setFieldOptions/
-// setHeader's baseFieldRevision) — see worker/aps-room-state.js's fuller
-// comment on this function for why that's a deliberate, known, low-
-// priority gap carried over from the pre-migration behavior rather than
-// something newly introduced.
+// setHeader's baseFieldRevision) — a deliberate, known, low-priority gap
+// carried over from the pre-migration behavior rather than something
+// newly introduced.
 function handleUpsertProjectBatch(project, msg, attachment) {
   let next = project;
   let changed = false;
@@ -209,6 +238,7 @@ function handleUpsertProjectBatch(project, msg, attachment) {
 
   (msg.jobs || []).forEach(function (job) {
     if (!job || !job.id) return;
+    if (!isArrayIfPresent(job.tasks) || !isArrayIfPresent(job.phases)) return;
     if (next.deletedIds[job.id]) return;
     const existing = next.jobs[job.id];
     if (existing && (existing.updatedAt || 0) > (job.updatedAt || 0)) return;
@@ -220,6 +250,7 @@ function handleUpsertProjectBatch(project, msg, attachment) {
 
   (msg.boardCards || []).forEach(function (card) {
     if (!card || !card.id) return;
+    if (!isArrayIfPresent(card.attachments) || !isPlainObjectIfPresent(card.checklists)) return;
     if (next.deletedIds[String(card.id)]) return;
     const existing = next.boardCards[card.id];
     if (existing && (existing.updatedAt || 0) > (card.updatedAt || 0)) return;
@@ -230,6 +261,7 @@ function handleUpsertProjectBatch(project, msg, attachment) {
 
   (msg.calendarEvents || []).forEach(function (ev) {
     if (!ev || !ev.id) return;
+    if (!isPlainObjectIfPresent(ev.exceptions) || !isArrayIfPresent(ev.visibleMembers)) return;
     if (next.deletedIds[String(ev.id)]) return;
     const existing = next.calendarEvents[ev.id];
     if (existing && (existing.updatedAt || 0) > (ev.updatedAt || 0)) return;
@@ -320,11 +352,20 @@ function filterUpsertProjectBatchByTier(msg, storedProject, role) {
   return out;
 }
 
+const SET_WHOLE_FIELD_ARRAY_FIELDS = ['boardColumns', 'workflowItems'];
+const SET_WHOLE_FIELD_OBJECT_FIELDS = ['fieldOptions', 'header'];
+
 function handleSetWholeField(project, msg, fieldName) {
   const currentRev = project.fieldRevisions[fieldName] || 0;
   const baseRev = typeof msg.baseFieldRevision === 'number' ? msg.baseFieldRevision : -1;
   if (baseRev < currentRev) {
     return { project, changed: false, rejected: 'stale', currentFieldRevision: currentRev };
+  }
+  if (SET_WHOLE_FIELD_ARRAY_FIELDS.indexOf(fieldName) !== -1 && !Array.isArray(msg.value)) {
+    return { project, changed: false, error: 'setWholeField: ' + fieldName + ' must be an array' };
+  }
+  if (SET_WHOLE_FIELD_OBJECT_FIELDS.indexOf(fieldName) !== -1 && !isPlainObject(msg.value)) {
+    return { project, changed: false, error: 'setWholeField: ' + fieldName + ' must be a plain object' };
   }
   const next = cloneRoomState({ projects: { p: project } }).projects.p;
   next[fieldName] = msg.value;
@@ -1204,6 +1245,16 @@ async function handleErrorsList(request, env, corsHeaders) {
   return jsonResponse({ errors: raw ? JSON.parse(raw) : [] }, 200, corsHeaders);
 }
 
+// Named exports purely so worker/aps-do-worker.test.mjs can import these
+// pure functions directly — a no-op for Cloudflare's own bundling, which
+// only cares about the default export and the ApsRoom class below.
+export {
+  isPlainObject, isArrayIfPresent, isPlainObjectIfPresent,
+  ensureProject, blankProject,
+  handleUpsertJob, handleUpsertCard, handleUpsertCalendarEvent,
+  handleUpsertProjectBatch, handleSetWholeField
+};
+
 // --- 9. WORKER ENTRYPOINTS ---
 export default {
   async scheduled(controller, env, ctx) {
@@ -1359,10 +1410,11 @@ export default {
   }
 };
 
-// --- 10. THE DURABLE OBJECT ITSELF (see worker/aps-room-do.js for the
-// source-of-truth copy with full design-rationale comments, including
-// the honest caveat about what could and couldn't be tested without a
-// real Durable Objects runtime) ---
+// --- 10. THE DURABLE OBJECT ITSELF (this file is the sole source of
+// truth for it; an earlier design-iteration copy that used to live at
+// worker/aps-room-do.js — including the honest caveat about what could
+// and couldn't be tested without a real Durable Objects runtime — was
+// removed in commit a4da847) ---
 
 export class ApsRoom {
   constructor(state, env) {

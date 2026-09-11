@@ -1,0 +1,144 @@
+// Unit tests for the pure reducer functions in aps-do-worker.js. Node's
+// built-in test runner, no new dependency — run with:
+//   node --test worker/aps-do-worker.test.mjs
+//
+// Scope: only the new shape guards this fix adds, plus a small baseline
+// safety net for the pre-existing idempotency/staleness behavior these
+// guards sit next to. NOT a full worker test suite — no storage/WebSocket/
+// crypto mocking, no applyMessage()/webSocketMessage() end-to-end coverage.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  isPlainObject, isArrayIfPresent, isPlainObjectIfPresent,
+  ensureProject, blankProject,
+  handleUpsertJob, handleUpsertCard,
+  handleUpsertProjectBatch, handleSetWholeField
+} from './aps-do-worker.js';
+
+function freshProject() {
+  return blankProject('Test Project');
+}
+
+// ── isPlainObject / isArrayIfPresent / isPlainObjectIfPresent ──
+
+test('isPlainObject rejects arrays and null, accepts plain objects', () => {
+  assert.equal(isPlainObject({}), true);
+  assert.equal(isPlainObject([]), false);
+  assert.equal(isPlainObject(null), false);
+  assert.equal(isPlainObject('x'), false);
+});
+
+test('isArrayIfPresent/isPlainObjectIfPresent accept an absent (undefined) value', () => {
+  assert.equal(isArrayIfPresent(undefined), true);
+  assert.equal(isPlainObjectIfPresent(undefined), true);
+});
+
+// ── handleUpsertJob ──
+
+test('handleUpsertJob rejects a job whose tasks is not an array', () => {
+  const result = handleUpsertJob(freshProject(), { job: { id: 'job-1', tasks: 'oops' } });
+  assert.equal(result.changed, false);
+  assert.ok(result.error);
+});
+
+test('handleUpsertJob accepts a job with tasks absent entirely', () => {
+  const result = handleUpsertJob(freshProject(), { job: { id: 'job-1' } });
+  assert.equal(result.changed, true);
+});
+
+test('handleUpsertJob accepts a job with correctly-typed tasks: []', () => {
+  const result = handleUpsertJob(freshProject(), { job: { id: 'job-1', tasks: [] } });
+  assert.equal(result.changed, true);
+  assert.deepEqual(result.project.jobs['job-1'].tasks, []);
+});
+
+test('handleUpsertJob staleness rejection is unaffected by the new guard', () => {
+  let project = freshProject();
+  const first = handleUpsertJob(project, { job: { id: 'job-1', updatedAt: 100 } });
+  assert.equal(first.changed, true);
+  project = first.project;
+
+  const stale = handleUpsertJob(project, { job: { id: 'job-1', updatedAt: 50 } });
+  assert.equal(stale.changed, false);
+  assert.equal(stale.rejected, 'stale');
+  assert.equal(project.jobs['job-1'].updatedAt, 100);
+});
+
+// ── handleUpsertCard ──
+
+test('handleUpsertCard rejects checklists that are an array instead of an object', () => {
+  const result = handleUpsertCard(freshProject(), { card: { id: 'card-1', checklists: [] } });
+  assert.equal(result.changed, false);
+  assert.ok(result.error);
+});
+
+test('handleUpsertCard accepts absent/correctly-typed checklists', () => {
+  const withoutField = handleUpsertCard(freshProject(), { card: { id: 'card-1' } });
+  assert.equal(withoutField.changed, true);
+
+  const withField = handleUpsertCard(freshProject(), { card: { id: 'card-2', checklists: { done: [] } } });
+  assert.equal(withField.changed, true);
+});
+
+test('handleUpsertCard staleness rejection is unaffected by the new guard', () => {
+  let project = freshProject();
+  const first = handleUpsertCard(project, { card: { id: 'card-1', updatedAt: 100 } });
+  assert.equal(first.changed, true);
+  project = first.project;
+
+  const stale = handleUpsertCard(project, { card: { id: 'card-1', updatedAt: 50 } });
+  assert.equal(stale.changed, false);
+  assert.equal(stale.rejected, 'stale');
+  assert.equal(project.boardCards['card-1'].updatedAt, 100);
+});
+
+// ── handleUpsertProjectBatch ──
+
+test('handleUpsertProjectBatch skips one malformed item but still applies a valid sibling', () => {
+  const result = handleUpsertProjectBatch(freshProject(), {
+    jobs: [
+      { id: 'job-good', tasks: [] },
+      { id: 'job-bad', tasks: 'oops' }
+    ]
+  }, null);
+  assert.equal(result.changed, true);
+  assert.ok(result.project.jobs['job-good']);
+  assert.ok(!result.project.jobs['job-bad']);
+});
+
+// ── handleSetWholeField ──
+
+test('handleSetWholeField rejects boardColumns when the value is not an array', () => {
+  const result = handleSetWholeField(freshProject(), { baseFieldRevision: 0, value: { not: 'an array' } }, 'boardColumns');
+  assert.equal(result.changed, false);
+  assert.ok(result.error);
+});
+
+test('handleSetWholeField rejects fieldOptions when the value is an array', () => {
+  const result = handleSetWholeField(freshProject(), { baseFieldRevision: 0, value: [] }, 'fieldOptions');
+  assert.equal(result.changed, false);
+  assert.ok(result.error);
+});
+
+test('handleSetWholeField accepts correctly-typed values for all four guarded field names', () => {
+  const project = freshProject();
+  const cols = handleSetWholeField(project, { baseFieldRevision: 0, value: [{ id: 'c1' }] }, 'boardColumns');
+  assert.equal(cols.changed, true);
+  const items = handleSetWholeField(project, { baseFieldRevision: 0, value: [] }, 'workflowItems');
+  assert.equal(items.changed, true);
+  const opts = handleSetWholeField(project, { baseFieldRevision: 0, value: { pm: [] } }, 'fieldOptions');
+  assert.equal(opts.changed, true);
+  const header = handleSetWholeField(project, { baseFieldRevision: 0, value: { title: 'x' } }, 'header');
+  assert.equal(header.changed, true);
+});
+
+// ── ensureProject idempotency (baseline safety net) ──
+
+test('ensureProject does not reset an already-created project', () => {
+  const state = { projects: {} };
+  const afterCreate = ensureProject(state, 'p1', 'Seed Name');
+  afterCreate.projects['p1'].name = 'Renamed Locally';
+
+  const afterSecondCall = ensureProject(afterCreate, 'p1', 'Seed Name');
+  assert.equal(afterSecondCall.projects['p1'].name, 'Renamed Locally');
+});
