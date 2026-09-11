@@ -5615,6 +5615,18 @@ function enforceProjectScopeForRole() {
 // created project, never re-asserted onto an existing one.
 const FIXED_PROJECT_NAMES = ['ADVANCED PRECUT SYSTEMS', 'BLUDORN BUILDERS'];
 
+// Deterministic, not Date.now()-based: two browsers racing to bootstrap a
+// genuinely empty shared room (see bootstrapFirstSnapshot() in
+// src/sync/inbound.ts) each independently fabricate this project locally
+// before pushing it. If the id were time-based, the two would almost never
+// match, and the worker's ensureProject() (no dedup-by-name) would create
+// two separate stored projects with the same name. A deterministic id
+// means both racers compute the SAME id, so the second push just updates
+// the project the first one already created instead of duplicating it.
+function slugifyFixedProjectName(name) {
+  return 'project-fixed-' + name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '');
+}
+
 function enforceFixedProjectSet() {
   const changedIds = [];
   if (Object.keys(projects).length >= 2) return changedIds;
@@ -5645,7 +5657,7 @@ function enforceFixedProjectSet() {
     // solo project that already happens to be named FIXED_PROJECT_NAMES[0]).
     const usedNames = Object.values(projects).map(function(p) { return p.name; });
     const name = usedNames.indexOf(FIXED_PROJECT_NAMES[0]) === -1 ? FIXED_PROJECT_NAMES[0] : FIXED_PROJECT_NAMES[1];
-    const id = 'project-' + Date.now() + '-' + changedIds.length;
+    const id = slugifyFixedProjectName(name);
     projects[id] = makeProject(id, name);
     if (!activeProjectId) activeProjectId = id;
     // This id is just as much a locally-fabricated placeholder as the one
