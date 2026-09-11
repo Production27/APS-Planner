@@ -21,53 +21,20 @@
 // addColumnChecklistDefaultItem/removeColumnChecklistDefaultItem/
 // getChecklistForStageInProject), and the entire "My Checklist" tab
 // (buildMyChecklistRows through setMyChecklistStageAssignee).
-// closeAllColSettings()/openEditCard() are called here but exported for
-// real from board.ts — declared ambient rather than imported, since
-// board.ts already imports from this file and a real cross-import the
-// other way would make the two files circular.
 import type { BoardCard, BoardColumn, ChecklistItem, ChecklistSubItem, Job, Phase } from '../core/types';
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { findJob, getJobPhases } from '../core/models';
 import { pushProjectToShared } from '../sync/outbound';
+import { closeAllColSettings, openEditCard } from './board';
 
+// Ambient globals this file shares verbatim with other src/ files
+// (BOARD_COLUMNS, activeProjectId, saveJobs(), showToast(), etc.) are
+// declared once in src/shared-globals.d.ts, not repeated here.
 declare global {
-  // Shared verbatim with src/views/calendar.ts's identical ambient
-  // declarations for these same globals.
-  // eslint-disable-next-line no-var
-  var viewAsUsername: string | null;
-  function getEffectiveRole(): string;
-  function getStoredUsername(): string;
-  // Shared verbatim with src/views/board.ts's identical ambient
-  // declaration for this same global.
-  // eslint-disable-next-line no-var
-  var BOARD_COLUMNS: BoardColumn[];
-  // eslint-disable-next-line no-var
-  var boardCards: BoardCard[];
-  // eslint-disable-next-line no-var
-  var cachedUserRoster: { username: string; displayName: string }[] | null;
-  // eslint-disable-next-line no-var
-  var activeProjectId: string | null;
-  // eslint-disable-next-line no-var
-  var projects: Record<string, any>;
-  // eslint-disable-next-line no-var
-  var DEFAULT_BOARD_COLUMNS: { id: string; label: string }[];
-  function hasMinTier(tier: string): boolean;
-  function openModal(id: string): void;
-  function closeModal(id: string, onClosed?: () => void): void;
-  function closeAllColSettings(): void;
-  function saveBoardColumns(): void;
-  function isJobVisibleToMe(job: Job): boolean;
   function toggleMsDropdown(id: string, forceOpen?: boolean): void;
   function msSetAll(optionsId: string, checked: boolean): void;
-  function msDropdownLabelText(count: number, emptyText?: string): string;
   function switchProject(projectId: string): void;
-  function openEditCard(id: string): void;
-  function saveJobs(): void;
-  function saveProjects(): void;
-  function showToast(text: string, kind?: string): void;
-  function applyPermissionGating(): void;
-  function ensureUserRosterLoaded(): Promise<void>;
 }
 
 // card.checklists (one array per board-column stage, keyed by column id)

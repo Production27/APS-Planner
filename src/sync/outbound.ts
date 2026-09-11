@@ -22,42 +22,20 @@
 // this separately-bundled script.
 import { setSyncIndicator } from './connection';
 
+// Ambient globals this file shares verbatim with other src/ files
+// (roomSocket, activeProjectId, projects, saveProjects(),
+// mergeTombstones(), etc.) are declared once in src/shared-globals.d.ts,
+// not repeated here.
 declare global {
-  // Shared verbatim with src/sync/presence.ts's and src/sync/connection.ts's
-  // identical ambient declaration for this same global — see
-  // connection.ts's comment on this line for why the shape must match
-  // exactly. `close` is used directly by this file's logout().
-  // eslint-disable-next-line no-var
-  var roomSocket: { readyState: number; send: (data: string) => void; close: () => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;
-  // eslint-disable-next-line no-var
-  var pendingWrites: Map<string, { msg: Record<string, unknown>; sentAt: number }>;
-  // eslint-disable-next-line no-var
-  var activeProjectId: string | null;
-  // Widened to `any` values (src/sync/presence.ts declared this same
-  // global with a narrower shape before this phase, since it only ever
-  // read a project's `name`) — this file's push functions read many more
-  // fields (jobs/boardCards/calendarEvents/header/boardColumns/
-  // fieldOptions/workflowItems/fieldRevisions/deletedIds/...), and every
-  // declaration of the same global must stay structurally identical, so
-  // presence.ts's declaration was widened to match here rather than kept
-  // narrower and duplicated.
-  // eslint-disable-next-line no-var
-  var projects: Record<string, any>;
   // eslint-disable-next-line no-var
   var localActivityLog: { who: string; what: string; when: number }[];
   // eslint-disable-next-line no-var
   var USERNAME_KEY: string;
   // eslint-disable-next-line no-var
   var DISPLAY_NAME_KEY: string;
-  function setStoredSessionToken(token: string | null): void;
   function getActiveProject(): any;
-  function saveProjects(): void;
-  function updateProjectToggle(): void;
   function normalizeThemeColor(theme: unknown): string;
   function getSavedThemeColor(): string;
-  function mergeTombstones(a: Record<string, number> | undefined, b: Record<string, number>): Record<string, number>;
-  function getStoredDisplayName(): string;
-  function renderActivityLogSidebar(): void;
   function flushAutoSaveJobForm(): void;
   function flushCardAutosave(): void;
 }

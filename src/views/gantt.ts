@@ -37,6 +37,9 @@ import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 
+// Ambient globals this file shares verbatim with other src/ files
+// (BOARD_COLUMNS, saveJobs(), showToast(), getJobDueMarkerTask(), etc.)
+// are declared once in src/shared-globals.d.ts, not repeated here.
 declare global {
   // eslint-disable-next-line no-var
   var dayWidth: number;
@@ -46,27 +49,14 @@ declare global {
   var tickResizeState: TickResizeState | null;
   // eslint-disable-next-line no-var
   var barMoveState: BarMoveState | null;
-  // eslint-disable-next-line no-var
-  var BOARD_COLUMNS: BoardColumn[];
-  // eslint-disable-next-line no-var
-  var DUE_MARKER_TASK_ID: string;
-  function hasMinTier(tier: string): boolean;
-  function saveJobs(): void;
-  function logActivity(text: string): void;
-  function showToast(text: string, kind?: string): void;
-  function renderJobList(): void;
-  function renderBoard(): void;
-  function refreshJobFormIfOpen(jobId: string): void;
-  // Shared verbatim with src/views/calendar.ts's identical ambient
-  // declaration for this same index.html function — TypeScript's global
-  // declaration merging requires every re-declaration of one ambient
-  // global to be structurally identical, not just compatible, so this
-  // anonymous shape (rather than either file's own CalJob/GanttJob
-  // pseudo-types) is the deliberate common denominator both call sites
-  // satisfy.
-  function getJobDueMarkerTask(job: { id: string; name: string; [key: string]: unknown }, phaseId: string | null): { id: string; name: string; start?: string; finish?: string; [key: string]: unknown } | null;
-  function moveTooltip(e: MouseEvent): void;
-  function hideTooltip(): void;
+  // getVisibleJobs/getLinkedReferenceJobs/editJob/jumpToLinkedJobReference/
+  // isTaskFinished are declared here (rather than in shared-globals.d.ts)
+  // because this file types them with its own Job/GanttTask shapes —
+  // src/views/calendar.ts declares the same index.html functions with
+  // its own, differently named/shaped types. TypeScript allows an
+  // ambient `function` (unlike `var`) to be re-declared with a different
+  // signature per file — each file gets its own narrower view of the
+  // same real function.
   function getVisibleJobs(): Job[];
   function getLinkedReferenceJobs(): Job[];
   function getHiddenTaskOrders(): Set<number>;
@@ -106,7 +96,6 @@ declare global {
   function buildPhaseSubTags(job: Job, phaseId: string | null, phaseName: string | null, subPhaseId: string | null, subPhaseName: string | null, phaseFoldable: boolean, excludeSubTag: boolean): HTMLElement[];
   function showTooltip(e: MouseEvent, job: Job, task: GanttTask): void;
   function setHeaderScroll(px: number): void;
-  function setupScrollSync(): void;
   function isTaskFinished(job: Job, task: GanttTask): boolean;
 }
 

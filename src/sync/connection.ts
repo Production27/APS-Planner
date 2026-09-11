@@ -21,29 +21,11 @@
 // draggedColId (Board's own, in src/views/board.ts).
 import { sendPresenceUpdate } from './presence';
 
+// Ambient globals this file shares verbatim with other src/ files
+// (roomSocket, roomEverConnected, pendingWrites, draggedCardId,
+// draggedColId, setStoredSessionToken(), etc.) are declared once in
+// src/shared-globals.d.ts, not repeated here.
 declare global {
-  // Shared verbatim with src/sync/presence.ts's and src/sync/outbound.ts's
-  // identical ambient declaration for this same global — TypeScript's
-  // global declaration merging requires every re-declaration to be
-  // structurally identical, not just compatible. `close` is used by
-  // outbound.ts's logout(), which closes the socket directly.
-  // eslint-disable-next-line no-var
-  var roomSocket: { readyState: number; send: (data: string) => void; close: () => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;
-  // eslint-disable-next-line no-var
-  var roomEverConnected: boolean;
-  // eslint-disable-next-line no-var
-  var pendingWrites: Map<string, { msg: Record<string, unknown>; sentAt: number }>;
-  // barMoveState/tickResizeState/barResizeState/calDragState are NOT
-  // re-declared here — they're already declared (with their own real
-  // types) by src/views/gantt.ts and src/views/calendar.ts, which are
-  // part of this same bundled program; declaring them again here with a
-  // looser type would conflict, per the same "must be structurally
-  // identical" rule as roomSocket above.
-  // eslint-disable-next-line no-var
-  var draggedCardId: string | null;
-  // eslint-disable-next-line no-var
-  var draggedColId: string | null;
-  function setStoredSessionToken(token: string | null): void;
   function reauthenticateOnce(forceReprompt: boolean): Promise<unknown>;
   function buildRoomWsUrl(): Promise<string>;
   function handleRoomMessage(msg: unknown): void;

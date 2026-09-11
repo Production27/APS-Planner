@@ -48,79 +48,37 @@ import { createAutosaveController } from '../utils/autosave';
 import { darkenColor } from '../utils/color';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 
+// Ambient globals this file shares verbatim with other src/ files
+// (BOARD_COLUMNS, jobs, saveJobs(), showToast(), hasMinTier(), etc.) are
+// declared once in src/shared-globals.d.ts, not repeated here.
 declare global {
-  // eslint-disable-next-line no-var
-  var BOARD_COLUMNS: BoardColumn[];
-  // eslint-disable-next-line no-var
-  var boardCards: BoardCard[];
-  // eslint-disable-next-line no-var
-  var draggedCardId: string | null;
-  // eslint-disable-next-line no-var
-  var draggedColId: string | null;
-  // eslint-disable-next-line no-var
-  var homeExpandedWidgetId: string | null;
-  // eslint-disable-next-line no-var
-  var WORKFLOW_ITEMS: WorkflowItem[];
-  // eslint-disable-next-line no-var
-  var COLOR_PRESETS: string[];
   // eslint-disable-next-line no-var
   var editingCardId: string | null;
   // eslint-disable-next-line no-var
   var draftAttachments: unknown[];
   // eslint-disable-next-line no-var
-  var activeProjectId: string | null;
-  // eslint-disable-next-line no-var
-  var cachedUserRoster: { username: string; displayName: string }[] | null;
-  // eslint-disable-next-line no-var
   var BOARD_COLOR_PRESETS: string[];
   // eslint-disable-next-line no-var
   var DEFAULT_TASK_DURATION_DAYS: number;
   // eslint-disable-next-line no-var
-  var DEFAULT_STALLED_AFTER_DAYS: number;
-  // eslint-disable-next-line no-var
   var CUSTOM_FIELD_DEFS: CustomFieldDef[];
-  // Shared verbatim with src/core/models.ts's/src/sync/inbound.ts's
-  // identical ambient declarations for these same globals.
-  // eslint-disable-next-line no-var
-  var jobs: Job[];
-  // eslint-disable-next-line no-var
-  var editingJobId: string | null;
   function setCardColumn(card: BoardCard, newColumnId: string): void;
-  // Shared verbatim with src/views/calendar.ts's/gantt.ts's identical
-  // ambient declaration for this same function.
-  function saveJobs(): void;
-  // Shared verbatim with src/sync/inbound.ts's identical ambient
-  // declaration for this same function.
-  function renderHomeDashboard(): void;
   function ensureJobTasksMatchColumns(job: Job): void;
   function renderFixedTaskGrid(taskList: Task[]): void;
-  function saveBoardColumns(): void;
   function saveBoardCards(): void;
   function saveWorkflowItems(): void;
-  function logActivity(text: string): void;
-  function showToast(text: string, kind?: string): void;
-  function renderGantt(): void;
-  function renderJobList(): void;
   function renderCalendar(): void;
   function renderHomeWorkflowExpandedBoard(): void;
   function slugifyColumnId(label: string): string;
-  function isJobVisibleToMe(job: Job): boolean;
-  function openModal(id: string): void;
-  function closeModal(id: string, onClosed?: () => void): void;
-  function hasMinTier(tier: string): boolean;
   function renderCustomFieldsGrid(customFields: Record<string, unknown>): void;
   function renderTeamFieldsGrid(customFields: Record<string, unknown>): void;
   function renderAttachments(): void;
   function collectCustomFieldValues(): Record<string, unknown>;
   function deleteCardFromShared(projectId: string | null, cardId: string): void;
-  function refreshJobFormIfOpen(jobId: string): void;
   function syncCardColumns(): void;
   function isFinishedColumn(col: BoardColumn): boolean;
-  function isFinishedColumnId(colId: string): boolean;
   function displayNameForUsername(username: string): string;
-  function applyPermissionGating(): void;
   function renderBoardWorkflowStrip(): void;
-  function ensureUserRosterLoaded(): Promise<void>;
 }
 
 // ===== BOARD: COLUMN DRAG & DROP =====

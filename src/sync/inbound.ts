@@ -20,37 +20,15 @@ import { renderBoard } from '../views/board';
 import { renderCalendar, ensureCalendarEventIds } from '../views/calendar';
 import { genId } from '../utils/id';
 
+// Ambient globals this file shares verbatim with other src/ files
+// (roomEverConnected, activeProjectId, projects, latestPresenceUsers,
+// mergeTombstones(), renderJobList(), etc.) are declared once in
+// src/shared-globals.d.ts, not repeated here.
 declare global {
-  // Shared verbatim with src/sync/connection.ts's identical ambient
-  // declaration for this same global.
-  // eslint-disable-next-line no-var
-  var roomEverConnected: boolean;
-  // Shared verbatim with src/sync/presence.ts's/src/sync/outbound.ts's
-  // identical ambient declarations for these same globals.
-  // eslint-disable-next-line no-var
-  var activeProjectId: string | null;
-  // eslint-disable-next-line no-var
-  var projects: Record<string, any>;
-  // eslint-disable-next-line no-var
-  var latestPresenceUsers: PresenceUser[];
   // eslint-disable-next-line no-var
   var pendingRemoteRefresh: boolean;
   // eslint-disable-next-line no-var
-  var editingJobId: string | null;
-  // eslint-disable-next-line no-var
-  var DEFAULT_BOARD_COLUMNS: { id: string; label: string }[];
-  // eslint-disable-next-line no-var
   var DEFAULT_THEME_COLOR: string;
-  // Shared verbatim with src/sync/outbound.ts's identical ambient
-  // declarations for these same functions.
-  function mergeTombstones(a: Record<string, number> | undefined, b: Record<string, number>): Record<string, number>;
-  function saveProjects(): void;
-  function updateProjectToggle(): void;
-  function renderActivityLogSidebar(): void;
-  // Shared verbatim with src/views/board.ts's/calendar.ts's/gantt.ts's
-  // identical ambient declarations for these same functions.
-  function renderJobList(): void;
-  function refreshJobFormIfOpen(jobId: string): void;
   function ensureJobAndTaskIds(arr: any[]): void;
   function ensureCardIds(arr: any[]): void;
   function enforceFixedProjectSet(): string[];
@@ -59,7 +37,6 @@ declare global {
   function renderAll(): void;
   function hideFreshLoadOverlay(): void;
   function updateJobCount(): void;
-  function renderHomeDashboard(): void;
   function refreshArchivedJobsListIfOpen(): void;
 }
 

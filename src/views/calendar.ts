@@ -39,46 +39,30 @@ import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getPhaseCard } from '../core/models';
 
+// Ambient globals this file shares verbatim with other src/ files
+// (BOARD_COLUMNS-style shared state, saveJobs()-style shared functions,
+// etc.) are declared once in src/shared-globals.d.ts, not repeated here.
 declare global {
   // eslint-disable-next-line no-var
   var calendarEvents: CalendarEvent[];
-  // eslint-disable-next-line no-var
-  var viewAsUsername: string | null;
   // eslint-disable-next-line no-var
   var editingCalendarEventId: string | null;
   // eslint-disable-next-line no-var
   var calendarEventTargetDate: string | null;
   // eslint-disable-next-line no-var
-  var cachedUserRoster: { username: string; displayName: string }[] | null;
-  // eslint-disable-next-line no-var
-  var COLOR_PRESETS: string[];
-  // eslint-disable-next-line no-var
-  var activeProjectId: string | null;
-  // eslint-disable-next-line no-var
   var calendarViewDate: Date;
   // eslint-disable-next-line no-var
-  var calendarViewMode: string;
-  // eslint-disable-next-line no-var
-  var CAL_BAR_H: number;
-  // eslint-disable-next-line no-var
-  var CAL_BAR_GAP: number;
-  // eslint-disable-next-line no-var
-  var CAL_DAYNUM_H: number;
-  // eslint-disable-next-line no-var
-  var DUE_MARKER_TASK_ID: string;
-  // eslint-disable-next-line no-var
   var calDragState: CalDragState | null;
-  function getEffectiveRole(): string;
-  function getStoredUsername(): string;
-  function openModal(id: string): void;
-  function closeModal(id: string, onClosed?: () => void): void;
-  function ensureUserRosterLoaded(): Promise<void>;
   function saveCalendarEvents(): void;
-  function showToast(text: string, kind?: string): void;
-  function logActivity(text: string): void;
-  function hasMinTier(tier: string): boolean;
   function deleteCalendarEventFromShared(projectId: string | null, eventId: string): void;
-  function msDropdownLabelText(count: number, emptyText?: string): string;
+  // getVisibleJobs/buildCalendarJobRows/isTaskFinished/editJob/
+  // getLinkedReferenceJobs/jumpToLinkedJobReference are declared here
+  // (rather than in shared-globals.d.ts) because this file types them
+  // with its own CalJob/CalRow/CalTask shapes — src/views/gantt.ts
+  // declares the same index.html functions with its own, differently
+  // named types. TypeScript allows an ambient `function` (unlike `var`)
+  // to be re-declared with a different signature per file — each file
+  // gets its own narrower view of the same real function.
   function getVisibleJobs(): CalJob[];
   function flattenJobs(jobsArr: CalJob[]): CalRow[];
   function buildCalendarJobRows(jobsArr: CalJob[]): CalRow[];
@@ -88,17 +72,6 @@ declare global {
   function isCalendarJobSpanTaskId(taskId: unknown): boolean;
   function getLinkedReferenceJobs(): CalJob[];
   function jumpToLinkedJobReference(job: CalJob): void;
-  // Shared verbatim with src/views/gantt.ts's identical ambient
-  // declaration for this same index.html function — see that file's
-  // comment on this line for why the shape must match exactly.
-  function getJobDueMarkerTask(job: { id: string; name: string; [key: string]: unknown }, phaseId: string | null): { id: string; name: string; start?: string; finish?: string; [key: string]: unknown } | null;
-  function moveTooltip(e: MouseEvent): void;
-  function hideTooltip(): void;
-  function saveJobs(): void;
-  function renderGantt(): void;
-  function renderJobList(): void;
-  function renderBoard(): void;
-  function refreshJobFormIfOpen(jobId: string): void;
 }
 
 // Everything a bar-drag (handleCalBarMouseDown/Move/Up) needs to carry

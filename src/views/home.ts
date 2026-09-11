@@ -66,60 +66,22 @@ import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isD
 import { renderMyChecklist, buildMyChecklistRows } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
 
+// Ambient globals this file shares verbatim with other src/ files
+// (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
+// are declared once in src/shared-globals.d.ts, not repeated here.
 declare global {
-  // Shared verbatim with src/views/gantt.ts's identical ambient
-  // declaration for this same function.
-  function setupScrollSync(): void;
-  // Shared verbatim with src/views/calendar.ts's identical ambient
-  // declaration for this same global.
-  // eslint-disable-next-line no-var
-  var calendarViewMode: string;
   function cancelEdit(): void;
-  // Shared verbatim with src/views/board.ts's identical ambient
-  // declaration for this same global.
-  // eslint-disable-next-line no-var
-  var homeExpandedWidgetId: string | null;
-  // Shared verbatim with src/views/checklist.ts's/board.ts's identical
-  // ambient declarations for these same globals/functions.
-  // eslint-disable-next-line no-var
-  var boardCards: BoardCard[];
-  // eslint-disable-next-line no-var
-  var BOARD_COLUMNS: BoardColumn[];
-  function isJobVisibleToMe(job: Job): boolean;
-  function isFinishedColumnId(colId: string): boolean;
-  // Shared verbatim with src/core/models.ts's identical ambient
-  // declaration for this same global.
-  // eslint-disable-next-line no-var
-  var jobs: Job[];
-  // Shared verbatim with src/views/board.ts's identical ambient
-  // declaration for this same global — see this file's own header note
-  // above for why it stays a real `var` in index.html.
-  // eslint-disable-next-line no-var
-  var DEFAULT_STALLED_AFTER_DAYS: number;
-  function getStoredDisplayName(): string;
-  // eslint-disable-next-line no-var
-  var activeProjectId: string | null;
-  // eslint-disable-next-line no-var
-  var WORKFLOW_ITEMS: WorkflowItem[];
   function buildWorkflowStageData(): { firstColId: string; lastColId: string; label: string; color?: string }[];
-  // Shared verbatim with src/views/calendar.ts's identical ambient
-  // declarations for these same globals/functions — used here to lay
-  // out real job/event bars the same way the real Calendar tab does
-  // (see this file's own header note above on why the return shapes
-  // below are loosely typed rather than importing Calendar's own
-  // private CalJob/CalRow types just for this).
+  // getVisibleJobs/buildCalendarJobRows/jumpToLinkedJobReference are
+  // declared here (rather than in shared-globals.d.ts) with loose `any`
+  // shapes, used to lay out real job/event bars the same way the real
+  // Calendar tab does — src/views/calendar.ts declares the same
+  // index.html functions with its own stricter CalJob/CalRow types.
+  // TypeScript allows an ambient `function` (unlike `var`) to be
+  // re-declared with a different signature per file.
   function getVisibleJobs(): any[];
   function buildCalendarJobRows(jobsArr: any[]): any[];
   function jumpToLinkedJobReference(job: any): void;
-  // eslint-disable-next-line no-var
-  var CAL_DAYNUM_H: number;
-  // eslint-disable-next-line no-var
-  var CAL_BAR_H: number;
-  // eslint-disable-next-line no-var
-  var CAL_BAR_GAP: number;
-  // Shared verbatim with src/views/checklist.ts's/board.ts's identical
-  // ambient declaration for this same function.
-  function applyPermissionGating(): void;
   function formatCommentWhen(when: number | undefined): string;
   function postJobComment(jobId: string, text: string, important: boolean): any;
   function postJobReply(jobId: string, commentId: string, text: string | false): any;

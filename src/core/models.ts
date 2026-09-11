@@ -12,12 +12,8 @@
 // before.
 import type { Job, Phase, SubPhase, BoardCard, FoundJob, FoundTask } from './types';
 
-declare global {
-  // eslint-disable-next-line no-var
-  var jobs: Job[];
-  // eslint-disable-next-line no-var
-  var boardCards: BoardCard[];
-}
+// `jobs`/`boardCards` (used throughout this file) are declared once,
+// ambiently, in src/shared-globals.d.ts.
 
 export function findJob(jobId: string): FoundJob | null {
   for (let i = 0; i < jobs.length; i++) {
