@@ -10,13 +10,18 @@
 // ==========================================
 //
 // Replaces Liveblocks entirely with a single Durable Object (ApsRoom,
-// defined at the bottom of this file — Cloudflare requires a Durable
-// Object's class to live in the same deployed script as the binding that
-// references it, hence one big file rather than several small ones, same
-// as every other Worker in this repo). The user-accounts section is
-// carried over byte-for-byte unchanged from aps-liveblocks-worker.js —
-// confirmed independent of Liveblocks by exploration before this
-// migration started.
+// defined at the bottom of this file for now). Cloudflare requires a
+// Durable Object's class to live in the same DEPLOYED script as the
+// binding that references it — but that's a bundling requirement, not a
+// source-file one: wrangler bundles a Worker's local ES module imports
+// into one script automatically (confirmed via Cloudflare's own Durable
+// Objects docs), so this file is mid-way through being split into
+// worker/src/*.js modules that wrangler.jsonc's `main` will bundle back
+// together. Functions still get pulled out of here into worker/src/ one
+// at a time — see the git log for the in-progress split. The
+// user-accounts section is carried over byte-for-byte unchanged from
+// aps-liveblocks-worker.js — confirmed independent of Liveblocks by
+// exploration before this migration started.
 //
 // New bindings this file needs beyond what's already configured:
 //   APS_ROOM        Durable Object namespace, class name "ApsRoom",
@@ -34,6 +39,11 @@
 // was a late addition to the migration, decided after noticing the
 // original design (one JSON blob per room, broadcast on every change)
 // would otherwise grow unboundedly with every photo/PDF someone attaches.
+
+import { jsonResponse } from './src/http.js';
+import { VALID_TIERS, tierAtLeast } from './src/tiers.js';
+import { signRoomToken, verifyRoomToken } from './src/room-token.js';
+import { getRoomStub } from './src/room-stub.js';
 
 // --- 1. ROOM STATE REDUCER (pure logic — this file is the sole source
 // of truth for it; an earlier design-iteration copy that used to live at
@@ -514,52 +524,6 @@ function removeProject(state, projectId) {
   return { state: next, changed: true };
 }
 
-// --- 2. ROOM TOKEN SIGNING (see worker/aps-room-token.js for the
-// source-of-truth copy with full design-rationale comments) ---
-
-function base64UrlEncode(bytes) {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function base64UrlDecode(str) {
-  const padded = str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4);
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-async function importHmacKey(secret, usage) {
-  const enc = new TextEncoder();
-  return crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
-}
-const DEFAULT_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
-async function signRoomToken(secret, payload, ttlMs) {
-  const enc = new TextEncoder();
-  const body = JSON.stringify(Object.assign({}, payload, { exp: Date.now() + (ttlMs || DEFAULT_TOKEN_TTL_MS) }));
-  const bodyB64 = base64UrlEncode(enc.encode(body));
-  const key = await importHmacKey(secret, 'sign');
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(bodyB64));
-  return bodyB64 + '.' + base64UrlEncode(new Uint8Array(sig));
-}
-async function verifyRoomToken(secret, token) {
-  if (typeof token !== 'string' || token.indexOf('.') === -1) return null;
-  const dot = token.lastIndexOf('.');
-  const bodyB64 = token.slice(0, dot);
-  const sigB64 = token.slice(dot + 1);
-  if (!bodyB64 || !sigB64) return null;
-  let sigBytes;
-  try { sigBytes = base64UrlDecode(sigB64); } catch (e) { return null; }
-  const enc = new TextEncoder();
-  const key = await importHmacKey(secret, 'verify');
-  const valid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(bodyB64));
-  if (!valid) return null;
-  let payload;
-  try { payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(bodyB64))); } catch (e) { return null; }
-  if (!payload || typeof payload.exp !== 'number' || Date.now() > payload.exp) return null;
-  return payload;
-}
-
 // --- 3. BACKUP/RESTORE — now talks to our own Durable Object instead of
 // Liveblocks' REST API. Much simpler: no DELETE-then-POST dance, no
 // external round trip, no typed LSON wrapping — the DO's /internal/export
@@ -611,11 +575,6 @@ function appFormatToRoomState(appData) {
     };
   }
   return { projects };
-}
-
-function getRoomStub(env) {
-  const id = env.APS_ROOM.idFromName('aps-production-room');
-  return env.APS_ROOM.get(id);
 }
 
 async function runBackup(env) {
@@ -713,17 +672,6 @@ async function hashPasswordPBKDF2(password, saltHex) {
 
 function normalizeUsername(username) {
   return (typeof username === "string" ? username : "").trim().toLowerCase();
-}
-
-// Permission tiers, lowest to highest — matches PERMISSION_TIERS in
-// index.html. Used both to validate incoming role values in
-// handleUsersAdd/handleUsersUpdate below, and (via tierAtLeast()) to
-// enforce content-write permissions in webSocketMessage() below.
-const VALID_TIERS = ["viewer", "commenter", "editor", "projectAdmin", "admin"];
-function tierAtLeast(role, minTier) {
-  const mine = VALID_TIERS.indexOf(role);
-  const need = VALID_TIERS.indexOf(minTier);
-  return mine !== -1 && need !== -1 && mine >= need;
 }
 
 // Lazy migration: pre-tier accounts stored role:"member" (the old binary
@@ -1159,13 +1107,6 @@ async function handleAttachmentDelete(request, env, corsHeaders) {
 }
 
 // --- 8. UTILITIES ---
-function jsonResponse(data, status, corsHeaders) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" }
-  });
-}
-
 // Backups used to be gated by the shared team password alone, with no tie
 // to individual accounts at all. Now they require a real Admin-tier
 // account's own credentials — same resolveIdentity() every other
