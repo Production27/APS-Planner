@@ -1,6 +1,4 @@
-// --- USER ACCOUNTS (byte-for-byte unchanged from
-// aps-liveblocks-worker.js — confirmed independent of Liveblocks by
-// exploration before this migration started) ---
+// --- USER ACCOUNTS ---
 import { verifyRoomToken } from './room-token.ts';
 import type { UserRecord, Identity } from './types.ts';
 
@@ -88,12 +86,9 @@ export async function verifyCredentials(env: Env, username: string, password: st
   return user;
 }
 
-// The shared team-password fallback (and TEAM_PASSWORD itself) is gone —
-// every caller now authenticates as a real individual account, full stop.
-// fallbackName is kept as a parameter (unused) rather than removed from
-// every call site across this file for a change that's otherwise purely
-// subtractive.
-export async function resolveIdentity(env: Env, username: string, password: string | undefined, fallbackName?: string): Promise<Identity | null> {
+// Every caller authenticates as a real individual account — there's no
+// shared team-password fallback.
+export async function resolveIdentity(env: Env, username: string, password: string | undefined): Promise<Identity | null> {
   if (!username) return null;
   const user = await verifyCredentials(env, username, password);
   if (!user) return null;
@@ -113,9 +108,7 @@ export async function resolveIdentityFromToken(env: Env, token: string | null | 
 // Single entry point every authenticated JSON-body endpoint uses.
 // handleAuth() (the /auth login endpoint, in auth.ts) is the only
 // remaining place a raw password is verified — everything past it runs
-// on the token that mints. (The legacy username+password fallback this
-// used to also accept was removed once every client had picked up the
-// token-based build.)
+// on the token that mints.
 export async function resolveCaller(env: Env, body: { token?: string } | null | undefined): Promise<Identity | null> {
   return resolveIdentityFromToken(env, body && body.token);
 }

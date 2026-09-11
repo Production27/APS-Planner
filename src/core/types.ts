@@ -53,10 +53,6 @@ export interface Job {
   [key: string]: unknown;
 }
 
-// Tightened (Phase CL-b of the checklist-system extraction) from the
-// original `unknown[]`/`unknown[]` now that src/views/checklist.ts's own
-// functions read specific fields off these — same "tighten when a later
-// phase actually needs it" philosophy as this file's header comment.
 // `assignee` stays `unknown`: legacy data can still carry a single
 // username string where current code always writes an array (see
 // normalizeChecklistAssignees() in src/views/checklist.ts).

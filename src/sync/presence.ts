@@ -1,30 +1,15 @@
-// Sync/Presence, moved out of index.html starting with Phase 7 of the
-// architecture roadmap. Deliberately tackled LAST of everything — this is
-// the real-time collaboration engine (WebSocket connection lifecycle,
-// incoming-change merge/conflict-resolution, and presence) that every
-// other view's save/load path ultimately calls into, and a bug here can
-// silently affect every user in a project at once (lost/overwritten work),
-// not just one person's own screen the way a Board/Calendar/Gantt bug
-// would. Phased narrowest/lowest-risk first, same discipline as every
-// prior phase, but with extra scrutiny given the stakes — see each
-// sub-phase's own notes as they land.
-//
-//   Phase 7a — presence avatars (this file's initial content):
-//     sendPresenceUpdate/presenceAvatarColor/presenceInitials/
-//     presenceAnimDelay/renderPresenceAvatars. Purely cosmetic — "who
-//     else is viewing this project right now" bubbles — with zero data-
-//     mutation risk (worst case of a bug here is a wrong-colored or
-//     missing avatar, never a corrupted job/task). Chosen as the
-//     starting slice specifically because it's the lowest-stakes corner
-//     of the whole sync system, the same "smallest/safest first" logic
-//     used to open every other multi-phase extraction this session.
+// Presence: "who else is viewing this project right now" avatar bubbles
+// — sendPresenceUpdate/presenceAvatarColor/presenceInitials/
+// presenceAnimDelay/renderPresenceAvatars. Purely cosmetic, with zero
+// data-mutation risk (worst case of a bug here is a wrong-colored or
+// missing avatar, never a corrupted job/task) — unlike src/sync/connection.ts
+// and src/sync/inbound.ts, where a bug can silently affect every user in
+// a project at once.
 //
 // roomSocket/activeProjectId/latestPresenceUsers/myPresenceSessionId/
 // projects stay in index.html (the actual WebSocket connection, the
-// active-project pointer, and the shared project-data map are all
-// still-to-be-extracted sync/data-layer state) and are referenced below
-// as ambient globals — converted let/const -> var where needed, same
-// mechanism as every prior phase's cross-script globals.
+// active-project pointer, and the shared project-data map) and are
+// referenced below as ambient globals.
 import { escapeHtml } from '../utils/html';
 
 declare global {
@@ -39,18 +24,18 @@ declare global {
   var latestPresenceUsers: PresenceUser[];
   // eslint-disable-next-line no-var
   var myPresenceSessionId: string;
-  // Widened to `any` values in Phase 7c (see src/sync/outbound.ts's
-  // identical declaration and comment) — that file's push functions read
-  // many more project fields than this file's read-only "what's this
-  // project called" use, and every declaration of the same global must
+  // Widened to `any` values (see src/sync/outbound.ts's identical
+  // declaration and comment) — that file's push functions read many
+  // more project fields than this file's read-only "what's this project
+  // called" use, and every declaration of the same global must
   // stay structurally identical.
   // eslint-disable-next-line no-var
   var projects: Record<string, any>;
 }
 
-// Exported (Phase 7d) so src/sync/inbound.ts's handleRoomMessage() can
-// reuse this exact named type for its own identical `latestPresenceUsers`
-// ambient declaration, rather than duplicating an inline shape that could
+// Exported so src/sync/inbound.ts's handleRoomMessage() can reuse this
+// exact named type for its own identical `latestPresenceUsers` ambient
+// declaration, rather than duplicating an inline shape that could
 // silently drift out of sync with this one.
 export interface PresenceUser {
   sessionId?: string;

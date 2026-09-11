@@ -1,5 +1,5 @@
-// Moved verbatim from index.html as part of Phase 2 of the architecture
-// roadmap — pure color math, no DOM or shared-state dependency.
+// Pure color math (hex darken/soften) — no DOM or shared-state
+// dependency.
 
 export function darkenColor(hex: string | null | undefined, amount: number): string {
   hex = (hex || '#3949ab').replace('#', '');

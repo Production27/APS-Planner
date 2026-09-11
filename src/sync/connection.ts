@@ -1,41 +1,31 @@
-// Sync/Presence, Phase 7 of the architecture roadmap — see
-// src/sync/presence.ts's header comment for the full context (why this
-// is tackled last, the agreed phased order, and the extra scrutiny
-// given the stakes).
+// Sync connection: the WebSocket connection lifecycle and its status
+// indicator — initSyncIndicator/setSyncIndicator/
+// scheduleOfflineEscalation/cancelOfflineEscalation/isBusyEditing/
+// handleRoomOpen/handleRoomClose/handleRoomSocketError/
+// handleRoomSocketMessageEvent/setupLiveblocksSync.
 //
-//   Phase 7b — the WebSocket connection lifecycle and its status
-//     indicator (this file): initSyncIndicator/setSyncIndicator/
-//     scheduleOfflineEscalation/cancelOfflineEscalation/isBusyEditing/
-//     handleRoomOpen/handleRoomClose/handleRoomSocketError/
-//     handleRoomSocketMessageEvent/setupLiveblocksSync. Deliberately
-//     does NOT include handleRoomMessage() itself — the function
-//     handleRoomSocketMessageEvent() dispatches to — which is where the
-//     actual incoming-snapshot merge/conflict-resolution logic lives;
-//     that stays in index.html for a later, separately-scoped phase
-//     (7d) with its own extra scrutiny, same narrowing judgment used
-//     throughout this whole roadmap for the densest/riskiest piece of
-//     any given cluster.
+// Deliberately does NOT include handleRoomMessage() itself — the
+// function handleRoomSocketMessageEvent() dispatches to — where the
+// actual incoming-snapshot merge/conflict-resolution logic lives; see
+// src/sync/inbound.ts.
 //
 // pendingWrites/sendRoomMessage/armStuckWriteWatch/clearPendingWrite/
 // queueSharedSync/flushPendingRoomPush/pushLiveblocksState (the OUTBOUND
-// half of sync — sending local changes out) stay in index.html for their
-// own later phase (7c) — this phase is scoped to the connection's own
-// lifecycle and status, not what flows over it once open.
+// half of sync — sending local changes out) live in src/sync/outbound.ts
+// instead — this file is scoped to the connection's own lifecycle and
+// status, not what flows over it once open.
 //
 // isBusyEditing() reads barMoveState/tickResizeState/barResizeState/
-// calDragState (Gantt/Calendar's own drag-in-progress flags, already
-// bundled in src/views/gantt.ts and src/views/calendar.ts) and
-// draggedCardId/draggedColId (Board's own, in src/views/board.ts) — all
-// already real `var` globals from their own earlier phases, so no new
-// conversions were needed for those specifically.
+// calDragState (Gantt/Calendar's own drag-in-progress flags, in
+// src/views/gantt.ts and src/views/calendar.ts) and draggedCardId/
+// draggedColId (Board's own, in src/views/board.ts).
 import { sendPresenceUpdate } from './presence';
 
 declare global {
   // Shared verbatim with src/sync/presence.ts's and src/sync/outbound.ts's
   // identical ambient declaration for this same global — TypeScript's
   // global declaration merging requires every re-declaration to be
-  // structurally identical, not just compatible (the same lesson learned
-  // in Phase 6a's getJobDueMarkerTask). `close` was added in Phase 7c for
+  // structurally identical, not just compatible. `close` is used by
   // outbound.ts's logout(), which closes the socket directly.
   // eslint-disable-next-line no-var
   var roomSocket: { readyState: number; send: (data: string) => void; close: () => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;

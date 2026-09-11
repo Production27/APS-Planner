@@ -1,34 +1,25 @@
-// Sync/Presence, Phase 7 of the architecture roadmap — see
-// src/sync/presence.ts's header comment for the full context (why this
-// is tackled last, the agreed phased order, and the extra scrutiny
-// given the stakes).
-//
-//   Phase 7c — outbound sync (this file): sending THIS browser's own
-//     changes out to the shared room. queueSharedSync/flushPendingRoomPush/
-//     flushPendingSync/logout/sendRoomMessage/armStuckWriteWatch/
-//     clearPendingWrite/hasPendingWriteForProject/pushProjectToShared/
-//     removeProjectFromShared/pruneStrayEmptyProjects/deleteFromSharedMap/
-//     deleteJobFromShared/deleteCardFromShared/deleteCalendarEventFromShared/
-//     recordTombstone/pushFieldToShared/pushBoardColumnsToShared/
-//     pushFieldOptionsToShared/pushWorkflowItemsToShared/pushHeaderToShared/
-//     logActivity/pushLiveblocksState. This is everything that pushes a
-//     local change TO the server; it deliberately still excludes the
-//     INBOUND merge/conflict-resolution logic (handleRoomMessage,
-//     applyRoomSnapshot, safeMergeInto, synthesizeJobFromOrphanCard,
-//     scheduleOrphanRecovery, healOrphanedJobCards & friends) even though
-//     those functions sit physically between this cluster's two halves in
-//     index.html — that stays in index.html for Phase 7d, deliberately
-//     last, with the most scrutiny of anything in this whole roadmap.
+// Outbound sync: sending this browser's own changes out to the shared
+// room. queueSharedSync/flushPendingRoomPush/flushPendingSync/logout/
+// sendRoomMessage/armStuckWriteWatch/clearPendingWrite/
+// hasPendingWriteForProject/pushProjectToShared/removeProjectFromShared/
+// pruneStrayEmptyProjects/deleteFromSharedMap/deleteJobFromShared/
+// deleteCardFromShared/deleteCalendarEventFromShared/recordTombstone/
+// pushFieldToShared/pushBoardColumnsToShared/pushFieldOptionsToShared/
+// pushWorkflowItemsToShared/pushHeaderToShared/logActivity/
+// pushLiveblocksState. This is everything that pushes a local change TO
+// the server; it deliberately excludes the INBOUND merge/
+// conflict-resolution logic (handleRoomMessage, applyRoomSnapshot,
+// safeMergeInto, synthesizeJobFromOrphanCard, scheduleOrphanRecovery,
+// healOrphanedJobCards & friends), which lives in src/sync/inbound.ts
+// instead.
 //
 // stuckWriteTimer/syncPushTimer/msgSeq are private to this file — every
-// reader and writer of them (checked against the whole of index.html
-// before this phase) lives in the functions moved here, so unlike most of
-// this migration they did NOT need a let/const -> var conversion; they
-// simply became normal module-scoped `let`s below.
+// reader and writer of them lives in the functions here, so they're
+// ordinary module-scoped `let`s below rather than ambient globals.
 //
-// localActivityLog/USERNAME_KEY/DISPLAY_NAME_KEY DID need converting from
-// let/const to var in index.html, since logActivity()/logout() below now
-// read/write them from this separately-bundled script.
+// localActivityLog/USERNAME_KEY/DISPLAY_NAME_KEY are `var`s in
+// index.html, since logActivity()/logout() below read/write them from
+// this separately-bundled script.
 import { setSyncIndicator } from './connection';
 
 declare global {
@@ -175,7 +166,7 @@ function clearPendingWrite(msgId: string): void {
 // reaches the server (caught during staging testing: a just-added job
 // vanishing). pushLiveblocksState() (what the debounce timer calls) only
 // ever pushes the active project, so the timer only implicates that one.
-// Used by index.html's still-in-place applyRoomSnapshot() (Phase 7d).
+// Used by src/sync/inbound.ts's applyRoomSnapshot().
 function hasPendingWriteForProject(projectId: string): boolean {
   if (syncPushTimer && projectId === activeProjectId) return true;
   for (const entry of pendingWrites.values()) {

@@ -1,22 +1,15 @@
-// Phase 3 of the architecture roadmap — the shared job/task/phase/card
-// LOOKUP layer, moved verbatim. Deliberately scoped to read-only
-// accessors only (nothing here ever mutates `jobs`/`boardCards`) — the
-// functions that WRITE to this data (ensureJobAndTaskIds, setCardColumn,
-// migration/normalization helpers, etc.) stay in index.html for a later,
-// separately-scoped phase. That's narrower than "the whole model layer"
-// the roadmap sketched, and deliberately so: every function below is
-// pure with respect to its own arguments once `jobs`/`boardCards` are
-// read, which is what makes it safe to move in one atomic step. A real
-// data-shape migration would need the maintenance-mode banner from the
-// roadmap's plan; a same-behavior relocation of read-only lookups,
-// covered by the read-back tests in tests/unit-models.spec.js and the
-// full existing Playwright suite, does not.
+// The shared job/task/phase/card LOOKUP layer. Deliberately scoped to
+// read-only accessors only — nothing here ever mutates `jobs`/
+// `boardCards`. The functions that WRITE to this data (ensureJobAndTaskIds,
+// setCardColumn, migration/normalization helpers, etc.) stay in
+// index.html; every function below is pure with respect to its own
+// arguments once `jobs`/`boardCards` are read.
 //
 // `jobs`/`boardCards` are declared `var` (not `let`/`const`) in
 // index.html specifically so they exist as real `window` properties —
 // see that file's own note next to each declaration. Every call site
-// across the app (500+ of them) keeps calling findJob(jobId) etc.
-// completely unchanged; only the function bodies moved.
+// across the app (500+ of them) calls findJob(jobId) etc. exactly as
+// before.
 import type { Job, Phase, SubPhase, BoardCard, FoundJob, FoundTask } from './types';
 
 declare global {

@@ -1,43 +1,30 @@
-// Checklist system, moved out of index.html starting here. Unlike Board/
-// Calendar/Gantt, this was deliberately NOT part of any of those views'
-// own extraction phases — it's cross-cutting (Board's card-move gate,
-// its own dedicated "Checklist" tab/rail-tab, a per-column "Manage
-// Column Checklist" modal, and small Home-dashboard widgets all read/
-// write the same per-card checklist data) — see src/views/board.ts's own
-// Phase 4e note for the original deferral. Phased the same
-// narrowest/lowest-risk-first way as every other multi-phase extraction
-// this project has done, surveyed and agreed with Karl before starting:
+// Checklist system: per-card checklists, cross-cutting rather than
+// Board-specific — Board's card-move gate, this file's own dedicated
+// "Checklist" tab/rail-tab, a per-column "Manage Column Checklist"
+// modal, and small Home-dashboard widgets all read/write the same
+// per-card checklist data.
 //
-//   Phase CL-a — core primitives: ensureCardChecklists/
-//     normalizeChecklistAssignees/isChecklistStageVisibleToMe. Pure
-//     data-shape helpers with no rendering and minimal mutation (a
-//     one-time legacy-data migration) — the same "smallest/safest
-//     first" logic used to open every other multi-phase extraction this
-//     session. src/views/board.ts already declared ambient
-//     ```declare function``` signatures for all three (written when
-//     board.ts itself was extracted, calling into these while they were
-//     still untyped index.html functions) — this file's real
-//     implementations match those exactly, same "must be structurally
-//     identical" discipline as every prior cross-file ambient this
-//     project has hit.
-//   Phase CL-b — Board's card-move gate: getOpenChecklistItemsForCard/
-//     confirmChecklistBeforeMove. Reuses board.ts's own already-reserved
-//     ambient signature for confirmChecklistBeforeMove() exactly.
-//   Phase CL-d (this addition, skipping CL-c — the folded-in Board
-//     column-settings cluster landed in board.ts itself, see that
-//     file's own header) — the densest and highest-effort phase of this
-//     whole extraction, zero prior test coverage anywhere in it:
-//     canAssignChecklistStages() (standalone one-liner), the "Manage
-//     Column Checklist" modal (managingChecklistColumnId/
-//     openManageColumnChecklist/closeManageColumnChecklist/
-//     renderManageColumnChecklistBody/addColumnChecklistDefaultItem/
-//     removeColumnChecklistDefaultItem/getChecklistForStageInProject),
-//     and the entire "My Checklist" tab (buildMyChecklistRows through
-//     setMyChecklistStageAssignee). closeAllColSettings()/openEditCard()
-//     are called here but real-exported from board.ts — declared
-//     ambient rather than imported for real, since board.ts already
-//     imports from this file and a real cross-import the other way
-//     would make the two files circular.
+// Core primitives: ensureCardChecklists/normalizeChecklistAssignees/
+// isChecklistStageVisibleToMe — pure data-shape helpers with no
+// rendering and minimal mutation (a one-time legacy-data migration).
+// src/views/board.ts declares ambient `declare function` signatures for
+// all three and calls into these real implementations, which must stay
+// structurally identical to those signatures.
+//
+// Board's card-move gate: getOpenChecklistItemsForCard/
+// confirmChecklistBeforeMove. board.ts's own ambient signature for
+// confirmChecklistBeforeMove() must match this file's real one exactly.
+//
+// canAssignChecklistStages() (standalone one-liner), the "Manage Column
+// Checklist" modal (managingChecklistColumnId/openManageColumnChecklist/
+// closeManageColumnChecklist/renderManageColumnChecklistBody/
+// addColumnChecklistDefaultItem/removeColumnChecklistDefaultItem/
+// getChecklistForStageInProject), and the entire "My Checklist" tab
+// (buildMyChecklistRows through setMyChecklistStageAssignee).
+// closeAllColSettings()/openEditCard() are called here but exported for
+// real from board.ts — declared ambient rather than imported, since
+// board.ts already imports from this file and a real cross-import the
+// other way would make the two files circular.
 import type { BoardCard, BoardColumn, ChecklistItem, ChecklistSubItem, Job, Phase } from '../core/types';
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';

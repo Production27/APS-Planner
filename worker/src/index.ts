@@ -1,43 +1,28 @@
 // ==========================================
-// APS Planner — Worker (Durable Objects backend) — entry point
-// LIVE — this is what's actually deployed at aps-planner-staging
-// (confirmed via `wrangler deployments list` against this file's own git
-// history). This directory (worker/src/) is the sole source of truth for
-// everything in it — the old pre-migration Liveblocks-based worker, its
-// README, and a set of design-iteration reference files this used to
-// point readers to were all removed in commit a4da847 ("Remove stale
-// unused worker reference files"); deploys go through wrangler.jsonc's
-// wrangler-based pipeline.
+// APS Planner — Worker (Durable Objects backend) — entry point / router
 // ==========================================
 //
-// Replaces Liveblocks entirely with a single Durable Object (ApsRoom,
-// defined in room-do.ts and re-exported below). Cloudflare requires a
-// Durable Object's class to live in the same DEPLOYED script as the
-// binding that references it — but that's a bundling requirement, not a
-// source-file one: wrangler bundles a Worker's local ES module imports
-// into one script automatically (confirmed via Cloudflare's own Durable
-// Objects docs). This file is just the URL router — see the git log for
-// the rest of the worker split's history, and the sibling files in this
-// directory for every other piece. users.ts is carried over byte-for-byte
-// unchanged from aps-liveblocks-worker.js — confirmed independent of
-// Liveblocks by exploration before this migration started.
+// Routes incoming requests to the appropriate handler and re-exports the
+// ApsRoom Durable Object class (defined in room-do.ts) so it's included
+// in this deployed script. Cloudflare requires a Durable Object's class
+// to live in the same deployed script as the binding that references it
+// — but that's a bundling requirement, not a source-file one: wrangler
+// bundles a Worker's local ES module imports into one script
+// automatically, so the implementation is split across the sibling files
+// in this directory.
 //
 // Bindings this worker needs (configured in wrangler.jsonc/the dashboard):
 //   APS_ROOM        Durable Object namespace, class name "ApsRoom",
 //                    pointing at this same script.
 //   ROOM_TOKEN_SECRET  Secret (Settings -> Variables and Secrets) — any
 //                    long random string, used to sign/verify room
-//                    connection tokens. Generate once, never reuse
-//                    TEAM_PASSWORD or LIVEBLOCKS_SECRET_KEY for this.
-//   BACKUP_BUCKET, USERS_KV, TEAM_PASSWORD — reused as-is from the
-//                    original Liveblocks-era worker.
+//                    connection tokens.
+//   BACKUP_BUCKET, USERS_KV  R2 bucket and KV namespace used for backups
+//                    and user accounts respectively.
 //
 // Attachments (card/job file uploads) live in R2 under an attachments/
-// prefix in the SAME BACKUP_BUCKET, rather than inline base64 in the
-// synced data — see attachments.ts. This was a late addition to the
-// original Liveblocks migration, decided after noticing the original
-// design (one JSON blob per room, broadcast on every change) would
-// otherwise grow unboundedly with every photo/PDF someone attaches.
+// prefix in the same BACKUP_BUCKET, rather than inline base64 in the
+// synced data — see attachments.ts.
 
 import { getRoomStub } from './room-stub.ts';
 import { handleAuth } from './auth.ts';

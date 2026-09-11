@@ -1,6 +1,5 @@
-// --- ROOM TOKEN SIGNING — this file is the sole source of truth for it;
-// an earlier design-iteration copy that used to live at
-// worker/aps-room-token.js was removed in commit a4da847. ---
+// --- ROOM TOKEN SIGNING — HMAC-signs/verifies the tokens used to
+// authenticate WebSocket room connections. ---
 
 // Whatever's passed to signRoomToken() (currently always username/
 // displayName/role/assignedProjectId — see auth.ts) plus the `exp` stamp

@@ -1,84 +1,57 @@
-// Home dashboard, moved out of index.html starting here — the last
-// remaining piece of the original index.html view layer (Board/Calendar/
-// Gantt/Sync/Checklist are all already extracted). Phased the same
-// narrowest/lowest-risk-first way as every other multi-phase extraction
-// this project has done, surveyed and agreed with Karl before starting:
+// Home dashboard: core tab-switching/navigation (getActiveTab/
+// switchTabMorphed/homeWidgetGoTo/clearHomeTabMorphNames/switchTab/
+// toggleJobRail/setMobileView — genuinely app-shell infrastructure,
+// since switchTab() is what every other view's tab button ultimately
+// calls, living here because Home is the hub every "morph" transition
+// grows out of or shrinks back into), widget expand/collapse mechanics
+// (HOME_EXPAND_WIDGET_ID/HOME_REFLOW_TRACK/applyHomeReflowTracks/
+// toggleHomeWidgetExpand, plus the window resize listener that keeps the
+// grid's reflow in sync), the widget DATA builders (pure functions,
+// jobs/cards in and row arrays out, with no rendering —
+// buildHomeOverdueRows/buildHomeStalledRows/buildHomeStageSummary/
+// buildHomeTodayScheduleRows/buildHomeUpcomingScheduleRows/
+// buildHomeGanttUnclosedRows), the widget RENDERERS plus the
+// dismissible-alert system (renderHomeGreeting/
+// renderHomeChecklistWidget(+Expanded)/getDismissedHomeWidgetAlerts/
+// isHomeWidgetAlertDismissed/dismissHomeWidgetAlert/
+// renderHomeWidgetAlert/renderHomeOverdueWidget/
+// renderHomeCalendarExpanded(+MiniMonth)/renderHomeWorkflowMiniBoard/
+// renderHomeWorkflowExpandedBoard/renderHomeTodayScheduleWidget), the
+// Home Job Chat widget (buildHomeJobChatFeed/
+// renderHomeJobChatComposeOptions/renderHomeJobChatItem/
+// renderHomeJobChat/postHomeJobChatComment/toggleHomeReplyBox/
+// addHomeJobReply/handleHomeReplyKey), and renderHomeDashboard() itself,
+// the dispatcher tying every widget together.
 //
-//   Phase HD-a (this file's initial content) — core tab-switching/
-//     navigation: getActiveTab/switchTabMorphed/homeWidgetGoTo/
-//     clearHomeTabMorphNames/switchTab/toggleJobRail/setMobileView.
-//     Genuinely app-shell infrastructure (switchTab() is what every
-//     other view's tab button ultimately calls) that happens to live
-//     here because Home is the hub every "morph" transition grows out
-//     of or shrinks back into — chosen as the safest first slice, same
-//     "smallest/safest first" logic as every other multi-phase
-//     extraction, and it's what every later Home-specific phase
-//     (widget expand mechanics, the actual dashboard content,
-//     renderHomeDashboard() itself) builds on.
-//   Phase HD-b — widget expand/collapse mechanics: HOME_EXPAND_WIDGET_ID/
-//     HOME_REFLOW_TRACK/applyHomeReflowTracks/toggleHomeWidgetExpand,
-//     plus the window resize listener that keeps the grid's reflow in
-//     sync. homeExpandedWidgetId itself stays a `var` in index.html
-//     (same as every other cross-script mutable PRIMITIVE this whole
-//     project has hit) — src/views/board.ts already ambiently declares
-//     it (several of its own functions re-render the workflow mini-board
-//     when it's the one expanded), and this file's own ambient
-//     declaration below must stay structurally identical to that one,
-//     not become a real local declaration: esbuild bundles every source
-//     file into ONE shared IIFE scope, so a `var` moved INTO a .ts
-//     module would just become private to that module's own closure
-//     inside the bundle, not a real `window` property board.ts's bundled
-//     code could still see — unlike a genuinely object-typed global (a
-//     Map, an array), reassigning a bare string/null primitive needs the
-//     real declaration to stay wherever every reader/writer can see it
-//     as an actual global, which for a cross-file primitive still means
-//     index.html's own top-level classic-script scope.
-//   Phase HD-c — the widget DATA builders: pure functions (jobs/cards
-//     in, row arrays out) with no rendering — buildHomeOverdueRows/
-//     buildHomeStalledRows/buildHomeStageSummary/
-//     buildHomeTodayScheduleRows/buildHomeUpcomingScheduleRows/
-//     buildHomeGanttUnclosedRows. DEFAULT_STALLED_AFTER_DAYS stays a
-//     `var` in index.html (same reasoning as homeExpandedWidgetId above
-//     — src/views/board.ts's bundled setColumnStalledThreshold() reads
-//     it directly), ambiently declared here instead of moved.
-//   Phase HD-d (this addition) — the widget RENDERERS + the dismissible-
-//     alert system: renderHomeGreeting/renderHomeChecklistWidget(+Expanded)/
-//     the alert cluster (getDismissedHomeWidgetAlerts/
-//     isHomeWidgetAlertDismissed/dismissHomeWidgetAlert/
-//     renderHomeWidgetAlert)/renderHomeOverdueWidget/
-//     renderHomeCalendarExpanded(+MiniMonth)/renderHomeWorkflowMiniBoard/
-//     renderHomeWorkflowExpandedBoard/renderHomeTodayScheduleWidget.
-//     Its onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200)
-//     REGISTRATION call deliberately stays a top-level statement in
-//     index.html instead — see the comment above renderHomeWorkflowMiniBoard()
-//     below for why. The densest phase of this whole
-//     extraction (~450 lines) — several functions here reuse Calendar's
-//     own privately-typed shapes (CalJob/CalRow/CalSeg, none exported)
-//     to lay out real job/event bars; rather than exporting those types
-//     just for this one cross-file reuse, the handful of objects built
-//     here to feed buildCalBarHtml()/buildCalendarJobRows() are typed
-//     `any` at the boundary — consistent with this whole project's
-//     "verbatim port, tighten only when trivial" discipline.
-//   Phase HD-e — the Home Job Chat widget, a small self-contained
-//     feature (buildHomeJobChatFeed/renderHomeJobChatComposeOptions/
-//     renderHomeJobChatItem/renderHomeJobChat/postHomeJobChatComment/
-//     toggleHomeReplyBox/addHomeJobReply/handleHomeReplyKey).
-//     `job.comments` stays typed loosely (`any[]`) at this boundary
-//     rather than adding a real Comment interface to core/types.ts just
-//     for this one still-JS feature — same "tighten only when trivial"
-//     call as the Calendar bar shapes in HD-d above.
-//   Phase HD-f (this addition, the LAST phase) — renderHomeDashboard()
-//     itself, the dispatcher tying every widget together, same as
-//     renderBoard()/renderGantt() being the densest/last piece of their
-//     own extractions. This closes out the entire Home-dashboard
-//     extraction and the original index.html view layer as a whole:
-//     Board/Calendar/Gantt/Sync/Checklist/Home are now all fully in
-//     src/. HOME_MINI_GANTT_WINDOW_DAYS (an ambient `var` in index.html
-//     since HD-d, because renderHomeDashboard() there was its other
-//     reader) becomes a genuinely local `const` now that both readers
-//     live in this one module — see that constant's own comment below.
-//     `buildMyChecklistRows` becomes a real import from checklist.ts
-//     (no circularity: checklist.ts doesn't import from home.ts).
+// homeExpandedWidgetId and DEFAULT_STALLED_AFTER_DAYS stay `var`s in
+// index.html rather than moving here: esbuild bundles every source file
+// into ONE shared IIFE scope, so a `var` moved into a .ts module would
+// become private to that module's own closure inside the bundle, not a
+// real `window` property other bundled files could still see — unlike a
+// genuinely object-typed global (a Map, an array), reassigning a bare
+// string/null/number primitive needs the real declaration to stay
+// wherever every reader/writer can see it as an actual global.
+// src/views/board.ts reads homeExpandedWidgetId directly (it re-renders
+// the workflow mini-board when it's the one expanded) and its bundled
+// setColumnStalledThreshold() reads DEFAULT_STALLED_AFTER_DAYS directly;
+// both are declared ambient below and must stay structurally identical
+// to board.ts's own matching declarations.
+//
+// The onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200)
+// registration call deliberately stays a top-level statement in
+// index.html instead — see the comment above renderHomeWorkflowMiniBoard()
+// below for why.
+//
+// Several functions here reuse Calendar's own privately-typed shapes
+// (CalJob/CalRow/CalSeg, none exported) to lay out real job/event bars;
+// rather than exporting those types just for this one cross-file reuse,
+// the objects built here to feed buildCalBarHtml()/buildCalendarJobRows()
+// are typed `any` at the boundary. `job.comments` is similarly typed
+// loosely (`any[]`) rather than adding a real Comment interface to
+// core/types.ts just for the Job Chat widget.
+//
+// buildMyChecklistRows is a real import from checklist.ts (no
+// circularity: checklist.ts doesn't import from home.ts).
 import type { BoardCard, BoardColumn, Job, WorkflowItem } from '../core/types';
 import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
 import { escapeHtml } from '../utils/html';
@@ -119,8 +92,8 @@ declare global {
   // eslint-disable-next-line no-var
   var jobs: Job[];
   // Shared verbatim with src/views/board.ts's identical ambient
-  // declaration for this same global — see this file's own Phase HD-c
-  // header note for why it stays a real `var` in index.html.
+  // declaration for this same global — see this file's own header note
+  // above for why it stays a real `var` in index.html.
   // eslint-disable-next-line no-var
   var DEFAULT_STALLED_AFTER_DAYS: number;
   function getStoredDisplayName(): string;
@@ -132,9 +105,9 @@ declare global {
   // Shared verbatim with src/views/calendar.ts's identical ambient
   // declarations for these same globals/functions — used here to lay
   // out real job/event bars the same way the real Calendar tab does
-  // (see this file's own Phase HD-d header note on why the return
-  // shapes below are loosely typed rather than importing Calendar's
-  // own private CalJob/CalRow types just for this).
+  // (see this file's own header note above on why the return shapes
+  // below are loosely typed rather than importing Calendar's own
+  // private CalJob/CalRow types just for this).
   function getVisibleJobs(): any[];
   function buildCalendarJobRows(jobsArr: any[]): any[];
   function jumpToLinkedJobReference(job: any): void;
@@ -1206,10 +1179,7 @@ function renderHomeWorkflowMiniBoard(): void {
 // onPanelResize() from inside this bundled module would throw
 // "onPanelResize is not defined" immediately, aborting the WHOLE
 // bundle's execution before any of main.ts's window.x = x assignments
-// ever ran (caught by the standard "grep the built bundle" + full-suite
-// check every phase runs before shipping — this one failed almost every
-// test in the suite, including completely unrelated ones, the same
-// symptom pattern as Phase 4d's createAutosaveController near-miss).
+// ever ran, failing the whole test suite including unrelated tests.
 // index.html's own two sibling onPanelResize() calls (for
 // panel-calendar/panel-board) already prove this exact pattern is safe
 // once the call is a plain index.html statement: by the time index.html's
@@ -1269,9 +1239,9 @@ function renderHomeWorkflowExpandedBoard(): void {
 // on purpose so today lands exactly in the middle column rather than
 // off-center.
 //
-// A genuinely local `const` now (not an index.html `var`) — Phase HD-f
-// moved renderHomeDashboard(), its only other reader, into this same
-// module, so nothing outside home.ts needs to see this anymore.
+// A genuinely local `const` (not an index.html `var`) — renderHomeDashboard(),
+// its only other reader, lives in this same module, so nothing outside
+// home.ts needs to see this.
 const HOME_MINI_GANTT_WINDOW_DAYS = 7;
 function renderHomeTodayScheduleWidget(rows: HomeScheduleRow[], windowDays?: number, emptyLabel?: string): string {
   windowDays = windowDays || HOME_MINI_GANTT_WINDOW_DAYS;

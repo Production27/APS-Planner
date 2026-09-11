@@ -1,8 +1,6 @@
-// --- THE DURABLE OBJECT ITSELF (this file is the sole source of
-// truth for it; an earlier design-iteration copy that used to live at
-// worker/aps-room-do.js — including the honest caveat about what could
-// and couldn't be tested without a real Durable Objects runtime — was
-// removed in commit a4da847) ---
+// --- THE DURABLE OBJECT — ApsRoom manages a single room's WebSocket
+// connections, presence, and synced state (see room-state.ts for the
+// reducer logic this delegates to). ---
 import { verifyRoomToken } from './room-token.ts';
 import { tierAtLeast } from './tiers.ts';
 import {

@@ -1,28 +1,17 @@
-// Sync/Presence, Phase 7 of the architecture roadmap — see
-// src/sync/presence.ts's header comment for the full context (why this
-// is tackled last, the agreed phased order, and the extra scrutiny
-// given the stakes).
-//
-//   Phase 7d — INBOUND sync (this file, deliberately last, with the most
-//     scrutiny of anything in this whole roadmap): receiving and merging
-//     other people's changes in. handleRoomMessage/
-//     synthesizeJobFromOrphanCard/safeMergeInto/scheduleOrphanRecovery/
-//     healOrphanedJobCards/healOrphanedPhaseCards/
-//     healOrphanedCardsForProject/applyRoomSnapshot/
-//     refreshActiveProjectFromShared, plus the focusout listener that
-//     catches up a deferred remote refresh. This is the actual conflict-
-//     resolution code that decides what happens when a remote snapshot
-//     arrives while a local edit may still be in flight — the one place
-//     in the whole app where a bug could silently overwrite or lose a
-//     teammate's work instead of just misbehaving on one screen. Ported
-//     verbatim, same discipline as every prior phase: no opportunistic
-//     refactors, no behavior changes, just types layered on top.
+// Inbound sync: receiving and merging other people's changes in.
+// handleRoomMessage/synthesizeJobFromOrphanCard/safeMergeInto/
+// scheduleOrphanRecovery/healOrphanedJobCards/healOrphanedPhaseCards/
+// healOrphanedCardsForProject/applyRoomSnapshot/
+// refreshActiveProjectFromShared, plus the focusout listener that
+// catches up a deferred remote refresh. This is the actual
+// conflict-resolution code that decides what happens when a remote
+// snapshot arrives while a local edit may still be in flight — the one
+// place in the whole app where a bug could silently overwrite or lose a
+// teammate's work instead of just misbehaving on one screen.
 //
 // mergeTombstones() (shared with src/sync/outbound.ts, which also reads
-// it) deliberately stays in index.html — it's small, pure, shared
-// infrastructure with no natural single owner among the sync files, same
-// judgment call as leaving other small pure helpers (e.g. genId() before
-// Phase 2) ambient rather than moving everything reachable.
+// it) stays in index.html — small, pure, shared infrastructure with no
+// natural single owner among the sync files.
 import { isBusyEditing } from './connection';
 import { renderPresenceAvatars, PresenceUser } from './presence';
 import { clearPendingWrite, queueSharedSync, pushProjectToShared, pushLiveblocksState, pruneStrayEmptyProjects, deleteCardFromShared, hasPendingWriteForProject } from './outbound';
@@ -401,7 +390,7 @@ function applyRoomSnapshot(remoteProjects: Record<string, any>, isFirstSnapshot:
       // ── field revisions — what pushFieldToShared() needs to include as
       // baseFieldRevision next time it changes boardColumns/fieldOptions/
       // header, so the server can tell a stale write from a current one.
-      // See aps-room-state.js's handleSetWholeField().
+      // See worker/src/room-state.ts's handleSetWholeField().
       local.fieldRevisions = remoteFieldRevisions || local.fieldRevisions || { boardColumns: 0, fieldOptions: 0, header: 0, workflowItems: 0 };
     }
 

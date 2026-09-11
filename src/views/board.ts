@@ -1,41 +1,25 @@
-// Board, moved out of index.html across Phase 4 of the architecture
-// roadmap in deliberately narrow, separately-verified slices rather than
-// one giant move:
-//   Phase 4a — drag-and-drop (this file's original content): covered by
-//     the existing board drag-and-drop test plus the isBusyEditing()
-//     regression test, which reads draggedCardId/draggedColId directly.
-//   Phase 4b — column CRUD + card visibility (addBoardColumn/
-//     deleteBoardColumn/renameBoardColumn/isCardFromArchivedJob/
-//     isCardVisibleToMe): new dedicated tests added alongside this move
-//     (tests/teamsync.spec.js).
-//   Phase 4c — workflow items (openWorkflowItemsModal and friends): same
-//     pattern, new dedicated tests alongside this move.
-//   Phase 4d — the card detail modal + its autosave (openEditCard and
-//     friends): same pattern, new dedicated tests alongside this move.
-//   Phase 4e — renderBoard()/buildCardEl() themselves, the last real
-//     piece of Board: same pattern. The checklist system (ensureCard-
-//     Checklists/isChecklistStageVisibleToMe/getChecklistForStageInProject/
-//     toggleMyChecklistItemRequired and the whole "My Checklist" tab) was
-//     deliberately NOT part of "Board" — it's cross-cutting (also used
-//     by Job Manager and its own dedicated tab) — see src/views/
-//     checklist.ts's own header for its separate, later phasing.
-//     ensureCardChecklists()/isChecklistStageVisibleToMe()/
-//     confirmChecklistBeforeMove() are all real imports from there now
-//     (checklist.ts's Phases CL-a/CL-b).
-//   Phase CL-c (this addition, part of the checklist-system extraction's
-//     folded-in side-finding, not the checklist system itself) — the
-//     "column settings dropdown" (⋮ menu): isDarkColor/toggleColSettings/
-//     toggleColColorPanel/changeColumnColor/closeAllColSettings/
-//     toggleColumnScheduleVisibility/toggleColumnScheduleSync/
-//     toggleColumnFinishedTrigger/setColumnWorkflowItem/
-//     toggleColumnAutoAssignChecklist/setColumnChecklistAssignee/
-//     setColumnDefaultDuration/setColumnStalledThreshold/reconnectCard.
-//     This was simply never done back in Phase 4 — discovered while
-//     surveying the checklist system (two of these are checklist toggles),
-//     and Karl chose to fold the whole cluster in now rather than
-//     context-switch back to a separate future Board pass. isDarkColor()
-//     was ambiently duplicated here AND in calendar.ts before this; it's
-//     a real function here now, calendar.ts still declares it ambiently.
+// Board view: drag-and-drop, column CRUD (addBoardColumn/
+// deleteBoardColumn/renameBoardColumn), card visibility
+// (isCardFromArchivedJob/isCardVisibleToMe), workflow items
+// (openWorkflowItemsModal and friends), the card detail modal and its
+// autosave (openEditCard and friends), renderBoard()/buildCardEl(), and
+// the column settings dropdown (⋮ menu: isDarkColor/toggleColSettings/
+// toggleColColorPanel/changeColumnColor/closeAllColSettings/
+// toggleColumnScheduleVisibility/toggleColumnScheduleSync/
+// toggleColumnFinishedTrigger/setColumnWorkflowItem/
+// toggleColumnAutoAssignChecklist/setColumnChecklistAssignee/
+// setColumnDefaultDuration/setColumnStalledThreshold/reconnectCard).
+//
+// The checklist system (ensureCardChecklists/isChecklistStageVisibleToMe/
+// getChecklistForStageInProject/toggleMyChecklistItemRequired and the
+// whole "My Checklist" tab) is deliberately NOT part of Board — it's
+// cross-cutting (also used by Job Manager and its own dedicated tab) —
+// see src/views/checklist.ts, which this file imports
+// ensureCardChecklists()/isChecklistStageVisibleToMe()/
+// confirmChecklistBeforeMove() from.
+//
+// isDarkColor() is a real function here; src/views/calendar.ts still
+// declares it as an ambient global rather than importing it from here.
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
 // slugifyColumnId(), isJobVisibleToMe(),

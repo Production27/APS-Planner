@@ -1,7 +1,6 @@
-// Moved verbatim from index.html — a small generic debounce controller,
-// shared by both the Job form's and the Card modal's autosave (each
-// still has its own instance/state; this is just the factory). Pure,
-// no DOM or app-state dependency, same category as Phase 2's utilities.
+// A small generic debounce controller, shared by both the Job form's
+// and the Card modal's autosave (each still has its own instance/state;
+// this is just the factory). Pure, no DOM or app-state dependency.
 
 export interface AutosaveController {
   schedule: () => void;

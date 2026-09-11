@@ -1,7 +1,5 @@
-// Moved verbatim from index.html as part of Phase 2 of the architecture
-// roadmap (see project memory / the published "TeamSync Blueprint" plan)
-// — the first extraction out of the single inline <script> block, chosen
-// because neither function touches the DOM or any shared app state.
+// ID generation and safe JSON parsing — neither touches the DOM or any
+// shared app state.
 
 export function genId(): string {
   if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();

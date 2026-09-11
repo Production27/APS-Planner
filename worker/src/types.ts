@@ -129,7 +129,8 @@ export interface Identity {
 // wrangler.jsonc (see that file's own comment) — `wrangler types`
 // generates worker-configuration.d.ts's Env from bindings alone, so it
 // never includes secrets. This merges in the one this worker actually
-// needs; TEAM_PASSWORD/LIVEBLOCKS_SECRET_KEY are historical and unused.
+// uses; TEAM_PASSWORD and LIVEBLOCKS_SECRET_KEY are unused and
+// intentionally not declared here.
 declare global {
   interface Env {
     ROOM_TOKEN_SECRET: string;

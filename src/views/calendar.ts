@@ -1,56 +1,25 @@
-// Calendar, moved out of index.html across Phase 5 of the architecture
-// roadmap in deliberately narrow, separately-verified slices:
-//   Phase 5a — recurrence-expansion / event-visibility logic (this
-//     file's original content): pure, no DOM dependency, easy to test
-//     directly.
-//   Phase 5b — the calendar-event modal (openAddCalendarEvent and
-//     friends): same pattern as Board's card modal (Phase 4d), new
-//     dedicated tests alongside this move.
-//   Phase 5c — view navigation + the render dispatcher (setCalendarView/
-//     calendarPrev/calendarNext/calendarToday/calendarExitDayView/
-//     renderCalendar itself). renderMonthCalendar()/renderWeekCalendar()/
-//     renderDayCalendarView() (the actual DOM-building) stayed in
-//     index.html at the time, for a later, separately-scoped follow-up —
-//     renderCalendar() just dispatches to them by name, so moving the
-//     dispatcher didn't require moving what it dispatches to yet.
-//   Phase 5d — the render engine itself: buildCalBarHtml()/
-//     renderMonthCalendar()/renderWeekCalendar()/renderWeekHourGrid()/
-//     calendarOpenJob()/getScheduledItemsForDate()/openDayView()/
-//     renderDayCalendarView().
-//   Phase 5e — the bar-drag-to-reschedule logic (handleCalBarMouseDown/
-//     Move/Up, applyCalBarMouseMove): the DATA-MUTATING half of the
-//     drag/gesture cluster — dragging a bar actually changes a task's or
-//     calendar event's dates. Given its own dedicated test (mirroring the
-//     Gantt drag test's pattern: drive the handlers directly against a
-//     real rendered bar, bypassing the rAF/mousemove timing wrapper),
-//     confirmed via break-then-restore, before moving — same discipline
-//     as every risky move this session.
-//   Phase 5f — the purely-VISUAL swipe/wheel navigation gesture cluster:
-//     initCalendarDragHandlers/calSwipeTargets/handleCalSwipeStart/Move/
-//     End/slideCalendarTargets/animateCalendarWheelChange/handleCalWheel.
-//     Never mutates data (worst case of a bug here is a glitchy
-//     animation, not a corrupted date) — the same low-risk category as
-//     Gantt's own pinch-zoom/touch cluster (src/views/gantt.ts's Phase
-//     6d), which ended up NOT literally paired with this one in the end
-//     (independent files, no shared code — nothing to actually gain by
-//     delaying either for the other). No prior test coverage existed;
-//     real touch/swipe gestures aren't practically simulable in this
-//     test suite the same way real multi-touch pinch wasn't for Gantt,
-//     so this leans on manual real-browser verification plus one
-//     dedicated test for the desktop ctrl+wheel-free trackpad-scroll
-//     path (handleCalWheel's own deltaX/deltaY discrimination and
-//     threshold/cooldown logic), which IS directly driveable with a
-//     synthetic WheelEvent.
+// Calendar view: recurrence-expansion / event-visibility logic (pure, no
+// DOM dependency), the calendar-event modal (openAddCalendarEvent and
+// friends), view navigation and the render dispatcher (setCalendarView/
+// calendarPrev/calendarNext/calendarToday/calendarExitDayView/
+// renderCalendar), the render engine (buildCalBarHtml()/
+// renderMonthCalendar()/renderWeekCalendar()/renderWeekHourGrid()/
+// calendarOpenJob()/getScheduledItemsForDate()/openDayView()/
+// renderDayCalendarView()), the bar-drag-to-reschedule logic
+// (handleCalBarMouseDown/Move/Up, applyCalBarMouseMove — the
+// data-mutating half of the drag/gesture cluster, since dragging a bar
+// actually changes a task's or calendar event's dates), and the
+// purely-visual swipe/wheel navigation gesture cluster
+// (initCalendarDragHandlers/calSwipeTargets/handleCalSwipeStart/Move/
+// End/slideCalendarTargets/animateCalendarWheelChange/handleCalWheel —
+// never mutates data, worst case of a bug here is a glitchy animation).
 //
 // buildCalendarJobRows()/isCalendarJobSpanTaskId() are deliberately NOT
-// part of this file either, despite living right next to functions that
-// did move — they depend on getHiddenTaskOrders()/
-// forEachVisibleSubUnit()/buildSubUnitClusters(), which are really
-// Gantt's own task-clustering logic reused here, not Calendar-specific.
-// Moving them now would mean either dragging Gantt's clustering code
-// along for the ride or leaving a half-moved shared dependency — cleaner
-// to revisit once Gantt itself is being extracted. Declared as ambient
-// globals below since Phase 5d's render functions call them directly.
+// part of this file despite living right next to functions that are —
+// they depend on getHiddenTaskOrders()/forEachVisibleSubUnit()/
+// buildSubUnitClusters(), which are really Gantt's own task-clustering
+// logic reused here, not Calendar-specific. Declared as ambient globals
+// below since this file's render functions call them directly.
 //
 // getEffectiveRole()/getStoredUsername()/openModal()/closeModal()/
 // ensureUserRosterLoaded()/saveCalendarEvents()/showToast()/logActivity()/
@@ -1616,11 +1585,9 @@ let calSwipeTracking = false;
 // mousedown/mouseup pair synthesized from the same touch — which fires
 // right after touchend — knows not to also open whatever bar the finger
 // happened to land on. Read by handleCalBarMouseUp() earlier in this
-// file (Phase 5e) — a plain module-scoped `let` works for that (unlike
-// the cross-script `var`s elsewhere in this file) since both the reader
-// and the only writer (handleCalSwipeEnd() below) now live in this same
-// module; this used to be a real index.html global read here as an
-// ambient declaration, back when this cluster itself was still there.
+// file — a plain module-scoped `let` works for that (unlike the
+// cross-script `var`s elsewhere in this file) since both the reader and
+// the only writer (handleCalSwipeEnd() below) live in this same module.
 let calSwipeConsumedTap = false;
 
 function handleCalSwipeStart(e: TouchEvent): void {

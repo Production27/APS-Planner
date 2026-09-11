@@ -1,19 +1,17 @@
-// --- BACKUP/RESTORE — talks to our own Durable Object instead of
-// Liveblocks' REST API. Much simpler: no DELETE-then-POST dance, no
-// external round trip, no typed LSON wrapping — the DO's /internal/export
-// and /internal/import already speak plain JSON in the room's own shape.
-// External backup FILE shape is unchanged from the just-fixed Liveblocks
-// version (v3: jobs/boardCards/calendarEvents as arrays, deletedIds,
-// boardColumns, fieldOptions, header) for continuity with existing
-// backups and index.html's importData().
+// --- BACKUP/RESTORE — talks to the room's own Durable Object, whose
+// /internal/export and /internal/import endpoints speak plain JSON in
+// the room's own shape.
+// External backup FILE shape (v3: jobs/boardCards/calendarEvents as
+// arrays, deletedIds, boardColumns, fieldOptions, header) is kept stable
+// for continuity with existing backups and index.html's importData().
 import { jsonResponse } from './http.ts';
 import { getRoomStub } from './room-stub.ts';
 import { resolveCaller } from './users.ts';
 import type { RoomState, Project, Job, BoardCard, CalendarEvent } from './types.ts';
 
 // The external backup FILE shape — an array-based projection of the
-// room's own map-based Project shape, unchanged from the Liveblocks era
-// for continuity with existing backups and index.html's importData().
+// room's own map-based Project shape, kept stable for continuity with
+// existing backups and index.html's importData().
 export interface AppFormatProject {
   id?: string;
   name: string;

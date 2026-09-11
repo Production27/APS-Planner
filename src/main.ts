@@ -1,14 +1,13 @@
 // Entry point for the esbuild bundle (see package.json's "build" script).
-// index.html still expects every one of these as a bare global — its
-// inline <script> block was written before any of this existed and calls
-// genId()/toIsoDate()/etc. directly, as does the existing Playwright
-// suite (tests/helpers.js's seedSession() and several specs read/call
-// these as window-level globals too). Native ES modules would NOT expose
-// these as globals on their own — see the architecture roadmap's own
-// note on why this app uses a bundled IIFE instead of <script type="module">.
-// Every later extraction phase adds its own import here and assigns it
-// the same way; this file is the one place that has to know the whole
-// list.
+// index.html expects every one of these as a bare global — its inline
+// <script> block calls genId()/toIsoDate()/etc. directly, as does the
+// existing Playwright suite (tests/helpers.js's seedSession() and
+// several specs read/call these as window-level globals too). Native ES
+// modules would NOT expose these as globals on their own, which is why
+// this app bundles everything into one IIFE instead of using
+// <script type="module">. Every src/ module that needs to be callable
+// from index.html imports here and gets assigned the same way; this
+// file is the one place that has to know the whole list.
 import { genId, safeJsonParse } from './utils/id';
 import { getDaysDiff, toIsoDate, addMonths, getBusinessDaysDiff, addBusinessDays, formatTimeLabel, timeToMinutes } from './utils/date';
 import { darkenColor, softenColor, SOFTEN_AMOUNT } from './utils/color';

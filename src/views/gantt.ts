@@ -1,117 +1,36 @@
-// Gantt, moved out of index.html starting with Phase 6 of the
-// architecture roadmap. Gantt was deliberately tackled LAST of the three
-// main views (after Board and Calendar) because its drag/resize/zoom
-// mechanics are the most timing-sensitive code in the app — the same
-// reason its own touch/pinch-zoom gestures are deferred within this
-// phase too (see below).
+// Gantt view: the bar/tick drag-and-resize mechanics
+// (cascadeShiftLaterTasks/startBarResizeRight/startBarResizeLeft/
+// onBarResizeMove/applyBarResizeMove/onBarResizeEnd/startTickResize/
+// onTickResizeMove/applyTickResizeMove/onTickResizeEnd/startBarMove/
+// onBarMoveMove/applyBarMoveMove/onBarMoveEnd), the visible-row builder
+// (byStartDate/getPhaseSegments/buildSegment/buildPhaseCollapsedRow/
+// buildSubPhaseRow/buildVisibleTaskRows — a pure data transformation,
+// jobs/phases/tasks in and a flat row list out, with no DOM reads or
+// writes), renderGantt() itself (by far the densest function in the
+// app, ~800 lines), and the touch/pinch-zoom gesture cluster
+// (scrollToToday/ganttTouchDist/setGanttDayWidthAnchored/
+// requestGanttZoom/handleGanttTouchStart/Move/End/handleGanttWheelZoom/
+// zoomGanttCentered/zoomIn/zoomOut/resetZoom/fitToView — never mutates
+// task data, so the worst case of a bug here is a glitchy zoom or
+// scroll position, not a corrupted date).
 //
-//   Phase 6a — the bar/tick drag-and-resize mechanics (initial content):
-//     cascadeShiftLaterTasks/startBarResizeRight/startBarResizeLeft/
-//     onBarResizeMove/applyBarResizeMove/onBarResizeEnd/startTickResize/
-//     onTickResizeMove/applyTickResizeMove/onTickResizeEnd/startBarMove/
-//     onBarMoveMove/applyBarMoveMove/onBarMoveEnd. Chosen as the first
-//     slice because it already had real test coverage (the "gantt drag"
-//     test from Phase 1a covers the plain bar-move path) — same
-//     reasoning Board's Phase 4a used to pick its own first slice. Two
-//     new dedicated tests (bar resize, job-span move) cover the paths
-//     that test didn't, each confirmed via break-then-restore.
-//   Phase 6b — the visible-row builder: byStartDate/getPhaseSegments/
-//     buildSegment/buildPhaseCollapsedRow/buildSubPhaseRow/
-//     buildVisibleTaskRows. This was originally a cluster of nested
-//     closures INSIDE renderGantt() itself (see that function's own
-//     8-phase structure, described just above renderGantt() itself —
-//     later hoisted to module-level functions, see Phase 6e below) with
-//     exactly one external call site (`visibleRows =
-//     buildVisibleTaskRows();`) —
-//     confirmed by grepping renderGantt()'s entire body before moving
-//     anything, the same "survey before cutting" discipline every prior
-//     phase used. Pure data transformation (jobs/phases/tasks in, a flat
-//     row list out) with zero DOM reads or writes, so — unlike the DOM-
-//     drawing code that consumes its output — it's directly unit-
-//     testable against the blank fixture, same as Calendar's recurrence
-//     logic (Phase 5a).
-//
-//   Phase 6c — renderGantt() itself: the actual DOM-building 8 phases
-//     (setupDateRangeAndGrid/buildDateHeader/buildRowModel/
-//     renderLeftPanelRows/drawTodayLine/renderTimelineBars/
-//     drawConnectorLines/restoreScrollPosition) that consume
-//     buildVisibleTaskRows()'s output — Gantt's own renderBoard()/
-//     renderMonthCalendar() equivalent, and by far the densest single
-//     function in the whole app (~800 lines). Moved as ONE atomic unit,
-//     nested-closure structure and all, deliberately NOT restructured
-//     into individually-exported functions with explicit parameter-
-//     passing at the time — the 8 sub-phases shared ~11 pieces of
-//     mutable state (grid/header/leftBody/totalDays/gridWidth/
-//     visibleRows/jobBarMap/etc.) purely through JS closure, by the
-//     ORIGINAL author's own deliberate choice, specifically to avoid
-//     threading 11 values through parameters by hand. Splitting it then
-//     into separately-testable pieces would have meant redesigning that
-//     shared-state shape — real, warranted refactoring work, but a
-//     different task than "move this view's code into its own file,"
-//     and one this move deliberately did NOT take on: every other phase
-//     in this whole roadmap was a verbatim port with types layered on
-//     top, not an opportunistic internal redesign, and this was no
-//     exception. Flagged explicitly as future work for once there was a
-//     concrete reason to revisit it — see Phase 6e below, which is that
-//     future session.
-//
-//   Phase 6d — the touch/pinch-zoom gesture cluster: scrollToToday/
-//     ganttTouchDist/setGanttDayWidthAnchored/requestGanttZoom/
-//     handleGanttTouchStart/Move/End/handleGanttWheelZoom/
-//     zoomGanttCentered/zoomIn/zoomOut/resetZoom/fitToView. Never
-//     mutates task data — the worst case of a bug here is a glitchy
-//     zoom or scroll position, not a corrupted date — so this is Gantt's
-//     lowest-data-risk cluster, the same category as Calendar's own
-//     swipe/wheel navigation cluster (see src/views/calendar.ts's header
-//     comment), which stays in index.html for a separate reason (no
-//     concrete plan to pair the two into one move ever materialized —
-//     they're independent files with no shared code, so there was
-//     nothing to actually gain by delaying one for the other). No prior
-//     test coverage existed for any of this; three new dedicated tests
-//     cover the shared zoom-commit path (setGanttDayWidthAnchored's
-//     clamping and anchor-preserving scroll math) that every input
-//     method (buttons/wheel/pinch) funnels through, since real multi-
-//     touch gestures aren't practically simulable in this test suite —
-//     each confirmed via break-then-restore, plus manual real-browser
-//     verification of the buttons and ctrl+wheel path.
-//
-//   Phase 6e — de-closured renderGantt()'s 8 phases, the future session
-//     Phase 6c's own comment above pointed at: converted them from
-//     closures sharing ~12 mutable variables into ordinary module-level
-//     functions (defined just above renderGantt(), same pattern as
-//     buildVisibleTaskRows() above and scheduleOrphanRecovery() in
-//     src/sync/inbound.ts) with explicit named parameters and typed
-//     returns — see each function's own signature for exactly what it
-//     depends on and produces. renderGantt() itself is now a thin,
-//     linear pipeline calling each once in the same order as before,
-//     threading return values into the next call's arguments — no
-//     behavior change, same call order, same DOM output. Prompted by
-//     Karl's original "a stranger should be able to parse this codebase"
-//     goal: closure-shared state was exactly the kind of thing that
-//     required reading this whole ~800-line function to know what one
-//     phase touched, where a signature now says it directly. Landed as
-//     one commit (no cross-file/reachability risk the way earlier
-//     extractions had, so the usual small-slice discipline didn't apply)
-//     but built via safe incremental local steps — one phase converted
-//     at a time, each one checked against tsc before moving to the next.
-//     Verified via the full existing test suite (no new tests needed —
-//     no new behavior, no new call sites) plus a byte-exact Gantt visual
-//     snapshot diff and a manual real-browser pass across every distinct
-//     render path (Tasks view collapsed/expanded, Jobs/Leads view,
-//     due markers, connector lines both the normal and overlap-reroute
-//     cases, scroll restore on both the first-render and tab-switch
-//     paths, zoom, and a narrow/wide window resize) — the failure mode
-//     specifically targeted was a same-typed value transposed between
-//     two parameters (e.g. totalDays/gridWidth), which tsc's lack of
-//     noUnusedLocals/noUnusedParameters would not have caught on its
-//     own.
+// renderGantt() is a thin, linear pipeline built from module-level
+// functions (defined just above it, same pattern as
+// buildVisibleTaskRows() above and scheduleOrphanRecovery() in
+// src/sync/inbound.ts): setupDateRangeAndGrid/buildDateHeader/
+// buildRowModel/renderLeftPanelRows/drawTodayLine/renderTimelineBars/
+// drawConnectorLines/restoreScrollPosition, each taking explicit named
+// parameters and returning a typed result. renderGantt() calls each
+// once in a fixed order, threading each phase's return value into the
+// next call's arguments — see each function's own signature for exactly
+// what it depends on and produces, rather than reading a shared closure.
 //
 // showTooltip()/moveTooltip()/hideTooltip()/showDatePopover()/
 // hideDatePopover()/buildColorPresets()/updateJobColorSwatch()/
-// toggleJobColorPanel() also stay in index.html for now (small, shared
-// popover/tooltip chrome — not drag mechanics) and are referenced below
-// as ambient globals, same as calendar.ts already does for
-// moveTooltip()/hideTooltip() specifically.
+// toggleJobColorPanel() stay in index.html (small, shared popover/
+// tooltip chrome — not drag mechanics) and are referenced below as
+// ambient globals, same as calendar.ts does for moveTooltip()/
+// hideTooltip() specifically.
 import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { toIsoDate, getDaysDiff } from '../utils/date';
 import { escapeHtml } from '../utils/html';
@@ -919,11 +838,8 @@ function buildVisibleTaskRows(): GanttRow[] {
 // inside renderGantt()) — each takes exactly what it needs as named
 // parameters and returns exactly what it produces, instead of ~12 values
 // shared implicitly through closure. renderGantt() itself is a thin
-// pipeline that calls each once, in the same fixed order as before,
-// threading each phase's return value into the next call's arguments.
-// (Previously ported verbatim with the original shared-closure design
-// preserved on purpose — see Phase 6e in this file's header comment for
-// why that changed.)
+// pipeline that calls each once, in a fixed order, threading each
+// phase's return value into the next call's arguments.
 
 interface JobBarMapEntry {
   left: number;
@@ -994,8 +910,8 @@ function buildDateHeader(totalDays: number, grid: HTMLElement, header: HTMLEleme
     // (current.setDate(...) below), so every day's closure would
     // otherwise share that same object and see whatever date it holds
     // by the time a user actually hovers/clicks, not the date this
-    // specific header was built for. Real bug, caught when this file
-    // was first ported here (Phase 6c) — fixed on Karl's go-ahead.
+    // specific header was built for. Real bug — fixed on Karl's
+    // go-ahead.
     const dayDate = new Date(current);
     dayDiv.addEventListener('click', (e) => showDatePopover(e, dayDate));
     dayDiv.addEventListener('mouseenter', (e) => showDatePopover(e, dayDate));

@@ -143,7 +143,7 @@
     0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 0 rgba(67,160,71,0.55); }
     50% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 3px rgba(67,160,71,0.55); }
   }
-  /* Mobile-only Jobs/Board toggle — see setMobileBoardView() and the
+  /* Mobile-only view switcher — see setMobileView() and the
      @media (max-width:480px) rules that turn this into a visible tab bar. */
   .mobile-view-switcher { display: none; }
   /* Sized/shaped exactly like a .rail-tab (icon-only, fixed-width — see
@@ -532,7 +532,6 @@
   .task-row .col-finish { width: 88px; color: var(--text-light); font-size: var(--t-xs); }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
   .task-row .col-jobs .task-row-name { font-weight: 700; }
-  .task-row .col-jobs .company-tag { display: inline-block; font-size: var(--t-3xs); padding: 1px var(--s-1-75); border-radius: 10px; margin-left: var(--s-1-5); font-weight: 600; color: white; vertical-align: middle; }
   .task-row .col-jobs .task-row-jobname { display: inline-block; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 10px; vertical-align: middle; line-height: 1.5; }
   .task-row .col-jobs .task-row-jobname.collapsible { cursor: pointer; }
   .task-row .col-jobs .task-row-jobname.collapsible:hover { filter: brightness(1.15); }
@@ -1971,7 +1970,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      fill of its own span. The bar itself is styled exactly like a real
      .task-bar (softened fill in the task's color, solid border in the
      job's color) with the job name riding inside it in a
-     .task-bar-job-tag-style pill — same visual language as the real
+     .home-mini-gantt-pill — same visual language as the real
      chart, just shrunk down, per Karl's own ask. See
      renderHomeTodayScheduleWidget(). */
   /* --home-gantt-days (default 7) is normally left at the stylesheet's
@@ -2406,13 +2405,14 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
 
   /* ===== MOBILE (phone-width) =====
-     Job list + editor and Board each get their own full-screen mode, since
-     neither fits next to the other on a phone — .mobile-view-switcher
-     toggles between them via setMobileBoardView(), which flips
-     body.mobile-board-active. Gantt/Calendar are still a wide, dense,
-     desktop-oriented layout that needs its own dedicated mobile treatment
-     rather than just shrinking, so for now there's no way to reach them
-     from a phone at all. Revisit that in a later pass. */
+     Home/Checklist/Job list+editor/Board/Calendar/Gantt each get their own
+     full-screen mode, since none of them fit next to another on a phone —
+     .mobile-view-switcher's buttons call setMobileView() (src/views/home.ts),
+     which sets body[data-mobile-view="home"|"checklist"|"board"|"calendar"|
+     "gantt"] so the CSS below can show just that one full-screen ("jobs" —
+     the job list + editor — is the implicit default when no other value is
+     set). All of these are reachable from a phone this way, Gantt/Calendar
+     included. */
   /* Width OR height ≤480px — a phone rotated to landscape keeps its
      short dimension (~360-430px) as height instead of width, so a
      width-only query would drop back to the cramped desktop layout the
@@ -2945,8 +2945,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   /* Wider text-label sibling to .gantt-toolbar button's fixed 26px icon
      squares — same height/hover language, auto width for a real label
      (Expand All/Collapse All — see expandAllGantt()/collapseAllGantt()).
-     Formerly .archive-toggle-btn (the "Show archived jobs" toggle this
-     replaced); renamed since it's no longer archive-specific.
      ".gantt-toolbar button.gantt-toolbar-text-btn" (not just the bare
      class) deliberately matches .gantt-toolbar button's own specificity
      (one class + one element each) — a bare-class selector would have
@@ -3840,9 +3838,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   </div>
 </div>
 
-<!-- Built from src/ by `npm run build` (esbuild) — see the architecture
-     roadmap's Phase 2. An IIFE, not a native ES module: everything it
-     exports is assigned onto `window` (src/main.ts) because the rest of
+<!-- Built from src/ by `npm run build` (esbuild). An IIFE, not a native
+     ES module: everything it exports is assigned onto `window` (src/main.ts)
+     because the rest of
      this file's inline script, and the Playwright suite, both expect
      these as bare globals. Must load before the inline block below. -->
 <script src="dist/app.bundle.js"></script>
@@ -3893,7 +3891,7 @@ setInterval(checkForNewerVersion, 5 * 60 * 1000);
 // see applyIdentityFromTokenPayload()'s call into this below.
 async function checkMaintenanceStatus() {
   try {
-    const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'maintenance-status?_v=' + Date.now(), { cache: 'no-store' });
+    const res = await fetch(API_BASE_URL + 'maintenance-status?_v=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
     applyMaintenanceStatus(data);
@@ -3973,7 +3971,7 @@ function reportClientError(kind, message, extra) {
       appVersion: (typeof APP_VERSION !== 'undefined') ? APP_VERSION : null,
       token: token || null,
     }, extra || {});
-    fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'report-error', {
+    fetch(API_BASE_URL + 'report-error', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -4159,10 +4157,6 @@ const DEFAULT_JOBS = [
   }
 ];
 
-// `var`, not `const` — same cross-script-visibility reasoning as `jobs`
-// elsewhere in this file (see its comment): never reassigned, but still
-// needs to be a real `window` property for src/views/board.ts's bundled
-// workflow-item code (Phase 4c) to read it.
 var COLOR_PRESETS = [
   '#1a237e','#3949ab','#5b7eb5','#2c3e80','#3498db','#17a2b8',
   '#00bcd4','#4dd0e1','#80deea','#7dd3c0','#00897b','#2e7d32',
@@ -4170,11 +4164,6 @@ var COLOR_PRESETS = [
   '#c62828','#e53935','#dc3545','#f48fb1','#d4a5d4','#9b7edc',
   '#8e7cc3','#c0c0c0','#424242','#6c757d'
 ];
-
-// genId()/safeJsonParse() moved to src/utils/id.ts (Phase 2 of the
-// architecture roadmap) — bundled into dist/app.bundle.js and loaded via
-// the <script> tag near the top of <head>, before this block, so both
-// still exist as the bare globals every call site here expects.
 
 function ensureJobAndTaskIds(arr) {
   (arr || []).forEach(function(job, i) {
@@ -4399,14 +4388,6 @@ function buildCalendarJobRows(jobsArr) {
   return rows;
 }
 
-// isCalendarEventTaskId()/parseCalendarEventTaskId()/defaultRepeatUntil()/
-// getCalendarEventOccurrences()/flattenCalendarEventsForRange() moved to
-// src/views/calendar.ts (Phase 5 of the architecture roadmap) — see the
-// identical note by genId() above.
-
-// findJob()/findTask() moved to src/core/models.ts (Phase 3 of the
-// architecture roadmap) — see the identical note by genId() above.
-
 // A job's due date (card.due) isn't a task — it doesn't live in job.tasks
 // and Job Manager never shows it as one — but it still needs to appear on
 // the Gantt/Calendar and be draggable like a task bar. This synthesizes a
@@ -4416,7 +4397,7 @@ function buildCalendarJobRows(jobsArr) {
 // findTask()/job.tasks.
 // `var`, not `const` — same cross-script-visibility reasoning as
 // calendarViewDate elsewhere in this file: src/views/calendar.ts's bundled
-// bar-drag code (Phase 5e) reads this.
+// bar-drag code reads this.
 var DUE_MARKER_TASK_ID = '__due__';
 function getJobDueMarkerTask(job, phaseId) {
   const card = getPhaseCard(job, phaseId);
@@ -4438,10 +4419,6 @@ function getJobDueMarkerTask(job, phaseId) {
 // returns job.phases when present, otherwise a synthetic single-entry
 // array wrapping job.tasks itself (id: null — matches the phaseId a
 // legacy job's one card already has, since it predates this field).
-// getJobPhases()/getPhaseSubUnits()/getPhaseCard()/getJobCards()/
-// getPrimaryPhaseCard() moved to src/core/models.ts (Phase 3 of the
-// architecture roadmap) — see the identical note by genId() above.
-
 // Pure normalizer shared by ensureJobTasksMatchColumns (unphased job) and
 // ensureJobPhasesMatchColumns (each phase) — locks a task list 1:1 to
 // BOARD_COLUMNS by columnId, same rules either way.
@@ -4978,20 +4955,16 @@ function ensureCardIds(arr) {
 // overrides (keyed by the theoretical, un-overridden occurrence date) so
 // dragging one instance of a repeating event moves just that instance
 // instead of the whole series — see getCalendarEventOccurrences().
-// ensureCalendarEventIds() moved to src/views/calendar.ts (Phase 5 of
-// the architecture roadmap) — see the identical note by genId() above.
 
 // `var`, not `let` — this specific global must be a real `window`
 // property (which only `var`/a bare assignment gives you at the top
 // level of a classic script), not just a script-scoped binding, because
-// src/core/models.ts's bundled findJob()/getPhaseCard()/etc. (Phase 3 of
-// the architecture roadmap) read it as an ambient global from a SEPARATE
-// <script> tag. Every read/write in this file works exactly the same
-// either way — this only changes cross-script-tag visibility, not
-// scoping within this file.
+// src/core/models.ts's bundled findJob()/getPhaseCard()/etc. read it as
+// an ambient global from a SEPARATE <script> tag. Every read/write in
+// this file works exactly the same either way — this only changes
+// cross-script-tag visibility, not scoping within this file.
 var jobs = [];
-// `var` — src/sync/inbound.ts's bundled refreshActiveProjectFromShared()
-// (Phase 7d) reads this.
+// `var` — src/sync/inbound.ts's bundled refreshActiveProjectFromShared() reads this.
 var editingJobId = null;
 let editingTaskId = null;
 // Which phase's tasks/card the Job Manager's grid + description/due/
@@ -5001,8 +4974,7 @@ let editingPhaseId = null;
 // Which sub-phase's tasks the grid shows, within the currently-selected
 // phase (see getPhaseSubUnits()). null for a phase with no sub-phases.
 let editingSubPhaseId = null;
-// `var`, not `let` — src/views/gantt.ts's bundled drag/resize code
-// (Phase 6a) reads this.
+// `var`, not `let` — src/views/gantt.ts's bundled drag/resize code reads this.
 var dayWidth = 34;
 // Gantt row/bar sizing — kept in one place since it's threaded through
 // renderGantt(), the drag/resize handlers, and the SVG connector lines
@@ -5011,7 +4983,7 @@ var dayWidth = 34;
 // plain CSS can't reference JS constants — search for
 // GANTT_ROW_H/GANTT_BAR_H in a comment there if these ever change again.
 // `var`, not `const`/`let` — src/views/gantt.ts's bundled renderGantt()
-// (Phase 6c) reads all four of these.
+// reads all four of these.
 var GANTT_ROW_H = 40;
 var GANTT_BAR_H = 26;
 var GANTT_BAR_PAD = (GANTT_ROW_H - GANTT_BAR_H) / 2;
@@ -5070,8 +5042,7 @@ function togglePhaseCollapse(phaseId) {
 // sub-unit share id:null (see getJobPhases()/getPhaseSubUnits()) —
 // without the job/phase prefix, expanding one flat job's default bar
 // would collide with every other flat job's.
-// `var`, not `let` — src/views/gantt.ts's bundled row builder (Phase 6b)
-// reads these.
+// `var`, not `let` — src/views/gantt.ts's bundled row builder reads these.
 var tasksExpandedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_tasks_expanded_phases_v1') || '[]', []));
 var tasksExpandedSubPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_tasks_expanded_subphases_v1') || '[]', []));
 function getSubUnitKey(job, phaseId, subPhaseId) {
@@ -5125,8 +5096,7 @@ function collapseAllGantt() {
 // above — a filter that silently survived a reload would be confusing;
 // it's a short-lived "let me focus on this one job" tool, reset on every
 // page load and whenever the active project changes (see switchProject()).
-// `var`, not `let` — src/views/gantt.ts's bundled row builder (Phase 6b)
-// reads this.
+// `var`, not `let` — src/views/gantt.ts's bundled row builder reads this.
 var ganttFocusedJobId = null;
 function toggleGanttJobFocus(jobId) {
   ganttFocusedJobId = (ganttFocusedJobId === jobId) ? null : jobId;
@@ -5195,12 +5165,6 @@ function buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, ph
   }
   return tags;
 }
-// Darkens a hex color by `amount` (0-1) — used to give the overlap hatch
-// inside a collapsed sub-phase bar two visually distinct shades of the same
-// job color, since every sub-phase segment already shares that one color.
-// darkenColor()/softenColor()/SOFTEN_AMOUNT moved to src/utils/color.ts
-// (Phase 2 of the architecture roadmap) — see the identical note by
-// genId() above.
 // Same palette as COLOR_PRESETS (job/task colors), just softened toward
 // pastel — used only for the board column color picker, so picking a
 // board color is its own distinct, intentionally-gentler palette rather
@@ -5212,22 +5176,16 @@ function buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, ph
 // set — confirmed by rendering an actual side-by-side comparison. 30%
 // reads as consistently pastel across every hue.
 const BOARD_COLOR_SOFTEN_AMOUNT = 0.30;
-// `var`, not `const` — same cross-script-visibility reasoning as `jobs`
-// elsewhere in this file: never reassigned, but src/views/board.ts's
-// bundled renderBoard()/buildCardEl() (Phase 4e) still need to read it.
 var BOARD_COLOR_PRESETS = COLOR_PRESETS.map(function(c) { return softenColor(c, BOARD_COLOR_SOFTEN_AMOUNT); });
 const ARCHIVE_CUTOFF_DAYS = 90;
-// `var`, not `let` — src/views/gantt.ts's bundled renderGantt() (Phase
-// 6c) reads/writes this.
+// `var`, not `let` — src/views/gantt.ts's bundled renderGantt() reads/writes this.
 var ganttFirstRender = true;
 // Fallback only — per-board default lives on col.defaultDuration, set from
 // each board's ⋮ settings menu (see setColumnDefaultDuration).
-// `var`, not `const` — same reasoning as BOARD_COLOR_PRESETS above.
 var DEFAULT_TASK_DURATION_DAYS = 5;
 
 // ===== TRELLO-STYLE BOARD =====
-// `var` — src/sync/inbound.ts's bundled applyRoomSnapshot() (Phase 7d)
-// reads this.
+// `var` — src/sync/inbound.ts's bundled applyRoomSnapshot() reads this.
 var DEFAULT_BOARD_COLUMNS = [
   { id: 'bid', label: 'Bid' },
   { id: 'scheduled', label: 'Scheduled' },
@@ -5235,9 +5193,6 @@ var DEFAULT_BOARD_COLUMNS = [
   { id: 'complete', label: 'Complete' },
   { id: 'invoiced', label: 'Invoiced' }
 ];
-// `var` — same cross-script-visibility reasoning as `jobs`/`boardCards`
-// above (see `jobs`'s comment): src/views/board.ts's bundled drag-and-drop
-// code (Phase 4) reads and reassigns this as an ambient global.
 var BOARD_COLUMNS = [];
 // Named groups a board can be assigned to (col.workflowItemId, see the
 // ⋮ menu's "Workflow Item" picker) — deliberately independent of any
@@ -5248,9 +5203,6 @@ var BOARD_COLUMNS = [];
 // most other board settings — but still stored per-project
 // (p.workflowItems, same as BOARD_COLUMNS), since two projects'
 // boards can reasonably want a different breakdown.
-// `var` — same cross-script-visibility reasoning as `jobs` above:
-// src/views/board.ts's workflow-item functions (Phase 4c) read/reassign
-// this as an ambient global.
 var WORKFLOW_ITEMS = [];
 
 // A column counts as a "finished" trigger — cards sitting in it are done,
@@ -5273,40 +5225,21 @@ function isFinishedColumnId(colId) {
   return isFinishedColumn(BOARD_COLUMNS.find(c => c.id === colId));
 }
 
-// `var`, not `let` — same reasoning as `jobs` above (see its comment).
 var boardCards = [];
-// `var` — same cross-script-visibility reasoning as `jobs` elsewhere in
-// this file: src/views/calendar.ts's bundled code (Phase 5) reads this.
 var calendarEvents = [];
-// `var` — same cross-script-visibility reasoning as `jobs` above:
-// src/views/calendar.ts's calendar-event-modal code (Phase 5b) reads/sets this.
 var editingCalendarEventId = null;
-// `var` — same reasoning as editingCalendarEventId above.
 var calendarEventTargetDate = null; // set by openAddCalendarEvent(), read by saveCalendarEventFromModal()
-// `var` — same cross-script-visibility reasoning as `jobs` above:
-// src/views/board.ts's card-modal code (Phase 4d) reads/sets this.
 var editingCardId = null;
-// `var` — same cross-script-visibility reasoning as `jobs` above:
-// src/views/board.ts (Phase 4) sets this, and isBusyEditing() (still in
-// this file) reads it directly.
+// isBusyEditing() (still in this file) reads draggedCardId directly.
 var draggedCardId = null;
-// Same reasoning — relocated here from its old spot right before the
-// column-drag-and-drop code below, which moved to src/views/board.ts.
 var draggedColId = null;
-// `var` — src/sync/outbound.ts's logActivity() (Phase 7c) reads/writes this.
+// `var` — src/sync/outbound.ts's logActivity() reads/writes this.
 var localActivityLog = [];
-// `var` — same cross-script-visibility reasoning as `jobs` above:
-// src/views/board.ts's card-modal code (Phase 4d) reads/sets this.
 var draftAttachments = [];
 // Job Manager's own copy of the card modal's draft attachment state — kept
 // separate so editing a job's attachments there can't collide with the
 // Board's quick-edit popup if both happen to hold stale drafts.
 let jmDraftAttachments = [];
-
-// ensureCardChecklists()/normalizeChecklistAssignees()/
-// isChecklistStageVisibleToMe() moved to src/views/checklist.ts (Phase
-// CL-a of the checklist-system extraction) — see the identical note by
-// genId() above.
 
 // ===== JOB VISIBILITY BY MEMBERSHIP =====
 // Below Project Admin only sees jobs they're a Member of (see
@@ -5363,8 +5296,6 @@ function getVisibleJobs() {
 // viewAsUsername simulates a specific member's own view when an Admin is
 // previewing, so this still correctly bypasses for a simulated Project
 // Admin's own preview.
-// isCalendarEventVisibleToMe() moved to src/views/calendar.ts (Phase 5
-// of the architecture roadmap) — see the identical note by genId() above.
 
 // Real user accounts (username/displayName only, no passwords/roles) for
 // the "Visible to" picker — fetched once per session via the Worker's
@@ -5379,8 +5310,7 @@ function getVisibleJobs() {
 // session. userRosterLoadError holds the last failure's message, purely
 // so the dropdown can tell the user something actually went wrong instead
 // of just showing "Everyone" with no explanation either way.
-// `var` — same cross-script-visibility reasoning as `jobs` elsewhere in
-// this file: src/views/board.ts's renderBoard() (Phase 4e) reads this.
+// `var` — src/views/board.ts's renderBoard() reads this.
 var cachedUserRoster = null;
 let userRosterLoadError = null;
 
@@ -5442,8 +5372,7 @@ async function ensureUserRosterLoaded() {
 // here any more.) Session-only, like ganttFocusedJobId — not persisted,
 // and cleared on project switch (see
 // switchProject()).
-// `var` — same cross-script-visibility reasoning as `jobs` above:
-// src/views/calendar.ts's isCalendarEventVisibleToMe() (Phase 5) reads this.
+// `var` — src/views/calendar.ts's isCalendarEventVisibleToMe() reads this.
 var viewAsUsername = null;
 let viewAsRole = null;
 
@@ -5462,9 +5391,7 @@ function setViewAs(username, role) {
   renderAll();
 }
 
-// `var`, not `const` — same cross-script-visibility reasoning as
-// BOARD_COLOR_PRESETS above: src/views/board.ts's buildCardEl() (Phase 4e)
-// reads this.
+// `var`, not `const` — src/views/board.ts's buildCardEl() reads this.
 var CUSTOM_FIELD_DEFS = [
   // Real-account single-select, same source as Members (cachedUserRoster)
   // just one value instead of an array — see renderCustomFieldsGrid()'s
@@ -5498,11 +5425,9 @@ let fieldOptions = {};
 // ===== PROJECT MANAGEMENT =====
 const PROJECTS_KEY = 'aps-planner:projects-v2';
 const ACTIVE_PROJECT_KEY = 'aps-planner:active-project-v2';
-// `var`, not `let` — src/sync/presence.ts's bundled renderPresenceAvatars()
-// (Phase 7a) reads this.
+// `var`, not `let` — src/sync/presence.ts's bundled renderPresenceAvatars() reads this.
 var projects = {};
-// `var` — same cross-script-visibility reasoning as `jobs` above:
-// src/views/board.ts's deleteCardFromModal() (Phase 4d) reads this.
+// `var` — src/views/board.ts's deleteCardFromModal() reads this.
 var activeProjectId = null;
 
 // Set when this browser has never had any real data (no saved projects,
@@ -5975,12 +5900,6 @@ function applyPermissionGating() {
       el.style.display = 'none';
     });
   }
-}
-
-function closeAllDropdowns() {
-  closeSettingsMenu();
-  closeAllColSettings();
-  closeAllMsDropdowns();
 }
 
 // ===== MEMBER MULTI-SELECT DROPDOWN =====
@@ -6744,8 +6663,7 @@ function toggleDarkMode() {
 // it, and every existing --primary/--primary-light consumer already
 // composes the two the same way regardless of exactly how dark
 // --primary is.
-// `var` — src/sync/inbound.ts's bundled applyRoomSnapshot() (Phase 7d)
-// reads this.
+// `var` — src/sync/inbound.ts's bundled applyRoomSnapshot() reads this.
 var DEFAULT_THEME_COLOR = '#3949ab';
 const THEME_PRESETS = [
   '#3949ab', // Indigo (default)
@@ -6926,30 +6844,9 @@ function applyProjectBgVisual() {
   }
 }
 
-// HOME_WIDGET_FOR_TAB/getActiveTab()/HOME_TAB_MORPH_NAME/
-// clearHomeTabMorphNames()/switchTabMorphed()/homeWidgetGoTo() (Phase
-// HD-a of the Home-dashboard extraction) moved to src/views/home.ts —
-// see the identical note by genId() above.
-
-// HOME_EXPAND_WIDGET_ID/HOME_REFLOW_TRACK/applyHomeReflowTracks()/
-// toggleHomeWidgetExpand() (Phase HD-b of the Home-dashboard extraction)
-// moved to src/views/home.ts — see the identical note by genId() above.
-// homeExpandedWidgetId itself stays here as a real `var` (src/views/
-// board.ts's own bundled code still reads it directly).
+// homeExpandedWidgetId stays here as a real `var` (src/views/board.ts's
+// own bundled code still reads it directly).
 var homeExpandedWidgetId = null;
-
-// switchTab()/toggleJobRail()/setMobileView() moved to src/views/home.ts
-// (Phase HD-a of the Home-dashboard extraction) — see the identical
-// note by genId() above.
-
-// getDaysDiff()/toIsoDate()/addMonths()/getBusinessDaysDiff()/
-// addBusinessDays()/formatTimeLabel()/timeToMinutes() moved to
-// src/utils/date.ts (Phase 2 of the architecture roadmap) — see the
-// identical note by genId() above. toIsoDate() and addMonths() each
-// carry real past-bug history; see that file's comments, not here.
-
-// buildCalBarHtml() moved to src/views/calendar.ts (Phase 5d of the
-// architecture roadmap) — see the identical note by genId() above.
 
 function computeDateRange() {
   const hiddenOrders = new Set(
@@ -7062,32 +6959,19 @@ function setupScrollSync() {
 }
 
 // ===== CALENDAR TAB =====
-// `var`, not `let` — same cross-script-visibility reasoning as `jobs`
-// elsewhere in this file: src/views/calendar.ts's bundled navigation/
-// dispatch code (Phase 5c) reads/sets these.
+// `var`, not `let` — src/views/calendar.ts's bundled navigation/dispatch
+// code reads/sets these.
 var calendarViewDate = new Date();
 var calendarViewMode = 'month'; // 'month', 'week', or 'day'
 
-// setCalendarView()/calendarPrev()/calendarNext()/calendarToday()/
-// calendarExitDayView()/renderCalendar() moved to src/views/calendar.ts
-// (Phase 5c of the architecture roadmap) — see the identical note by
-// genId() above. buildCalBarHtml()/renderMonthCalendar()/
-// renderWeekCalendar()/renderWeekHourGrid()/calendarOpenJob()/
-// getScheduledItemsForDate()/openDayView()/renderDayCalendarView() moved
-// there too (Phase 5d) — same note.
-
 // `var`, not `const` — same cross-script-visibility reasoning as
 // calendarViewDate above: src/views/calendar.ts's bundled render engine
-// (Phase 5d) reads these.
+// reads these.
 var CAL_BAR_H = 20;
-// `var`, not `let` — Phase 5e's bundled bar-drag code reads/writes this.
+// `var`, not `let` — src/views/calendar.ts's bundled bar-drag code reads/writes this.
 var calDragState = null;
 var CAL_BAR_GAP = 3;
 var CAL_DAYNUM_H = 26;
-
-// renderMonthCalendar()/renderWeekCalendar()/renderWeekHourGrid() moved to
-// src/views/calendar.ts (Phase 5d of the architecture roadmap) — see the
-// identical note by genId() above.
 
 // Debounced — a manual window resize-drag or a mobile orientation
 // change/on-screen-keyboard show-hide can fire 'resize' many times in
@@ -7115,59 +6999,18 @@ function onPanelResize(panelId, renderFn, debounceMs) {
 }
 onPanelResize('panel-calendar', renderCalendar, 200);
 
-// initCalendarDragHandlers()/calSwipeTargets()/handleCalSwipeStart()/
-// handleCalSwipeMove()/slideCalendarTargets()/handleCalSwipeEnd()/
-// animateCalendarWheelChange()/handleCalWheel() moved to
-// src/views/calendar.ts (Phase 5f of the architecture roadmap) — see the
-// identical note by genId() above.
-
-
-// handleCalBarMouseDown()/handleCalBarMouseMove()/applyCalBarMouseMove()/
-// handleCalBarMouseUp() moved to src/views/calendar.ts (Phase 5e of the
-// architecture roadmap) — see the identical note by genId() above.
-
-
-// calendarOpenJob()/getScheduledItemsForDate()/openDayView()/
-// renderDayCalendarView() moved to src/views/calendar.ts (Phase 5d of the
-// architecture roadmap) — see the identical note by genId() above.
-
 // ===== CALENDAR-ONLY EVENTS: Add/Edit modal =====
 // Deliberately simple (explicit Save, not autosave like the job form) —
 // this is a small, self-contained modal, not worth the bulletproofing
 // machinery built for Job Manager/the card popup.
-// openAddCalendarEvent()/openEditCalendarEvent()/closeCalendarEventModal()/
-// toggleRepeatUntilField()/toggleCalendarEventVisibilityFields()/
-// collectCalendarEventVisibilityMembers()/toggleCalendarEventColorPanel()/
-// updateCalendarEventColorSwatch()/buildCalendarEventColorPresets()/
-// saveCalendarEventFromModal()/deleteCalendarEventFromModal() moved to
-// src/views/calendar.ts (Phase 5b of the architecture roadmap) — see the
-// identical note by genId() above.
-
-// renderGantt() moved to src/views/gantt.ts (Phase 6c of the
-// architecture roadmap) — see the identical note by genId() above.
-
 
 // ===== GANTT BAR RESIZE & MOVE (drag edges to resize, drag body to move) =====
-// startBarResizeRight()/startBarResizeLeft()/onBarResizeMove()/
-// applyBarResizeMove()/onBarResizeEnd()/startTickResize()/
-// onTickResizeMove()/applyTickResizeMove()/onTickResizeEnd()/
-// startBarMove()/onBarMoveMove()/applyBarMoveMove()/onBarMoveEnd()/
-// cascadeShiftLaterTasks() moved to src/views/gantt.ts (Phase 6a of the
-// architecture roadmap) — see the identical note by genId() above.
 // `var`, not `let` — isBusyEditing() and init()'s periodic re-render
 // check (both still in this file) read these, and the bundled drag code
-// (Phase 6a) reads/writes them.
+// in src/views/gantt.ts reads/writes them.
 var barResizeState = null;
 var barMoveState = null;
 var tickResizeState = null;
-
-
-// scrollToToday()/ganttTouchDist()/setGanttDayWidthAnchored()/
-// requestGanttZoom()/handleGanttTouchStart()/handleGanttTouchMove()/
-// handleGanttTouchEnd()/handleGanttWheelZoom()/zoomGanttCentered()/
-// zoomIn()/zoomOut()/resetZoom()/fitToView() moved to src/views/gantt.ts
-// (Phase 6d of the architecture roadmap) — see the identical note by
-// genId() above.
 
 
 // ===== DATE POPOVER =====
@@ -8439,8 +8282,6 @@ function handleJobCommentKey(event) {
 // immediately and clears any pending timer, cancel() drops a pending
 // timer without saving (used before destructive transitions so a stale
 // timer can't resurrect old field values afterward).
-// createAutosaveController() moved to src/utils/autosave.ts (Phase 4d of
-// the architecture roadmap) — see the identical note by genId() above.
 
 // ===== JOB FORM AUTOSAVE =====
 // Replaces the old explicit "Save Job" button. Every field change schedules
@@ -9035,7 +8876,7 @@ async function fetchWithReauth(url, buildOptions) {
 
 async function downloadBackupFile(key) {
   try {
-    const res = await fetchWithReauth(LIVEBLOCKS_AUTH_ENDPOINT + 'download-backup', function(token) {
+    const res = await fetchWithReauth(API_BASE_URL + 'download-backup', function(token) {
       return {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -9092,7 +8933,7 @@ async function restoreBackupFile(key, dateLabel) {
 // getSessionToken()) — the Worker re-verifies it, and the caller's role,
 // on every single request; nothing here is trusted client-side.
 async function postUsersEndpoint(path, extraBody) {
-  const res = await fetchWithReauth(LIVEBLOCKS_AUTH_ENDPOINT + path, function(token) {
+  const res = await fetchWithReauth(API_BASE_URL + path, function(token) {
     return {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -9377,7 +9218,7 @@ async function changeMyPasswordUI() {
     // away rather than leaving that to happen naturally on next expiry,
     // using newPassword while it's still in memory here (never persisted).
     try {
-      const res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+      const res = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username, password: newPassword, name: username })
@@ -9428,38 +9269,6 @@ function submitAddColumn() {
   addBoardColumn(trimmed);
   hideAddColumnForm();
 }
-
-// addBoardColumn()/deleteBoardColumn()/renameBoardColumn()/
-// isCardFromArchivedJob()/isCardVisibleToMe() moved to src/views/board.ts,
-// and escapeHtml() to src/utils/html.ts (Phase 4b of the architecture
-// roadmap) — see the identical note by genId() above.
-
-// ===== BOARD: RENDER =====
-// renderBoard()/buildCardEl() moved to src/views/board.ts (Phase 4e of
-// the architecture roadmap) — see the identical note by genId() above.
-// This closes out Board's own view code; the checklist system it calls
-// into moved separately to src/views/checklist.ts across its own
-// cross-cutting extraction (see that file's own header) — most recently
-// getOpenChecklistItemsForCard()/confirmChecklistBeforeMove() (Phase
-// CL-b).
-
-// Column drag/reorder (handleColumnDragStart/End, handleColumnReorderOver/
-// Leave/Drop, getDragAfterColumn, syncColumnsFromDOM), card drag/drop
-// (handleCardDragStart/End, handleColumnDragOver/applyColumnDragOver/
-// handleColumnDragLeave, dropNeedsManualOverride), and
-// handleColumnDrop()/moveCardToColumn()/getDragAfterElement()/
-// syncBoardCardsFromDOM() moved to src/views/board.ts (Phase 4 of the
-// architecture roadmap) — see the identical note by genId() above.
-
-// isDarkColor()/toggleColSettings()/toggleColColorPanel()/
-// changeColumnColor()/closeAllColSettings()/toggleColumnScheduleVisibility()/
-// toggleColumnScheduleSync()/toggleColumnFinishedTrigger()/
-// setColumnWorkflowItem()/toggleColumnAutoAssignChecklist()/
-// setColumnChecklistAssignee()/setColumnDefaultDuration()/
-// setColumnStalledThreshold()/reconnectCard() (the column settings
-// dropdown, Phase CL-c of the checklist-system extraction — a Board
-// leftover from Phase 4, folded in here) moved to src/views/board.ts —
-// see the identical note by genId() above.
 
 // ===== BOARD: CARD MODAL =====
 // ----- Custom fields -----
@@ -9601,10 +9410,6 @@ function collectJobCustomFieldValues() {
   return values;
 }
 
-// canAssignChecklistStages() moved to src/views/checklist.ts (Phase CL-d
-// of the checklist-system extraction) — see the identical note by
-// genId() above.
-
 // ----- Attachment storage (R2, via the Worker) -----
 // Files upload to R2 (attachments/<uuid>.<ext>) instead of being embedded
 // as inline base64 — a single job/card object staying small regardless of
@@ -9626,7 +9431,7 @@ const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25MB — was 3MB when attachmen
 // would show anyway.
 function attachmentDownloadUrl(key) {
   const token = getStoredSessionToken();
-  return LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/download?token=' + encodeURIComponent(token) + '&key=' + encodeURIComponent(key);
+  return API_BASE_URL + 'attachments/download?token=' + encodeURIComponent(token) + '&key=' + encodeURIComponent(key);
 }
 function attachmentSrc(att) {
   return att.key ? attachmentDownloadUrl(att.key) : (att.dataUrl || '');
@@ -9636,7 +9441,7 @@ async function uploadAttachmentFile(file) {
   // Token as a header, not a query param — this request's body IS the raw
   // file, so there's no JSON body to put it in the way every other POST
   // endpoint does (matches the Worker's handleAttachmentUpload()).
-  const url = LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/upload?name=' + encodeURIComponent(file.name) +
+  const url = API_BASE_URL + 'attachments/upload?name=' + encodeURIComponent(file.name) +
     '&type=' + encodeURIComponent(file.type || 'application/octet-stream');
   const res = await fetchWithReauth(url, function(token) {
     return { method: 'POST', headers: { 'X-Aps-Token': token }, body: file };
@@ -9653,7 +9458,7 @@ async function uploadAttachmentFile(file) {
 function deleteAttachmentFile(key) {
   if (!key) return;
   const token = getStoredSessionToken();
-  fetch(LIVEBLOCKS_AUTH_ENDPOINT + 'attachments/delete', {
+  fetch(API_BASE_URL + 'attachments/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token: token, key: key })
@@ -9795,19 +9600,6 @@ function buildManageFieldGroup(key, label) {
     '</div></div>';
 }
 
-// managingChecklistColumnId/openManageColumnChecklist()/
-// closeManageColumnChecklist()/renderManageColumnChecklistBody()/
-// addColumnChecklistDefaultItem()/removeColumnChecklistDefaultItem()
-// (the "Manage Column Checklist" modal, Phase CL-d of the
-// checklist-system extraction) moved to src/views/checklist.ts — see
-// the identical note by genId() above.
-
-// ===== WORKFLOW ITEMS (global — see WORKFLOW_ITEMS above) =====
-// openWorkflowItemsModal()/closeWorkflowItemsModal()/renderWorkflowItemsBody()/
-// toggleWorkflowItemColorPanel()/changeWorkflowItemColor()/addWorkflowItem()/
-// removeWorkflowItem() moved to src/views/board.ts (Phase 4c of the
-// architecture roadmap) — see the identical note by genId() above.
-
 function addFieldOption(key) {
   const input = document.getElementById('mf_new_' + key);
   const val = input.value.trim();
@@ -9822,21 +9614,6 @@ function removeFieldOption(key, val) {
   fieldOptions[key] = (fieldOptions[key] || []).filter(o => o !== val);
   renderManageFieldsBody();
 }
-
-// getChecklistForStageInProject()/buildMyChecklistRows()/
-// myChecklistMsDropdownHtml()/renderMyChecklistList()/
-// toggleMyChecklistHideDone()/myChecklistAddableCards()/
-// renderMyChecklistToolbar()/renderMyChecklistFilterBar()/
-// onMyChecklistContextChange()/addMyChecklistItemFromBar()/
-// buildMyChecklistJobRows()/renderMyChecklist()/updateMyChecklistBadge()/
-// openMyChecklistItem()/resolveMyChecklistCard()/persistMyChecklistChange()/
-// withMyChecklistItem()/toggleMyChecklistItemDone()/
-// toggleMyChecklistItemRequired()/toggleMyChecklistSubItemDone()/
-// addMyChecklistSubItem()/deleteMyChecklistSubItem()/addMyChecklistItem()/
-// deleteMyChecklistItem()/setMyChecklistItemAssignee()/
-// setMyChecklistStageAssignee() (the entire "My Checklist" tab, Phase
-// CL-d of the checklist-system extraction) moved to
-// src/views/checklist.ts — see the identical note by genId() above.
 
 // ----- Attachments -----
 function formatFileSize(bytes) {
@@ -9951,35 +9728,13 @@ function renderActivityLogSidebar() {
   bodyEl.innerHTML = html;
 }
 
-// Alias for any legacy calls
-function renderActivityLog() { renderActivityLogSidebar(); }
-
-// HOME_DUE_SOON_DAYS/buildHomeOverdueRows()/buildHomeStalledRows()/
-// buildHomeStageSummary()/buildHomeTodayScheduleRows()/
-// buildHomeUpcomingScheduleRows()/buildHomeGanttUnclosedRows() (Phase
-// HD-c of the Home-dashboard extraction) moved to src/views/home.ts —
-// see the identical note by genId() above.
-
 // A column's "too long in this stage" threshold — per-column
 // (col.stalledAfterDays, see setColumnStalledThreshold()) since stages
 // genuinely take different lengths of time (Bid can reasonably sit for
 // weeks; Active sitting untouched for the same span is a problem).
 // Falls back to this when a column has never had it set.
-// `var`, not `const` — same cross-script-visibility reasoning as
-// BOARD_COLOR_PRESETS above.
 var DEFAULT_STALLED_AFTER_DAYS = 14;
 
-
-// homeGreetingPhrase()/renderHomeGreeting()/renderHomeChecklistWidget()/
-// renderHomeChecklistWidgetExpanded()/HOME_ALERT_DISMISS_KEY/
-// getDismissedHomeWidgetAlerts()/isHomeWidgetAlertDismissed()/
-// dismissHomeWidgetAlert()/renderHomeWidgetAlert()/renderHomeOverdueWidget()/
-// renderHomeCalendarExpanded()/renderHomeCalendarMiniMonth()/
-// renderHomeWorkflowMiniBoard()/renderHomeWorkflowExpandedBoard()/
-// HOME_MINI_GANTT_WINDOW_DAYS/renderHomeTodayScheduleWidget() (Phase
-// HD-d of the Home-dashboard extraction) moved to src/views/home.ts —
-// see the identical note by genId() above.
-//
 // This ONE registration call deliberately stays here rather than moving
 // into home.ts along with renderHomeWorkflowMiniBoard() itself:
 // dist/app.bundle.js (an IIFE) runs to completion before this inline
@@ -9992,19 +9747,6 @@ var DEFAULT_STALLED_AFTER_DAYS = 14;
 // already exists, same as the two sibling onPanelResize() calls already
 // below/above it for panel-calendar/panel-board.
 onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200);
-
-
-// buildHomeJobChatFeed()/renderHomeJobChatComposeOptions()/
-// renderHomeJobChatItem()/renderHomeJobChat()/postHomeJobChatComment()/
-// toggleHomeReplyBox()/addHomeJobReply()/handleHomeReplyKey() (the Home
-// Job Chat widget, Phase HD-e of the Home-dashboard extraction) moved to
-// src/views/home.ts — see the identical note by genId() above.
-
-// renderHomeDashboard()/HOME_MINI_GANTT_WINDOW_DAYS (Phase HD-f, the last
-// phase of the Home-dashboard extraction) moved to src/views/home.ts —
-// see the identical note by genId() above. This closes out the entire
-// Home-dashboard extraction: src/views/home.ts is now the sole home of
-// the Home dashboard, matching Board/Calendar/Gantt/Checklist.
 
 // Groups BOARD_COLUMNS into contiguous runs sharing the same
 // workflowItemId — an unassigned column never merges with an adjacent
@@ -10125,12 +9867,6 @@ function scrollToBoardColumn(colId) {
   if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 }
 
-// resolveCardNameTarget()/openEditCard()/closeCardModal()/
-// scheduleCardAutosave()/flushCardAutosave()/cancelPendingCardAutosave()/
-// setCardTitleHint()/autoSaveCardForm()/initCardFormAutosaveListeners()/
-// deleteCardFromModal() moved to src/views/board.ts (Phase 4d of the
-// architecture roadmap) — see the identical note by genId() above.
-
 // ===== TOAST =====
 function showToast(msg, type) {
   const container = document.getElementById('toastContainer');
@@ -10228,22 +9964,20 @@ document.addEventListener('keydown', function(e) {
 // get that automatically, so it's built here instead).
 //
 // Auth: unchanged in spirit — the browser holds no secret. It calls
-// LIVEBLOCKS_AUTH_ENDPOINT (still named after the service it used to
-// front — renaming it would touch the several other call sites in this
-// file that also use it for backups/user-management, not worth the extra
-// diff on top of everything else changing here) once with a per-user
+// API_BASE_URL (the Worker's base URL — also used elsewhere in this file
+// for backups/user-management, not just room sync) once with a per-user
 // username+password (see reauthenticate()) to get back a short-lived
 // signed token (not a Liveblocks token anymore, and — unlike the
 // password — cached and reused across calls, see getSessionToken()), and
 // uses it to open a WebSocket to the Worker's Durable Object.
-const LIVEBLOCKS_AUTH_ENDPOINT = "https://aps-planner-staging.production-db3.workers.dev/";
+const API_BASE_URL = "https://aps-planner-staging.production-db3.workers.dev/";
 
 // How long a delete tombstone (see recordTombstone()/deleteFromSharedMap())
 // sticks around before it's pruned locally. Needs to outlast any
 // realistically-stale tab/device so its eventual reconnect-replay still
 // gets blocked from resurrecting whatever it deleted (the server enforces
-// this too — see aps-room-state.js — this is just the client's own mirror
-// of the same rule, used when merging a snapshot).
+// this too — see worker/src/room-state.ts — this is just the client's own
+// mirror of the same rule, used when merging a snapshot).
 const TOMBSTONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function mergeTombstones(a, b) {
@@ -10255,7 +9989,7 @@ function mergeTombstones(a, b) {
   return merged;
 }
 
-// `var` — src/sync/outbound.ts's logout() (Phase 7c) reads these.
+// `var` — src/sync/outbound.ts's logout() reads these.
 var DISPLAY_NAME_KEY = "gantt_display_name_v1";
 var USERNAME_KEY = "gantt_username_v1";
 // Retired: used to hold the raw password in localStorage indefinitely.
@@ -10479,7 +10213,7 @@ async function reauthenticate(forceReprompt) {
       // `name` is vestigial now that resolveIdentity() has no team-password
       // fallback path left to use it for — harmless to keep sending, not
       // worth a change just to remove an unused field.
-      res = await fetch(LIVEBLOCKS_AUTH_ENDPOINT, {
+      res = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username, password: password, name: username })
@@ -10562,34 +10296,20 @@ async function getSessionToken() {
 }
 
 // ---- Connection state ----
-// `var`, not `let` — src/sync/presence.ts's bundled sendPresenceUpdate()
-// (Phase 7a) reads this.
+// `var`, not `let` — src/sync/presence.ts's bundled sendPresenceUpdate() reads this.
 var roomSocket = null;
 // `var`, not `let` — src/sync/connection.ts's bundled handleRoomClose()
-// (Phase 7b) and src/sync/inbound.ts's bundled handleRoomMessage()
-// (Phase 7d) both read/write this.
+// and src/sync/inbound.ts's bundled handleRoomMessage() both read/write this.
 var roomEverConnected = false; // true once at least one snapshot has been received on this page load
 // msgId -> { msg, sentAt } — every outbound write sits here until acked,
 // rejected, or errored. Replayed in order on reconnect (see roomSocket's
 // 'open' handler) since a plain WebSocket has no built-in "resend what
 // didn't make it" the way Liveblocks' SDK did.
-// `var`, not `const` — src/sync/connection.ts's bundled handleRoomOpen()
-// (Phase 7b) reads this.
+// `var`, not `const` — src/sync/connection.ts's bundled handleRoomOpen() reads this.
 var pendingWrites = new Map();
 // `var` — src/sync/inbound.ts's bundled applyRoomSnapshot()/the focusout
-// listener (Phase 7d) read and write this.
+// listener read and write this.
 var pendingRemoteRefresh = false;
-
-// initSyncIndicator()/setSyncIndicator()/scheduleOfflineEscalation()/
-// cancelOfflineEscalation()/isBusyEditing() moved to
-// src/sync/connection.ts (Phase 7b of the architecture roadmap) — see
-// the identical note by genId() above.
-//
-// queueSharedSync()/flushPendingRoomPush()/flushPendingSync()/logout()/
-// sendRoomMessage()/armStuckWriteWatch()/clearPendingWrite() (plus
-// stuckWriteTimer/syncPushTimer/msgSeq, now private module state there)
-// moved to src/sync/outbound.ts (Phase 7c of the architecture roadmap) —
-// the OUTBOUND half of sync (sending this browser's own changes out).
 
 // Runs on every WebSocket (re)connect attempt (see buildRoomWsUrl() below,
 // called fresh by ReconnectingWebSocket each try) — re-asserts project
@@ -10615,14 +10335,11 @@ async function fetchRoomToken() {
 // gets reused past its expiry on a long-lived tab's reconnect.
 async function buildRoomWsUrl() {
   const token = await fetchRoomToken();
-  const httpUrl = new URL('room', LIVEBLOCKS_AUTH_ENDPOINT);
+  const httpUrl = new URL('room', API_BASE_URL);
   httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   httpUrl.searchParams.set('token', token);
   return httpUrl.toString();
 }
-
-// handleRoomOpen() moved to src/sync/connection.ts (Phase 7b of the
-// architecture roadmap) — see the identical note by genId() above.
 
 // ===== PRESENCE (who's currently viewing which tab/project) =====
 // Deliberately a fully separate, best-effort system, not routed through
@@ -10635,8 +10352,7 @@ async function buildRoomWsUrl() {
 // way a single-canvas app like Figma has — a lightweight "who's here,
 // which tab are they on" indicator gets most of the value without that
 // problem.
-// `var`, not `let` — src/sync/presence.ts's bundled renderPresenceAvatars()
-// (Phase 7a) reads/writes this.
+// `var`, not `let` — src/sync/presence.ts's bundled renderPresenceAvatars() reads/writes this.
 var latestPresenceUsers = [];
 // Random per-page-load id, NOT the logged-in username, so this client can
 // reliably recognize its own entry in the broadcast presence list.
@@ -10646,26 +10362,8 @@ var latestPresenceUsers = [];
 // username would then never match (or, with two team-password logins at
 // once, would match the WRONG one), which is exactly what caused a real
 // user to see their own avatar as a phantom second person on the board.
-// `var`, not `const` — same cross-script-visibility reasoning: Phase 7a's
-// bundled presence code reads this.
+// `var`, not `const` — src/sync/presence.ts's bundled presence code reads this.
 var myPresenceSessionId = genId();
-
-// sendPresenceUpdate()/presenceAvatarColor()/presenceInitials()/
-// presenceAnimDelay()/renderPresenceAvatars() moved to
-// src/sync/presence.ts (Phase 7a of the architecture roadmap) — see the
-// identical note by genId() above.
-
-// handleRoomClose()/handleRoomSocketError()/handleRoomSocketMessageEvent()/
-// setupLiveblocksSync() moved to src/sync/connection.ts (Phase 7b of the
-// architecture roadmap) — see the identical note by genId() above.
-
-// handleRoomMessage()/synthesizeJobFromOrphanCard()/safeMergeInto()/
-// scheduleOrphanRecovery()/healOrphanedJobCards()/healOrphanedPhaseCards()/
-// healOrphanedCardsForProject()/applyRoomSnapshot()/
-// refreshActiveProjectFromShared() (plus the focusout listener that
-// catches up a deferred remote refresh) moved to src/sync/inbound.ts
-// (Phase 7d of the architecture roadmap) — see the identical note by
-// genId() above.
 
 // Initialize — gated behind a valid session first. Previously the app
 // rendered immediately from whatever project data was cached locally while

@@ -1,9 +1,6 @@
-// Moved verbatim from index.html as part of Phase 2 of the architecture
-// roadmap. Two of these functions carry real production-bug history —
-// see the comments on toIsoDate() and addMonths() below — which is
-// exactly why this file has its own pinning tests (tests/unit/date.spec.js)
-// written BEFORE the move, not after: a regression here has bitten real
-// users twice already.
+// Date/time helpers. toIsoDate() and addMonths() below carry real
+// production-bug history — see their own comments — so changes here
+// warrant extra care; a regression has bitten real users twice already.
 
 export function getDaysDiff(d1: Date, d2: Date): number {
   return Math.round((d2.getTime() - d1.getTime()) / 86400000);

@@ -1,6 +1,5 @@
-// --- ROOM STATE REDUCER (pure logic — this file is the sole source
-// of truth for it; an earlier design-iteration copy that used to live at
-// worker/aps-room-state.js was removed in commit a4da847) ---
+// --- ROOM STATE REDUCER (pure logic for applying messages to a room's
+// synced state) ---
 import { tierAtLeast } from './tiers.ts';
 import type { RoomState, Project, Job, BoardCard, CalendarEvent, Attachment, RoomMessage, ActivityLogEntry } from './types.ts';
 

@@ -1,7 +1,6 @@
-// --- AUTH HANDLER — mints a signed room token rather than calling
-// Liveblocks (long gone). Credential checking (resolveIdentity, in
-// users.ts) is completely unchanged; only what happens after a
-// successful check is different. ---
+// --- AUTH HANDLER — verifies credentials (resolveIdentity, in users.ts)
+// and mints a signed room token used to authenticate the client's
+// WebSocket connection. ---
 import { jsonResponse } from './http.ts';
 import { signRoomToken } from './room-token.ts';
 import {
@@ -33,7 +32,7 @@ export async function handleAuth(request: Request, env: Env, corsHeaders: Record
     return jsonResponse({ error: "Too many attempts — try again in a few minutes." }, 429, corsHeaders);
   }
 
-  const identity = await resolveIdentity(env, body.username as string, body.password, body.name);
+  const identity = await resolveIdentity(env, body.username as string, body.password);
   if (!identity) {
     const bump = Promise.all([bumpAuthFailure(env, usernameFailKey), bumpAuthFailure(env, ipFailKey)]);
     if (ctx) ctx.waitUntil(bump); else await bump;
