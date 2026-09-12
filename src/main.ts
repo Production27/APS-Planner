@@ -120,6 +120,11 @@ import {
   toggleJobCommentsPanel,
 } from './views/job-comments';
 import {
+  renderJobList, filterJobList, updateJobCount, archiveJob, restoreJob, openArchivedJobsModal,
+  closeArchivedJobsModal, refreshArchivedJobsListIfOpen, renderArchivedJobsList, archiveCurrentJob,
+  duplicateJob, promptDeleteJob, confirmDelete, executeDelete, closeDeleteJobModal,
+} from './views/job-list';
+import {
   getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
   applyHomeReflowTracks, toggleHomeWidgetExpand, buildHomeOverdueRows, buildHomeStalledRows, buildHomeStageSummary,
   buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows, renderHomeGreeting,
@@ -349,6 +354,21 @@ declare global {
     deleteJobComment: typeof deleteJobComment;
     handleJobCommentKey: typeof handleJobCommentKey;
     toggleJobCommentsPanel: typeof toggleJobCommentsPanel;
+    renderJobList: typeof renderJobList;
+    filterJobList: typeof filterJobList;
+    updateJobCount: typeof updateJobCount;
+    archiveJob: typeof archiveJob;
+    restoreJob: typeof restoreJob;
+    openArchivedJobsModal: typeof openArchivedJobsModal;
+    closeArchivedJobsModal: typeof closeArchivedJobsModal;
+    refreshArchivedJobsListIfOpen: typeof refreshArchivedJobsListIfOpen;
+    renderArchivedJobsList: typeof renderArchivedJobsList;
+    archiveCurrentJob: typeof archiveCurrentJob;
+    duplicateJob: typeof duplicateJob;
+    promptDeleteJob: typeof promptDeleteJob;
+    confirmDelete: typeof confirmDelete;
+    executeDelete: typeof executeDelete;
+    closeDeleteJobModal: typeof closeDeleteJobModal;
     isCalendarEventTaskId: typeof isCalendarEventTaskId;
     parseCalendarEventTaskId: typeof parseCalendarEventTaskId;
     defaultRepeatUntil: typeof defaultRepeatUntil;
@@ -778,6 +798,21 @@ window.addJobComment = addJobComment;
 window.deleteJobComment = deleteJobComment;
 window.handleJobCommentKey = handleJobCommentKey;
 window.toggleJobCommentsPanel = toggleJobCommentsPanel;
+window.renderJobList = renderJobList;
+window.filterJobList = filterJobList;
+window.updateJobCount = updateJobCount;
+window.archiveJob = archiveJob;
+window.restoreJob = restoreJob;
+window.openArchivedJobsModal = openArchivedJobsModal;
+window.closeArchivedJobsModal = closeArchivedJobsModal;
+window.refreshArchivedJobsListIfOpen = refreshArchivedJobsListIfOpen;
+window.renderArchivedJobsList = renderArchivedJobsList;
+window.archiveCurrentJob = archiveCurrentJob;
+window.duplicateJob = duplicateJob;
+window.promptDeleteJob = promptDeleteJob;
+window.confirmDelete = confirmDelete;
+window.executeDelete = executeDelete;
+window.closeDeleteJobModal = closeDeleteJobModal;
 window.isCalendarEventTaskId = isCalendarEventTaskId;
 window.parseCalendarEventTaskId = parseCalendarEventTaskId;
 window.defaultRepeatUntil = defaultRepeatUntil;
