@@ -13,6 +13,7 @@ import { getDaysDiff, toIsoDate, addMonths, getBusinessDaysDiff, addBusinessDays
 import { darkenColor, softenColor, SOFTEN_AMOUNT } from './utils/color';
 import { escapeHtml } from './utils/html';
 import { createAutosaveController } from './utils/autosave';
+import { openModal, closeModal, showToast, moveTooltip, hideTooltip, toggleMsDropdown, closeAllMsDropdowns, msSetAll, msDropdownLabelText } from './utils/ui';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
@@ -137,6 +138,15 @@ declare global {
     isCardVisibleToMe: typeof isCardVisibleToMe;
     escapeHtml: typeof escapeHtml;
     createAutosaveController: typeof createAutosaveController;
+    openModal: typeof openModal;
+    closeModal: typeof closeModal;
+    showToast: typeof showToast;
+    moveTooltip: typeof moveTooltip;
+    hideTooltip: typeof hideTooltip;
+    toggleMsDropdown: typeof toggleMsDropdown;
+    closeAllMsDropdowns: typeof closeAllMsDropdowns;
+    msSetAll: typeof msSetAll;
+    msDropdownLabelText: typeof msDropdownLabelText;
     openWorkflowItemsModal: typeof openWorkflowItemsModal;
     closeWorkflowItemsModal: typeof closeWorkflowItemsModal;
     renderWorkflowItemsBody: typeof renderWorkflowItemsBody;
@@ -411,6 +421,15 @@ window.isCardFromArchivedJob = isCardFromArchivedJob;
 window.isCardVisibleToMe = isCardVisibleToMe;
 window.escapeHtml = escapeHtml;
 window.createAutosaveController = createAutosaveController;
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.showToast = showToast;
+window.moveTooltip = moveTooltip;
+window.hideTooltip = hideTooltip;
+window.toggleMsDropdown = toggleMsDropdown;
+window.closeAllMsDropdowns = closeAllMsDropdowns;
+window.msSetAll = msSetAll;
+window.msDropdownLabelText = msDropdownLabelText;
 window.openWorkflowItemsModal = openWorkflowItemsModal;
 window.closeWorkflowItemsModal = closeWorkflowItemsModal;
 window.renderWorkflowItemsBody = renderWorkflowItemsBody;

@@ -80,9 +80,6 @@ declare global {
   function saveJobs(): void;
   function saveProjects(): void;
   function saveBoardColumns(): void;
-  function openModal(id: string): void;
-  function closeModal(id: string, onClosed?: () => void): void;
-  function showToast(text: string, kind?: string): void;
   function logActivity(text: string): void;
   function hasMinTier(tier: string): boolean;
   function isJobVisibleToMe(job: Job): boolean;
@@ -102,9 +99,6 @@ declare global {
   function renderActivityLogSidebar(): void;
   function refreshJobFormIfOpen(jobId: string): void;
   function setupScrollSync(): void;
-  function msDropdownLabelText(count: number, emptyText?: string): string;
-  function moveTooltip(e: MouseEvent): void;
-  function hideTooltip(): void;
   // The anonymous shape (rather than any one file's own CalJob/GanttJob
   // pseudo-type) is the deliberate common denominator every caller of
   // this one index.html function satisfies.

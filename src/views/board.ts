@@ -46,6 +46,7 @@ import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
 import { darkenColor } from '../utils/color';
+import { openModal, closeModal, showToast } from '../utils/ui';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 
 // Ambient globals this file shares verbatim with other src/ files

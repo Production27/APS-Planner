@@ -25,17 +25,16 @@
 // next call's arguments — see each function's own signature for exactly
 // what it depends on and produces, rather than reading a shared closure.
 //
-// showTooltip()/moveTooltip()/hideTooltip()/showDatePopover()/
-// hideDatePopover()/buildColorPresets()/updateJobColorSwatch()/
-// toggleJobColorPanel() stay in index.html (small, shared popover/
-// tooltip chrome — not drag mechanics) and are referenced below as
-// ambient globals, same as calendar.ts does for moveTooltip()/
-// hideTooltip() specifically.
+// showTooltip()/showDatePopover()/hideDatePopover()/buildColorPresets()/
+// updateJobColorSwatch()/toggleJobColorPanel() stay in index.html (small,
+// shared popover/tooltip chrome — not drag mechanics) and are referenced
+// below as ambient globals.
 import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { toIsoDate, getDaysDiff } from '../utils/date';
 import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
+import { showToast, moveTooltip, hideTooltip } from '../utils/ui';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, saveJobs(), showToast(), getJobDueMarkerTask(), etc.)

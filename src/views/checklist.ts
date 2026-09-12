@@ -27,13 +27,12 @@ import { genId } from '../utils/id';
 import { findJob, getJobPhases } from '../core/models';
 import { pushProjectToShared } from '../sync/outbound';
 import { closeAllColSettings, openEditCard } from './board';
+import { openModal, closeModal, showToast, toggleMsDropdown, msSetAll, msDropdownLabelText } from '../utils/ui';
 
 // Ambient globals this file shares verbatim with other src/ files
-// (BOARD_COLUMNS, activeProjectId, saveJobs(), showToast(), etc.) are
-// declared once in src/shared-globals.d.ts, not repeated here.
+// (BOARD_COLUMNS, activeProjectId, saveJobs(), etc.) are declared once
+// in src/shared-globals.d.ts, not repeated here.
 declare global {
-  function toggleMsDropdown(id: string, forceOpen?: boolean): void;
-  function msSetAll(optionsId: string, checked: boolean): void;
   function switchProject(projectId: string): void;
 }
 
