@@ -53,6 +53,11 @@ import {
   toggleColumnScheduleVisibility, toggleColumnScheduleSync, toggleColumnFinishedTrigger, setColumnWorkflowItem,
   toggleColumnAutoAssignChecklist, setColumnChecklistAssignee, setColumnDefaultDuration, setColumnStalledThreshold,
   reconnectCard,
+  renderFieldDefHtml, renderCustomFieldsGrid, renderTeamFieldsGrid, collectCustomFieldValues,
+  MAX_ATTACHMENT_SIZE, attachmentDownloadUrl, attachmentSrc, uploadAttachmentFile, deleteAttachmentFile, formatFileSize,
+  renderAttachmentPanel, handleAttachmentPanelUpload, removeAttachmentPanelItem,
+  renderAttachments, handleAttachmentUpload, removeAttachment,
+  openManageFields, closeManageFields, renderManageFieldsBody, buildManageFieldGroup, addFieldOption, removeFieldOption,
 } from './views/board';
 import {
   isCalendarEventTaskId, parseCalendarEventTaskId, defaultRepeatUntil, getCalendarEventOccurrences,
@@ -304,6 +309,28 @@ declare global {
     setColumnDefaultDuration: typeof setColumnDefaultDuration;
     setColumnStalledThreshold: typeof setColumnStalledThreshold;
     reconnectCard: typeof reconnectCard;
+    renderFieldDefHtml: typeof renderFieldDefHtml;
+    renderCustomFieldsGrid: typeof renderCustomFieldsGrid;
+    renderTeamFieldsGrid: typeof renderTeamFieldsGrid;
+    collectCustomFieldValues: typeof collectCustomFieldValues;
+    MAX_ATTACHMENT_SIZE: typeof MAX_ATTACHMENT_SIZE;
+    attachmentDownloadUrl: typeof attachmentDownloadUrl;
+    attachmentSrc: typeof attachmentSrc;
+    uploadAttachmentFile: typeof uploadAttachmentFile;
+    deleteAttachmentFile: typeof deleteAttachmentFile;
+    formatFileSize: typeof formatFileSize;
+    renderAttachmentPanel: typeof renderAttachmentPanel;
+    handleAttachmentPanelUpload: typeof handleAttachmentPanelUpload;
+    removeAttachmentPanelItem: typeof removeAttachmentPanelItem;
+    renderAttachments: typeof renderAttachments;
+    handleAttachmentUpload: typeof handleAttachmentUpload;
+    removeAttachment: typeof removeAttachment;
+    openManageFields: typeof openManageFields;
+    closeManageFields: typeof closeManageFields;
+    renderManageFieldsBody: typeof renderManageFieldsBody;
+    buildManageFieldGroup: typeof buildManageFieldGroup;
+    addFieldOption: typeof addFieldOption;
+    removeFieldOption: typeof removeFieldOption;
     isCalendarEventTaskId: typeof isCalendarEventTaskId;
     parseCalendarEventTaskId: typeof parseCalendarEventTaskId;
     defaultRepeatUntil: typeof defaultRepeatUntil;
@@ -698,6 +725,28 @@ window.setColumnChecklistAssignee = setColumnChecklistAssignee;
 window.setColumnDefaultDuration = setColumnDefaultDuration;
 window.setColumnStalledThreshold = setColumnStalledThreshold;
 window.reconnectCard = reconnectCard;
+window.renderFieldDefHtml = renderFieldDefHtml;
+window.renderCustomFieldsGrid = renderCustomFieldsGrid;
+window.renderTeamFieldsGrid = renderTeamFieldsGrid;
+window.collectCustomFieldValues = collectCustomFieldValues;
+window.MAX_ATTACHMENT_SIZE = MAX_ATTACHMENT_SIZE;
+window.attachmentDownloadUrl = attachmentDownloadUrl;
+window.attachmentSrc = attachmentSrc;
+window.uploadAttachmentFile = uploadAttachmentFile;
+window.deleteAttachmentFile = deleteAttachmentFile;
+window.formatFileSize = formatFileSize;
+window.renderAttachmentPanel = renderAttachmentPanel;
+window.handleAttachmentPanelUpload = handleAttachmentPanelUpload;
+window.removeAttachmentPanelItem = removeAttachmentPanelItem;
+window.renderAttachments = renderAttachments;
+window.handleAttachmentUpload = handleAttachmentUpload;
+window.removeAttachment = removeAttachment;
+window.openManageFields = openManageFields;
+window.closeManageFields = closeManageFields;
+window.renderManageFieldsBody = renderManageFieldsBody;
+window.buildManageFieldGroup = buildManageFieldGroup;
+window.addFieldOption = addFieldOption;
+window.removeFieldOption = removeFieldOption;
 window.isCalendarEventTaskId = isCalendarEventTaskId;
 window.parseCalendarEventTaskId = parseCalendarEventTaskId;
 window.defaultRepeatUntil = defaultRepeatUntil;

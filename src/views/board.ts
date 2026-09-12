@@ -29,30 +29,42 @@
 // isDarkColor() is a real function here; src/views/calendar.ts still
 // declares it as an ambient global rather than importing it from here.
 //
+// Custom fields (renderCustomFieldsGrid/renderTeamFieldsGrid/
+// collectCustomFieldValues/renderFieldDefHtml) and attachments
+// (renderAttachmentPanel and friends) live here because the card modal
+// above owns the "real" implementation both surfaces share — Job
+// Manager's own mirrored grids/attachment panel (renderJobCustomFieldsGrid/
+// renderJobTeamFieldsGrid/collectJobCustomFieldValues/
+// JM_ATTACHMENT_PANEL_CONFIG, still in index.html until Job Manager itself
+// is extracted) call these as ambient globals, same forward-reference
+// pattern as everything else not yet moved.
+//
 // Several functions this file calls but does NOT define — setCardColumn(),
 // isJobVisibleToMe(), renderGantt(), renderJobList(), renderCalendar(),
-// saveWorkflowItems(), hasMinTier(), renderCustomFieldsGrid(),
-// renderTeamFieldsGrid(), renderAttachments(), collectCustomFieldValues(),
-// deleteCardFromShared(), refreshJobFormIfOpen(), syncCardColumns(),
-// isFinishedColumn(), isFinishedColumnId(), displayNameForUsername(),
-// applyPermissionGating(), ensureUserRosterLoaded(), saveJobs(),
-// renderHomeDashboard(), ensureJobTasksMatchColumns(),
-// renderFixedTaskGrid() — stay in index.html on purpose (checklist
-// business rules, modal-chrome/permission/custom-field plumbing shared
-// across many modals, or genuinely separate concerns like the Gantt/
-// Calendar/Job List re-renders a rename triggers, or Job Manager's own
-// fixed-task-grid rendering). Referenced below as ambient globals: an
-// ordinary top-level `function` declaration already attaches to `window`
-// on its own (unlike `let`/`const`), so none of those needed any change
-// to stay visible here — only genuinely mutated DATA globals do.
+// saveWorkflowItems(), hasMinTier(), getLeadRoster(), saveFieldOptions(),
+// renderJobCustomFieldsGrid(), renderJobTeamFieldsGrid(),
+// collectJobCustomFieldValues(), deleteCardFromShared(),
+// refreshJobFormIfOpen(), syncCardColumns(), isFinishedColumn(),
+// isFinishedColumnId(), displayNameForUsername(), applyPermissionGating(),
+// ensureUserRosterLoaded(), saveJobs(), renderHomeDashboard(),
+// ensureJobTasksMatchColumns(), renderFixedTaskGrid() — stay in index.html
+// on purpose (checklist business rules, modal-chrome/permission plumbing
+// shared across many modals, Job Manager's own still-inline mirror
+// functions, or genuinely separate concerns like the Gantt/Calendar/Job
+// List re-renders a rename triggers). Referenced below as ambient globals:
+// an ordinary top-level `function` declaration already attaches to
+// `window` on its own (unlike `let`/`const`), so none of those needed any
+// change to stay visible here — only genuinely mutated DATA globals do.
 import type { BoardCard, BoardColumn, WorkflowItem, Job, Task, Phase, CustomFieldDef } from '../core/types';
 import { findJob } from '../core/models';
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
 import { darkenColor } from '../utils/color';
-import { openModal, closeModal, showToast, onPanelResize } from '../utils/ui';
+import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
+import { getStoredSessionToken } from '../auth/session';
+import { fetchWithReauth } from '../app/worker-client';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 import { buildHomeStageSummary, buildHomeStalledRows } from './home';
 
@@ -70,17 +82,22 @@ declare global {
   var DEFAULT_TASK_DURATION_DAYS: number;
   // eslint-disable-next-line no-var
   var CUSTOM_FIELD_DEFS: CustomFieldDef[];
+  // eslint-disable-next-line no-var
+  var TEAM_FIELD_KEYS: string[];
+  // eslint-disable-next-line no-var
+  var fieldOptions: Record<string, string[]>;
   function setCardColumn(card: BoardCard, newColumnId: string): void;
   function ensureJobTasksMatchColumns(job: Job): void;
   function renderFixedTaskGrid(taskList: Task[]): void;
   function saveBoardCards(): void;
   function saveWorkflowItems(): void;
+  function saveFieldOptions(): void;
   function renderCalendar(): void;
   function renderHomeWorkflowExpandedBoard(): void;
-  function renderCustomFieldsGrid(customFields: Record<string, unknown>): void;
-  function renderTeamFieldsGrid(customFields: Record<string, unknown>): void;
-  function renderAttachments(): void;
-  function collectCustomFieldValues(): Record<string, unknown>;
+  function getLeadRoster(currentValueUsername: string): { username: string; displayName: string }[];
+  function renderJobCustomFieldsGrid(values: Record<string, unknown>): void;
+  function renderJobTeamFieldsGrid(values: Record<string, unknown>): void;
+  function collectJobCustomFieldValues(): Record<string, unknown>;
   function deleteCardFromShared(projectId: string | null, cardId: string): void;
   function syncCardColumns(): void;
   function isFinishedColumn(col: BoardColumn): boolean;
@@ -1474,6 +1491,333 @@ function reconnectCard(cardId: string, event?: Event): void {
   showToast('Card reconnected to schedule', 'success');
 }
 
+// ===== BOARD: CUSTOM FIELDS =====
+// One shared per-field renderer for both grids (Team + Custom Fields) and
+// both surfaces (card modal here + Job Manager, still in index.html until
+// it's extracted in a later phase — its renderJobCustomFieldsGrid()/
+// renderJobTeamFieldsGrid()/collectJobCustomFieldValues() mirror this
+// file's own three below, reading/writing the same card.customFields).
+// `onNeedsRoster` is called once the user-select/multiselect branches need
+// to lazy-load cachedUserRoster and re-render themselves; each caller
+// passes its own "re-render me with my current values" closure.
+function renderFieldDefHtml(def: CustomFieldDef, val: unknown, onNeedsRoster: () => void, idPrefix: string): string {
+  if (def.type === 'select') {
+    const opts = fieldOptions[def.key] || [];
+    const optionsHtml = '<option value="">Select...</option>' + opts.map((o) =>
+      '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
+    ).join('');
+    return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+  }
+  if (def.type === 'user-select') {
+    // Real-account single-select (PM/Foreman) — same roster source as
+    // Members' multiselect just below, but narrowed to Lead-classified
+    // accounts only via getLeadRoster() (see Manage Users' Classification
+    // field).
+    if (!cachedUserRoster) {
+      ensureUserRosterLoaded().then(onNeedsRoster);
+      return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select disabled><option>Loading…</option></select></div>';
+    }
+    const optionsHtml = '<option value="">Select...</option>' + getLeadRoster(val as string).map(function (u) {
+      return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+    }).join('');
+    return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+  }
+  if (def.type === 'multiselect') {
+    // Backed by the REAL account roster (same one the "Visible to"
+    // checklist-stage picker uses — see ensureUserRosterLoaded()), not a
+    // free-text fieldOptions pool like a 'select' field — a Member has to
+    // be a real, matchable account for isJobVisibleToMe() to work.
+    // Checkbox value = username (what gets stored/matched), label =
+    // displayName. Lazy-loaded once per session; re-renders this same grid
+    // once it resolves. Collapsed behind a toggle button + Select
+    // All/Unselect All instead of listing every account inline —
+    // dropdownId needs to be unique per grid (card modal's teamFieldsGrid
+    // vs Job Manager's jmTeamFieldsGrid can both be in the DOM/rendered
+    // independently), hence idPrefix.
+    const selected = Array.isArray(val) ? (val as string[]) : [];
+    if (!cachedUserRoster) {
+      ensureUserRosterLoaded().then(onNeedsRoster);
+      return '<div class="cf-field cf-field-wide"><label>' + escapeHtml(def.label) + '</label><div class="cf-multiselect-loading">Loading team roster…</div></div>';
+    }
+    const dropdownId = (idPrefix || '') + 'MsDropdown_' + def.key;
+    const optionsId = dropdownId + '_options';
+    const optionsHtml = cachedUserRoster.length
+      ? cachedUserRoster.map((u) => '<label class="cf-multiselect-option"><input type="checkbox" data-field="' + def.key + '" value="' + escapeHtml(u.username) + '" data-min-tier="editor"' + (selected.indexOf(u.username) !== -1 ? ' checked' : '') + '> ' + escapeHtml(u.displayName) + '</label>').join('')
+      : '<span class="cf-multiselect-empty">No team accounts yet</span>';
+    return '<div class="cf-field cf-field-wide"><label>' + escapeHtml(def.label) + '</label>' +
+      '<div class="ms-dropdown" id="' + dropdownId + '">' +
+        '<button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown(\'' + dropdownId + '\')"><span>' + msDropdownLabelText(selected.length) + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
+        '<div class="ms-dropdown-panel">' +
+          (cachedUserRoster.length ? '<div class="ms-dropdown-actions"><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', true)">Select All</button><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', false)">Unselect All</button></div>' : '') +
+          '<div class="cf-multiselect" id="' + optionsId + '">' + optionsHtml + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+  return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val as string) + '" placeholder="Add ' + escapeHtml(def.label) + '..."></div>';
+}
+
+function renderCustomFieldsGrid(values: Record<string, unknown>): void {
+  values = values || {};
+  const grid = document.getElementById('customFieldsGrid')!;
+  const defs = CUSTOM_FIELD_DEFS.filter((d) => TEAM_FIELD_KEYS.indexOf(d.key) === -1);
+  grid.innerHTML = defs.map((def) => renderFieldDefHtml(def, values[def.key] || '', function () { renderCustomFieldsGrid(collectCustomFieldValues()); }, '')).join('');
+  applyPermissionGating(); // rebuilt on every card-modal open, outside renderAll()'s own sweep
+}
+
+// Project Manager / Project Lead-Foreman / Members — split out of Custom
+// Fields into their own "Team" section (still CUSTOM_FIELD_DEFS entries,
+// still stored under the same card.customFields keys — see
+// TEAM_FIELD_KEYS). collectCustomFieldValues() reads [data-field] from
+// BOTH grids, so either one re-rendering after a lazy roster load still
+// collects the other grid's current values correctly.
+function renderTeamFieldsGrid(values: Record<string, unknown>): void {
+  values = values || {};
+  const grid = document.getElementById('teamFieldsGrid');
+  if (!grid) return;
+  const defs = CUSTOM_FIELD_DEFS.filter((d) => TEAM_FIELD_KEYS.indexOf(d.key) !== -1);
+  grid.innerHTML = defs.map((def) => renderFieldDefHtml(def, values[def.key] || '', function () { renderTeamFieldsGrid(collectCustomFieldValues()); }, '')).join('');
+  applyPermissionGating();
+}
+
+function collectCustomFieldValues(): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  document.querySelectorAll('#customFieldsGrid [data-field], #teamFieldsGrid [data-field]').forEach((el) => {
+    const input = el as HTMLInputElement;
+    if (input.type === 'checkbox') {
+      if (!values[input.dataset.field!]) values[input.dataset.field!] = [];
+      if (input.checked) (values[input.dataset.field!] as string[]).push(input.value);
+    } else {
+      values[input.dataset.field!] = input.value.trim();
+    }
+  });
+  return values;
+}
+
+// ===== BOARD: ATTACHMENTS (R2, via the Worker) =====
+// Files upload to R2 (attachments/<uuid>.<ext>) instead of being embedded
+// as inline base64 — a single job/card object staying small regardless of
+// how many photos/PDFs get attached to it matters a lot now that the whole
+// project gets pushed/broadcast as one message on every routine save (see
+// pushProjectToShared() in sync/outbound.ts). Existing attachments from
+// before this migration still carry `dataUrl` instead of `key` —
+// attachmentSrc() below renders either shape so nothing already attached
+// silently breaks.
+const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25MB — was 3MB when attachments lived inline in localStorage; R2 has no such pressure
+
+interface Attachment {
+  id: number;
+  name: string;
+  size: number;
+  isImage?: boolean;
+  key?: string;
+  dataUrl?: string;
+}
+
+// Synchronous, so it can be dropped straight into a rendered href/src
+// attribute — reads whatever session token is already cached rather than
+// minting/refreshing one (that needs a network round-trip, which a
+// synchronous render can't wait on). By the time attachments are being
+// rendered at all, a valid token is essentially always already cached from
+// login/the room connection; a missing or expired one just makes the
+// resulting link 401 when clicked, same failure mode as a stale link would
+// show anyway.
+function attachmentDownloadUrl(key: string): string {
+  const token = getStoredSessionToken();
+  return API_BASE_URL + 'attachments/download?token=' + encodeURIComponent(token || '') + '&key=' + encodeURIComponent(key);
+}
+function attachmentSrc(att: Attachment): string {
+  return att.key ? attachmentDownloadUrl(att.key) : (att.dataUrl || '');
+}
+
+async function uploadAttachmentFile(file: File): Promise<{ key: string; name: string }> {
+  // Token as a header, not a query param — this request's body IS the raw
+  // file, so there's no JSON body to put it in the way every other POST
+  // endpoint does (matches the Worker's handleAttachmentUpload()).
+  const url = API_BASE_URL + 'attachments/upload?name=' + encodeURIComponent(file.name) +
+    '&type=' + encodeURIComponent(file.type || 'application/octet-stream');
+  const res = await fetchWithReauth(url, function (token) {
+    return { method: 'POST', headers: { 'X-Aps-Token': token }, body: file };
+  });
+  if (!res.ok) throw new Error('Upload failed: ' + res.status);
+  return res.json(); // { key, name }
+}
+
+// Best-effort, fire-and-forget — a failed cleanup leaves an orphaned R2
+// object (harmless, just unused storage) rather than blocking the user's
+// actual intent (removing the attachment from the job/card). Uses
+// whatever token is already cached, same reasoning as attachmentDownloadUrl()
+// above — not worth minting a fresh one for a call this disposable.
+function deleteAttachmentFile(key: string): void {
+  if (!key) return;
+  const token = getStoredSessionToken();
+  fetch(API_BASE_URL + 'attachments/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: token, key: key }),
+  }).catch(function (err) { console.error('Failed to delete attachment file ' + key, err); });
+}
+
+interface AttachmentPanelConfig {
+  draftArrayGetter: () => Attachment[];
+  draftArraySetter: (arr: Attachment[]) => void;
+  containerId: string;
+  removeHandlerName: string;
+  flushFn: () => void;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// Shared behind Job Manager's and the card modal's attachment panels
+// (previously renderJobAttachments()/renderAttachments(),
+// handleJobAttachmentUpload()/handleAttachmentUpload(),
+// removeJobAttachment()/removeAttachment() — near-full duplicates of each
+// other, confirmed already drifted once). config shape: {draftArrayGetter,
+// draftArraySetter, containerId, removeHandlerName, flushFn} — the
+// getter/setter pair exists because each caller's draft array is
+// reassigned (filtered), not just mutated in place, so a plain reference
+// wouldn't see removals. removeHandlerName is the caller's own
+// thin-wrapper function name (e.g. "removeJobAttachment"), embedded
+// literally in the rendered onclick= so each panel's remove button keeps
+// calling its own stable global name rather than this shared one plus a
+// config object.
+function renderAttachmentPanel(config: AttachmentPanelConfig): void {
+  const container = document.getElementById(config.containerId);
+  if (!container) return;
+  const items = config.draftArrayGetter();
+  if (!items.length) {
+    container.innerHTML = '<p style="font-size: var(--t-xs);color:#999;">No attachments yet.</p>';
+    return;
+  }
+  container.innerHTML = items.map((att) => {
+    const src = attachmentSrc(att);
+    const thumb = att.isImage
+      ? '<img class="att-thumb" src="' + src + '">'
+      : '<div class="att-icon"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/><circle cx="8" cy="9" r="1.8" fill="#f0ad4e"/><path d="M4 18l5-6 4 4 3-3 5 5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+    return '<div class="attachment-item">' +
+      '<a href="' + src + '" download="' + escapeHtml(att.name) + '" target="_blank" style="display:flex;align-items:center;gap: var(--s-2-5);flex:1;min-width:0;text-decoration:none;">' +
+      thumb +
+      '<div class="att-info"><span class="att-name">' + escapeHtml(att.name) + '</span><span class="att-size">' + formatFileSize(att.size) + '</span></div>' +
+      '</a>' +
+      '<button class="att-remove" data-min-tier="editor" onclick="' + config.removeHandlerName + '(' + att.id + ')">×</button>' +
+      '</div>';
+  }).join('');
+  applyPermissionGating(); // rebuilt on every attachment change, outside renderAll()'s own sweep
+}
+
+function handleAttachmentPanelUpload(e: Event, config: AttachmentPanelConfig): void {
+  const files = Array.from((e.target as HTMLInputElement).files || []);
+  files.forEach(function (file) {
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      showToast('"' + file.name + '" is too large (max 25MB)', 'error');
+      return;
+    }
+    const localId = Date.now() + Math.random();
+    uploadAttachmentFile(file).then(function (result) {
+      config.draftArrayGetter().push({
+        id: localId,
+        name: file.name,
+        size: file.size,
+        // Matches the Worker's own isSafeInlineImageType() — svg+xml is
+        // excluded because it's now always force-downloaded server-side
+        // (can carry embedded scripts), so treating it as isImage here
+        // would just render as a broken thumbnail.
+        isImage: file.type.startsWith('image/') && file.type !== 'image/svg+xml',
+        key: result.key,
+      });
+      renderAttachmentPanel(config);
+      config.flushFn();
+    }).catch(function (err) {
+      console.error('Attachment upload failed', err);
+      showToast('"' + file.name + '" failed to upload — ' + err.message, 'error');
+    });
+  });
+  (e.target as HTMLInputElement).value = '';
+}
+
+function removeAttachmentPanelItem(id: number, config: AttachmentPanelConfig): void {
+  const items = config.draftArrayGetter();
+  const att = items.find(function (a) { return a.id === id; });
+  if (att && att.key) deleteAttachmentFile(att.key);
+  config.draftArraySetter(items.filter((a) => a.id !== id));
+  renderAttachmentPanel(config);
+  config.flushFn();
+}
+
+const CARD_ATTACHMENT_PANEL_CONFIG: AttachmentPanelConfig = {
+  draftArrayGetter: function () { return draftAttachments as Attachment[]; },
+  draftArraySetter: function (arr) { draftAttachments = arr; },
+  containerId: 'attachmentItems',
+  removeHandlerName: 'removeAttachment',
+  flushFn: flushCardAutosave,
+};
+function renderAttachments(): void { renderAttachmentPanel(CARD_ATTACHMENT_PANEL_CONFIG); }
+function handleAttachmentUpload(e: Event): void { handleAttachmentPanelUpload(e, CARD_ATTACHMENT_PANEL_CONFIG); }
+function removeAttachment(id: number): void { removeAttachmentPanelItem(id, CARD_ATTACHMENT_PANEL_CONFIG); }
+
+// ===== MANAGE CUSTOM FIELD OPTIONS =====
+function openManageFields(): void {
+  renderManageFieldsBody();
+  openModal('manageFieldsModal');
+}
+
+function closeManageFields(): void {
+  closeModal('manageFieldsModal', function () {
+    saveFieldOptions();
+    // Both the card modal and Job Manager can have this open behind it —
+    // refresh whichever grid(s) actually exist right now, so a newly
+    // added/removed option (Job Type, Timeframe, etc.) shows up in an open
+    // field's dropdown immediately instead of only after reopening.
+    if (document.getElementById('customFieldsGrid')) renderCustomFieldsGrid(collectCustomFieldValues());
+    if (document.getElementById('teamFieldsGrid')) renderTeamFieldsGrid(collectCustomFieldValues());
+    if (document.getElementById('jmCustomFieldsGrid')) renderJobCustomFieldsGrid(collectJobCustomFieldValues());
+    if (document.getElementById('jmTeamFieldsGrid')) renderJobTeamFieldsGrid(collectJobCustomFieldValues());
+  });
+}
+
+function renderManageFieldsBody(): void {
+  const container = document.getElementById('manageFieldsBody')!;
+  // 'multiselect' (Members) is deliberately excluded — it's backed by the
+  // real account roster (see renderCustomFieldsGrid()), not a free-text
+  // fieldOptions pool, so there's nothing here to add/remove; who's
+  // addable is managed via Manage Users instead.
+  const selectDefs = CUSTOM_FIELD_DEFS.filter((d) => d.type === 'select');
+  const groups = selectDefs.map((def) => buildManageFieldGroup(def.key, def.label));
+  container.innerHTML = groups.join('');
+}
+
+function buildManageFieldGroup(key: string, label: string): string {
+  const opts = fieldOptions[key] || [];
+  const chips = opts.map((o) => '<span class="manage-field-chip">' + escapeHtml(o) +
+    '<button onclick="removeFieldOption(\'' + key + '\', \'' + o.replace(/'/g, "\\'") + '\')">×</button></span>').join('');
+  return '<div class="manage-field-group">' +
+    '<h5>' + escapeHtml(label) + '</h5>' +
+    '<div class="manage-field-chips">' + (chips || '<span style="font-size: var(--t-xs);color:#999;">No options yet</span>') + '</div>' +
+    '<div class="manage-field-add-row">' +
+    '<input type="text" id="mf_new_' + key + '" placeholder="Add option..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFieldOption(\'' + key + '\');}">' +
+    '<button class="btn btn-secondary" onclick="addFieldOption(\'' + key + '\')">Add</button>' +
+    '</div></div>';
+}
+
+function addFieldOption(key: string): void {
+  const input = document.getElementById('mf_new_' + key) as HTMLInputElement;
+  const val = input.value.trim();
+  if (!val) return;
+  if (!fieldOptions[key]) fieldOptions[key] = [];
+  if (!fieldOptions[key].includes(val)) fieldOptions[key].push(val);
+  input.value = '';
+  renderManageFieldsBody();
+}
+
+function removeFieldOption(key: string, val: string): void {
+  fieldOptions[key] = (fieldOptions[key] || []).filter((o) => o !== val);
+  renderManageFieldsBody();
+}
+
 export {
   handleColumnDragStart,
   handleColumnDragEnd,
@@ -1539,4 +1883,26 @@ export {
   setColumnDefaultDuration,
   setColumnStalledThreshold,
   reconnectCard,
+  renderFieldDefHtml,
+  renderCustomFieldsGrid,
+  renderTeamFieldsGrid,
+  collectCustomFieldValues,
+  MAX_ATTACHMENT_SIZE,
+  attachmentDownloadUrl,
+  attachmentSrc,
+  uploadAttachmentFile,
+  deleteAttachmentFile,
+  formatFileSize,
+  renderAttachmentPanel,
+  handleAttachmentPanelUpload,
+  removeAttachmentPanelItem,
+  renderAttachments,
+  handleAttachmentUpload,
+  removeAttachment,
+  openManageFields,
+  closeManageFields,
+  renderManageFieldsBody,
+  buildManageFieldGroup,
+  addFieldOption,
+  removeFieldOption,
 };
