@@ -3854,7 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-11.4';
+const APP_VERSION = '2026-09-11.5';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -5017,11 +5017,7 @@ var ganttViewMode = 'tasks';
 // `var`, not `let` — src/views/gantt.ts's bundled renderGantt() (Phase
 // 6c) reads this.
 var collapsedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_collapsed_phases_v1') || '[]', []));
-function togglePhaseCollapse(phaseId) {
-  if (collapsedPhaseIds.has(phaseId)) collapsedPhaseIds.delete(phaseId); else collapsedPhaseIds.add(phaseId);
-  localStorage.setItem('gantt_collapsed_phases_v1', JSON.stringify(Array.from(collapsedPhaseIds)));
-  renderGantt();
-}
+// togglePhaseCollapse() moved to src/views/gantt.ts.
 
 // ===== TASKS VIEW: DEFAULT-COLLAPSED PHASES/SUB-PHASES =====
 // Every phase and sub-phase in Tasks view starts CONDENSED (one bar,
@@ -5045,48 +5041,8 @@ function togglePhaseCollapse(phaseId) {
 // `var`, not `let` — src/views/gantt.ts's bundled row builder reads these.
 var tasksExpandedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_tasks_expanded_phases_v1') || '[]', []));
 var tasksExpandedSubPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_tasks_expanded_subphases_v1') || '[]', []));
-function getSubUnitKey(job, phaseId, subPhaseId) {
-  return job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
-}
-function toggleTasksPhaseExpanded(phaseId) {
-  if (tasksExpandedPhaseIds.has(phaseId)) tasksExpandedPhaseIds.delete(phaseId); else tasksExpandedPhaseIds.add(phaseId);
-  localStorage.setItem('gantt_tasks_expanded_phases_v1', JSON.stringify(Array.from(tasksExpandedPhaseIds)));
-  renderGantt();
-}
-function toggleTasksSubPhaseExpanded(key) {
-  if (tasksExpandedSubPhaseIds.has(key)) tasksExpandedSubPhaseIds.delete(key); else tasksExpandedSubPhaseIds.add(key);
-  localStorage.setItem('gantt_tasks_expanded_subphases_v1', JSON.stringify(Array.from(tasksExpandedSubPhaseIds)));
-  renderGantt();
-}
-// Gantt toolbar's Expand All/Collapse All — bulk versions of
-// toggleTasksPhaseExpanded()/toggleTasksSubPhaseExpanded() above, over
-// every phase/sub-phase of every job currently in view (same job set
-// buildVisibleTaskRows() itself renders — visible-to-me jobs plus
-// cross-project linked references). Harmless to add ids for a
-// non-collapsible/synthetic phase or sub-phase along the way (e.g. an
-// unphased job's default wrapper) — those are never read back since
-// nothing renders a fold toggle for them in the first place.
-function expandAllGantt() {
-  getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
-    getJobPhases(job).forEach(function(phase) {
-      const phaseId = phase.id || null;
-      tasksExpandedPhaseIds.add(phaseId);
-      getPhaseSubUnits(phase).forEach(function(sub) {
-        tasksExpandedSubPhaseIds.add(getSubUnitKey(job, phaseId, sub.id || null));
-      });
-    });
-  });
-  localStorage.setItem('gantt_tasks_expanded_phases_v1', JSON.stringify(Array.from(tasksExpandedPhaseIds)));
-  localStorage.setItem('gantt_tasks_expanded_subphases_v1', JSON.stringify(Array.from(tasksExpandedSubPhaseIds)));
-  renderGantt();
-}
-function collapseAllGantt() {
-  tasksExpandedPhaseIds.clear();
-  tasksExpandedSubPhaseIds.clear();
-  localStorage.setItem('gantt_tasks_expanded_phases_v1', '[]');
-  localStorage.setItem('gantt_tasks_expanded_subphases_v1', '[]');
-  renderGantt();
-}
+// getSubUnitKey()/toggleTasksPhaseExpanded()/toggleTasksSubPhaseExpanded()/
+// expandAllGantt()/collapseAllGantt() moved to src/views/gantt.ts.
 
 // ===== TASKS VIEW: FOCUS ON ONE JOB =====
 // Clicking a job's name pill isolates the Gantt to just that job — every
@@ -5098,73 +5054,8 @@ function collapseAllGantt() {
 // page load and whenever the active project changes (see switchProject()).
 // `var`, not `let` — src/views/gantt.ts's bundled row builder reads this.
 var ganttFocusedJobId = null;
-function toggleGanttJobFocus(jobId) {
-  ganttFocusedJobId = (ganttFocusedJobId === jobId) ? null : jobId;
-  renderGantt();
-}
-function clearGanttJobFocus() {
-  if (!ganttFocusedJobId) return;
-  ganttFocusedJobId = null;
-  renderGantt();
-}
-// Shown in the Gantt toolbar (Tasks view only — see buildVisibleTaskRows()):
-// a quiet hint when nothing's focused (so the click-to-isolate feature is
-// discoverable at all), swapping to the active "Showing only X — Show all"
-// banner once a job is, so there's always an obvious way back to seeing
-// every job again, even after scrolling away from that job's own pill.
-function syncGanttJobFocusBanner() {
-  const el = document.getElementById('ganttJobFocusBanner');
-  if (!el) return;
-  if (ganttViewMode !== 'tasks') {
-    el.style.display = 'none';
-    el.innerHTML = '';
-    return;
-  }
-  // The focused job could vanish out from under the filter (deleted, no
-  // longer a Member — see isJobVisibleToMe() — a project switch already
-  // cleared ganttFocusedJobId — see switchProject() — or it's not in the
-  // member currently being previewed — see viewAsUsername).
-  const job = ganttFocusedJobId ? getVisibleJobs().find(function(j) { return j.id === ganttFocusedJobId; }) : null;
-  el.style.display = 'flex';
-  el.innerHTML = job
-    ? 'Showing only <b>' + escapeHtml(job.name) + '</b> <button type="button" onclick="clearGanttJobFocus()">Show all</button>'
-    : '<span class="gantt-job-focus-hint">Click a job name to isolate it</span>';
-}
-// Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
-// Gantt bar (mirrors the equivalent left-panel pills — see renderGantt()).
-// Returns an array of ready-to-append elements (0-2 of them). `excludeSubTag`
-// is set for a row that already represents a WHOLE folded phase (no single
-// sub-unit context to toggle). Colored the same as the job's own tag/pill —
-// all three (job/phase/sub-phase) read as one family at a glance. Only ever
-// called from Tasks-view render paths, so it reads tasksExpandedPhaseIds/
-// tasksExpandedSubPhaseIds (default-collapsed) rather than collapsedPhaseIds
-// (Jobs/Leads view's own, default-expanded set).
-function buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, phaseFoldable, excludeSubTag) {
-  const tags = [];
-  const bg = job.color || '#999';
-  function makeTag(folded, label, foldedTitle, unfoldedTitle, onClick) {
-    const t = document.createElement('span');
-    t.className = 'task-bar-job-tag collapsible';
-    t.style.background = bg;
-    t.textContent = (folded ? '▸' : '▾') + (label ? ' ' + label : '');
-    t.title = (folded ? foldedTitle : unfoldedTitle) + (label ? ' — ' + label : '');
-    t.addEventListener('mousedown', function(e) { e.stopPropagation(); });
-    t.addEventListener('click', function(e) { e.stopPropagation(); onClick(); });
-    return t;
-  }
-  if (phaseFoldable && phaseName !== null) {
-    tags.push(makeTag(!tasksExpandedPhaseIds.has(phaseId), phaseName,
-      'Click to expand sub-phases', 'Click to collapse sub-phases into one bar',
-      function() { toggleTasksPhaseExpanded(phaseId); }));
-  }
-  if (!excludeSubTag) {
-    const subKey = getSubUnitKey(job, phaseId, subPhaseId);
-    tags.push(makeTag(!tasksExpandedSubPhaseIds.has(subKey), subPhaseName || phaseName || '',
-      'Click to expand into individual tasks', 'Click to collapse into a single bar',
-      function() { toggleTasksSubPhaseExpanded(subKey); }));
-  }
-  return tags;
-}
+// toggleGanttJobFocus()/clearGanttJobFocus()/syncGanttJobFocusBanner()/
+// buildPhaseSubTags() moved to src/views/gantt.ts.
 // Same palette as COLOR_PRESETS (job/task colors), just softened toward
 // pastel — used only for the board column color picker, so picking a
 // board color is its own distinct, intentionally-gentler palette rather
@@ -6804,61 +6695,7 @@ function applyProjectBgVisual() {
 // own bundled code still reads it directly).
 var homeExpandedWidgetId = null;
 
-function computeDateRange() {
-  const hiddenOrders = new Set(
-    BOARD_COLUMNS.map(function(c, i) { return c.hideFromSchedule ? i : null; }).filter(function(i) { return i !== null; })
-  );
-  let datedTasks = [];
-  getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function(job) {
-    getJobPhases(job).forEach(function(phase) {
-      getPhaseSubUnits(phase).forEach(function(subUnit, subIdx) {
-        (subUnit.tasks || []).forEach(function(task) {
-          if (hiddenOrders.has(task.order)) return;
-          if (!task.start || !task.finish) return;
-          const s = new Date(task.start + 'T00:00:00');
-          const f = new Date(task.finish + 'T00:00:00');
-          if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
-          datedTasks.push(task);
-        });
-        // A due date can sit outside every task's date range (e.g. set well
-        // past the last task's finish) — without this the marker could fall
-        // off the edge of the chart entirely, with no grid to scroll into.
-        // Only the FIRST sub-unit's row carries it — see flattenJobs().
-        if (!job.isLinkedReference && subIdx === 0) {
-          const dueTask = getJobDueMarkerTask(job, phase.id);
-          if (dueTask) datedTasks.push(dueTask);
-        }
-      });
-    });
-  });
-  // However the task dates work out, always leave room to scroll back at
-  // least ARCHIVE_CUTOFF_DAYS — otherwise a job that just auto-archived (or
-  // simply doesn't have anything scheduled that far back) leaves no grid to
-  // scroll into, even though the data's still there with "Show archived" on.
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const minPastDate = new Date(today);
-  minPastDate.setDate(minPastDate.getDate() - ARCHIVE_CUTOFF_DAYS);
-
-  if (datedTasks.length === 0) {
-    // No dated tasks anywhere (e.g. brand new jobs with blank grids, or a
-    // project — like Bludorn was — that just doesn't have anything
-    // scheduled yet) — give the chart a window around today. Matches the
-    // +30 days buffer the dated-tasks branch below gets, so every project
-    // behaves the same regardless of whether it happens to have any dates
-    // set yet.
-    startDate = new Date(minPastDate);
-    endDate = new Date(today); endDate.setDate(today.getDate() + 30);
-    return;
-  }
-  const starts = datedTasks.map(t => new Date(t.start + 'T00:00:00'));
-  const finishes = datedTasks.map(t => new Date(t.finish + 'T00:00:00'));
-  startDate = new Date(Math.min.apply(null, starts));
-  endDate = new Date(Math.max.apply(null, finishes));
-  startDate.setDate(startDate.getDate() - 3);
-  endDate.setDate(endDate.getDate() + 30);
-  if (startDate > minPastDate) startDate = minPastDate;
-}
+// computeDateRange() moved to src/views/gantt.ts.
 
 let isSyncingScroll = false;
 
@@ -6969,66 +6806,8 @@ var barMoveState = null;
 var tickResizeState = null;
 
 
-// ===== DATE POPOVER =====
-function showDatePopover(e, date) {
-  const popover = document.getElementById('datePopover');
-  const dateStr = toIsoDate(date);
-  const dayJobs = [];
-  getVisibleJobs().forEach(job => {
-    if (job.archived) return;
-    (job.tasks || []).forEach(task => {
-      const s = new Date(task.start + 'T00:00:00');
-      const f = new Date(task.finish + 'T00:00:00');
-      if (date >= s && date <= f) dayJobs.push({job: job, task: task});
-    });
-  });
-
-  let html = '<h5>' + date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + '</h5>';
-  if (dayJobs.length === 0) {
-    html += '<div class="dp-row"><span class="dp-label">No jobs</span></div>';
-  } else {
-    html += '<div class="dp-row"><span class="dp-label">Jobs:</span><span class="dp-value">' + dayJobs.length + '</span></div>';
-    dayJobs.slice(0, 5).forEach(jt => {
-      html += '<div class="dp-row" style="margin-top: var(--s-1);"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + jt.job.color + ';margin-right: var(--s-1-5);"></span>' + escapeHtml(jt.job.name) + '</div>';
-    });
-    if (dayJobs.length > 5) html += '<div class="dp-row" style="color:#888;font-size: var(--t-2xs);">+' + (dayJobs.length - 5) + ' more...</div>';
-  }
-  popover.innerHTML = html;
-  popover.classList.add('show');
-
-  const rect = e.target.getBoundingClientRect();
-  const parentRect = document.getElementById('timelineBody').getBoundingClientRect();
-  let left = rect.left - parentRect.left + document.getElementById('timelineBody').scrollLeft;
-  let top = rect.bottom - parentRect.top + document.getElementById('timelineBody').scrollTop + 4;
-  popover.style.left = left + 'px';
-  popover.style.top = top + 'px';
-}
-
-function hideDatePopover() {
-  document.getElementById('datePopover').classList.remove('show');
-}
-
-// ===== TOOLTIP =====
-function showTooltip(e, job, task) {
-  const tt = document.getElementById('tooltip');
-  const s = new Date(task.start + 'T00:00:00');
-  const f = new Date(task.finish + 'T00:00:00');
-  const dur = getDaysDiff(s, f) + 1;
-  let html = '<div class="tt-title">' + escapeHtml(job.name) + '</div>';
-  // A job-span bar (see buildPhaseCollapsedRow()/buildSubPhaseRow()) IS the
-  // job/phase, condensed — task.name is just that name again there, so a
-  // "Task:" row repeating the title right above it would be redundant.
-  if (!task.isJobSpan) {
-    html += '<div class="tt-row"><span class="tt-label">Task:</span><span class="tt-value">' + escapeHtml(task.name) + '</span></div>';
-  }
-  html += '<div class="tt-row"><span class="tt-label">Start:</span><span class="tt-value">' + s.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
-  html += '<div class="tt-row"><span class="tt-label">Finish:</span><span class="tt-value">' + f.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</span></div>';
-  html += '<div class="tt-row"><span class="tt-label">Duration:</span><span class="tt-value">' + dur + ' day' + (dur>1?'s':'') + '</span></div>';
-  if (task.notes) html += '<div class="tt-notes">' + escapeHtml(task.notes) + '</div>';
-  tt.innerHTML = html;
-  tt.classList.add('show');
-  moveTooltip(e);
-}
+// showDatePopover()/hideDatePopover()/showTooltip() moved to
+// src/views/gantt.ts.
 // moveTooltip()/hideTooltip() moved to src/utils/ui.ts.
 
 // ===== JOB MANAGER =====

@@ -48,7 +48,9 @@ import {
   startBarMove, onBarMoveMove, applyBarMoveMove, onBarMoveEnd, buildVisibleTaskRows, renderGantt,
   scrollToToday, ganttTouchDist, setGanttDayWidthAnchored, requestGanttZoom, handleGanttTouchStart,
   handleGanttTouchMove, handleGanttTouchEnd, handleGanttWheelZoom, zoomGanttCentered, zoomIn, zoomOut,
-  resetZoom, fitToView,
+  resetZoom, fitToView, togglePhaseCollapse, getSubUnitKey, toggleTasksPhaseExpanded,
+  toggleTasksSubPhaseExpanded, expandAllGantt, collapseAllGantt, toggleGanttJobFocus, clearGanttJobFocus,
+  syncGanttJobFocusBanner, buildPhaseSubTags, computeDateRange, showDatePopover, hideDatePopover, showTooltip,
 } from './views/gantt';
 import {
   sendPresenceUpdate, presenceAvatarColor, presenceInitials, presenceAnimDelay, renderPresenceAvatars,
@@ -254,6 +256,20 @@ declare global {
     zoomOut: typeof zoomOut;
     resetZoom: typeof resetZoom;
     fitToView: typeof fitToView;
+    togglePhaseCollapse: typeof togglePhaseCollapse;
+    getSubUnitKey: typeof getSubUnitKey;
+    toggleTasksPhaseExpanded: typeof toggleTasksPhaseExpanded;
+    toggleTasksSubPhaseExpanded: typeof toggleTasksSubPhaseExpanded;
+    expandAllGantt: typeof expandAllGantt;
+    collapseAllGantt: typeof collapseAllGantt;
+    toggleGanttJobFocus: typeof toggleGanttJobFocus;
+    clearGanttJobFocus: typeof clearGanttJobFocus;
+    syncGanttJobFocusBanner: typeof syncGanttJobFocusBanner;
+    buildPhaseSubTags: typeof buildPhaseSubTags;
+    computeDateRange: typeof computeDateRange;
+    showDatePopover: typeof showDatePopover;
+    hideDatePopover: typeof hideDatePopover;
+    showTooltip: typeof showTooltip;
     sendPresenceUpdate: typeof sendPresenceUpdate;
     presenceAvatarColor: typeof presenceAvatarColor;
     presenceInitials: typeof presenceInitials;
@@ -537,6 +553,20 @@ window.zoomIn = zoomIn;
 window.zoomOut = zoomOut;
 window.resetZoom = resetZoom;
 window.fitToView = fitToView;
+window.togglePhaseCollapse = togglePhaseCollapse;
+window.getSubUnitKey = getSubUnitKey;
+window.toggleTasksPhaseExpanded = toggleTasksPhaseExpanded;
+window.toggleTasksSubPhaseExpanded = toggleTasksSubPhaseExpanded;
+window.expandAllGantt = expandAllGantt;
+window.collapseAllGantt = collapseAllGantt;
+window.toggleGanttJobFocus = toggleGanttJobFocus;
+window.clearGanttJobFocus = clearGanttJobFocus;
+window.syncGanttJobFocusBanner = syncGanttJobFocusBanner;
+window.buildPhaseSubTags = buildPhaseSubTags;
+window.computeDateRange = computeDateRange;
+window.showDatePopover = showDatePopover;
+window.hideDatePopover = hideDatePopover;
+window.showTooltip = showTooltip;
 window.sendPresenceUpdate = sendPresenceUpdate;
 window.presenceAvatarColor = presenceAvatarColor;
 window.presenceInitials = presenceInitials;
