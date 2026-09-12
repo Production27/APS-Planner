@@ -3854,7 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-11.8';
+const APP_VERSION = '2026-09-11.9';
 
 // checkForNewerVersion() moved to src/app/version-check.ts.
 // checkMaintenanceStatus()/applyMaintenanceStatus()/
@@ -9325,311 +9325,52 @@ function mergeTombstones(a, b) {
   return merged;
 }
 
-// `var` — src/sync/outbound.ts's logout() reads these.
-var DISPLAY_NAME_KEY = "gantt_display_name_v1";
-var USERNAME_KEY = "gantt_username_v1";
-// Retired: used to hold the raw password in localStorage indefinitely.
-// Kept only as a key name to scrub (see the boot-time cleanup below) —
-// nothing writes to it anymore.
-const USER_PASSWORD_KEY = "gantt_user_password_v1";
-// Holds the signed room token (see signRoomToken/verifyRoomToken in the
-// Worker) returned by /auth — this, not a password, is what every
-// authenticated request now sends. The raw password only ever exists
-// transiently in memory between a login prompt and the /auth call that
-// consumes it.
-const SESSION_TOKEN_KEY = "gantt_session_token_v1";
+// DISPLAY_NAME_KEY/USERNAME_KEY/getStoredDisplayName()/getStoredUsername()/
+// getStoredSessionToken()/setStoredSessionToken()/decodeSessionTokenPayload()/
+// isSessionTokenUsable() moved to src/auth/session.ts.
+// PERMISSION_TIERS/getEffectiveRole()/hasMinTier()/
+// applyIdentityFromTokenPayload() moved to src/auth/permissions.ts.
 
-function getStoredDisplayName() {
-  return localStorage.getItem(DISPLAY_NAME_KEY) || "";
-}
-function getStoredUsername() {
-  return localStorage.getItem(USERNAME_KEY) || "";
-}
-function getStoredSessionToken() {
-  return localStorage.getItem(SESSION_TOKEN_KEY) || "";
-}
-function setStoredSessionToken(token) {
-  if (token) localStorage.setItem(SESSION_TOKEN_KEY, token);
-  else localStorage.removeItem(SESSION_TOKEN_KEY);
-}
-
-// One-time cleanup for browsers that logged in before this file switched
-// to token-based auth: scrubs the raw password sitting in localStorage
-// from before, regardless of whether a fresh token has been minted yet.
-(function scrubLegacyStoredPassword() {
-  if (localStorage.getItem(USER_PASSWORD_KEY)) {
-    localStorage.removeItem(USER_PASSWORD_KEY);
-  }
-})();
+// currentUserRole/currentAssignedProjectId/roleConfirmed stay real `var`s
+// here (not moved) — switchProject()/enforceProjectScopeForRole()/
+// updateProjectToggle() and other still-in-index.html Project Management
+// code (a later phase) read/write them directly, so src/auth/
+// permissions.ts's bundled applyIdentityFromTokenPayload()/
+// getEffectiveRole() reference them as ambient globals instead.
 
 // Set from the Worker's confirmed identity after a successful login — see
-// fetchRoomToken() below. One of PERMISSION_TIERS below, or null before the
-// first successful connection. Purely a UI convenience (e.g. showing a
-// clearer error before even trying an admin-only action, or hiding/disabling
-// controls per tier via applyPermissionGating()); the Worker re-verifies
-// role server-side on every admin-gated call regardless (account management
-// only — content-level tiers below admin are enforced client-side only, by
+// src/auth/permissions.ts's applyIdentityFromTokenPayload(). One of
+// PERMISSION_TIERS, or null before the first successful connection.
+// Purely a UI convenience (e.g. showing a clearer error before even
+// trying an admin-only action, or hiding/disabling controls per tier via
+// applyPermissionGating()); the Worker re-verifies role server-side on
+// every admin-gated call regardless (account management only —
+// content-level tiers below admin are enforced client-side only, by
 // design), so nothing security-relevant depends on this being accurate.
-let currentUserRole = null;
+var currentUserRole = null;
 
-// Which of the two fixed projects (see FIXED_PROJECT_NAMES) this account is
-// restricted to — null means unrestricted (sees both), which is always true
-// for the 'admin' tier and optionally true for any tier below it. Set
-// alongside currentUserRole in fetchRoomToken(); see enforceProjectScopeForRole().
-let currentAssignedProjectId = null;
+// Which of the two fixed projects (see FIXED_PROJECT_NAMES) this account
+// is restricted to — null means unrestricted (sees both), always true
+// for 'admin' and optionally true for any tier below it. Set alongside
+// currentUserRole in applyIdentityFromTokenPayload(); see
+// enforceProjectScopeForRole().
+var currentAssignedProjectId = null;
 
-// False until fetchRoomToken() has actually heard back from the Worker at
-// least once this page load. Before that, currentAssignedProjectId is still
-// its default null — indistinguishable from "confirmed unrestricted" if
-// nothing else guarded against it, which would let a restricted account
-// switch projects (or see the toggle button) during the brief window right
-// after a page load/refresh, before their real assignment is known. Both
-// switchProject() and updateProjectToggle() fail CLOSED (block/hide) while
-// this is false, not open.
-let roleConfirmed = false;
+// False until applyIdentityFromTokenPayload() has actually heard back
+// from the Worker at least once this page load. Before that,
+// currentAssignedProjectId is still its default null — indistinguishable
+// from "confirmed unrestricted" if nothing else guarded against it, which
+// would let a restricted account switch projects (or see the toggle
+// button) during the brief window right after a page load/refresh,
+// before their real assignment is known. Both switchProject() and
+// updateProjectToggle() fail CLOSED (block/hide) while this is false,
+// not open.
+var roleConfirmed = false;
 
-// Highest to lowest — see the 5-Tier Permission System plan for the full
-// per-tier capability breakdown. hasMinTier() is the one function nearly
-// every permission check in this file should go through, so the ordering
-// only needs to be correct in exactly one place.
-const PERMISSION_TIERS = ['viewer', 'commenter', 'editor', 'projectAdmin', 'admin'];
-// While "View as" is active (see viewAsUsername/viewAsRole above), every
-// hasMinTier() check throughout the app — which is nearly all of them,
-// including the data-min-tier sweep in applyPermissionGating() — reflects
-// the SIMULATED account's own tier instead of the real admin's. Only 2
-// places deliberately read currentUserRole directly instead of going
-// through this: setViewAs() (guarded by a literal currentUserRole ===
-// 'admin' check, so it stays usable no matter how restrictive the tier
-// being previewed is) and enforceProjectScopeForRole() (must react to the
-// REAL account's assignment, not a simulated one). Everywhere else should
-// prefer getEffectiveRole()/hasMinTier() over reading currentUserRole.
-function getEffectiveRole() {
-  return viewAsUsername ? viewAsRole : currentUserRole;
-}
-function hasMinTier(tier) {
-  const effectiveRole = getEffectiveRole();
-  const mine = PERMISSION_TIERS.indexOf(effectiveRole);
-  const need = PERMISSION_TIERS.indexOf(tier);
-  if (mine === -1 || need === -1) return false;
-  return mine >= need;
-}
-
-// Decodes a signed room token's JSON payload WITHOUT verifying its
-// signature — safe to do purely to read exp/role/etc. client-side, since
-// the Worker independently re-verifies the real signature on every actual
-// request. Only ever used to decide whether a cached token is worth
-// reusing and to re-apply its identity claims without a network round-
-// trip. Returns null for anything missing/malformed.
-function decodeSessionTokenPayload(token) {
-  if (typeof token !== 'string' || token.indexOf('.') === -1) return null;
-  try {
-    const bodyB64 = token.slice(0, token.lastIndexOf('.'));
-    const padded = bodyB64.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((bodyB64.length + 3) % 4);
-    return JSON.parse(atob(padded));
-  } catch (e) { return null; }
-}
-// 60s safety margin so a token that's about to expire isn't treated as
-// still usable, sent, and rejected by the Worker a moment later.
-function isSessionTokenUsable(token) {
-  const payload = decodeSessionTokenPayload(token);
-  return !!(payload && typeof payload.exp === 'number' && Date.now() < payload.exp - 60000);
-}
-
-// Applies the identity side effects a token's payload implies — shared by
-// both a brand-new /auth response and a reused cached token, so gating/
-// scoping/toggle state gets (re)asserted from whichever token is actually
-// in play, not just at the moments a network call happens to mint one.
-function applyIdentityFromTokenPayload(payload) {
-  if (!payload) return;
-  if (payload.displayName) localStorage.setItem(DISPLAY_NAME_KEY, payload.displayName);
-  currentUserRole = payload.role || null;
-  currentAssignedProjectId = payload.assignedProjectId || null;
-  roleConfirmed = true;
-  enforceProjectScopeForRole();
-  applyPermissionGating();
-  updateProjectToggle();
-  // Re-evaluate now that the real role is known — checkMaintenanceStatus()
-  // may have already run once before this resolved (roleConfirmed was
-  // still false then, so it deliberately didn't block anyone yet).
-  checkMaintenanceStatus();
-}
-
-// ---- Login overlay (#loginOverlay in the markup) ----
-// Replaces the old window.prompt()-pair flow. showLoginOverlay() displays
-// it and waitForLoginSubmit() resolves once the form is submitted;
-// reauthenticate() below drives the two in a retry loop so a wrong
-// password or a rate-limit lockout just re-shows the form with an inline
-// message instead of throwing back up to the caller — there's no cancel
-// affordance by design, matching blocking the whole app until a valid
-// session exists (see the docs for why, further down).
-let loginFormSubmit = null;
-function showLoginOverlay(prefillUsername) {
-  const userInput = document.getElementById('loginUsername');
-  const passInput = document.getElementById('loginPassword');
-  document.getElementById('loginOverlay').classList.add('show');
-  userInput.value = prefillUsername || '';
-  passInput.value = '';
-  passInput.type = 'password';
-  document.getElementById('loginPwToggle').classList.remove('showing');
-  setLoginBusy(false);
-  (prefillUsername ? passInput : userInput).focus();
-}
-function hideLoginOverlay() {
-  document.getElementById('loginOverlay').classList.remove('show');
-}
-function setLoginBanner(message, tone) {
-  const banner = document.getElementById('loginBanner');
-  document.getElementById('loginFieldUser').classList.toggle('has-error', tone === 'err');
-  document.getElementById('loginFieldPass').classList.toggle('has-error', tone === 'err');
-  if (!message) { banner.classList.remove('show', 'err', 'lockout'); return; }
-  document.getElementById('loginBannerText').textContent = message;
-  banner.classList.add('show');
-  banner.classList.toggle('err', tone === 'err');
-  banner.classList.toggle('lockout', tone === 'lockout');
-}
-function setLoginBusy(busy) {
-  const btn = document.getElementById('loginSubmit');
-  btn.classList.toggle('loading', busy);
-  btn.disabled = busy;
-}
-function waitForLoginSubmit() {
-  return new Promise(function(resolve) {
-    loginFormSubmit = function() {
-      resolve({
-        username: document.getElementById('loginUsername').value.trim(),
-        password: document.getElementById('loginPassword').value
-      });
-    };
-  });
-}
-{
-  const loginFormEl = document.getElementById('loginForm');
-  if (loginFormEl) loginFormEl.addEventListener('submit', function(e) {
-    e.preventDefault();
-    if (loginFormSubmit) loginFormSubmit();
-  });
-}
-{
-  const loginPwToggleEl = document.getElementById('loginPwToggle');
-  if (loginPwToggleEl) loginPwToggleEl.addEventListener('click', function() {
-    const passInput = document.getElementById('loginPassword');
-    const showing = this.classList.toggle('showing');
-    if (passInput) passInput.type = showing ? 'text' : 'password';
-    this.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
-  });
-}
-
-// Shows the login overlay and loops on it until a real token is minted —
-// caches only the username so people aren't asked for it again every visit
-// (the password is used here purely in-memory to mint a token and is never
-// written to localStorage; see SESSION_TOKEN_KEY above). forceReprompt is
-// true for a later reprompt (e.g. a token that stopped being accepted
-// mid-session, not just the very first boot) and just changes the initial
-// banner text. The shared team password no longer exists as a fallback —
-// every login now needs a real individual account. This is the ONLY place
-// a password crosses the wire; everything else uses the token this mints.
-// Deliberately never throws for a credential/lockout failure (unlike the
-// old prompt()-based version) — the overlay has no cancel button, so the
-// only way out of this loop is a successful login, which is also what
-// lets this same function gate app boot (see the bottom of this file).
-async function reauthenticate(forceReprompt) {
-  let username = getStoredUsername();
-  showLoginOverlay(username);
-  if (forceReprompt) setLoginBanner('Your session ended — please sign in again.', 'err');
-
-  while (true) {
-    const creds = await waitForLoginSubmit();
-    username = creds.username;
-    const password = creds.password;
-    localStorage.setItem(USERNAME_KEY, username);
-    setLoginBusy(true);
-
-    let res;
-    try {
-      // `name` is vestigial now that resolveIdentity() has no team-password
-      // fallback path left to use it for — harmless to keep sending, not
-      // worth a change just to remove an unused field.
-      res = await fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username, password: password, name: username })
-      });
-    } catch (networkErr) {
-      setLoginBusy(false);
-      setLoginBanner('Could not reach the server — check your connection and try again.', 'err');
-      continue;
-    }
-
-    if (res.status === 429) {
-      // The Worker's login rate limiter tripped — this is not a bad
-      // credential, so (unlike the block below) the cached username must
-      // NOT be cleared: the account is fine, it's just temporarily locked
-      // out. Surface the Worker's own message rather than a raw status code.
-      let lockoutMessage = 'Too many attempts — try again in a few minutes.';
-      try {
-        const data = await res.json();
-        if (data && data.error) lockoutMessage = data.error;
-      } catch (e) { /* fall back to the default message above */ }
-      setLoginBusy(false);
-      setLoginBanner(lockoutMessage, 'lockout');
-      document.getElementById('loginPassword').focus();
-      continue;
-    }
-    if (!res.ok) {
-      // A rejected login (wrong username OR wrong password — the Worker's
-      // handleAuth() doesn't distinguish which) must not leave a bad
-      // username cached or displayed: every later attempt with no valid
-      // token reuses getStoredUsername() as-is (see reauthenticateOnce()/
-      // getSessionToken()), so a typo on the very first attempt would
-      // otherwise keep getting silently reused forever. Clearing both here
-      // means the next attempt starts fresh on both fields.
-      localStorage.removeItem(USERNAME_KEY);
-      document.getElementById('loginUsername').value = '';
-      document.getElementById('loginPassword').value = '';
-      setLoginBusy(false);
-      setLoginBanner('Incorrect username or password.', 'err');
-      document.getElementById('loginUsername').focus();
-      continue;
-    }
-
-    const data = await res.json();
-    if (!data || !data.token) {
-      setLoginBusy(false);
-      setLoginBanner('Unexpected error — please try again.', 'err');
-      continue;
-    }
-    setStoredSessionToken(data.token);
-    setLoginBusy(false);
-    hideLoginOverlay();
-    return data.token;
-  }
-}
-
-// Returns a usable session token: the cached one if it's still valid
-// (checked locally via isSessionTokenUsable(), no network call), otherwise
-// mints a fresh one via reauthenticate() (which only prompts when there's
-// no cached username, or when forced). Every authenticated call in this
-// file goes through this instead of ever touching a stored password.
-//
-// Several independent things can all discover they need a token within
-// the same tick at boot (the WebSocket connection, the user roster
-// fetch, ...) — without the dedup below, each would independently see no
-// cached token yet and call reauthenticate() on its own, prompting for
-// the password once per caller instead of once total. inFlightAuthPromise
-// makes every concurrent caller (forced or not) share the one request
-// already in progress rather than starting their own.
-let inFlightAuthPromise = null;
-function reauthenticateOnce(forceReprompt) {
-  if (!inFlightAuthPromise) {
-    inFlightAuthPromise = reauthenticate(forceReprompt).finally(function() { inFlightAuthPromise = null; });
-  }
-  return inFlightAuthPromise;
-}
-async function getSessionToken() {
-  const cached = getStoredSessionToken();
-  if (isSessionTokenUsable(cached)) return cached;
-  return await reauthenticateOnce(false);
-}
+// The login overlay (showLoginOverlay()/hideLoginOverlay()/setLoginBanner()/
+// setLoginBusy()/waitForLoginSubmit()/the form-submit and password-toggle
+// listeners), reauthenticate()/reauthenticateOnce()/getSessionToken() moved
+// to src/auth/login.ts.
 
 // ---- Connection state ----
 // `var`, not `let` — src/sync/presence.ts's bundled sendPresenceUpdate() reads this.
@@ -9647,35 +9388,7 @@ var pendingWrites = new Map();
 // listener read and write this.
 var pendingRemoteRefresh = false;
 
-// Runs on every WebSocket (re)connect attempt (see buildRoomWsUrl() below,
-// called fresh by ReconnectingWebSocket each try) — re-asserts project
-// scoping/gating from whatever token ends up in play every time, in case
-// an admin changed this account's tier/project assignment since the last
-// connection. Only hits the network (via getSessionToken()) when there's
-// no still-valid cached token; a valid one is reused and its claims
-// re-decoded locally, rather than re-authenticating from scratch on every
-// single reconnect the way this used to. That does mean a role/project
-// change now takes up to the token's TTL to be reflected here if the
-// connection stays up the whole time without a single reconnect — an
-// accepted tradeoff for a small trusted-team tool (see the token-
-// revocation reasoning near resolveCaller() in the Worker).
-async function fetchRoomToken() {
-  const token = await getSessionToken();
-  applyIdentityFromTokenPayload(decodeSessionTokenPayload(token));
-  return token;
-}
-
-// Called fresh by ReconnectingWebSocket on every (re)connect attempt, not
-// just once — passing the async function itself (not its resolved value)
-// as the url is what makes that happen, so a token minted hours ago never
-// gets reused past its expiry on a long-lived tab's reconnect.
-async function buildRoomWsUrl() {
-  const token = await fetchRoomToken();
-  const httpUrl = new URL('room', API_BASE_URL);
-  httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  httpUrl.searchParams.set('token', token);
-  return httpUrl.toString();
-}
+// fetchRoomToken()/buildRoomWsUrl() moved to src/auth/login.ts.
 
 // ===== PRESENCE (who's currently viewing which tab/project) =====
 // Deliberately a fully separate, best-effort system, not routed through

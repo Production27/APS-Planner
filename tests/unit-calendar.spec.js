@@ -66,21 +66,25 @@ test('getCalendarEventOccurrences: a per-occurrence exception can skip, move, or
 test('isCalendarEventVisibleToMe: private and members-only visibility gate correctly, all/projectAdmin bypass', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {
-    // Stub the ambient globals isCalendarEventVisibleToMe() depends on —
-    // this fixture has no real app/session state, only the bundle.
-    window.getEffectiveRole = () => window.__role || 'member';
-    window.getStoredUsername = () => 'alice';
+    // getEffectiveRole()/getStoredUsername() are real src/auth/ imports
+    // now, not ambient globals — calendar.ts's own bundled code already
+    // holds a resolved reference to them, so reassigning window.X (or the
+    // bare identifier) no longer redirects what it calls. Drive the real
+    // underlying state they read instead: currentUserRole/viewAsUsername
+    // (still real index.html globals) and localStorage (getStoredUsername()'s
+    // actual backing store).
+    localStorage.setItem('gantt_username_v1', 'alice');
     viewAsUsername = null;
 
     const privateEvt = { visibility: 'private', createdBy: 'bob' };
     const membersEvt = { visibility: 'members', visibleMembers: ['alice', 'carol'] };
     const allEvt = { visibility: 'all' };
 
-    window.__role = 'member';
+    currentUserRole = 'member';
     const aliceSeesBobsPrivate = isCalendarEventVisibleToMe(privateEvt);
     const aliceSeesOwnMembersList = isCalendarEventVisibleToMe(membersEvt);
 
-    window.__role = 'projectAdmin';
+    currentUserRole = 'projectAdmin';
     const projectAdminBypassesPrivate = isCalendarEventVisibleToMe(privateEvt);
 
     return {

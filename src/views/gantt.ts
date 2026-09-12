@@ -35,6 +35,7 @@ import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { showToast, moveTooltip, hideTooltip } from '../utils/ui';
+import { hasMinTier } from '../auth/permissions';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, saveJobs(), showToast(), getJobDueMarkerTask(), etc.)

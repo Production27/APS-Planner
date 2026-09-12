@@ -52,6 +52,7 @@ import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
 import { darkenColor } from '../utils/color';
 import { openModal, closeModal, showToast, onPanelResize } from '../utils/ui';
+import { hasMinTier } from '../auth/permissions';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 import { buildHomeStageSummary, buildHomeStalledRows } from './home';
 

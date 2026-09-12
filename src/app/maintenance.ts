@@ -10,10 +10,6 @@
 import { showToast } from '../utils/ui';
 
 declare global {
-  // eslint-disable-next-line no-var
-  var roleConfirmed: boolean;
-  // eslint-disable-next-line no-var
-  var currentUserRole: string;
   function logActivity(text: string): void;
   function postUsersEndpoint(path: string, body: unknown): Promise<any>;
 }

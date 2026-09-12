@@ -21,16 +21,12 @@
 // logic reused here, not Calendar-specific. Declared as ambient globals
 // below since this file's render functions call them directly.
 //
-// getEffectiveRole()/getStoredUsername()/ensureUserRosterLoaded()/
-// saveCalendarEvents()/logActivity()/hasMinTier()/
+// ensureUserRosterLoaded()/saveCalendarEvents()/logActivity()/
 // deleteCalendarEventFromShared()/getVisibleJobs()/flattenJobs()/
 // buildCalendarJobRows()/isTaskFinished()/isDarkColor()/editJob() stay in
-// index.html on purpose (session/role plumbing, the Gantt-clustering-
-// coupled row builder noted above, or genuinely separate concerns like
-// Job Manager's own edit-drawer) and are referenced below as ambient
-// globals — an ordinary top-level `function` declaration already
-// attaches to `window` on its own (unlike `let`/`const`), so nothing
-// about those needed to change.
+// index.html on purpose (the Gantt-clustering-coupled row builder noted
+// above, or genuinely separate concerns like Job Manager's own
+// edit-drawer) and are referenced below as ambient globals.
 import type { CalendarEvent, CalendarEventOccurrence, Job } from '../core/types';
 import { addMonths, toIsoDate, formatTimeLabel, timeToMinutes, getDaysDiff } from '../utils/date';
 import { genId } from '../utils/id';
@@ -38,6 +34,8 @@ import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getPhaseCard } from '../core/models';
 import { openModal, closeModal, showToast, moveTooltip, hideTooltip, msDropdownLabelText, onPanelResize } from '../utils/ui';
+import { getEffectiveRole, hasMinTier } from '../auth/permissions';
+import { getStoredUsername } from '../auth/session';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS-style shared state, saveJobs()-style shared functions,

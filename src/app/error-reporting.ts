@@ -1,18 +1,10 @@
 // A crash used to only surface if the person who hit it happened to
 // mention it — nothing told an admin automatically. Registered as early
 // as possible (this module is one of the first imported by main.ts) so
-// it catches as much of boot as possible. getStoredSessionToken() is
-// declared ambient below (still in index.html, part of the not-yet-
-// extracted auth/login code) — safe because the listeners below only
-// ever fire later, asynchronously, on an actual error, by which point
-// index.html's own top-to-bottom script has long since finished. The
-// try/catch inside reportClientError() is what makes that safe even in
-// the rare case it doesn't: reporting an error must never itself throw
-// a second one.
-
-declare global {
-  function getStoredSessionToken(): string | null;
-}
+// it catches as much of boot as possible. The try/catch inside
+// reportClientError() is what makes that safe even if something inside
+// it throws: reporting an error must never itself throw a second one.
+import { getStoredSessionToken } from '../auth/session';
 
 let clientErrorReportCount = 0;
 const MAX_CLIENT_ERROR_REPORTS_PER_LOAD = 20; // bounds a tight error loop, not normal use

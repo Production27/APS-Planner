@@ -59,6 +59,7 @@ import { toIsoDate, getDaysDiff } from '../utils/date';
 import { darkenColor, softenColor } from '../utils/color';
 import { renderGantt, setupScrollSync } from './gantt';
 import { onPanelResize } from '../utils/ui';
+import { getStoredDisplayName } from '../auth/session';
 import {
   renderCalendar, initCalendarDragHandlers, buildCalBarHtml, flattenCalendarEventsForRange,
   isCalendarEventTaskId, parseCalendarEventTaskId, openEditCalendarEvent, calendarOpenJob,

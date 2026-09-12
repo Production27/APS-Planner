@@ -17,10 +17,10 @@
 // reader and writer of them lives in the functions here, so they're
 // ordinary module-scoped `let`s below rather than ambient globals.
 //
-// localActivityLog/USERNAME_KEY/DISPLAY_NAME_KEY are `var`s in
-// index.html, since logActivity()/logout() below read/write them from
-// this separately-bundled script.
+// localActivityLog is a `var` in index.html, since logActivity() below
+// reads/writes it from this separately-bundled script.
 import { setSyncIndicator } from './connection';
+import { USERNAME_KEY, DISPLAY_NAME_KEY, getStoredDisplayName, setStoredSessionToken } from '../auth/session';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomSocket, activeProjectId, projects, saveProjects(),
@@ -29,10 +29,6 @@ import { setSyncIndicator } from './connection';
 declare global {
   // eslint-disable-next-line no-var
   var localActivityLog: { who: string; what: string; when: number }[];
-  // eslint-disable-next-line no-var
-  var USERNAME_KEY: string;
-  // eslint-disable-next-line no-var
-  var DISPLAY_NAME_KEY: string;
   function getActiveProject(): any;
   function normalizeThemeColor(theme: unknown): string;
   function getSavedThemeColor(): string;

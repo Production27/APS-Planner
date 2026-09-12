@@ -20,14 +20,14 @@
 // src/views/gantt.ts and src/views/calendar.ts) and draggedCardId/
 // draggedColId (Board's own, in src/views/board.ts).
 import { sendPresenceUpdate } from './presence';
+import { setStoredSessionToken } from '../auth/session';
+import { reauthenticateOnce, buildRoomWsUrl } from '../auth/login';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomSocket, roomEverConnected, pendingWrites, draggedCardId,
-// draggedColId, setStoredSessionToken(), etc.) are declared once in
-// src/shared-globals.d.ts, not repeated here.
+// draggedColId, etc.) are declared once in src/shared-globals.d.ts, not
+// repeated here.
 declare global {
-  function reauthenticateOnce(forceReprompt: boolean): Promise<unknown>;
-  function buildRoomWsUrl(): Promise<string>;
   function handleRoomMessage(msg: unknown): void;
 }
 

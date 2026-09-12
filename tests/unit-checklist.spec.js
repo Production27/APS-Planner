@@ -54,8 +54,14 @@ test('normalizeChecklistAssignees: passes arrays through, wraps a single value, 
 test('isChecklistStageVisibleToMe: no assignees on the stage means everyone can see it', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {
-    getEffectiveRole = () => 'member';
-    getStoredUsername = () => 'alice';
+    // getEffectiveRole()/getStoredUsername() are real src/auth/ imports
+    // now — this file's own bundled code holds a resolved reference to
+    // them, so reassigning the bare identifier no longer redirects what
+    // it calls. Drive the real underlying state instead: currentUserRole/
+    // viewAsUsername/viewAsRole (still real index.html globals) and
+    // localStorage (getStoredUsername()'s actual backing store).
+    currentUserRole = 'member';
+    localStorage.setItem('gantt_username_v1', 'alice');
     viewAsUsername = null;
     return isChecklistStageVisibleToMe({}, 'active');
   });
@@ -65,12 +71,12 @@ test('isChecklistStageVisibleToMe: no assignees on the stage means everyone can 
 test('isChecklistStageVisibleToMe: a stage restricted to specific usernames hides from everyone else, but is visible to a matching username', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {
-    getEffectiveRole = () => 'member';
+    currentUserRole = 'member';
     viewAsUsername = null;
     const assignees = { active: ['alice', 'bob'] };
-    getStoredUsername = () => 'carol';
+    localStorage.setItem('gantt_username_v1', 'carol');
     const carolSees = isChecklistStageVisibleToMe(assignees, 'active');
-    getStoredUsername = () => 'bob';
+    localStorage.setItem('gantt_username_v1', 'bob');
     const bobSees = isChecklistStageVisibleToMe(assignees, 'active');
     return { carolSees, bobSees };
   });
@@ -80,8 +86,8 @@ test('isChecklistStageVisibleToMe: a stage restricted to specific usernames hide
 test('isChecklistStageVisibleToMe: an admin bypasses a restricted stage even when not in the assignee list', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {
-    getEffectiveRole = () => 'admin';
-    getStoredUsername = () => 'zoe';
+    currentUserRole = 'admin';
+    localStorage.setItem('gantt_username_v1', 'zoe');
     viewAsUsername = null;
     return isChecklistStageVisibleToMe({ active: ['alice'] }, 'active');
   });
@@ -91,8 +97,8 @@ test('isChecklistStageVisibleToMe: an admin bypasses a restricted stage even whe
 test('isChecklistStageVisibleToMe: while "viewing as" someone, visibility resolves against the simulated username, not the real admin\'s', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {
-    getEffectiveRole = () => 'member'; // simulated account's role, per hasMinTier()'s own View As convention
-    getStoredUsername = () => 'realadmin';
+    viewAsRole = 'member'; // simulated account's role, per hasMinTier()'s own View As convention
+    localStorage.setItem('gantt_username_v1', 'realadmin');
     viewAsUsername = 'alice';
     return isChecklistStageVisibleToMe({ active: ['alice'] }, 'active');
   });
@@ -104,8 +110,8 @@ test('isChecklistStageVisibleToMe: while "viewing as" someone, visibility resolv
 test('getOpenChecklistItemsForCard: with no required items, every unfinished item (and sub-item) gates the move', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {
-    getEffectiveRole = () => 'member';
-    getStoredUsername = () => 'alice';
+    currentUserRole = 'member';
+    localStorage.setItem('gantt_username_v1', 'alice');
     viewAsUsername = null;
     BOARD_COLUMNS = [{ id: 'active', label: 'Active', defaultChecklist: [{ id: 'tmpl-1', text: 'Template item (not yet stored)' }] }];
     const card = {
@@ -123,8 +129,8 @@ test('getOpenChecklistItemsForCard: with no required items, every unfinished ite
 test('getOpenChecklistItemsForCard: once any item is flagged required, only required items gate the move', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {
-    getEffectiveRole = () => 'member';
-    getStoredUsername = () => 'alice';
+    currentUserRole = 'member';
+    localStorage.setItem('gantt_username_v1', 'alice');
     viewAsUsername = null;
     BOARD_COLUMNS = [{ id: 'active', label: 'Active' }];
     const card = {
@@ -142,8 +148,8 @@ test('getOpenChecklistItemsForCard: once any item is flagged required, only requ
 test('getOpenChecklistItemsForCard: a stage hidden from the current user never gates the move', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {
-    getEffectiveRole = () => 'member';
-    getStoredUsername = () => 'someone-else';
+    currentUserRole = 'member';
+    localStorage.setItem('gantt_username_v1', 'someone-else');
     viewAsUsername = null;
     BOARD_COLUMNS = [{ id: 'active', label: 'Active' }];
     const card = {

@@ -37,6 +37,10 @@ declare global {
   var COLOR_PRESETS: string[];
   // eslint-disable-next-line no-var
   var activeProjectId: string | null;
+  // eslint-disable-next-line no-var
+  var currentUserRole: string | null;
+  // eslint-disable-next-line no-var
+  var roleConfirmed: boolean;
   // Every field this shape lists is actually read by at least one src/
   // file's push functions (jobs/boardCards/calendarEvents/header/
   // boardColumns/fieldOptions/workflowItems/fieldRevisions/deletedIds/
@@ -82,15 +86,10 @@ declare global {
   function saveProjects(): void;
   function saveBoardColumns(): void;
   function logActivity(text: string): void;
-  function hasMinTier(tier: string): boolean;
   function isJobVisibleToMe(job: Job): boolean;
   function isFinishedColumnId(colId: string): boolean;
   function applyPermissionGating(): void;
   function ensureUserRosterLoaded(): Promise<void>;
-  function getEffectiveRole(): string;
-  function getStoredUsername(): string;
-  function getStoredDisplayName(): string;
-  function setStoredSessionToken(token: string | null): void;
   function updateProjectToggle(): void;
   function mergeTombstones(a: Record<string, number> | undefined, b: Record<string, number>): Record<string, number>;
   function renderJobList(): void;

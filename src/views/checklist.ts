@@ -28,6 +28,8 @@ import { findJob, getJobPhases } from '../core/models';
 import { pushProjectToShared } from '../sync/outbound';
 import { closeAllColSettings, openEditCard } from './board';
 import { openModal, closeModal, showToast, toggleMsDropdown, msSetAll, msDropdownLabelText } from '../utils/ui';
+import { getEffectiveRole, hasMinTier } from '../auth/permissions';
+import { getStoredUsername } from '../auth/session';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, activeProjectId, saveJobs(), etc.) are declared once
