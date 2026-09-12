@@ -125,6 +125,16 @@ import {
   duplicateJob, promptDeleteJob, confirmDelete, executeDelete, closeDeleteJobModal,
 } from './views/job-list';
 import {
+  renderFixedTaskGrid, updateJobCurrentBoardIndicator, renderJobPhaseStrip, renderJobSubPhaseStrip,
+  renderJobFormForPhase, selectJobPhase, splitJobIntoPhasesUI, addJobPhaseUI, renameJobPhaseUI,
+  deleteJobPhaseUI, selectJobSubPhase, getCurrentEditingPhase, splitPhaseIntoSubPhasesUI,
+  addPhaseSubUnitUI, renameSubPhaseUI, deleteSubPhaseUI, renderJobLinkSection, openJobLinkPickerUI,
+  cancelJobLinkPickerUI, confirmJobLinkUI, toggleJobLinkEnabledUI, unlinkJobUI, openJobDrawer,
+  closeJobDrawer, addNewJob, editJob, refreshJobFormIfOpen, scheduleAutoSaveJobForm,
+  flushAutoSaveJobForm, cancelPendingJobAutosave, setJobNameHint, showTaskRowWarnings,
+  autoSaveJobForm, initJobFormAutosaveListeners, cancelEdit,
+} from './views/job-form';
+import {
   getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
   applyHomeReflowTracks, toggleHomeWidgetExpand, buildHomeOverdueRows, buildHomeStalledRows, buildHomeStageSummary,
   buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows, renderHomeGreeting,
@@ -369,6 +379,41 @@ declare global {
     confirmDelete: typeof confirmDelete;
     executeDelete: typeof executeDelete;
     closeDeleteJobModal: typeof closeDeleteJobModal;
+    renderFixedTaskGrid: typeof renderFixedTaskGrid;
+    updateJobCurrentBoardIndicator: typeof updateJobCurrentBoardIndicator;
+    renderJobPhaseStrip: typeof renderJobPhaseStrip;
+    renderJobSubPhaseStrip: typeof renderJobSubPhaseStrip;
+    renderJobFormForPhase: typeof renderJobFormForPhase;
+    selectJobPhase: typeof selectJobPhase;
+    splitJobIntoPhasesUI: typeof splitJobIntoPhasesUI;
+    addJobPhaseUI: typeof addJobPhaseUI;
+    renameJobPhaseUI: typeof renameJobPhaseUI;
+    deleteJobPhaseUI: typeof deleteJobPhaseUI;
+    selectJobSubPhase: typeof selectJobSubPhase;
+    getCurrentEditingPhase: typeof getCurrentEditingPhase;
+    splitPhaseIntoSubPhasesUI: typeof splitPhaseIntoSubPhasesUI;
+    addPhaseSubUnitUI: typeof addPhaseSubUnitUI;
+    renameSubPhaseUI: typeof renameSubPhaseUI;
+    deleteSubPhaseUI: typeof deleteSubPhaseUI;
+    renderJobLinkSection: typeof renderJobLinkSection;
+    openJobLinkPickerUI: typeof openJobLinkPickerUI;
+    cancelJobLinkPickerUI: typeof cancelJobLinkPickerUI;
+    confirmJobLinkUI: typeof confirmJobLinkUI;
+    toggleJobLinkEnabledUI: typeof toggleJobLinkEnabledUI;
+    unlinkJobUI: typeof unlinkJobUI;
+    openJobDrawer: typeof openJobDrawer;
+    closeJobDrawer: typeof closeJobDrawer;
+    addNewJob: typeof addNewJob;
+    editJob: typeof editJob;
+    refreshJobFormIfOpen: typeof refreshJobFormIfOpen;
+    scheduleAutoSaveJobForm: typeof scheduleAutoSaveJobForm;
+    flushAutoSaveJobForm: typeof flushAutoSaveJobForm;
+    cancelPendingJobAutosave: typeof cancelPendingJobAutosave;
+    setJobNameHint: typeof setJobNameHint;
+    showTaskRowWarnings: typeof showTaskRowWarnings;
+    autoSaveJobForm: typeof autoSaveJobForm;
+    initJobFormAutosaveListeners: typeof initJobFormAutosaveListeners;
+    cancelEdit: typeof cancelEdit;
     isCalendarEventTaskId: typeof isCalendarEventTaskId;
     parseCalendarEventTaskId: typeof parseCalendarEventTaskId;
     defaultRepeatUntil: typeof defaultRepeatUntil;
@@ -813,6 +858,41 @@ window.promptDeleteJob = promptDeleteJob;
 window.confirmDelete = confirmDelete;
 window.executeDelete = executeDelete;
 window.closeDeleteJobModal = closeDeleteJobModal;
+window.renderFixedTaskGrid = renderFixedTaskGrid;
+window.updateJobCurrentBoardIndicator = updateJobCurrentBoardIndicator;
+window.renderJobPhaseStrip = renderJobPhaseStrip;
+window.renderJobSubPhaseStrip = renderJobSubPhaseStrip;
+window.renderJobFormForPhase = renderJobFormForPhase;
+window.selectJobPhase = selectJobPhase;
+window.splitJobIntoPhasesUI = splitJobIntoPhasesUI;
+window.addJobPhaseUI = addJobPhaseUI;
+window.renameJobPhaseUI = renameJobPhaseUI;
+window.deleteJobPhaseUI = deleteJobPhaseUI;
+window.selectJobSubPhase = selectJobSubPhase;
+window.getCurrentEditingPhase = getCurrentEditingPhase;
+window.splitPhaseIntoSubPhasesUI = splitPhaseIntoSubPhasesUI;
+window.addPhaseSubUnitUI = addPhaseSubUnitUI;
+window.renameSubPhaseUI = renameSubPhaseUI;
+window.deleteSubPhaseUI = deleteSubPhaseUI;
+window.renderJobLinkSection = renderJobLinkSection;
+window.openJobLinkPickerUI = openJobLinkPickerUI;
+window.cancelJobLinkPickerUI = cancelJobLinkPickerUI;
+window.confirmJobLinkUI = confirmJobLinkUI;
+window.toggleJobLinkEnabledUI = toggleJobLinkEnabledUI;
+window.unlinkJobUI = unlinkJobUI;
+window.openJobDrawer = openJobDrawer;
+window.closeJobDrawer = closeJobDrawer;
+window.addNewJob = addNewJob;
+window.editJob = editJob;
+window.refreshJobFormIfOpen = refreshJobFormIfOpen;
+window.scheduleAutoSaveJobForm = scheduleAutoSaveJobForm;
+window.flushAutoSaveJobForm = flushAutoSaveJobForm;
+window.cancelPendingJobAutosave = cancelPendingJobAutosave;
+window.setJobNameHint = setJobNameHint;
+window.showTaskRowWarnings = showTaskRowWarnings;
+window.autoSaveJobForm = autoSaveJobForm;
+window.initJobFormAutosaveListeners = initJobFormAutosaveListeners;
+window.cancelEdit = cancelEdit;
 window.isCalendarEventTaskId = isCalendarEventTaskId;
 window.parseCalendarEventTaskId = parseCalendarEventTaskId;
 window.defaultRepeatUntil = defaultRepeatUntil;
