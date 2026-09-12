@@ -19,7 +19,9 @@ import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
   getDragAfterColumn, syncColumnsFromDOM, handleCardDragStart, handleCardDragEnd, handleColumnDragOver, applyColumnDragOver,
   handleColumnDragLeave, dropNeedsManualOverride, handleColumnDrop, moveCardToColumn, getDragAfterElement, syncBoardCardsFromDOM,
-  addBoardColumn, deleteBoardColumn, renameBoardColumn, isCardFromArchivedJob, isCardVisibleToMe,
+  slugifyColumnId, addBoardColumn, showAddColumnForm, hideAddColumnForm, handleAddColumnKey, submitAddColumn,
+  deleteBoardColumn, renameBoardColumn, buildWorkflowStageData, renderBoardWorkflowStrip, scrollToBoardColumn,
+  isCardFromArchivedJob, isCardVisibleToMe,
   openWorkflowItemsModal, closeWorkflowItemsModal, renderWorkflowItemsBody, toggleWorkflowItemColorPanel, changeWorkflowItemColor,
   addWorkflowItem, removeWorkflowItem, handleColorSwatchKeydown,
   resolveCardNameTarget, openEditCard, closeCardModal, scheduleCardAutosave, flushCardAutosave, cancelPendingCardAutosave,
@@ -133,9 +135,17 @@ declare global {
     moveCardToColumn: typeof moveCardToColumn;
     getDragAfterElement: typeof getDragAfterElement;
     syncBoardCardsFromDOM: typeof syncBoardCardsFromDOM;
+    slugifyColumnId: typeof slugifyColumnId;
     addBoardColumn: typeof addBoardColumn;
+    showAddColumnForm: typeof showAddColumnForm;
+    hideAddColumnForm: typeof hideAddColumnForm;
+    handleAddColumnKey: typeof handleAddColumnKey;
+    submitAddColumn: typeof submitAddColumn;
     deleteBoardColumn: typeof deleteBoardColumn;
     renameBoardColumn: typeof renameBoardColumn;
+    buildWorkflowStageData: typeof buildWorkflowStageData;
+    renderBoardWorkflowStrip: typeof renderBoardWorkflowStrip;
+    scrollToBoardColumn: typeof scrollToBoardColumn;
     isCardFromArchivedJob: typeof isCardFromArchivedJob;
     isCardVisibleToMe: typeof isCardVisibleToMe;
     escapeHtml: typeof escapeHtml;
@@ -430,9 +440,17 @@ window.handleColumnDrop = handleColumnDrop;
 window.moveCardToColumn = moveCardToColumn;
 window.getDragAfterElement = getDragAfterElement;
 window.syncBoardCardsFromDOM = syncBoardCardsFromDOM;
+window.slugifyColumnId = slugifyColumnId;
 window.addBoardColumn = addBoardColumn;
+window.showAddColumnForm = showAddColumnForm;
+window.hideAddColumnForm = hideAddColumnForm;
+window.handleAddColumnKey = handleAddColumnKey;
+window.submitAddColumn = submitAddColumn;
 window.deleteBoardColumn = deleteBoardColumn;
 window.renameBoardColumn = renameBoardColumn;
+window.buildWorkflowStageData = buildWorkflowStageData;
+window.renderBoardWorkflowStrip = renderBoardWorkflowStrip;
+window.scrollToBoardColumn = scrollToBoardColumn;
 window.isCardFromArchivedJob = isCardFromArchivedJob;
 window.isCardVisibleToMe = isCardVisibleToMe;
 window.escapeHtml = escapeHtml;

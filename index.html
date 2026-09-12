@@ -3854,7 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-11.5';
+const APP_VERSION = '2026-09-11.6';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -8949,38 +8949,8 @@ async function changeMyPasswordUI() {
    loadActiveProjectData(), which reads boardCards/BOARD_COLUMNS from
    the per-project data directly. */
 
-function slugifyColumnId(label) {
-  let base = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '');
-  if (!base) base = 'board';
-  let id = base, n = 2;
-  while (BOARD_COLUMNS.some(c => c.id === id)) { id = base + '-' + n; n++; }
-  return id;
-}
-
-function showAddColumnForm() {
-  document.getElementById('addColumnBtn').style.display = 'none';
-  document.getElementById('addColumnForm').classList.add('active');
-  document.getElementById('newColumnName').focus();
-}
-
-function hideAddColumnForm() {
-  document.getElementById('addColumnBtn').style.display = 'block';
-  document.getElementById('addColumnForm').classList.remove('active');
-  document.getElementById('newColumnName').value = '';
-}
-
-function handleAddColumnKey(e) {
-  if (e.key === 'Enter') { e.preventDefault(); submitAddColumn(); }
-  if (e.key === 'Escape') { hideAddColumnForm(); }
-}
-
-function submitAddColumn() {
-  const input = document.getElementById('newColumnName');
-  const trimmed = input.value.trim();
-  if (!trimmed) { showToast('Board name cannot be empty', 'error'); return; }
-  addBoardColumn(trimmed);
-  hideAddColumnForm();
-}
+// slugifyColumnId()/showAddColumnForm()/hideAddColumnForm()/
+// handleAddColumnKey()/submitAddColumn() moved to src/views/board.ts.
 
 // ===== BOARD: CARD MODAL =====
 // ----- Custom fields -----
@@ -9460,126 +9430,13 @@ var DEFAULT_STALLED_AFTER_DAYS = 14;
 // below/above it for panel-calendar/panel-board.
 onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200);
 
-// Groups BOARD_COLUMNS into contiguous runs sharing the same
-// workflowItemId — an unassigned column never merges with an adjacent
-// unassigned one (each keeps its own board name; only columns actually
-// assigned to the SAME item merge into one span, per Karl's spec: "a
-// workflow item with more than one board would stretch above both
-// boards if they are next to each other"). Reuses
-// buildHomeStageSummary()'s counts and buildHomeStalledRows() rather
-// than recomputing either. See renderBoardWorkflowStrip() for the
-// position-measuring/rendering half.
-function buildWorkflowStageData() {
-  const perColumnCounts = {};
-  buildHomeStageSummary().forEach(function(s) { perColumnCounts[s.id] = s.count; });
-  const stalledCountByCol = {};
-  buildHomeStalledRows().forEach(function(row) {
-    stalledCountByCol[row.card.column] = (stalledCountByCol[row.card.column] || 0) + 1;
-  });
-
-  const runs = [];
-  BOARD_COLUMNS.forEach(function(col) {
-    const key = col.workflowItemId || ('__col__' + col.id);
-    const prevRun = runs[runs.length - 1];
-    if (prevRun && prevRun.key === key) prevRun.colIds.push(col.id);
-    else runs.push({ key: key, workflowItemId: col.workflowItemId || null, colIds: [col.id] });
-  });
-
-  return runs.map(function(run) {
-    const item = run.workflowItemId ? WORKFLOW_ITEMS.find(function(i) { return i.id === run.workflowItemId; }) : null;
-    const firstCol = BOARD_COLUMNS.find(function(c) { return c.id === run.colIds[0]; });
-    return {
-      firstColId: run.colIds[0],
-      lastColId: run.colIds[run.colIds.length - 1],
-      label: item ? item.label : (firstCol ? firstCol.label : ''),
-      color: item ? item.color : null,
-      isItem: !!item,
-      count: run.colIds.reduce(function(n, id) { return n + (perColumnCounts[id] || 0); }, 0),
-      stalledCount: run.colIds.reduce(function(n, id) { return n + (stalledCountByCol[id] || 0); }, 0)
-    };
-  });
-}
-
-// The stacked-header band above the board itself (see
-// .board-workflow-strip CSS for the full design rationale). Measures
-// each group's real left/right edge against the actual rendered
-// .board-column elements — not computed from fixed widths, so it stays
-// correct whether desktop (245px columns) or mobile (calc(100vw-48px))
-// — then draws an angled bracket per group and a flow arrow in each
-// real gap between adjacent groups. Called from renderBoard() so it
-// always reflects the same data/column positions currently on screen.
-function renderBoardWorkflowStrip() {
-  const wrapper = document.getElementById('boardWrapper');
-  const track = document.getElementById('wfTrack');
-  if (!wrapper || !track) return;
-  const wrapperRect = wrapper.getBoundingClientRect();
-
-  const measured = buildWorkflowStageData().map(function(g) {
-    const firstEl = wrapper.querySelector('.board-column[data-column="' + g.firstColId + '"]');
-    const lastEl = wrapper.querySelector('.board-column[data-column="' + g.lastColId + '"]');
-    if (!firstEl || !lastEl) return null;
-    const left = firstEl.getBoundingClientRect().left - wrapperRect.left + wrapper.scrollLeft;
-    const right = lastEl.getBoundingClientRect().right - wrapperRect.left + wrapper.scrollLeft;
-    return Object.assign({}, g, { left: left, right: right });
-  }).filter(Boolean);
-
-  const segmentsHtml = measured.map(function(g) {
-    const width = g.right - g.left;
-    const isUnassigned = !g.isItem;
-    const style = 'left:' + g.left + 'px; width:' + width + 'px;';
-    const stalledHtml = g.stalledCount ? '<span class="wf-stalled">⚠ ' + g.stalledCount + '</span>' : '';
-    const labelRow = '<div class="wf-seg-label">' + escapeHtml(g.label) +
-      (isUnassigned ? '' : '<span class="wf-count">' + g.count + '</span>') +
-      stalledHtml +
-    '</div>';
-    // Angled ticks (a trapezoid: narrower at the top bar, flaring
-    // outward toward the boards) rather than a squared-off corner, per
-    // Karl's direction — drawn over every group, single-column or not.
-    const bw = Math.max(width - 16, 20);
-    const inset = 2.5, flare = 7;
-    const path = 'M' + inset + ',10 L' + (inset + flare) + ',2.5 L' + (bw - inset - flare) + ',2.5 L' + (bw - inset) + ',10';
-    const bracketStyle = g.color ? ('color:' + g.color + ';') : 'color:var(--text-light);opacity:0.6;';
-    const bracket = '<div class="wf-bracket-wrap" style="' + bracketStyle + '"><svg width="' + bw + '" height="10" viewBox="0 0 ' + bw + ' 10">' +
-      '<path d="' + path + '" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
-      '</svg></div>';
-    const title = g.count + ' job' + (g.count === 1 ? '' : 's') + ' in ' + g.label + (g.stalledCount ? ', ' + g.stalledCount + ' stalled' : '');
-    return '<div class="wf-seg' + (isUnassigned ? ' unassigned' : '') + '" style="' + style + '" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="scrollToBoardColumn(\'' + g.firstColId + '\')" title="' + escapeHtml(title) + '">' + labelRow + bracket + '</div>';
-  }).join('');
-
-  // One arrow per real gap between adjacent groups — flow direction
-  // between workflow items, not just within one.
-  const arrowsHtml = measured.slice(0, -1).map(function(g, i) {
-    const next = measured[i + 1];
-    const midX = (g.right + next.left) / 2;
-    return '<div class="wf-flow-arrow" style="left:' + midX + 'px;">' +
-      '<svg width="32" height="32" viewBox="0 0 24 24"><path d="M4 12h14m0 0l-5.5-5.5m5.5 5.5l-5.5 5.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-    '</div>';
-  }).join('');
-
-  track.innerHTML = segmentsHtml + arrowsHtml;
-
-  // Keeps the band locked to the board's own horizontal scroll — same
-  // mechanism the Gantt's date header already uses (setHeaderScroll()),
-  // not a second independent scrollbar that could drift out of
-  // alignment. Property assignment, not addEventListener, so re-running
-  // this on every renderBoard() doesn't stack up duplicate listeners
-  // the way repeated addEventListener calls would.
-  wrapper.onscroll = function() {
-    track.style.transform = 'translateX(-' + wrapper.scrollLeft + 'px)';
-  };
-}
+// buildWorkflowStageData()/renderBoardWorkflowStrip()/
+// scrollToBoardColumn() moved to src/views/board.ts.
 // Recomputes on resize (e.g. rotating a tablet, resizing the window)
 // since the band's segment positions are measured in real pixels, not
 // derived from a fixed formula — only while Board is actually the
 // visible tab, to avoid needless work on every other view.
 onPanelResize('panel-board', renderBoardWorkflowStrip, 0);
-
-function scrollToBoardColumn(colId) {
-  const el = document.querySelector('.board-column[data-column="' + colId + '"]');
-  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-}
-
-// showToast() moved to src/utils/ui.ts.
 
 // ===== EVENTS =====
 // Every getElementById(...) below is guarded — none of these elements

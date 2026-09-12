@@ -62,7 +62,7 @@ import {
   renderCalendar, initCalendarDragHandlers, buildCalBarHtml, flattenCalendarEventsForRange,
   isCalendarEventTaskId, parseCalendarEventTaskId, openEditCalendarEvent, calendarOpenJob,
 } from './calendar';
-import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor } from './board';
+import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor, buildWorkflowStageData } from './board';
 import { renderMyChecklist, buildMyChecklistRows } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
 
@@ -71,7 +71,6 @@ import { sendPresenceUpdate } from '../sync/presence';
 // are declared once in src/shared-globals.d.ts, not repeated here.
 declare global {
   function cancelEdit(): void;
-  function buildWorkflowStageData(): { firstColId: string; lastColId: string; label: string; color?: string }[];
   // getVisibleJobs/buildCalendarJobRows/jumpToLinkedJobReference are
   // declared here (rather than in shared-globals.d.ts) with loose `any`
   // shapes, used to lay out real job/event bars the same way the real

@@ -1,14 +1,22 @@
-// Board view: drag-and-drop, column CRUD (addBoardColumn/
+// Board view: drag-and-drop, column CRUD (slugifyColumnId/addBoardColumn/
 // deleteBoardColumn/renameBoardColumn), card visibility
 // (isCardFromArchivedJob/isCardVisibleToMe), workflow items
 // (openWorkflowItemsModal and friends), the card detail modal and its
-// autosave (openEditCard and friends), renderBoard()/buildCardEl(), and
-// the column settings dropdown (⋮ menu: isDarkColor/toggleColSettings/
+// autosave (openEditCard and friends), renderBoard()/buildCardEl(), the
+// column settings dropdown (⋮ menu: isDarkColor/toggleColSettings/
 // toggleColColorPanel/changeColumnColor/closeAllColSettings/
 // toggleColumnScheduleVisibility/toggleColumnScheduleSync/
 // toggleColumnFinishedTrigger/setColumnWorkflowItem/
 // toggleColumnAutoAssignChecklist/setColumnChecklistAssignee/
-// setColumnDefaultDuration/setColumnStalledThreshold/reconnectCard).
+// setColumnDefaultDuration/setColumnStalledThreshold/reconnectCard), the
+// "add a board" form (showAddColumnForm and friends), and the workflow
+// strip above the board itself (buildWorkflowStageData/
+// renderBoardWorkflowStrip/scrollToBoardColumn — reuses home.ts's
+// buildHomeStageSummary()/buildHomeStalledRows() rather than
+// recomputing either, hence the real import from './home' below; home.ts
+// already imports from this file, so this is a real, deliberate circular
+// import between the two — safe here since neither side calls the
+// other at module-evaluation time, only from within functions).
 //
 // The checklist system (ensureCardChecklists/isChecklistStageVisibleToMe/
 // getChecklistForStageInProject/toggleMyChecklistItemRequired and the
@@ -22,24 +30,21 @@
 // declares it as an ambient global rather than importing it from here.
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
-// slugifyColumnId(), isJobVisibleToMe(),
-// renderGantt(), renderJobList(), renderCalendar(), openModal()/
-// closeModal(), saveWorkflowItems(), hasMinTier(), renderCustomFieldsGrid(),
+// isJobVisibleToMe(), renderGantt(), renderJobList(), renderCalendar(),
+// saveWorkflowItems(), hasMinTier(), renderCustomFieldsGrid(),
 // renderTeamFieldsGrid(), renderAttachments(), collectCustomFieldValues(),
 // deleteCardFromShared(), refreshJobFormIfOpen(), syncCardColumns(),
 // isFinishedColumn(), isFinishedColumnId(), displayNameForUsername(),
-// applyPermissionGating(), renderBoardWorkflowStrip(),
-// ensureUserRosterLoaded(), saveJobs(), renderHomeDashboard(),
-// ensureJobTasksMatchColumns(), renderFixedTaskGrid() — stay in
-// index.html on purpose (checklist business rules, modal-chrome/
-// permission/custom-field plumbing shared across many modals, or
-// genuinely separate concerns like the Gantt/Calendar/Job List
-// re-renders a rename triggers, or Home/schedule-derived column
-// placement, or Job Manager's own fixed-task-grid rendering). Referenced
-// below as ambient globals: an ordinary top-level `function` declaration
-// already attaches to `window` on its own (unlike `let`/`const`), so none
-// of those needed any change to stay visible here — only genuinely
-// mutated DATA globals do.
+// applyPermissionGating(), ensureUserRosterLoaded(), saveJobs(),
+// renderHomeDashboard(), ensureJobTasksMatchColumns(),
+// renderFixedTaskGrid() — stay in index.html on purpose (checklist
+// business rules, modal-chrome/permission/custom-field plumbing shared
+// across many modals, or genuinely separate concerns like the Gantt/
+// Calendar/Job List re-renders a rename triggers, or Job Manager's own
+// fixed-task-grid rendering). Referenced below as ambient globals: an
+// ordinary top-level `function` declaration already attaches to `window`
+// on its own (unlike `let`/`const`), so none of those needed any change
+// to stay visible here — only genuinely mutated DATA globals do.
 import type { BoardCard, BoardColumn, WorkflowItem, Job, Task, Phase, CustomFieldDef } from '../core/types';
 import { findJob } from '../core/models';
 import { escapeHtml } from '../utils/html';
@@ -48,9 +53,10 @@ import { createAutosaveController } from '../utils/autosave';
 import { darkenColor } from '../utils/color';
 import { openModal, closeModal, showToast } from '../utils/ui';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
+import { buildHomeStageSummary, buildHomeStalledRows } from './home';
 
 // Ambient globals this file shares verbatim with other src/ files
-// (BOARD_COLUMNS, jobs, saveJobs(), showToast(), hasMinTier(), etc.) are
+// (BOARD_COLUMNS, jobs, saveJobs(), hasMinTier(), etc.) are
 // declared once in src/shared-globals.d.ts, not repeated here.
 declare global {
   // eslint-disable-next-line no-var
@@ -70,7 +76,6 @@ declare global {
   function saveWorkflowItems(): void;
   function renderCalendar(): void;
   function renderHomeWorkflowExpandedBoard(): void;
-  function slugifyColumnId(label: string): string;
   function renderCustomFieldsGrid(customFields: Record<string, unknown>): void;
   function renderTeamFieldsGrid(customFields: Record<string, unknown>): void;
   function renderAttachments(): void;
@@ -79,7 +84,6 @@ declare global {
   function syncCardColumns(): void;
   function isFinishedColumn(col: BoardColumn): boolean;
   function displayNameForUsername(username: string): string;
-  function renderBoardWorkflowStrip(): void;
 }
 
 // ===== BOARD: COLUMN DRAG & DROP =====
@@ -389,6 +393,14 @@ function syncBoardCardsFromDOM(): void {
 
 // ===== BOARD: COLUMN CRUD =====
 
+function slugifyColumnId(label: string): string {
+  let base = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '');
+  if (!base) base = 'board';
+  let id = base, n = 2;
+  while (BOARD_COLUMNS.some(c => c.id === id)) { id = base + '-' + n; n++; }
+  return id;
+}
+
 function addBoardColumn(label: string): void {
   BOARD_COLUMNS.push({ id: slugifyColumnId(label), label: label });
   saveBoardColumns();
@@ -399,6 +411,31 @@ function addBoardColumn(label: string): void {
     const wrapper = document.getElementById('boardWrapper')!;
     wrapper.scrollLeft = wrapper.scrollWidth;
   }, 60);
+}
+
+function showAddColumnForm(): void {
+  (document.getElementById('addColumnBtn') as HTMLElement).style.display = 'none';
+  document.getElementById('addColumnForm')!.classList.add('active');
+  (document.getElementById('newColumnName') as HTMLElement).focus();
+}
+
+function hideAddColumnForm(): void {
+  (document.getElementById('addColumnBtn') as HTMLElement).style.display = 'block';
+  document.getElementById('addColumnForm')!.classList.remove('active');
+  (document.getElementById('newColumnName') as HTMLInputElement).value = '';
+}
+
+function handleAddColumnKey(e: KeyboardEvent): void {
+  if (e.key === 'Enter') { e.preventDefault(); submitAddColumn(); }
+  if (e.key === 'Escape') { hideAddColumnForm(); }
+}
+
+function submitAddColumn(): void {
+  const input = document.getElementById('newColumnName') as HTMLInputElement;
+  const trimmed = input.value.trim();
+  if (!trimmed) { showToast('Board name cannot be empty', 'error'); return; }
+  addBoardColumn(trimmed);
+  hideAddColumnForm();
 }
 
 function deleteBoardColumn(colId: string, event?: Event): void {
@@ -801,6 +838,119 @@ function deleteCardFromModal(): void {
   if (homeExpandedWidgetId === 'board') renderHomeWorkflowExpandedBoard();
   closeCardModal();
   showToast('Card deleted', 'info');
+}
+
+// ===== BOARD: WORKFLOW STRIP =====
+// The stacked-header band above the board itself. Groups BOARD_COLUMNS
+// into contiguous runs sharing the same workflowItemId — an unassigned
+// column never merges with an adjacent unassigned one (each keeps its
+// own board name; only columns actually assigned to the SAME item merge
+// into one span, per Karl's spec: "a workflow item with more than one
+// board would stretch above both boards if they are next to each
+// other"). Reuses home.ts's buildHomeStageSummary()'s counts and
+// buildHomeStalledRows() rather than recomputing either. See
+// renderBoardWorkflowStrip() for the position-measuring/rendering half.
+function buildWorkflowStageData(): { firstColId: string; lastColId: string; label: string; color?: string | null; isItem: boolean; count: number; stalledCount: number }[] {
+  const perColumnCounts: Record<string, number> = {};
+  buildHomeStageSummary().forEach(function(s) { perColumnCounts[s.id] = s.count; });
+  const stalledCountByCol: Record<string, number> = {};
+  buildHomeStalledRows().forEach(function(row) {
+    stalledCountByCol[row.card.column] = (stalledCountByCol[row.card.column] || 0) + 1;
+  });
+
+  const runs: { key: string; workflowItemId: string | null; colIds: string[] }[] = [];
+  BOARD_COLUMNS.forEach(function(col) {
+    const key = col.workflowItemId || ('__col__' + col.id);
+    const prevRun = runs[runs.length - 1];
+    if (prevRun && prevRun.key === key) prevRun.colIds.push(col.id);
+    else runs.push({ key: key, workflowItemId: col.workflowItemId || null, colIds: [col.id] });
+  });
+
+  return runs.map(function(run) {
+    const item = run.workflowItemId ? WORKFLOW_ITEMS.find(function(i) { return i.id === run.workflowItemId; }) : null;
+    const firstCol = BOARD_COLUMNS.find(function(c) { return c.id === run.colIds[0]; });
+    return {
+      firstColId: run.colIds[0],
+      lastColId: run.colIds[run.colIds.length - 1],
+      label: item ? item.label : (firstCol ? firstCol.label : ''),
+      color: item ? item.color : null,
+      isItem: !!item,
+      count: run.colIds.reduce(function(n, id) { return n + (perColumnCounts[id] || 0); }, 0),
+      stalledCount: run.colIds.reduce(function(n, id) { return n + (stalledCountByCol[id] || 0); }, 0)
+    };
+  });
+}
+
+// Measures each group's real left/right edge against the actual rendered
+// .board-column elements — not computed from fixed widths, so it stays
+// correct whether desktop (245px columns) or mobile (calc(100vw-48px))
+// — then draws an angled bracket per group and a flow arrow in each real
+// gap between adjacent groups. Called from renderBoard() so it always
+// reflects the same data/column positions currently on screen.
+function renderBoardWorkflowStrip(): void {
+  const wrapper = document.getElementById('boardWrapper');
+  const track = document.getElementById('wfTrack');
+  if (!wrapper || !track) return;
+  const wrapperRect = wrapper.getBoundingClientRect();
+
+  const measured = buildWorkflowStageData().map(function(g) {
+    const firstEl = wrapper.querySelector('.board-column[data-column="' + g.firstColId + '"]');
+    const lastEl = wrapper.querySelector('.board-column[data-column="' + g.lastColId + '"]');
+    if (!firstEl || !lastEl) return null;
+    const left = firstEl.getBoundingClientRect().left - wrapperRect.left + wrapper.scrollLeft;
+    const right = lastEl.getBoundingClientRect().right - wrapperRect.left + wrapper.scrollLeft;
+    return Object.assign({}, g, { left: left, right: right });
+  }).filter(Boolean) as ({ firstColId: string; lastColId: string; label: string; color?: string | null; isItem: boolean; count: number; stalledCount: number; left: number; right: number })[];
+
+  const segmentsHtml = measured.map(function(g) {
+    const width = g.right - g.left;
+    const isUnassigned = !g.isItem;
+    const style = 'left:' + g.left + 'px; width:' + width + 'px;';
+    const stalledHtml = g.stalledCount ? '<span class="wf-stalled">⚠ ' + g.stalledCount + '</span>' : '';
+    const labelRow = '<div class="wf-seg-label">' + escapeHtml(g.label) +
+      (isUnassigned ? '' : '<span class="wf-count">' + g.count + '</span>') +
+      stalledHtml +
+    '</div>';
+    // Angled ticks (a trapezoid: narrower at the top bar, flaring
+    // outward toward the boards) rather than a squared-off corner, per
+    // Karl's direction — drawn over every group, single-column or not.
+    const bw = Math.max(width - 16, 20);
+    const inset = 2.5, flare = 7;
+    const path = 'M' + inset + ',10 L' + (inset + flare) + ',2.5 L' + (bw - inset - flare) + ',2.5 L' + (bw - inset) + ',10';
+    const bracketStyle = g.color ? ('color:' + g.color + ';') : 'color:var(--text-light);opacity:0.6;';
+    const bracket = '<div class="wf-bracket-wrap" style="' + bracketStyle + '"><svg width="' + bw + '" height="10" viewBox="0 0 ' + bw + ' 10">' +
+      '<path d="' + path + '" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg></div>';
+    const title = g.count + ' job' + (g.count === 1 ? '' : 's') + ' in ' + g.label + (g.stalledCount ? ', ' + g.stalledCount + ' stalled' : '');
+    return '<div class="wf-seg' + (isUnassigned ? ' unassigned' : '') + '" style="' + style + '" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="scrollToBoardColumn(\'' + g.firstColId + '\')" title="' + escapeHtml(title) + '">' + labelRow + bracket + '</div>';
+  }).join('');
+
+  // One arrow per real gap between adjacent groups — flow direction
+  // between workflow items, not just within one.
+  const arrowsHtml = measured.slice(0, -1).map(function(g, i) {
+    const next = measured[i + 1];
+    const midX = (g.right + next.left) / 2;
+    return '<div class="wf-flow-arrow" style="left:' + midX + 'px;">' +
+      '<svg width="32" height="32" viewBox="0 0 24 24"><path d="M4 12h14m0 0l-5.5-5.5m5.5 5.5l-5.5 5.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+    '</div>';
+  }).join('');
+
+  track.innerHTML = segmentsHtml + arrowsHtml;
+
+  // Keeps the band locked to the board's own horizontal scroll — same
+  // mechanism the Gantt's date header uses (src/views/gantt.ts's
+  // setHeaderScroll()), not a second independent scrollbar that could
+  // drift out of alignment. Property assignment, not addEventListener,
+  // so re-running this on every renderBoard() doesn't stack up duplicate
+  // listeners the way repeated addEventListener calls would.
+  (wrapper as HTMLElement).onscroll = function() {
+    (track as HTMLElement).style.transform = 'translateX(-' + (wrapper as HTMLElement).scrollLeft + 'px)';
+  };
+}
+
+function scrollToBoardColumn(colId: string): void {
+  const el = document.querySelector('.board-column[data-column="' + colId + '"]');
+  if (el && (el as HTMLElement).scrollIntoView) (el as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 }
 
 // ===== BOARD: RENDER =====
@@ -1333,9 +1483,17 @@ export {
   moveCardToColumn,
   getDragAfterElement,
   syncBoardCardsFromDOM,
+  slugifyColumnId,
   addBoardColumn,
+  showAddColumnForm,
+  hideAddColumnForm,
+  handleAddColumnKey,
+  submitAddColumn,
   deleteBoardColumn,
   renameBoardColumn,
+  buildWorkflowStageData,
+  renderBoardWorkflowStrip,
+  scrollToBoardColumn,
   isCardFromArchivedJob,
   isCardVisibleToMe,
   openWorkflowItemsModal,
