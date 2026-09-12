@@ -53,6 +53,7 @@ import {
   saveLinkEnabledPref, isLinkEnabledLocally, setLinkEnabledLocally, getOtherFixedProjectId, getLinkedReferenceJobs,
   jumpToLinkedJobReference, linkJobs, setJobLinkEnabled, unlinkJobById,
 } from './app/project';
+import { mergeTombstones, showFreshLoadOverlay, hideFreshLoadOverlay, init, boot } from './app/boot';
 import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
   getDragAfterColumn, syncColumnsFromDOM, handleCardDragStart, handleCardDragEnd, handleColumnDragOver, applyColumnDragOver,
@@ -408,6 +409,11 @@ declare global {
     linkJobs: typeof linkJobs;
     setJobLinkEnabled: typeof setJobLinkEnabled;
     unlinkJobById: typeof unlinkJobById;
+    mergeTombstones: typeof mergeTombstones;
+    showFreshLoadOverlay: typeof showFreshLoadOverlay;
+    hideFreshLoadOverlay: typeof hideFreshLoadOverlay;
+    init: typeof init;
+    boot: typeof boot;
     renderFieldDefHtml: typeof renderFieldDefHtml;
     renderCustomFieldsGrid: typeof renderCustomFieldsGrid;
     renderTeamFieldsGrid: typeof renderTeamFieldsGrid;
@@ -943,6 +949,11 @@ window.jumpToLinkedJobReference = jumpToLinkedJobReference;
 window.linkJobs = linkJobs;
 window.setJobLinkEnabled = setJobLinkEnabled;
 window.unlinkJobById = unlinkJobById;
+window.mergeTombstones = mergeTombstones;
+window.showFreshLoadOverlay = showFreshLoadOverlay;
+window.hideFreshLoadOverlay = hideFreshLoadOverlay;
+window.init = init;
+window.boot = boot;
 window.renderFieldDefHtml = renderFieldDefHtml;
 window.renderCustomFieldsGrid = renderCustomFieldsGrid;
 window.renderTeamFieldsGrid = renderTeamFieldsGrid;
