@@ -46,6 +46,14 @@ import {
   isJobFinished, isTaskFinished,
 } from './core/jobs';
 import {
+  migrateFromLegacy, loadProjects, saveProjects, getActiveProject, switchProject, enforceProjectScopeForRole,
+  slugifyFixedProjectName, enforceFixedProjectSet, loadActiveProjectData, saveActiveProject, toggleProject,
+  updateProjectToggle, renderAll, applyPermissionGating, saveJobs, autoArchiveJobs, saveBoardColumns,
+  saveWorkflowItems, saveBoardCards, saveCalendarEvents, saveFieldOptions, saveHeader, loadLinkEnabledPref,
+  saveLinkEnabledPref, isLinkEnabledLocally, setLinkEnabledLocally, getOtherFixedProjectId, getLinkedReferenceJobs,
+  jumpToLinkedJobReference, linkJobs, setJobLinkEnabled, unlinkJobById,
+} from './app/project';
+import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
   getDragAfterColumn, syncColumnsFromDOM, handleCardDragStart, handleCardDragEnd, handleColumnDragOver, applyColumnDragOver,
   handleColumnDragLeave, dropNeedsManualOverride, handleColumnDrop, moveCardToColumn, getDragAfterElement, syncBoardCardsFromDOM,
@@ -368,6 +376,38 @@ declare global {
     // signature can't satisfy that intersection; GanttTask/CalTask aren't
     // structurally assignable to Task).
     isTaskFinished: (job: any, task: any) => boolean;
+    migrateFromLegacy: typeof migrateFromLegacy;
+    loadProjects: typeof loadProjects;
+    saveProjects: typeof saveProjects;
+    getActiveProject: typeof getActiveProject;
+    switchProject: typeof switchProject;
+    enforceProjectScopeForRole: typeof enforceProjectScopeForRole;
+    slugifyFixedProjectName: typeof slugifyFixedProjectName;
+    enforceFixedProjectSet: typeof enforceFixedProjectSet;
+    loadActiveProjectData: typeof loadActiveProjectData;
+    saveActiveProject: typeof saveActiveProject;
+    toggleProject: typeof toggleProject;
+    updateProjectToggle: typeof updateProjectToggle;
+    renderAll: typeof renderAll;
+    applyPermissionGating: typeof applyPermissionGating;
+    saveJobs: typeof saveJobs;
+    autoArchiveJobs: typeof autoArchiveJobs;
+    saveBoardColumns: typeof saveBoardColumns;
+    saveWorkflowItems: typeof saveWorkflowItems;
+    saveBoardCards: typeof saveBoardCards;
+    saveCalendarEvents: typeof saveCalendarEvents;
+    saveFieldOptions: typeof saveFieldOptions;
+    saveHeader: typeof saveHeader;
+    loadLinkEnabledPref: typeof loadLinkEnabledPref;
+    saveLinkEnabledPref: typeof saveLinkEnabledPref;
+    isLinkEnabledLocally: typeof isLinkEnabledLocally;
+    setLinkEnabledLocally: typeof setLinkEnabledLocally;
+    getOtherFixedProjectId: typeof getOtherFixedProjectId;
+    getLinkedReferenceJobs: typeof getLinkedReferenceJobs;
+    jumpToLinkedJobReference: typeof jumpToLinkedJobReference;
+    linkJobs: typeof linkJobs;
+    setJobLinkEnabled: typeof setJobLinkEnabled;
+    unlinkJobById: typeof unlinkJobById;
     renderFieldDefHtml: typeof renderFieldDefHtml;
     renderCustomFieldsGrid: typeof renderCustomFieldsGrid;
     renderTeamFieldsGrid: typeof renderTeamFieldsGrid;
@@ -871,6 +911,38 @@ window.isJobVisibleToMe = isJobVisibleToMe;
 window.getVisibleJobs = getVisibleJobs;
 window.isJobFinished = isJobFinished;
 window.isTaskFinished = isTaskFinished as any;
+window.migrateFromLegacy = migrateFromLegacy;
+window.loadProjects = loadProjects;
+window.saveProjects = saveProjects;
+window.getActiveProject = getActiveProject;
+window.switchProject = switchProject;
+window.enforceProjectScopeForRole = enforceProjectScopeForRole;
+window.slugifyFixedProjectName = slugifyFixedProjectName;
+window.enforceFixedProjectSet = enforceFixedProjectSet;
+window.loadActiveProjectData = loadActiveProjectData;
+window.saveActiveProject = saveActiveProject;
+window.toggleProject = toggleProject;
+window.updateProjectToggle = updateProjectToggle;
+window.renderAll = renderAll;
+window.applyPermissionGating = applyPermissionGating;
+window.saveJobs = saveJobs;
+window.autoArchiveJobs = autoArchiveJobs;
+window.saveBoardColumns = saveBoardColumns;
+window.saveWorkflowItems = saveWorkflowItems;
+window.saveBoardCards = saveBoardCards;
+window.saveCalendarEvents = saveCalendarEvents;
+window.saveFieldOptions = saveFieldOptions;
+window.saveHeader = saveHeader;
+window.loadLinkEnabledPref = loadLinkEnabledPref;
+window.saveLinkEnabledPref = saveLinkEnabledPref;
+window.isLinkEnabledLocally = isLinkEnabledLocally;
+window.setLinkEnabledLocally = setLinkEnabledLocally;
+window.getOtherFixedProjectId = getOtherFixedProjectId;
+window.getLinkedReferenceJobs = getLinkedReferenceJobs;
+window.jumpToLinkedJobReference = jumpToLinkedJobReference;
+window.linkJobs = linkJobs;
+window.setJobLinkEnabled = setJobLinkEnabled;
+window.unlinkJobById = unlinkJobById;
 window.renderFieldDefHtml = renderFieldDefHtml;
 window.renderCustomFieldsGrid = renderCustomFieldsGrid;
 window.renderTeamFieldsGrid = renderTeamFieldsGrid;

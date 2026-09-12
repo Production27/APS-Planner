@@ -20,6 +20,8 @@ import { renderBoard } from '../views/board';
 import { renderCalendar, ensureCalendarEventIds } from '../views/calendar';
 import { genId } from '../utils/id';
 import { DEFAULT_THEME_COLOR } from '../app/theme';
+import { ensureCardIds } from '../core/jobs';
+import { enforceFixedProjectSet } from '../app/project';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomEverConnected, activeProjectId, projects, latestPresenceUsers,
@@ -28,9 +30,7 @@ import { DEFAULT_THEME_COLOR } from '../app/theme';
 declare global {
   // eslint-disable-next-line no-var
   var pendingRemoteRefresh: boolean;
-  function ensureJobAndTaskIds(arr: any[]): void;
-  function ensureCardIds(arr: any[]): void;
-  function enforceFixedProjectSet(): string[];
+  function ensureJobAndTaskIds(arr: any[]): any[];
   function enforceProjectScopeForRole(): void;
   function loadActiveProjectData(): void;
   function renderAll(): void;
@@ -334,7 +334,7 @@ function applyRoomSnapshot(remoteProjects: Record<string, any>, isFirstSnapshot:
 
       // ── cards ──
       if (!projectSyncPending) {
-        const c = Object.values(remoteCards).filter(function (card: any) { return !local.deletedIds[String(card.id)]; });
+        const c = Object.values(remoteCards).filter(function (card: any) { return !local.deletedIds[String(card.id)]; }) as any[];
         ensureCardIds(c);
         local.boardCards = c;
       }
