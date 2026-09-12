@@ -19,6 +19,13 @@ import { checkMaintenanceStatus, applyMaintenanceStatus, toggleMaintenancePanel,
 import { reportClientError } from './app/error-reporting';
 import { positionSettingsMenu, toggleSettingsMenu, closeSettingsMenu, armSettingsMenuAutoClose, cancelSettingsMenuAutoClose } from './app/settings-menu';
 import { applyDarkMode, loadDarkModePref, toggleDarkMode, DEFAULT_THEME_COLOR, normalizeThemeColor, getSavedThemeColor, applyThemeColor, buildThemePresets, updateThemePreview, openThemeModal, closeThemeModal, applyTheme, resetThemeDefault, applyProjectBgVisual } from './app/theme';
+import {
+  tutorialStateKey, getTutorialState, saveTutorialState,
+  maybeShowTutorialPrompt, showTutorialNotification, hideTutorialNotification, tutorialNotifShow, tutorialNotifLater,
+  tutorialNotifNever, renderTutorialSlide, openTutorialSlides, closeTutorialSlides, tutorialSlideBack, tutorialSlideNext,
+  tutorialSlideSkip, findCoachmarkTarget, findNextCoachmarkIndex, renderCoachmarkStep, openCoachmarkTour,
+  closeCoachmarkTour, coachmarkBack, coachmarkNext,
+} from './app/onboarding';
 import { DISPLAY_NAME_KEY, getStoredDisplayName, getStoredUsername, getStoredSessionToken, setStoredSessionToken, decodeSessionTokenPayload, isSessionTokenUsable } from './auth/session';
 import { PERMISSION_TIERS, getEffectiveRole, hasMinTier, applyIdentityFromTokenPayload } from './auth/permissions';
 import { reauthenticate, reauthenticateOnce, getSessionToken, fetchRoomToken, buildRoomWsUrl } from './auth/login';
@@ -209,6 +216,28 @@ declare global {
     applyTheme: typeof applyTheme;
     resetThemeDefault: typeof resetThemeDefault;
     applyProjectBgVisual: typeof applyProjectBgVisual;
+    tutorialStateKey: typeof tutorialStateKey;
+    getTutorialState: typeof getTutorialState;
+    saveTutorialState: typeof saveTutorialState;
+    maybeShowTutorialPrompt: typeof maybeShowTutorialPrompt;
+    showTutorialNotification: typeof showTutorialNotification;
+    hideTutorialNotification: typeof hideTutorialNotification;
+    tutorialNotifShow: typeof tutorialNotifShow;
+    tutorialNotifLater: typeof tutorialNotifLater;
+    tutorialNotifNever: typeof tutorialNotifNever;
+    renderTutorialSlide: typeof renderTutorialSlide;
+    openTutorialSlides: typeof openTutorialSlides;
+    closeTutorialSlides: typeof closeTutorialSlides;
+    tutorialSlideBack: typeof tutorialSlideBack;
+    tutorialSlideNext: typeof tutorialSlideNext;
+    tutorialSlideSkip: typeof tutorialSlideSkip;
+    findCoachmarkTarget: typeof findCoachmarkTarget;
+    findNextCoachmarkIndex: typeof findNextCoachmarkIndex;
+    renderCoachmarkStep: typeof renderCoachmarkStep;
+    openCoachmarkTour: typeof openCoachmarkTour;
+    closeCoachmarkTour: typeof closeCoachmarkTour;
+    coachmarkBack: typeof coachmarkBack;
+    coachmarkNext: typeof coachmarkNext;
     openWorkflowItemsModal: typeof openWorkflowItemsModal;
     closeWorkflowItemsModal: typeof closeWorkflowItemsModal;
     renderWorkflowItemsBody: typeof renderWorkflowItemsBody;
@@ -557,6 +586,28 @@ window.closeThemeModal = closeThemeModal;
 window.applyTheme = applyTheme;
 window.resetThemeDefault = resetThemeDefault;
 window.applyProjectBgVisual = applyProjectBgVisual;
+window.tutorialStateKey = tutorialStateKey;
+window.getTutorialState = getTutorialState;
+window.saveTutorialState = saveTutorialState;
+window.maybeShowTutorialPrompt = maybeShowTutorialPrompt;
+window.showTutorialNotification = showTutorialNotification;
+window.hideTutorialNotification = hideTutorialNotification;
+window.tutorialNotifShow = tutorialNotifShow;
+window.tutorialNotifLater = tutorialNotifLater;
+window.tutorialNotifNever = tutorialNotifNever;
+window.renderTutorialSlide = renderTutorialSlide;
+window.openTutorialSlides = openTutorialSlides;
+window.closeTutorialSlides = closeTutorialSlides;
+window.tutorialSlideBack = tutorialSlideBack;
+window.tutorialSlideNext = tutorialSlideNext;
+window.tutorialSlideSkip = tutorialSlideSkip;
+window.findCoachmarkTarget = findCoachmarkTarget;
+window.findNextCoachmarkIndex = findNextCoachmarkIndex;
+window.renderCoachmarkStep = renderCoachmarkStep;
+window.openCoachmarkTour = openCoachmarkTour;
+window.closeCoachmarkTour = closeCoachmarkTour;
+window.coachmarkBack = coachmarkBack;
+window.coachmarkNext = coachmarkNext;
 window.openWorkflowItemsModal = openWorkflowItemsModal;
 window.closeWorkflowItemsModal = closeWorkflowItemsModal;
 window.renderWorkflowItemsBody = renderWorkflowItemsBody;
