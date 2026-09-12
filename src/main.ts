@@ -14,6 +14,9 @@ import { darkenColor, softenColor, SOFTEN_AMOUNT } from './utils/color';
 import { escapeHtml } from './utils/html';
 import { createAutosaveController } from './utils/autosave';
 import { openModal, closeModal, showToast, moveTooltip, hideTooltip, toggleMsDropdown, closeAllMsDropdowns, msSetAll, msDropdownLabelText } from './utils/ui';
+import { checkForNewerVersion } from './app/version-check';
+import { checkMaintenanceStatus, applyMaintenanceStatus, toggleMaintenancePanel, setMaintenanceMode } from './app/maintenance';
+import { reportClientError } from './app/error-reporting';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
@@ -160,6 +163,12 @@ declare global {
     closeAllMsDropdowns: typeof closeAllMsDropdowns;
     msSetAll: typeof msSetAll;
     msDropdownLabelText: typeof msDropdownLabelText;
+    checkForNewerVersion: typeof checkForNewerVersion;
+    checkMaintenanceStatus: typeof checkMaintenanceStatus;
+    applyMaintenanceStatus: typeof applyMaintenanceStatus;
+    toggleMaintenancePanel: typeof toggleMaintenancePanel;
+    setMaintenanceMode: typeof setMaintenanceMode;
+    reportClientError: typeof reportClientError;
     openWorkflowItemsModal: typeof openWorkflowItemsModal;
     closeWorkflowItemsModal: typeof closeWorkflowItemsModal;
     renderWorkflowItemsBody: typeof renderWorkflowItemsBody;
@@ -467,6 +476,12 @@ window.toggleMsDropdown = toggleMsDropdown;
 window.closeAllMsDropdowns = closeAllMsDropdowns;
 window.msSetAll = msSetAll;
 window.msDropdownLabelText = msDropdownLabelText;
+window.checkForNewerVersion = checkForNewerVersion;
+window.checkMaintenanceStatus = checkMaintenanceStatus;
+window.applyMaintenanceStatus = applyMaintenanceStatus;
+window.toggleMaintenancePanel = toggleMaintenancePanel;
+window.setMaintenanceMode = setMaintenanceMode;
+window.reportClientError = reportClientError;
 window.openWorkflowItemsModal = openWorkflowItemsModal;
 window.closeWorkflowItemsModal = closeWorkflowItemsModal;
 window.renderWorkflowItemsBody = renderWorkflowItemsBody;

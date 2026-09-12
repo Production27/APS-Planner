@@ -19,7 +19,8 @@ import type { Job, BoardCard, BoardColumn, WorkflowItem } from './core/types';
 import type { PresenceUser } from './sync/presence';
 
 declare global {
-  // ----- data state (still `var`-declared in index.html) -----
+  // ----- data state (still `var`/`const`-declared in index.html) -----
+  const API_BASE_URL: string;
   // eslint-disable-next-line no-var
   var jobs: Job[];
   // eslint-disable-next-line no-var

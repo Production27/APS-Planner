@@ -3854,145 +3854,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-11.7';
+const APP_VERSION = '2026-09-11.8';
 
-// Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
-// tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
-// than force-reloading — an unprompted reload could drop in-progress
-// typing, which would be a worse failure mode than a stale tab for a few
-// extra minutes. Called on visibilitychange (the tab-left-open-in-the-
-// background scenario) and on a periodic timer as a backstop.
-async function checkForNewerVersion() {
-  try {
-    const res = await fetch('version.txt?_v=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return;
-    const text = (await res.text()).trim();
-    if (text && text !== APP_VERSION) {
-      document.getElementById('newVersionBanner').classList.add('show');
-    }
-  } catch (err) {
-    // Offline or a network hiccup — not worth surfacing; the next
-    // periodic check (or the next tab-focus) will just try again.
-  }
-}
-document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'visible') checkForNewerVersion();
-});
-setInterval(checkForNewerVersion, 5 * 60 * 1000);
-
-// ===== MAINTENANCE MODE ===== (see worker's maintenance.ts)
-// Same "poll rather than push" shape as checkForNewerVersion() above, on
-// a shorter interval since a maintenance window is meant to be brief and
-// worth catching promptly, not eventually. Deliberately does NOT block
-// #loginOverlay — an admin needs to be able to log in during a
-// maintenance window to turn it back off, and gating login itself would
-// have no upside (login doesn't touch shared project data). The block
-// only ever applies AFTER identity resolves, and only to non-admins —
-// see applyIdentityFromTokenPayload()'s call into this below.
-async function checkMaintenanceStatus() {
-  try {
-    const res = await fetch(API_BASE_URL + 'maintenance-status?_v=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return;
-    const data = await res.json();
-    applyMaintenanceStatus(data);
-  } catch (err) {
-    // Offline or a network hiccup — not worth surfacing, same reasoning
-    // as checkForNewerVersion() above; the next periodic check (or the
-    // next tab-focus) will just try again.
-  }
-}
-
-// Split from checkMaintenanceStatus() so setMaintenanceMode() below can
-// apply the worker's response immediately, without waiting for the next
-// poll to reflect an admin's own change back to themselves.
-function applyMaintenanceStatus(status) {
-  const shouldBlock = !!(status && status.active) && roleConfirmed && currentUserRole !== 'admin';
-  const overlay = document.getElementById('maintenanceOverlay');
-  overlay.classList.toggle('show', shouldBlock);
-  if (shouldBlock) document.getElementById('maintenanceOverlayMessage').textContent = status.message;
-
-  const toggle = document.getElementById('maintenanceToggle');
-  if (toggle) toggle.classList.toggle('active', !!(status && status.active));
-  const enableBtn = document.getElementById('maintenanceEnableBtn');
-  if (enableBtn) {
-    const isActive = !!(status && status.active);
-    enableBtn.textContent = isActive ? 'Turn Off Maintenance Mode' : 'Turn On Maintenance Mode';
-    enableBtn.onclick = function() { setMaintenanceMode(!isActive); };
-  }
-}
-
-function toggleMaintenancePanel() {
-  document.getElementById('maintenancePanel').classList.toggle('open');
-}
-
-async function setMaintenanceMode(active) {
-  const messageInput = document.getElementById('maintenanceMessageInput');
-  const message = messageInput ? messageInput.value.trim() : '';
-  try {
-    const data = await postUsersEndpoint('maintenance-status/set', { active: active, message: message });
-    showToast(active ? 'Maintenance mode turned on' : 'Maintenance mode turned off', active ? 'info' : 'success');
-    logActivity(active ? 'turned on maintenance mode' : 'turned off maintenance mode');
-    applyMaintenanceStatus(data.status);
-    if (!active && messageInput) messageInput.value = '';
-    document.getElementById('maintenancePanel').classList.remove('open');
-  } catch (err) {
-    showToast('Could not update maintenance mode: ' + err.message, 'error');
-  }
-}
-
-document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'visible') checkMaintenanceStatus();
-});
-setInterval(checkMaintenanceStatus, 30 * 1000);
-
-// ===== CLIENT ERROR REPORTING =====
-// A crash used to only surface if the person who hit it happened to
-// mention it — nothing told an admin automatically. Registered as early
-// as possible (before anything else that could throw) so it catches as
-// much of boot as possible; the handler itself references LIVEBLOCKS_
-// AUTH_ENDPOINT/getSessionToken(), both declared later in this same
-// script, which is safe because the callback only ever RUNS later
-// (asynchronously, on an actual error) — by which point the whole script
-// has finished its initial top-to-bottom pass. The try/catch below is
-// what makes that safe even in the rare case it doesn't: reporting an
-// error must never itself throw a second one.
-let clientErrorReportCount = 0;
-const MAX_CLIENT_ERROR_REPORTS_PER_LOAD = 20; // bounds a tight error loop, not normal use
-function reportClientError(kind, message, extra) {
-  try {
-    if (clientErrorReportCount >= MAX_CLIENT_ERROR_REPORTS_PER_LOAD) return;
-    clientErrorReportCount++;
-    const token = (typeof getStoredSessionToken === 'function') ? getStoredSessionToken() : null;
-    const body = Object.assign({
-      kind: kind,
-      message: String(message || '').slice(0, 500),
-      pageUrl: location.href,
-      userAgent: navigator.userAgent,
-      appVersion: (typeof APP_VERSION !== 'undefined') ? APP_VERSION : null,
-      token: token || null,
-    }, extra || {});
-    fetch(API_BASE_URL + 'report-error', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      keepalive: true, // survives a navigation/close triggered by the same error
-    }).catch(function() {}); // best-effort — a failed report is not itself worth reporting
-  } catch (e) { /* reporting must never throw */ }
-}
-window.addEventListener('error', function(e) {
-  reportClientError('error', e.message, {
-    stack: e.error && e.error.stack ? String(e.error.stack).slice(0, 2000) : null,
-    source: e.filename || null,
-    line: e.lineno || null,
-    col: e.colno || null,
-  });
-});
-window.addEventListener('unhandledrejection', function(e) {
-  const reason = e.reason;
-  reportClientError('unhandledrejection', reason && reason.message ? reason.message : String(reason), {
-    stack: reason && reason.stack ? String(reason.stack).slice(0, 2000) : null,
-  });
-});
+// checkForNewerVersion() moved to src/app/version-check.ts.
+// checkMaintenanceStatus()/applyMaintenanceStatus()/
+// toggleMaintenancePanel()/setMaintenanceMode() moved to
+// src/app/maintenance.ts (see worker's maintenance.ts for the backend
+// half).
+// reportClientError() and its window 'error'/'unhandledrejection'
+// listeners moved to src/app/error-reporting.ts.
 
 const DEFAULT_JOBS = [
   {
