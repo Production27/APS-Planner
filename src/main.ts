@@ -39,6 +39,13 @@ import {
 } from './app/users-admin';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 import {
+  normalizeTasksToColumns, ensureJobTasksMatchColumns, dedupeTaskIdsAcrossPhases, makeBlankPhaseTasks, makePhaseCard,
+  splitJobIntoPhases, addJobPhase, removeJobPhase, unsplitJobFromPhases, splitPhaseIntoSubPhases, addPhaseSubUnit,
+  removePhaseSubUnit, unsplitPhaseFromSubPhases, ensureJobHasCards, migrateOrphanedCards, deriveColumnForTasks,
+  setCardColumn, runColumnEntryActions, syncCardColumns, ensureCardIds, isJobVisibleToMe, getVisibleJobs,
+  isJobFinished, isTaskFinished,
+} from './core/jobs';
+import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
   getDragAfterColumn, syncColumnsFromDOM, handleCardDragStart, handleCardDragEnd, handleColumnDragOver, applyColumnDragOver,
   handleColumnDragLeave, dropNeedsManualOverride, handleColumnDrop, moveCardToColumn, getDragAfterElement, syncBoardCardsFromDOM,
@@ -329,6 +336,38 @@ declare global {
     setColumnDefaultDuration: typeof setColumnDefaultDuration;
     setColumnStalledThreshold: typeof setColumnStalledThreshold;
     reconnectCard: typeof reconnectCard;
+    normalizeTasksToColumns: typeof normalizeTasksToColumns;
+    ensureJobTasksMatchColumns: typeof ensureJobTasksMatchColumns;
+    dedupeTaskIdsAcrossPhases: typeof dedupeTaskIdsAcrossPhases;
+    makeBlankPhaseTasks: typeof makeBlankPhaseTasks;
+    makePhaseCard: typeof makePhaseCard;
+    splitJobIntoPhases: typeof splitJobIntoPhases;
+    addJobPhase: typeof addJobPhase;
+    removeJobPhase: typeof removeJobPhase;
+    unsplitJobFromPhases: typeof unsplitJobFromPhases;
+    splitPhaseIntoSubPhases: typeof splitPhaseIntoSubPhases;
+    addPhaseSubUnit: typeof addPhaseSubUnit;
+    removePhaseSubUnit: typeof removePhaseSubUnit;
+    unsplitPhaseFromSubPhases: typeof unsplitPhaseFromSubPhases;
+    ensureJobHasCards: typeof ensureJobHasCards;
+    migrateOrphanedCards: typeof migrateOrphanedCards;
+    deriveColumnForTasks: typeof deriveColumnForTasks;
+    setCardColumn: typeof setCardColumn;
+    runColumnEntryActions: typeof runColumnEntryActions;
+    syncCardColumns: typeof syncCardColumns;
+    ensureCardIds: typeof ensureCardIds;
+    isJobVisibleToMe: typeof isJobVisibleToMe;
+    getVisibleJobs: typeof getVisibleJobs;
+    isJobFinished: typeof isJobFinished;
+    // Declared loosely (not `typeof isTaskFinished`) — gantt.ts/calendar.ts
+    // each declare their own stricter ambient `isTaskFinished` (GanttJob/
+    // GanttTask, CalJob/CalTask) for their own row-building code, which
+    // merges into this Window property's type too, as an intersection
+    // with whatever's declared here — the assignment below casts through
+    // `any` for the same reason (the real function's plain Job/Task
+    // signature can't satisfy that intersection; GanttTask/CalTask aren't
+    // structurally assignable to Task).
+    isTaskFinished: (job: any, task: any) => boolean;
     renderFieldDefHtml: typeof renderFieldDefHtml;
     renderCustomFieldsGrid: typeof renderCustomFieldsGrid;
     renderTeamFieldsGrid: typeof renderTeamFieldsGrid;
@@ -808,6 +847,30 @@ window.setColumnChecklistAssignee = setColumnChecklistAssignee;
 window.setColumnDefaultDuration = setColumnDefaultDuration;
 window.setColumnStalledThreshold = setColumnStalledThreshold;
 window.reconnectCard = reconnectCard;
+window.normalizeTasksToColumns = normalizeTasksToColumns;
+window.ensureJobTasksMatchColumns = ensureJobTasksMatchColumns;
+window.dedupeTaskIdsAcrossPhases = dedupeTaskIdsAcrossPhases;
+window.makeBlankPhaseTasks = makeBlankPhaseTasks;
+window.makePhaseCard = makePhaseCard;
+window.splitJobIntoPhases = splitJobIntoPhases;
+window.addJobPhase = addJobPhase;
+window.removeJobPhase = removeJobPhase;
+window.unsplitJobFromPhases = unsplitJobFromPhases;
+window.splitPhaseIntoSubPhases = splitPhaseIntoSubPhases;
+window.addPhaseSubUnit = addPhaseSubUnit;
+window.removePhaseSubUnit = removePhaseSubUnit;
+window.unsplitPhaseFromSubPhases = unsplitPhaseFromSubPhases;
+window.ensureJobHasCards = ensureJobHasCards;
+window.migrateOrphanedCards = migrateOrphanedCards;
+window.deriveColumnForTasks = deriveColumnForTasks;
+window.setCardColumn = setCardColumn;
+window.runColumnEntryActions = runColumnEntryActions;
+window.syncCardColumns = syncCardColumns;
+window.ensureCardIds = ensureCardIds;
+window.isJobVisibleToMe = isJobVisibleToMe;
+window.getVisibleJobs = getVisibleJobs;
+window.isJobFinished = isJobFinished;
+window.isTaskFinished = isTaskFinished as any;
 window.renderFieldDefHtml = renderFieldDefHtml;
 window.renderCustomFieldsGrid = renderCustomFieldsGrid;
 window.renderTeamFieldsGrid = renderTeamFieldsGrid;

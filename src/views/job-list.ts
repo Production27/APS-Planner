@@ -18,19 +18,18 @@ import { ensureCardChecklists } from './checklist';
 import { renderGantt } from './gantt';
 import { renderCalendar } from './calendar';
 import { renderBoard } from './board';
+import { getVisibleJobs, isJobFinished, ensureJobHasCards, syncCardColumns } from '../core/jobs';
 
-// getVisibleJobs()/syncCardColumns()/editJob()/cancelEdit() are already
-// declared ambient (identically) by gantt.ts/board.ts/home.ts — not
-// repeated here (TypeScript's ambient declaration merging is global, not
-// per-file, so redeclaring them here would just be a duplicate, and one
-// with the wrong overload ordering has actually broken cross-file type
-// resolution before — see gantt.ts's own getVisibleJobs()/
-// getLinkedReferenceJobs() calls if this ever needs revisiting).
+// editJob()/cancelEdit() are already declared ambient (identically) by
+// gantt.ts/home.ts — not repeated here (TypeScript's ambient declaration
+// merging is global, not per-file, so redeclaring them here would just
+// be a duplicate, and one with the wrong overload ordering has actually
+// broken cross-file type resolution before — see gantt.ts's own
+// getVisibleJobs()/getLinkedReferenceJobs() calls if this ever needs
+// revisiting).
 declare global {
   // eslint-disable-next-line no-var
   var editingTaskId: string | null;
-  function isJobFinished(job: Job): boolean;
-  function ensureJobHasCards(job: Job): void;
   function addNewJob(): void;
   function setJobNameHint(show: boolean): void;
   function showTaskRowWarnings(labels: string[]): void;

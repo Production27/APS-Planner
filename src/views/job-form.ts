@@ -1,15 +1,15 @@
 // Job Manager: the job edit/create form itself — phase/sub-phase strips
 // and switching, the fixed task grid (dates/duration), the linked-job
 // section, addNewJob()/editJob()/cancelEdit(), refreshJobFormIfOpen(),
-// and the whole autosave system. This is the highest-scrutiny slice of
+// and the whole autosave system. This was the highest-scrutiny slice of
 // the whole index.html extraction: two real, already-fixed production
 // bugs are documented in code comments below (an unphased job's date
 // edits silently never saving — see autoSaveJobForm()'s targetPhase
 // comment — and a task-id collision bug across job phases, fixed in
-// dedupeTaskIdsAcrossPhases() which stays in index.html's data-model
-// code), plus the linked-job UI, which had no test coverage at all
-// before this phase. Regression tests were written locking in today's
-// exact behavior before any of this moved — see tests/unit-job-form.spec.js.
+// dedupeTaskIdsAcrossPhases(), now in src/core/jobs.ts), plus the
+// linked-job UI, which had no test coverage at all before this phase.
+// Regression tests were written locking in today's exact behavior before
+// any of this moved — see tests/unit-job-form.spec.js.
 //
 // currentGridTasks/editingPhaseId/editingSubPhaseId/jobLinkPickerOpen
 // become real module state here (not ambient) — every reader and writer
@@ -20,15 +20,16 @@
 // there — see src/views/board.ts's shared renderAttachmentPanel()) reads
 // and writes it too.
 //
-// The job/phase DATA MODEL (splitJobIntoPhases/addJobPhase/removeJobPhase/
+// The job/phase data model (splitJobIntoPhases/addJobPhase/removeJobPhase/
 // unsplitJobFromPhases/splitPhaseIntoSubPhases/addPhaseSubUnit/
-// removePhaseSubUnit/unsplitPhaseFromSubPhases, the linked-job data model —
-// getOtherFixedProjectId/isLinkEnabledLocally/linkJobs/setJobLinkEnabled/
-// unlinkJobById — and ensureJobHasCards/ensureJobTasksMatchColumns) stays
-// in index.html on purpose: it's Phase 10 territory (the shared job/phase
-// data model + project management), not this phase's UI layer. Called
-// here as ambient globals, same forward-reference pattern as the rest of
-// this extraction.
+// removePhaseSubUnit/unsplitPhaseFromSubPhases/ensureJobHasCards/
+// ensureJobTasksMatchColumns/isJobVisibleToMe) is a real import from
+// src/core/jobs.ts (Phase 10 of the extraction plan). The linked-job data
+// model (getOtherFixedProjectId/isLinkEnabledLocally/linkJobs/
+// setJobLinkEnabled/unlinkJobById) and the rest of project management
+// stay in index.html for a later slice of that same phase — called here
+// as ambient globals, same forward-reference pattern as the rest of this
+// extraction.
 import type { Job, Phase, Task } from '../core/types';
 import { findJob, getJobPhases, getPhaseSubUnits, getPhaseCard, getPrimaryPhaseCard } from '../core/models';
 import { escapeHtml } from '../utils/html';
@@ -43,24 +44,19 @@ import { renderCalendar } from './calendar';
 import { renderBoard } from './board';
 import { renderJobList, archiveJob, restoreJob } from './job-list';
 import { renderJobComments } from './job-comments';
+import {
+  ensureJobHasCards, ensureJobTasksMatchColumns, splitJobIntoPhases, addJobPhase, removeJobPhase,
+  unsplitJobFromPhases, splitPhaseIntoSubPhases, addPhaseSubUnit, removePhaseSubUnit,
+  unsplitPhaseFromSubPhases, isJobVisibleToMe, syncCardColumns,
+} from '../core/jobs';
 
 declare global {
   // eslint-disable-next-line no-var
   var jmDraftAttachments: unknown[];
-  function ensureJobHasCards(job: Job): void;
-  function ensureJobTasksMatchColumns(job: Job): void;
   function renderJobCustomFieldsGrid(values: Record<string, unknown>): void;
   function renderJobTeamFieldsGrid(values: Record<string, unknown>): void;
   function renderJobAttachments(): void;
   function collectJobCustomFieldValues(): Record<string, unknown>;
-  function splitJobIntoPhases(job: Job): void;
-  function addJobPhase(job: Job): Phase;
-  function removeJobPhase(job: Job, phaseId: string): void;
-  function unsplitJobFromPhases(job: Job): boolean;
-  function splitPhaseIntoSubPhases(phase: Phase): void;
-  function addPhaseSubUnit(phase: Phase): { id: string; name: string; order: number; tasks: Task[] };
-  function removePhaseSubUnit(phase: Phase, subId: string): void;
-  function unsplitPhaseFromSubPhases(phase: Phase): boolean;
   function getOtherFixedProjectId(projectId: string | null): string | null;
   function isLinkEnabledLocally(jobId: string): boolean;
   function linkJobs(jobA: Job, projectAId: string | null, jobBId: string, projectBId: string): boolean;

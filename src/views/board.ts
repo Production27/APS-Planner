@@ -47,16 +47,17 @@
 // refreshJobFormIfOpen(), syncCardColumns(), isFinishedColumn(),
 // isFinishedColumnId(), displayNameForUsername(), applyPermissionGating(),
 // ensureUserRosterLoaded(), saveJobs(), renderHomeDashboard(),
-// ensureJobTasksMatchColumns(), renderFixedTaskGrid() — stay in index.html
-// on purpose (checklist business rules, modal-chrome/permission plumbing
-// shared across many modals, Job Manager's own still-inline mirror
-// functions, or genuinely separate concerns like the Gantt/Calendar/Job
-// List re-renders a rename triggers). Referenced below as ambient globals:
-// an ordinary top-level `function` declaration already attaches to
-// `window` on its own (unlike `let`/`const`), so none of those needed any
-// change to stay visible here — only genuinely mutated DATA globals do.
+// renderFixedTaskGrid() — stay in index.html on purpose (checklist
+// business rules, modal-chrome/permission plumbing shared across many
+// modals, Job Manager's own still-inline mirror functions, or genuinely
+// separate concerns like the Gantt/Calendar/Job List re-renders a rename
+// triggers). Referenced below as ambient globals: an ordinary top-level
+// `function` declaration already attaches to `window` on its own (unlike
+// `let`/`const`), so none of those needed any change to stay visible here
+// — only genuinely mutated DATA globals do.
 import type { BoardCard, BoardColumn, WorkflowItem, Job, Task, Phase, CustomFieldDef } from '../core/types';
 import { findJob } from '../core/models';
+import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../core/jobs';
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
@@ -86,8 +87,6 @@ declare global {
   var TEAM_FIELD_KEYS: string[];
   // eslint-disable-next-line no-var
   var fieldOptions: Record<string, string[]>;
-  function setCardColumn(card: BoardCard, newColumnId: string): void;
-  function ensureJobTasksMatchColumns(job: Job): void;
   function renderFixedTaskGrid(taskList: Task[]): void;
   function saveBoardCards(): void;
   function saveWorkflowItems(): void;
@@ -99,7 +98,6 @@ declare global {
   function renderJobTeamFieldsGrid(values: Record<string, unknown>): void;
   function collectJobCustomFieldValues(): Record<string, unknown>;
   function deleteCardFromShared(projectId: string | null, cardId: string): void;
-  function syncCardColumns(): void;
   function isFinishedColumn(col: BoardColumn): boolean;
   function displayNameForUsername(username: string): string;
 }
