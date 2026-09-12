@@ -8,11 +8,7 @@
 // only ever applies AFTER identity resolves, and only to non-admins —
 // see index.html's applyIdentityFromTokenPayload()'s call into this.
 import { showToast } from '../utils/ui';
-
-declare global {
-  function logActivity(text: string): void;
-  function postUsersEndpoint(path: string, body: unknown): Promise<any>;
-}
+import { postUsersEndpoint } from './worker-client';
 
 interface MaintenanceStatus {
   active: boolean;

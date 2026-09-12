@@ -29,6 +29,14 @@ import {
 import { DISPLAY_NAME_KEY, getStoredDisplayName, getStoredUsername, getStoredSessionToken, setStoredSessionToken, decodeSessionTokenPayload, isSessionTokenUsable } from './auth/session';
 import { PERMISSION_TIERS, getEffectiveRole, hasMinTier, applyIdentityFromTokenPayload } from './auth/permissions';
 import { reauthenticate, reauthenticateOnce, getSessionToken, fetchRoomToken, buildRoomWsUrl } from './auth/login';
+import { fetchWithReauth, postUsersEndpoint } from './app/worker-client';
+import { openBackupsModal, closeBackupsModal, triggerBackupNow, loadBackupsList, downloadBackupFile, restoreBackupFile } from './app/backups';
+import { openErrorsModal, closeErrorsModal, loadErrorsList } from './app/errors';
+import {
+  openManageUsersModal, closeManageUsersModal, TIER_LABELS, loadUsersList, populateUserFormProjectSelect,
+  onUserFormTierChange, showAddUserForm, showEditUserForm, hideUserFormPanel, submitUserForm,
+  resetUserPasswordUI, removeUserUI, changeMyPasswordUI,
+} from './app/users-admin';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 import {
   handleColumnDragStart, handleColumnDragEnd, handleColumnReorderOver, handleColumnReorderLeave, handleColumnReorderDrop,
@@ -197,6 +205,30 @@ declare global {
     getSessionToken: typeof getSessionToken;
     fetchRoomToken: typeof fetchRoomToken;
     buildRoomWsUrl: typeof buildRoomWsUrl;
+    fetchWithReauth: typeof fetchWithReauth;
+    postUsersEndpoint: typeof postUsersEndpoint;
+    openBackupsModal: typeof openBackupsModal;
+    closeBackupsModal: typeof closeBackupsModal;
+    triggerBackupNow: typeof triggerBackupNow;
+    loadBackupsList: typeof loadBackupsList;
+    downloadBackupFile: typeof downloadBackupFile;
+    restoreBackupFile: typeof restoreBackupFile;
+    openErrorsModal: typeof openErrorsModal;
+    closeErrorsModal: typeof closeErrorsModal;
+    loadErrorsList: typeof loadErrorsList;
+    openManageUsersModal: typeof openManageUsersModal;
+    closeManageUsersModal: typeof closeManageUsersModal;
+    TIER_LABELS: typeof TIER_LABELS;
+    loadUsersList: typeof loadUsersList;
+    populateUserFormProjectSelect: typeof populateUserFormProjectSelect;
+    onUserFormTierChange: typeof onUserFormTierChange;
+    showAddUserForm: typeof showAddUserForm;
+    showEditUserForm: typeof showEditUserForm;
+    hideUserFormPanel: typeof hideUserFormPanel;
+    submitUserForm: typeof submitUserForm;
+    resetUserPasswordUI: typeof resetUserPasswordUI;
+    removeUserUI: typeof removeUserUI;
+    changeMyPasswordUI: typeof changeMyPasswordUI;
     positionSettingsMenu: typeof positionSettingsMenu;
     toggleSettingsMenu: typeof toggleSettingsMenu;
     closeSettingsMenu: typeof closeSettingsMenu;
@@ -567,6 +599,30 @@ window.reauthenticateOnce = reauthenticateOnce;
 window.getSessionToken = getSessionToken;
 window.fetchRoomToken = fetchRoomToken;
 window.buildRoomWsUrl = buildRoomWsUrl;
+window.fetchWithReauth = fetchWithReauth;
+window.postUsersEndpoint = postUsersEndpoint;
+window.openBackupsModal = openBackupsModal;
+window.closeBackupsModal = closeBackupsModal;
+window.triggerBackupNow = triggerBackupNow;
+window.loadBackupsList = loadBackupsList;
+window.downloadBackupFile = downloadBackupFile;
+window.restoreBackupFile = restoreBackupFile;
+window.openErrorsModal = openErrorsModal;
+window.closeErrorsModal = closeErrorsModal;
+window.loadErrorsList = loadErrorsList;
+window.openManageUsersModal = openManageUsersModal;
+window.closeManageUsersModal = closeManageUsersModal;
+window.TIER_LABELS = TIER_LABELS;
+window.loadUsersList = loadUsersList;
+window.populateUserFormProjectSelect = populateUserFormProjectSelect;
+window.onUserFormTierChange = onUserFormTierChange;
+window.showAddUserForm = showAddUserForm;
+window.showEditUserForm = showEditUserForm;
+window.hideUserFormPanel = hideUserFormPanel;
+window.submitUserForm = submitUserForm;
+window.resetUserPasswordUI = resetUserPasswordUI;
+window.removeUserUI = removeUserUI;
+window.changeMyPasswordUI = changeMyPasswordUI;
 window.positionSettingsMenu = positionSettingsMenu;
 window.toggleSettingsMenu = toggleSettingsMenu;
 window.closeSettingsMenu = closeSettingsMenu;
