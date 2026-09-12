@@ -115,6 +115,11 @@ import {
   setMyChecklistItemAssignee, setMyChecklistStageAssignee,
 } from './views/checklist';
 import {
+  formatCommentWhen, renderJobComments, renderJobCommentItem, toggleReplyBox, postJobReply, addJobReply,
+  deleteJobReply, handleReplyKey, postJobComment, addJobComment, deleteJobComment, handleJobCommentKey,
+  toggleJobCommentsPanel,
+} from './views/job-comments';
+import {
   getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
   applyHomeReflowTracks, toggleHomeWidgetExpand, buildHomeOverdueRows, buildHomeStalledRows, buildHomeStageSummary,
   buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows, renderHomeGreeting,
@@ -331,6 +336,19 @@ declare global {
     buildManageFieldGroup: typeof buildManageFieldGroup;
     addFieldOption: typeof addFieldOption;
     removeFieldOption: typeof removeFieldOption;
+    formatCommentWhen: typeof formatCommentWhen;
+    renderJobComments: typeof renderJobComments;
+    renderJobCommentItem: typeof renderJobCommentItem;
+    toggleReplyBox: typeof toggleReplyBox;
+    postJobReply: typeof postJobReply;
+    addJobReply: typeof addJobReply;
+    deleteJobReply: typeof deleteJobReply;
+    handleReplyKey: typeof handleReplyKey;
+    postJobComment: typeof postJobComment;
+    addJobComment: typeof addJobComment;
+    deleteJobComment: typeof deleteJobComment;
+    handleJobCommentKey: typeof handleJobCommentKey;
+    toggleJobCommentsPanel: typeof toggleJobCommentsPanel;
     isCalendarEventTaskId: typeof isCalendarEventTaskId;
     parseCalendarEventTaskId: typeof parseCalendarEventTaskId;
     defaultRepeatUntil: typeof defaultRepeatUntil;
@@ -747,6 +765,19 @@ window.renderManageFieldsBody = renderManageFieldsBody;
 window.buildManageFieldGroup = buildManageFieldGroup;
 window.addFieldOption = addFieldOption;
 window.removeFieldOption = removeFieldOption;
+window.formatCommentWhen = formatCommentWhen;
+window.renderJobComments = renderJobComments;
+window.renderJobCommentItem = renderJobCommentItem;
+window.toggleReplyBox = toggleReplyBox;
+window.postJobReply = postJobReply;
+window.addJobReply = addJobReply;
+window.deleteJobReply = deleteJobReply;
+window.handleReplyKey = handleReplyKey;
+window.postJobComment = postJobComment;
+window.addJobComment = addJobComment;
+window.deleteJobComment = deleteJobComment;
+window.handleJobCommentKey = handleJobCommentKey;
+window.toggleJobCommentsPanel = toggleJobCommentsPanel;
 window.isCalendarEventTaskId = isCalendarEventTaskId;
 window.parseCalendarEventTaskId = parseCalendarEventTaskId;
 window.defaultRepeatUntil = defaultRepeatUntil;

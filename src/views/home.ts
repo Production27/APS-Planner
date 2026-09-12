@@ -67,6 +67,7 @@ import {
 import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor, buildWorkflowStageData } from './board';
 import { renderMyChecklist, buildMyChecklistRows } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
+import { formatCommentWhen, postJobComment, postJobReply } from './job-comments';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
@@ -83,9 +84,6 @@ declare global {
   function getVisibleJobs(): any[];
   function buildCalendarJobRows(jobsArr: any[]): any[];
   function jumpToLinkedJobReference(job: any): void;
-  function formatCommentWhen(when: number | undefined): string;
-  function postJobComment(jobId: string, text: string, important: boolean): any;
-  function postJobReply(jobId: string, commentId: string, text: string | false): any;
 }
 
 // Which Home widget represents each tab — Home widget headers (icon +
