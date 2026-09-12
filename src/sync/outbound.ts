@@ -21,6 +21,7 @@
 // reads/writes it from this separately-bundled script.
 import { setSyncIndicator } from './connection';
 import { USERNAME_KEY, DISPLAY_NAME_KEY, getStoredDisplayName, setStoredSessionToken } from '../auth/session';
+import { normalizeThemeColor, getSavedThemeColor } from '../app/theme';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomSocket, activeProjectId, projects, saveProjects(),
@@ -30,8 +31,6 @@ declare global {
   // eslint-disable-next-line no-var
   var localActivityLog: { who: string; what: string; when: number }[];
   function getActiveProject(): any;
-  function normalizeThemeColor(theme: unknown): string;
-  function getSavedThemeColor(): string;
   function flushAutoSaveJobForm(): void;
   function flushCardAutosave(): void;
 }

@@ -19,6 +19,7 @@ import { renderGantt } from '../views/gantt';
 import { renderBoard } from '../views/board';
 import { renderCalendar, ensureCalendarEventIds } from '../views/calendar';
 import { genId } from '../utils/id';
+import { DEFAULT_THEME_COLOR } from '../app/theme';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomEverConnected, activeProjectId, projects, latestPresenceUsers,
@@ -27,8 +28,6 @@ import { genId } from '../utils/id';
 declare global {
   // eslint-disable-next-line no-var
   var pendingRemoteRefresh: boolean;
-  // eslint-disable-next-line no-var
-  var DEFAULT_THEME_COLOR: string;
   function ensureJobAndTaskIds(arr: any[]): void;
   function ensureCardIds(arr: any[]): void;
   function enforceFixedProjectSet(): string[];

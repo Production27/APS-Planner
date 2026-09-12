@@ -3854,7 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-11.9';
+const APP_VERSION = '2026-09-11.10';
 
 // checkForNewerVersion() moved to src/app/version-check.ts.
 // checkMaintenanceStatus()/applyMaintenanceStatus()/
@@ -6213,85 +6213,10 @@ function coachmarkNext() {
   else closeCoachmarkTour();
 }
 
-// ===== SETTINGS DROPDOWN =====
-// Two triggers now share this one dropdown — the desktop rail-tab-row's
-// (.settings-menu-wrap > .settings-dots-btn) and the mobile
-// view-switcher's own (.mobile-view-btn.settings-menu-wrap) — only one of
-// which is ever actually on-screen at a time, per the usual @media
-// rules. #settingsDropdown itself lives at the top level now (see its
-// own markup comment), not nested inside either trigger, so its position
-// is computed fresh from whichever one is visible each time it opens
-// rather than relying on being a positioned ancestor's child.
-function positionSettingsMenu() {
-  const dropdown = document.getElementById('settingsDropdown');
-  let trigger = null;
-  document.querySelectorAll('.settings-menu-wrap').forEach(function(el) {
-    if (!trigger && el.offsetParent !== null) trigger = el;
-  });
-  if (!trigger) return;
-  const rect = trigger.getBoundingClientRect();
-  const dropdownWidth = dropdown.offsetWidth || 196; // 190 min-width + 6 padding — offsetWidth is 0 the very first time (display:none until opened)
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - dropdownWidth - 8));
-  dropdown.style.left = left + 'px';
-  dropdown.style.top = (rect.bottom + 8) + 'px';
-}
-
-function toggleSettingsMenu() {
-  const dropdown = document.getElementById('settingsDropdown');
-  const opening = !dropdown.classList.contains('show');
-  if (opening) positionSettingsMenu();
-  dropdown.classList.toggle('show', opening);
-  cancelSettingsMenuAutoClose();
-}
-
-function closeSettingsMenu() {
-  document.getElementById('settingsDropdown').classList.remove('show');
-  cancelSettingsMenuAutoClose();
-}
-
-// Auto-closes a few seconds after the mouse leaves BOTH the trigger and the
-// dropdown itself — armed only while open, and cancelled the moment the
-// mouse re-enters either one, so lingering on either piece keeps it open
-// indefinitely. Two triggers share this dropdown (see positionSettingsMenu()'s
-// own comment); only one is ever visible at a time, but listening on both is
-// harmless. Touch taps don't fire mouseenter/mouseleave the same way a real
-// pointer does, so this is effectively inert on mobile — tap-to-toggle and
-// the existing click-outside-closes handler below are unaffected.
-const SETTINGS_MENU_AUTOCLOSE_MS = 1000;
-let settingsMenuCloseTimer = null;
-function armSettingsMenuAutoClose() {
-  clearTimeout(settingsMenuCloseTimer);
-  settingsMenuCloseTimer = setTimeout(closeSettingsMenu, SETTINGS_MENU_AUTOCLOSE_MS);
-}
-function cancelSettingsMenuAutoClose() {
-  clearTimeout(settingsMenuCloseTimer);
-  settingsMenuCloseTimer = null;
-}
-document.querySelectorAll('.settings-menu-wrap').forEach(function(el) {
-  el.addEventListener('mouseenter', cancelSettingsMenuAutoClose);
-  el.addEventListener('mouseleave', function() {
-    const settingsDropdownForWrap = document.getElementById('settingsDropdown');
-    if (settingsDropdownForWrap && settingsDropdownForWrap.classList.contains('show')) armSettingsMenuAutoClose();
-  });
-});
-{
-  const settingsDropdownEl = document.getElementById('settingsDropdown');
-  if (settingsDropdownEl) {
-    settingsDropdownEl.addEventListener('mouseenter', cancelSettingsMenuAutoClose);
-    settingsDropdownEl.addEventListener('mouseleave', function() {
-      if (settingsDropdownEl.classList.contains('show')) armSettingsMenuAutoClose();
-    });
-    // Delegated rather than one onkeydown= per .settings-dropdown-item
-    // (each already has tabindex="0" role="button" for Tab reachability)
-    // — one listener here covers every item, including any added later,
-    // instead of relying on remembering to repeat the attribute.
-    settingsDropdownEl.addEventListener('keydown', function(e) {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      const item = e.target.closest('.settings-dropdown-item');
-      if (item) { e.preventDefault(); item.click(); }
-    });
-  }
-}
+// The settings dropdown (positionSettingsMenu()/toggleSettingsMenu()/
+// closeSettingsMenu()/armSettingsMenuAutoClose()/
+// cancelSettingsMenuAutoClose() and its own hover/keydown wiring) moved
+// to src/app/settings-menu.ts.
 
 // Snapshot before the click's own handlers run (mousedown fires first),
 // so the outside-click-closes-the-drawer check below can tell "this click
@@ -6343,24 +6268,6 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// ===== DARK MODE =====
-function applyDarkMode(on) {
-  document.body.classList.toggle('dark-mode', on);
-  const toggle = document.getElementById('darkModeToggle');
-  if (toggle) toggle.classList.toggle('active', on);
-  applyProjectBgVisual();
-}
-
-function loadDarkModePref() {
-  applyDarkMode(localStorage.getItem('gantt_dark_mode_v1') === '1');
-}
-
-function toggleDarkMode() {
-  const isOn = !document.body.classList.contains('dark-mode');
-  localStorage.setItem('gantt_dark_mode_v1', isOn ? '1' : '0');
-  applyDarkMode(isOn);
-}
-
 /* loadHeader() removed — loadActiveProjectData() sets
    #headerTitle/#headerSubtitle directly from the per-project data now.
    loadThemeColor() (a 1-line wrapper that only ever called
@@ -6368,198 +6275,12 @@ function toggleDarkMode() {
    still called directly from its other live call sites, so nothing
    actually depended on the wrapper. */
 
-// ===== THEME COLOR =====
-// Was a header-background gradient picker (start/end color) back when
-// .app-header was a visible gradient bar — now that it's display:none
-// (see its own rule), this drives --primary/--primary-light instead,
-// which is what buttons, active tabs, badges, and the Home banner
-// actually render from. A single picked color becomes --primary-light
-// (what most of those render as flat); --primary (the darker anchor
-// gradients pair it with) is derived via darkenColor() rather than
-// picked separately, since one color is simpler for the person picking
-// it, and every existing --primary/--primary-light consumer already
-// composes the two the same way regardless of exactly how dark
-// --primary is.
-// `var` — src/sync/inbound.ts's bundled applyRoomSnapshot() reads this.
-var DEFAULT_THEME_COLOR = '#3949ab';
-const THEME_PRESETS = [
-  '#3949ab', // Indigo (default)
-  '#2e7d32', // Forest
-  '#c62828', // Maroon
-  '#546e7a', // Slate
-  '#424242', // Charcoal
-  '#00897b', // Teal
-  '#7b1fa2', // Purple
-  '#fb8c00'  // Amber
-];
-
-// A project's own header.theme may still be the old {c1,c2} gradient
-// shape (every project's default was DEFAULT_THEME = {c1,c2} for as
-// long as the header-gradient picker existed, so most real project
-// records predate this switch to a single color) — collapses either
-// shape down to one hex string.
-function normalizeThemeColor(theme) {
-  if (typeof theme === 'string') return theme;
-  if (theme && typeof theme === 'object') return theme.c2 || theme.c1 || DEFAULT_THEME_COLOR;
-  return DEFAULT_THEME_COLOR;
-}
-
-function getSavedThemeColor() {
-  return localStorage.getItem('gantt_theme_color_v1') || DEFAULT_THEME_COLOR;
-}
-
-function applyThemeColor() {
-  const color = getSavedThemeColor();
-  document.documentElement.style.setProperty('--primary-light', color);
-  document.documentElement.style.setProperty('--primary', darkenColor(color, 0.3));
-}
-
-function buildThemePresets(selected) {
-  const container = document.getElementById('themePresets');
-  container.innerHTML = '';
-  THEME_PRESETS.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'theme-preset';
-    div.style.background = c;
-    if (selected && selected.toLowerCase() === c.toLowerCase()) div.classList.add('selected');
-    div.onclick = () => {
-      document.getElementById('theme_color').value = c;
-      container.querySelectorAll('.theme-preset').forEach(el => el.classList.remove('selected'));
-      div.classList.add('selected');
-      updateThemePreview();
-    };
-    container.appendChild(div);
-  });
-}
-
-function updateThemePreview() {
-  const c = document.getElementById('theme_color').value;
-  document.getElementById('themePreview').style.background = 'linear-gradient(135deg, ' + c + ' 0%, ' + darkenColor(c, 0.3) + ' 100%)';
-  document.querySelectorAll('#themePresets .theme-preset').forEach(el => el.classList.remove('selected'));
-  const idx = THEME_PRESETS.findIndex(p => p.toLowerCase() === c.toLowerCase());
-  if (idx !== -1) document.querySelectorAll('#themePresets .theme-preset')[idx].classList.add('selected');
-}
-
-function openThemeModal() {
-  const color = getSavedThemeColor();
-  document.getElementById('theme_color').value = color;
-  buildThemePresets(color);
-  updateThemePreview();
-  openModal('themeModal');
-}
-
-function closeThemeModal() {
-  closeModal('themeModal');
-}
-
-function applyTheme() {
-  const color = document.getElementById('theme_color').value;
-  localStorage.setItem('gantt_theme_color_v1', color);
-  applyThemeColor();
-  closeThemeModal();
-  showToast('Theme color updated', 'success');
-  logActivity('changed theme color');
-  // saveActiveProject() picks the new color up from localStorage (via
-  // getSavedThemeColor()) into proj.header, then the staleness-protected
-  // setHeader path (not the routine batch's unprotected header field)
-  // actually pushes it — see the comment on saveHeader() above.
-  saveActiveProject();
-  pushHeaderToShared(activeProjectId);
-}
-
-function resetThemeDefault() {
-  localStorage.removeItem('gantt_theme_color_v1');
-  applyThemeColor();
-  closeThemeModal();
-  showToast('Theme color reset to default', 'info');
-  logActivity('reset theme color to default');
-  saveActiveProject();
-  pushHeaderToShared(activeProjectId);
-}
-
-// ===== HEADER BACKGROUND PHOTO =====
-// The Settings > Header Background upload UI (openHeaderBgModal/
-// handleHeaderBgUpload/removeHeaderBgPhoto/etc.) was removed, same as the
-// Board Background one below. gantt_header_bg_photo_v1 stays: whatever
-// was already uploaded keeps being stored/synced, it's just no longer
-// changeable from the UI, and .app-header itself is display:none now so
-// it has no visible effect regardless.
-
-// ===== BOARD BACKGROUND PHOTO =====
-// The Settings > Board Background upload UI (openBoardBgModal/
-// handleBoardBgUpload/removeBoardBgPhoto/etc.) was removed — APS now uses
-// the static bundled image below, and Bludorn will get one the same way
-// later. applyProjectBgVisual() and gantt_board_bg_photo_v1 stay: whatever
-// Bludorn already had uploaded before the removal keeps displaying (see
-// the priority order below), it's just no longer changeable from the UI.
-
-// Static, bundled per-project background images — a normal image file
-// shipped alongside index.html (see /assets), not an upload stored in
-// localStorage or synced project data. Sidesteps the localStorage-quota/
-// base64-inflation problem and the Durable Object's single-key
-// room-storage size limit entirely (see handleBoardBgUpload()'s history)
-// — the browser just requests and caches it like any other website asset,
-// full resolution, no size cap. Keyed by FIXED_PROJECT_NAMES (the two
-// permanent projects this app already treats as fixed). Originally
-// Board-only (applyBoardBgVisual); extended to every other view's own
-// panel per explicit request. bludorn-board-bg.jpg is the full source
-// logo (icon + "BLUDORN BUILDERS" lettering), centered on a white
-// square canvas the same way APS's own asset is composed, so both
-// behave identically under background-size:cover across every panel
-// shape.
-const STATIC_PROJECT_BG_BY_NAME = {
-  'ADVANCED PRECUT SYSTEMS': 'assets/aps-board-bg.jpg',
-  'BLUDORN BUILDERS': 'assets/bludorn-board-bg.jpg'
-};
-// Panels that get the plain static-image treatment — full-bleed on the
-// PANEL itself, not each view's own inner content wrapper, so it reads
-// consistently even where that wrapper doesn't span the full width (My
-// Checklist's is a centered max-width:760px column; a background set on
-// IT alone would leave the wider margins on either side untouched).
-const STATIC_BG_PANEL_IDS = ['panel-home', 'panel-checklist', 'panel-calendar', 'panel-gantt'];
-function applyProjectBgVisual() {
-  const proj = getActiveProject();
-  const staticBg = proj && STATIC_PROJECT_BG_BY_NAME[proj.name];
-  const dark = document.body.classList.contains('dark-mode');
-  const overlay = dark ? 'rgba(10,12,16,0.6)' : 'rgba(255,255,255,0.55)';
-  // Board's own exact technique (flat opacity overlay, cover) — an
-  // earlier pass swapped this for background-blend-mode:multiply
-  // specifically to hide the source image's solid-white background
-  // showing as a pale box in dark mode, but per explicit follow-up
-  // feedback that dimmed it noticeably below Board's own actual
-  // brightness (multiply against a dark surface color darkens the
-  // logo's ink too, not just the white background around it — confirmed
-  // by rendering Board's real technique next to several multiply
-  // variants side by side, not just reasoned through). Reverted to
-  // Board's identical formula so these views match its brightness
-  // exactly, box included — Board shows that exact same box in its own
-  // dark mode today (confirmed directly), so this isn't a new problem,
-  // just Board's already-shipped look applied consistently everywhere.
-  const bgCss = staticBg ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + staticBg + '") center/cover no-repeat') : '';
-  STATIC_BG_PANEL_IDS.forEach(function(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.style.background = bgCss;
-    // background-blend-mode isn't part of the background shorthand
-    // above, so a stale value from before this reverted away from
-    // multiply-blend wouldn't otherwise get cleared on re-runs (project
-    // switch, dark mode toggle) within the same page load.
-    el.style.backgroundBlendMode = '';
-  });
-  // Board keeps its own richer logic (a legacy localStorage-uploaded
-  // photo, from the old "Board Background" upload UI, as a fallback when
-  // no static image is configured — see the comment above
-  // STATIC_PROJECT_BG_BY_NAME) rather than being folded into the loop
-  // above, since the other views never had that upload feature and
-  // shouldn't inherit a fallback that's specific to Board's own history.
-  const boardWrapper = document.getElementById('boardWrapper');
-  if (boardWrapper) {
-    const boardPhoto = staticBg || localStorage.getItem('gantt_board_bg_photo_v1');
-    boardWrapper.style.background = boardPhoto
-      ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + boardPhoto + '") center/cover no-repeat')
-      : '';
-  }
-}
+// Dark mode (applyDarkMode()/loadDarkModePref()/toggleDarkMode()), the
+// theme-color picker (DEFAULT_THEME_COLOR/normalizeThemeColor()/
+// getSavedThemeColor()/applyThemeColor()/buildThemePresets()/
+// updateThemePreview()/openThemeModal()/closeThemeModal()/applyTheme()/
+// resetThemeDefault()), and the per-project background photo
+// (applyProjectBgVisual()) moved to src/app/theme.ts.
 
 // homeExpandedWidgetId stays here as a real `var` (src/views/board.ts's
 // own bundled code still reads it directly).
