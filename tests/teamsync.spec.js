@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { APP_URL, WORKER_ORIGIN, seedSession, mockRoomWebSocket } = require('./helpers');
+const { APP_URL, WORKER_ORIGIN, seedSession, mockRoomWebSocket, fakeSessionToken } = require('./helpers');
 
 test('login: a valid seeded session bypasses the login overlay', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
@@ -7,6 +7,96 @@ test('login: a valid seeded session bypasses the login overlay', async ({ page }
 
   await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
   await expect(page.locator('#jobList')).toBeAttached();
+});
+
+// The four tests below drive the REAL login flow (no seedSession bypass)
+// — reauthenticate()'s POST to API_BASE_URL is intercepted directly, so
+// these exercise the actual #loginOverlay form, the retry-on-failure
+// loop, and the lockout path, none of which any other test in this file
+// touches (every other test seeds a session specifically to skip this).
+async function mockWorkerForLogin(page, loginResponse) {
+  await page.route(WORKER_ORIGIN + '/**', (route) => {
+    const req = route.request();
+    const url = req.url();
+    if (url.includes('/room')) return route.abort();
+    if (req.method() === 'POST' && (url === WORKER_ORIGIN + '/' || url === WORKER_ORIGIN)) {
+      return loginResponse(route);
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+}
+
+test('login: the real form boots into the overlay and a correct submit logs in', async ({ page }) => {
+  const token = fakeSessionToken({ username: 'realuser', displayName: 'Real User', role: 'admin' });
+  await mockWorkerForLogin(page, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ token }),
+  }));
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+
+  await expect(page.locator('#loginOverlay')).toHaveClass(/show/);
+  await page.fill('#loginUsername', 'realuser');
+  await page.fill('#loginPassword', 'correct-password');
+  await page.click('#loginSubmit');
+
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/, { timeout: 5000 });
+  const storedToken = await page.evaluate(() => localStorage.getItem('gantt_session_token_v1'));
+  expect(storedToken).toBeTruthy();
+});
+
+test('login: a rejected login shows an error, clears the username, and lets a retry succeed', async ({ page }) => {
+  const token = fakeSessionToken({ username: 'realuser', displayName: 'Real User', role: 'admin' });
+  let attempt = 0;
+  await mockWorkerForLogin(page, (route) => {
+    attempt++;
+    if (attempt === 1) {
+      return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'bad creds' }) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token }) });
+  });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+
+  await page.fill('#loginUsername', 'wronguser');
+  await page.fill('#loginPassword', 'wrong-password');
+  await page.click('#loginSubmit');
+
+  // Rejected: banner shows, username field is cleared (per reauthenticate()'s
+  // own comment: a bad first attempt must not keep reusing a typo'd name).
+  await expect(page.locator('#loginBanner')).toHaveClass(/show/);
+  await expect(page.locator('#loginBanner')).toHaveClass(/err/);
+  await expect(page.locator('#loginBannerText')).toHaveText('Incorrect username or password.');
+  await expect(page.locator('#loginUsername')).toHaveValue('');
+  await expect(page.locator('#loginOverlay')).toHaveClass(/show/);
+
+  // Retry with the (now-corrected) credentials succeeds.
+  await page.fill('#loginUsername', 'realuser');
+  await page.fill('#loginPassword', 'correct-password');
+  await page.click('#loginSubmit');
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/, { timeout: 5000 });
+});
+
+test('login: a 429 lockout shows the lockout banner and preserves the typed username', async ({ page }) => {
+  await mockWorkerForLogin(page, (route) => route.fulfill({
+    status: 429,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: 'Too many attempts — try again in 3 minutes.' }),
+  }));
+  await page.goto(APP_URL);
+
+  await page.fill('#loginUsername', 'realuser');
+  await page.fill('#loginPassword', 'whatever');
+  await page.click('#loginSubmit');
+
+  await expect(page.locator('#loginBanner')).toHaveClass(/show/);
+  await expect(page.locator('#loginBanner')).toHaveClass(/lockout/);
+  await expect(page.locator('#loginBannerText')).toHaveText('Too many attempts — try again in 3 minutes.');
+  // Unlike a rejected (401) login, a lockout is not the account's fault —
+  // the username must survive so the user doesn't have to retype it.
+  await expect(page.locator('#loginUsername')).toHaveValue('realuser');
+  await expect(page.locator('#loginOverlay')).toHaveClass(/show/);
 });
 
 test('job CRUD: creating a job via the UI lands in the underlying data model', async ({ page }) => {
