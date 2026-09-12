@@ -98,7 +98,6 @@ declare global {
   function renderHomeDashboard(): void;
   function renderActivityLogSidebar(): void;
   function refreshJobFormIfOpen(jobId: string): void;
-  function setupScrollSync(): void;
   // The anonymous shape (rather than any one file's own CalJob/GanttJob
   // pseudo-type) is the deliberate common denominator every caller of
   // this one index.html function satisfies.

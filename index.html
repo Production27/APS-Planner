@@ -3854,7 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-11.6';
+const APP_VERSION = '2026-09-11.7';
 
 // Fetches version.txt fresh (bypassing HTTP cache) and compares it to this
 // tab's own APP_VERSION. On a mismatch, shows a persistent banner rather
@@ -6697,59 +6697,8 @@ var homeExpandedWidgetId = null;
 
 // computeDateRange() moved to src/views/gantt.ts.
 
-let isSyncingScroll = false;
-
-// The single place that positions the date header horizontally — always
-// via transform, never timelineHeaderWrap.scrollLeft (see the comment on
-// .timeline-header). #timelineBody's own scrollLeft is the one source of
-// truth for "how far scrolled right now."
-function setHeaderScroll(px) {
-  const header = document.getElementById('timelineHeader');
-  if (header) header.style.transform = 'translateX(-' + px + 'px)';
-}
-
-function setupScrollSync() {
-  const timelineBody = document.getElementById('timelineBody');
-  const leftBody = document.getElementById('leftBody');
-
-  if (!timelineBody || !leftBody) return;
-
-  timelineBody.onscroll = function() {
-    if (isSyncingScroll) return;
-    isSyncingScroll = true;
-    setHeaderScroll(timelineBody.scrollLeft);
-    leftBody.scrollTop = timelineBody.scrollTop;
-    isSyncingScroll = false;
-  };
-
-  leftBody.onscroll = function() {
-    if (isSyncingScroll) return;
-    isSyncingScroll = true;
-    timelineBody.scrollTop = leftBody.scrollTop;
-    isSyncingScroll = false;
-  };
-
-  // Pinch-to-zoom (see the GANTT PINCH-TO-ZOOM block near fitToView()) —
-  // bound on .gantt-panels-row (the date header row is a SIBLING of
-  // timelineBody, not a descendant of it — see the "right-panel" markup —
-  // so a pinch starting with either finger over the header would never
-  // reach a listener scoped to timelineBody alone) rather than just
-  // timelineBody itself, even though the zoom math inside still targets
-  // timelineBody specifically (its own getBoundingClientRect()/scrollLeft
-  // — touch clientX/Y are viewport-relative regardless of which element
-  // the listener sits on, so this doesn't need to change). Re-wired here
-  // since renderGantt() rebuilds timelineBody's contents (though not the
-  // panels-row itself) on every call; property assignment rather than
-  // addEventListener so re-running this never stacks up duplicate
-  // listeners the way repeated addEventListener calls would.
-  const panelsRow = document.querySelector('.gantt-panels-row');
-  if (panelsRow) {
-    panelsRow.ontouchstart = handleGanttTouchStart;
-    panelsRow.ontouchmove = handleGanttTouchMove;
-    panelsRow.ontouchend = handleGanttTouchEnd;
-  }
-  timelineBody.onwheel = handleGanttWheelZoom;
-}
+// isSyncingScroll/setHeaderScroll()/setupScrollSync() moved to
+// src/views/gantt.ts.
 
 // ===== CALENDAR TAB =====
 // `var`, not `let` — src/views/calendar.ts's bundled navigation/dispatch
@@ -6766,31 +6715,9 @@ var calDragState = null;
 var CAL_BAR_GAP = 3;
 var CAL_DAYNUM_H = 26;
 
-// Debounced — a manual window resize-drag or a mobile orientation
-// change/on-screen-keyboard show-hide can fire 'resize' many times in
-// quick succession, each otherwise triggering a full calendar rebuild
-// mid-gesture instead of one settled render once it's actually done.
-// Registers a permanent resize listener that re-renders renderFn only
-// while panelId's panel is the active one, optionally debounced — the
-// shape shared by the Calendar/Home-workflow/Board-workflow resize
-// listeners below (each used to hand-roll its own clearTimeout/setTimeout
-// pair, or for the Board workflow strip, none at all — debounceMs: 0
-// preserves that exact synchronous behavior rather than changing it).
-// Deliberately NOT used for the Home grid's own resize listener further
-// up, which does meaningfully different work (toggles a CSS class
-// immediately, plus separate viewport-width branch logic) rather than
-// just debouncing a render call.
-function onPanelResize(panelId, renderFn, debounceMs) {
-  let timer = null;
-  window.addEventListener('resize', function() {
-    const panel = document.getElementById(panelId);
-    const fire = function() { if (panel && panel.classList.contains('active')) renderFn(); };
-    if (!debounceMs) { fire(); return; }
-    clearTimeout(timer);
-    timer = setTimeout(fire, debounceMs);
-  });
-}
-onPanelResize('panel-calendar', renderCalendar, 200);
+// onPanelResize() moved to src/utils/ui.ts. Each of its three callers
+// (Calendar/Home-workflow/Board-workflow) now registers its own panel
+// directly in its own file, at that module's top level.
 
 // ===== CALENDAR-ONLY EVENTS: Add/Edit modal =====
 // Deliberately simple (explicit Save, not autosave like the job form) —
@@ -9417,26 +9344,11 @@ function renderActivityLogSidebar() {
 // Falls back to this when a column has never had it set.
 var DEFAULT_STALLED_AFTER_DAYS = 14;
 
-// This ONE registration call deliberately stays here rather than moving
-// into home.ts along with renderHomeWorkflowMiniBoard() itself:
-// dist/app.bundle.js (an IIFE) runs to completion before this inline
-// script even begins, so a top-level call to onPanelResize() from
-// INSIDE the bundle would throw "onPanelResize is not defined" (still
-// only defined here) and abort the whole bundle's setup before any of
-// its window.x = x assignments ran. A plain statement here, by
-// contrast, runs only once this script reaches it — by which point the
-// bundle has long since finished and window.renderHomeWorkflowMiniBoard
-// already exists, same as the two sibling onPanelResize() calls already
-// below/above it for panel-calendar/panel-board.
-onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200);
-
-// buildWorkflowStageData()/renderBoardWorkflowStrip()/
-// scrollToBoardColumn() moved to src/views/board.ts.
-// Recomputes on resize (e.g. rotating a tablet, resizing the window)
-// since the band's segment positions are measured in real pixels, not
-// derived from a fixed formula — only while Board is actually the
-// visible tab, to avoid needless work on every other view.
-onPanelResize('panel-board', renderBoardWorkflowStrip, 0);
+// The panel-home/panel-board onPanelResize() registrations now live in
+// src/views/home.ts and src/views/board.ts respectively — both onPanelResize()
+// itself and renderHomeWorkflowMiniBoard()/renderBoardWorkflowStrip() are
+// real bundled code now, so there's no load-order reason left to keep
+// these calls here.
 
 // ===== EVENTS =====
 // Every getElementById(...) below is guarded — none of these elements

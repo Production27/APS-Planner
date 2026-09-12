@@ -53,6 +53,7 @@ import {
   resetZoom, fitToView, togglePhaseCollapse, getSubUnitKey, toggleTasksPhaseExpanded,
   toggleTasksSubPhaseExpanded, expandAllGantt, collapseAllGantt, toggleGanttJobFocus, clearGanttJobFocus,
   syncGanttJobFocusBanner, buildPhaseSubTags, computeDateRange, showDatePopover, hideDatePopover, showTooltip,
+  setHeaderScroll, setupScrollSync,
 } from './views/gantt';
 import {
   sendPresenceUpdate, presenceAvatarColor, presenceInitials, presenceAnimDelay, renderPresenceAvatars,
@@ -280,6 +281,8 @@ declare global {
     showDatePopover: typeof showDatePopover;
     hideDatePopover: typeof hideDatePopover;
     showTooltip: typeof showTooltip;
+    setHeaderScroll: typeof setHeaderScroll;
+    setupScrollSync: typeof setupScrollSync;
     sendPresenceUpdate: typeof sendPresenceUpdate;
     presenceAvatarColor: typeof presenceAvatarColor;
     presenceInitials: typeof presenceInitials;
@@ -585,6 +588,8 @@ window.computeDateRange = computeDateRange;
 window.showDatePopover = showDatePopover;
 window.hideDatePopover = hideDatePopover;
 window.showTooltip = showTooltip;
+window.setHeaderScroll = setHeaderScroll;
+window.setupScrollSync = setupScrollSync;
 window.sendPresenceUpdate = sendPresenceUpdate;
 window.presenceAvatarColor = presenceAvatarColor;
 window.presenceInitials = presenceInitials;

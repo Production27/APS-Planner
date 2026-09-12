@@ -37,7 +37,7 @@ import { genId } from '../utils/id';
 import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getPhaseCard } from '../core/models';
-import { openModal, closeModal, showToast, moveTooltip, hideTooltip, msDropdownLabelText } from '../utils/ui';
+import { openModal, closeModal, showToast, moveTooltip, hideTooltip, msDropdownLabelText, onPanelResize } from '../utils/ui';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS-style shared state, saveJobs()-style shared functions,
@@ -1751,6 +1751,12 @@ function handleCalWheel(e: WheelEvent): void {
   setTimeout(function () { calWheelCooldown = false; }, 450);
   animateCalendarWheelChange(goNext);
 }
+
+// Recomputes on resize (e.g. rotating a tablet, resizing the window) —
+// only while Calendar is actually the visible tab, to avoid needless
+// work on every other view. A top-level call, run once when this module
+// loads (see onPanelResize()'s own comment in src/utils/ui.ts).
+onPanelResize('panel-calendar', renderCalendar, 200);
 
 export {
   isCalendarEventTaskId,

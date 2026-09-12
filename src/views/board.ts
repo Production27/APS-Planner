@@ -51,7 +51,7 @@ import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
 import { darkenColor } from '../utils/color';
-import { openModal, closeModal, showToast } from '../utils/ui';
+import { openModal, closeModal, showToast, onPanelResize } from '../utils/ui';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 import { buildHomeStageSummary, buildHomeStalledRows } from './home';
 
@@ -952,6 +952,14 @@ function scrollToBoardColumn(colId: string): void {
   const el = document.querySelector('.board-column[data-column="' + colId + '"]');
   if (el && (el as HTMLElement).scrollIntoView) (el as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 }
+
+// Recomputes on resize (e.g. rotating a tablet, resizing the window)
+// since the band's segment positions are measured in real pixels, not
+// derived from a fixed formula — only while Board is actually the
+// visible tab, to avoid needless work on every other view. A top-level
+// call, run once when this module loads (see onPanelResize()'s own
+// comment in src/utils/ui.ts).
+onPanelResize('panel-board', renderBoardWorkflowStrip, 0);
 
 // ===== BOARD: RENDER =====
 

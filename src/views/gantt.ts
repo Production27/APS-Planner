@@ -89,7 +89,6 @@ declare global {
   const ARCHIVE_CUTOFF_DAYS: number;
   function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
   function jumpToLinkedJobReference(job: Job): void;
-  function setHeaderScroll(px: number): void;
   function isTaskFinished(job: Job, task: GanttTask): boolean;
 }
 
@@ -2055,6 +2054,66 @@ function fitToView(): void {
   zoomGanttCentered(fitted);
 }
 
+// ===== GANTT: HEADER/BODY SCROLL SYNC =====
+let isSyncingScroll = false;
+
+// The single place that positions the date header horizontally — always
+// via transform, never timelineHeaderWrap.scrollLeft (see the comment on
+// .timeline-header). #timelineBody's own scrollLeft is the one source of
+// truth for "how far scrolled right now."
+function setHeaderScroll(px: number): void {
+  const header = document.getElementById('timelineHeader');
+  if (header) header.style.transform = 'translateX(-' + px + 'px)';
+}
+
+// Called from home.ts (whenever the Home dashboard's expanded Gantt
+// widget switches to this tab) and from index.html's own init(), in
+// addition to this file's own renderGantt()/scrollToToday() — re-wiring
+// on every call is deliberate (see below), so any of those callers is
+// safe even if scroll sync is already set up.
+function setupScrollSync(): void {
+  const timelineBody = document.getElementById('timelineBody');
+  const leftBody = document.getElementById('leftBody');
+
+  if (!timelineBody || !leftBody) return;
+
+  timelineBody.onscroll = function() {
+    if (isSyncingScroll) return;
+    isSyncingScroll = true;
+    setHeaderScroll(timelineBody.scrollLeft);
+    leftBody.scrollTop = timelineBody.scrollTop;
+    isSyncingScroll = false;
+  };
+
+  leftBody.onscroll = function() {
+    if (isSyncingScroll) return;
+    isSyncingScroll = true;
+    timelineBody.scrollTop = leftBody.scrollTop;
+    isSyncingScroll = false;
+  };
+
+  // Pinch-to-zoom — bound on .gantt-panels-row (the date header row is a
+  // SIBLING of timelineBody, not a descendant of it — see the
+  // "right-panel" markup — so a pinch starting with either finger over
+  // the header would never reach a listener scoped to timelineBody alone)
+  // rather than just timelineBody itself, even though the zoom math
+  // inside still targets timelineBody specifically (its own
+  // getBoundingClientRect()/scrollLeft — touch clientX/Y are
+  // viewport-relative regardless of which element the listener sits on,
+  // so this doesn't need to change). Re-wired here since renderGantt()
+  // rebuilds timelineBody's contents (though not the panels-row itself)
+  // on every call; property assignment rather than addEventListener so
+  // re-running this never stacks up duplicate listeners the way repeated
+  // addEventListener calls would.
+  const panelsRow = document.querySelector('.gantt-panels-row') as HTMLElement | null;
+  if (panelsRow) {
+    panelsRow.ontouchstart = handleGanttTouchStart;
+    panelsRow.ontouchmove = handleGanttTouchMove;
+    panelsRow.ontouchend = handleGanttTouchEnd;
+  }
+  timelineBody.onwheel = handleGanttWheelZoom;
+}
+
 export {
   cascadeShiftLaterTasks,
   startBarResizeRight,
@@ -2085,6 +2144,8 @@ export {
   zoomOut,
   resetZoom,
   fitToView,
+  setHeaderScroll,
+  setupScrollSync,
   togglePhaseCollapse,
   getSubUnitKey,
   toggleTasksPhaseExpanded,

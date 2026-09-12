@@ -96,3 +96,28 @@ document.addEventListener('change', function(e) {
   const count = dropdown.querySelectorAll('input[type="checkbox"]:checked').length;
   labelEl.textContent = msDropdownLabelText(count, dropdown.dataset.msEmptyLabel);
 });
+
+// Debounced — a manual window resize-drag or a mobile orientation
+// change/on-screen-keyboard show-hide can fire 'resize' many times in
+// quick succession, each otherwise triggering a full rebuild mid-gesture
+// instead of one settled render once it's actually done. Registers a
+// permanent resize listener that re-renders renderFn only while panelId's
+// panel is the active one, optionally debounced — the shape shared by
+// the Calendar/Home-workflow/Board-workflow resize listeners (each used
+// to hand-roll its own clearTimeout/setTimeout pair, or for the Board
+// workflow strip, none at all — debounceMs: 0 preserves that exact
+// synchronous behavior rather than changing it). Each caller registers
+// its own panel at its own module's top level (src/views/calendar.ts,
+// src/views/home.ts, src/views/board.ts) — safe now that this function
+// itself lives in the bundle too, so it's always defined before any of
+// them run.
+export function onPanelResize(panelId: string, renderFn: () => void, debounceMs: number): void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  window.addEventListener('resize', function() {
+    const panel = document.getElementById(panelId);
+    const fire = function() { if (panel && panel.classList.contains('active')) renderFn(); };
+    if (!debounceMs) { fire(); return; }
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(fire, debounceMs);
+  });
+}

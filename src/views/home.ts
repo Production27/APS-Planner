@@ -57,7 +57,8 @@ import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
 import { escapeHtml } from '../utils/html';
 import { toIsoDate, getDaysDiff } from '../utils/date';
 import { darkenColor, softenColor } from '../utils/color';
-import { renderGantt } from './gantt';
+import { renderGantt, setupScrollSync } from './gantt';
+import { onPanelResize } from '../utils/ui';
 import {
   renderCalendar, initCalendarDragHandlers, buildCalBarHtml, flattenCalendarEventsForRange,
   isCalendarEventTaskId, parseCalendarEventTaskId, openEditCalendarEvent, calendarOpenJob,
@@ -1455,6 +1456,10 @@ function renderHomeDashboard(): void {
   renderHomeJobChat();
   applyPermissionGating();
 }
+
+// A top-level call, run once when this module loads (see
+// onPanelResize()'s own comment in src/utils/ui.ts).
+onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200);
 
 export {
   getActiveTab,
