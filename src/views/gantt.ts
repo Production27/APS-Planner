@@ -1999,6 +1999,14 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const grid = document.getElementById('timelineGrid');
   if (!grid) return;
+
+  // Pass 1 — READ ONLY. A row can draw many elements sharing one row key
+  // (every day-segment/tick in a job-span row, easily a dozen-plus for a
+  // month-long sub-unit — see rowKey's own comment), and a cascaded drag
+  // (cascadeShiftLaterTasks()) can reorder several DIFFERENT rows in the
+  // same render on top of that. Collect every element that actually needs
+  // to animate here, without writing anything yet.
+  const toAnimate: { el: HTMLElement; delta: number }[] = [];
   grid.querySelectorAll<HTMLElement>('[data-row-key]').forEach(function (el) {
     const key = el.dataset.rowKey as string;
     const oldTop = oldTops[key];
@@ -2010,22 +2018,49 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
     const newTop = el.getBoundingClientRect().top;
     const delta = oldTop - newTop;
     if (Math.abs(delta) < 1) return;
-    el.style.transition = 'none';
-    el.style.transform = 'translateY(' + delta + 'px)';
-    // Force the browser to commit that starting position before clearing
-    // `transition: none` below — otherwise both style changes can get
-    // batched into one recalc and there's never a "before" frame to
-    // animate away from (this bit the first pass at this exact technique
-    // in the approved mockup, worth not repeating: an inline
-    // `transition: none` also has to be explicitly cleared afterward, not
-    // just overridden by a class — an inline style always wins over a
-    // class's CSS rule regardless of specificity).
-    void el.offsetHeight;
-    el.style.transition = '';
-    el.classList.add('gantt-bar-reorder');
-    requestAnimationFrame(function () {
-      el.style.transform = 'translateY(0)';
-    });
+    toAnimate.push({ el: el, delta: delta });
+  });
+  if (!toAnimate.length) return;
+
+  // Pass 2 — WRITE ONLY (the "before" frame). Interleaving each element's
+  // own read/write/read/write (as this first did) forces a separate
+  // synchronous layout recalc PER ELEMENT — real, visible jank on any row
+  // with more than a couple of pieces, and worse, it let different
+  // elements' own requestAnimationFrame callbacks land on different actual
+  // frames, which is exactly what read as "the job bar and task bars move
+  // separately" (Karl's own report) — pieces of what should be one
+  // reorder drifting out of sync with each other. Writing every element's
+  // starting offset first, with no reads in between, then forcing exactly
+  // ONE reflow for the whole batch below, keeps this to a single recalc
+  // and guarantees every element commits its "before" frame at the same
+  // instant.
+  toAnimate.forEach(function (a) {
+    a.el.style.transition = 'none';
+    a.el.style.transform = 'translateY(' + a.delta + 'px)';
+  });
+  // ONE forced reflow for the whole batch — same reasoning as the
+  // single-element version's own comment (an inline `transition: none`
+  // has to be explicitly cleared afterward too, not just overridden by a
+  // class, since an inline style always wins over a class's CSS rule
+  // regardless of specificity), just amortized across every element here
+  // instead of paid once per element.
+  void grid.offsetHeight;
+
+  // Pass 3 — WRITE ONLY. Clears each element's transition override (letting
+  // .gantt-bar-reorder's own CSS transition apply) and marks it animating.
+  toAnimate.forEach(function (a) {
+    a.el.style.transition = '';
+    a.el.classList.add('gantt-bar-reorder');
+  });
+
+  // ONE shared rAF for the whole batch, not one per element — everything
+  // that needs to move starts moving on the exact same frame.
+  requestAnimationFrame(function () {
+    toAnimate.forEach(function (a) { a.el.style.transform = 'translateY(0)'; });
+  });
+
+  toAnimate.forEach(function (a) {
+    const el = a.el;
     el.addEventListener('transitionend', function handler(e) {
       if (e.propertyName !== 'transform') return;
       el.removeEventListener('transitionend', handler);
