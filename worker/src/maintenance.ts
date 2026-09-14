@@ -46,11 +46,9 @@ export async function handleMaintenanceStatus(request: Request, env: Env, corsHe
   return jsonResponse(status, 200, corsHeaders);
 }
 
-// Admin-only, and re-checked fresh from KV (requireAdmin, not a bare
-// role-off-the-token check like /download-backup and /restore-backup
-// still use) — this locks the whole team out of ordinary use at once,
-// a bigger blast radius than either of those, so it gets the stronger of
-// the two admin-gating patterns already in use elsewhere in this file.
+// Admin-only, re-checked fresh from KV via requireAdmin — this locks the
+// whole team out of ordinary use at once, a big enough blast radius that
+// it deliberately doesn't trust a stale role claim off the token.
 export async function handleSetMaintenanceStatus(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   let body: { token?: string; active?: boolean; message?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }

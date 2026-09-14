@@ -17,6 +17,10 @@
 // attachments keep rendering as thumbnails exactly as before.
 import { jsonResponse } from './http.ts';
 import { resolveIdentityFromToken, resolveCaller } from './users.ts';
+import { tierAtLeast } from './tiers.ts';
+
+// Matches the client's MAX_ATTACHMENT_SIZE (src/views/board.ts).
+export const MAX_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
 
 export function isSafeInlineImageType(type: unknown): boolean {
   return typeof type === "string" && type.indexOf("image/") === 0 && type !== "image/svg+xml";
@@ -30,6 +34,22 @@ export async function handleAttachmentUpload(request: Request, env: Env, corsHea
   // endpoints used to.
   const identity = await resolveIdentityFromToken(env, request.headers.get("X-Aps-Token"));
   if (!identity) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
+  // Same floor as upsertCard/upsertJob over the WebSocket (see
+  // MESSAGE_TIER_REQUIREMENTS in room-state.ts) — attaching a file to a
+  // card is a content edit, so a read-only viewer shouldn't be able to do
+  // it here just because this is a separate REST endpoint rather than a
+  // WS message.
+  if (!tierAtLeast(identity.role, 'editor')) return jsonResponse({ error: "Insufficient permissions" }, 403, corsHeaders);
+  // Matches the client's own MAX_ATTACHMENT_SIZE (src/views/board.ts) —
+  // that check is trivially bypassed by calling this endpoint directly,
+  // so it needs a server-side floor too. Content-Length is attacker-
+  // supplied and not a hard guarantee for a deliberately malformed
+  // request, but it stops the realistic cases (a genuine oversized file,
+  // or a script honestly reporting size) at no cost to a real upload.
+  const declaredLength = parseInt(request.headers.get("Content-Length") || "", 10);
+  if (declaredLength && declaredLength > MAX_ATTACHMENT_SIZE_BYTES) {
+    return jsonResponse({ error: "File too large (25MB max)" }, 413, corsHeaders);
+  }
 
   const name = url.searchParams.get("name") || "file";
   // The uploader's claimed type is never trusted beyond the inline-image
@@ -74,6 +94,10 @@ export async function handleAttachmentDelete(request: Request, env: Env, corsHea
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const identity = await resolveCaller(env, body);
   if (!identity) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
+  // Same reasoning as handleAttachmentUpload above — deleting a shared
+  // attachment is a content edit, gated the same as the WS content-edit
+  // messages.
+  if (!tierAtLeast(identity.role, 'editor')) return jsonResponse({ error: "Insufficient permissions" }, 403, corsHeaders);
 
   const key = body.key || "";
   if (!key.startsWith("attachments/")) return jsonResponse({ error: "Bad key" }, 400, corsHeaders);

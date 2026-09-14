@@ -46,6 +46,51 @@ export function isChecklistsShapeIfPresent(v: unknown): boolean {
   return Object.values(v).every(isArrayOfPlainObjectsIfPresent);
 }
 
+// Safe id: matches every id genId() (the client's src/utils/id.ts) can
+// ever produce — a crypto.randomUUID() or an "id-<base36>-<base36>"
+// fallback — while excluding every character an HTML/JS-string-breakout
+// needs (", ', <, >, &, backslash, whitespace). Client rendering code
+// across src/views/ interpolates job/card/event/task ids raw into
+// onclick="...('+id+'...)" and data-*="..." attribute strings — rejecting
+// a malformed id here, at the one place this content enters shared
+// state, closes that off for every one of those render sites at once
+// rather than requiring each to escape correctly by hand.
+export function isSafeIdString(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0 && v.length <= 200 && /^[A-Za-z0-9_.:-]+$/.test(v);
+}
+// card.id/event.id are typed string|number for legacy reasons — a real
+// number can never contain an HTML/JS metacharacter once stringified, so
+// it's inherently safe without needing the character-class check above.
+export function isSafeIdValue(v: unknown): v is string | number {
+  if (typeof v === 'number') return Number.isFinite(v);
+  return isSafeIdString(v);
+}
+// Safe color: the UI only ever produces a value here via <input
+// type="color"> (always a lowercase #rrggbb) or a fixed client-side
+// swatch palette (COLOR_PRESETS, also always #rrggbb) — never free text.
+// Rejecting anything else closes the same class of
+// style="background:'+color+';" attribute-breakout risk as
+// isSafeIdString above, for every color-rendering site in src/views/ at
+// once. Absent/empty means "no color" and is left alone (the client
+// renders its own default in that case).
+export function isSafeColorIfPresent(v: unknown): boolean {
+  return v === undefined || v === null || v === '' || (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v));
+}
+// Applies the two checks above to a job's nested tasks/phases — Gantt
+// renders task.id (in data-cal-task-id) and task.color (in
+// style="background:...") unescaped the same way it does the job's own
+// top-level fields, so they need the same validation. Assumes the caller
+// already ran isArrayOfPlainObjectsIfPresent on job.tasks/job.phases.
+export function hasSafeNestedTaskPhaseFields(job: Job): boolean {
+  const items = ([] as unknown[]).concat(job.tasks || [], job.phases || []);
+  return items.every(function (item) {
+    const it = item as Record<string, unknown>;
+    if (it.id !== undefined && !isSafeIdValue(it.id)) return false;
+    if (!isSafeColorIfPresent(it.color)) return false;
+    return true;
+  });
+}
+
 export function mergeTombstones(a: Record<string, number> | undefined, b: Record<string, number> | undefined): Record<string, number> {
   const merged: Record<string, number> = Object.assign({}, a || {}, b || {});
   const cutoff = Date.now() - TOMBSTONE_TTL_MS;
@@ -152,9 +197,12 @@ export interface HandlerResult {
 
 export function handleUpsertJob(project: Project, msg: { job?: Job }, attachment?: Attachment | null): HandlerResult {
   const job = msg.job;
-  if (!job || !job.id) return { project, changed: false, error: 'upsertJob missing job.id' };
+  if (!job || !isSafeIdString(job.id)) return { project, changed: false, error: 'upsertJob missing or unsafe job.id' };
   if (!isArrayOfPlainObjectsIfPresent(job.tasks) || !isArrayOfPlainObjectsIfPresent(job.phases)) {
     return { project, changed: false, error: 'upsertJob: tasks/phases must be arrays of objects if present' };
+  }
+  if (!isSafeColorIfPresent(job.color) || !hasSafeNestedTaskPhaseFields(job)) {
+    return { project, changed: false, error: 'upsertJob: color contains unsafe characters' };
   }
   if (project.deletedIds[job.id]) return { project, changed: false };
   const existing = project.jobs[job.id];
@@ -171,9 +219,12 @@ export function handleUpsertJob(project: Project, msg: { job?: Job }, attachment
 
 export function handleUpsertCard(project: Project, msg: { card?: BoardCard }): HandlerResult {
   const card = msg.card;
-  if (!card || !card.id) return { project, changed: false, error: 'upsertCard missing card.id' };
+  if (!card || !isSafeIdValue(card.id)) return { project, changed: false, error: 'upsertCard missing or unsafe card.id' };
   if (!isArrayIfPresent(card.attachments) || !isChecklistsShapeIfPresent(card.checklists)) {
     return { project, changed: false, error: 'upsertCard: attachments/checklists have wrong shape' };
+  }
+  if (!isSafeColorIfPresent(card.color)) {
+    return { project, changed: false, error: 'upsertCard: color contains unsafe characters' };
   }
   if (project.deletedIds[String(card.id)]) return { project, changed: false };
   const existing = project.boardCards[card.id];
@@ -189,9 +240,12 @@ export function handleUpsertCard(project: Project, msg: { card?: BoardCard }): H
 
 export function handleUpsertCalendarEvent(project: Project, msg: { event?: CalendarEvent }): HandlerResult {
   const event = msg.event;
-  if (!event || !event.id) return { project, changed: false, error: 'upsertCalendarEvent missing event.id' };
+  if (!event || !isSafeIdValue(event.id)) return { project, changed: false, error: 'upsertCalendarEvent missing or unsafe event.id' };
   if (!isPlainObjectIfPresent(event.exceptions) || !isArrayIfPresent(event.visibleMembers)) {
     return { project, changed: false, error: 'upsertCalendarEvent: exceptions/visibleMembers have wrong shape' };
+  }
+  if (!isSafeColorIfPresent(event.color)) {
+    return { project, changed: false, error: 'upsertCalendarEvent: color contains unsafe characters' };
   }
   if (project.deletedIds[String(event.id)]) return { project, changed: false };
   const existing = project.calendarEvents[event.id];
@@ -234,8 +288,9 @@ export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBat
   }
 
   (msg.jobs || []).forEach(function (job) {
-    if (!job || !job.id) return;
+    if (!job || !isSafeIdString(job.id)) return;
     if (!isArrayOfPlainObjectsIfPresent(job.tasks) || !isArrayOfPlainObjectsIfPresent(job.phases)) return;
+    if (!isSafeColorIfPresent(job.color) || !hasSafeNestedTaskPhaseFields(job)) return;
     if (next.deletedIds[job.id]) return;
     const existing = next.jobs[job.id];
     if (existing && (existing.updatedAt || 0) > (job.updatedAt || 0)) return;
@@ -246,8 +301,9 @@ export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBat
   });
 
   (msg.boardCards || []).forEach(function (card) {
-    if (!card || !card.id) return;
+    if (!card || !isSafeIdValue(card.id)) return;
     if (!isArrayIfPresent(card.attachments) || !isChecklistsShapeIfPresent(card.checklists)) return;
+    if (!isSafeColorIfPresent(card.color)) return;
     if (next.deletedIds[String(card.id)]) return;
     const existing = next.boardCards[card.id];
     if (existing && (existing.updatedAt || 0) > (card.updatedAt || 0)) return;
@@ -257,8 +313,9 @@ export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBat
   });
 
   (msg.calendarEvents || []).forEach(function (ev) {
-    if (!ev || !ev.id) return;
+    if (!ev || !isSafeIdValue(ev.id)) return;
     if (!isPlainObjectIfPresent(ev.exceptions) || !isArrayIfPresent(ev.visibleMembers)) return;
+    if (!isSafeColorIfPresent(ev.color)) return;
     if (next.deletedIds[String(ev.id)]) return;
     const existing = next.calendarEvents[ev.id];
     if (existing && (existing.updatedAt || 0) > (ev.updatedAt || 0)) return;
@@ -364,6 +421,20 @@ export function handleSetWholeField(project: Project, msg: { baseFieldRevision?:
   }
   if (SET_WHOLE_FIELD_OBJECT_FIELDS.indexOf(fieldName) !== -1 && !isPlainObject(msg.value)) {
     return { project, changed: false, error: 'setWholeField: ' + fieldName + ' must be a plain object' };
+  }
+  // boardColumns/workflowItems render their id/color unescaped in every
+  // Kanban view (col-swatch style="background:...", changeColumnColor()
+  // onclick="...('+id+'...)") the same way job/card/event do above —
+  // same validation, same reason.
+  if (fieldName === 'boardColumns' || fieldName === 'workflowItems') {
+    const itemsSafe = (msg.value as unknown[]).every(function (item) {
+      if (!isPlainObject(item)) return false;
+      const it = item as Record<string, unknown>;
+      return (it.id === undefined || isSafeIdValue(it.id)) && isSafeColorIfPresent(it.color);
+    });
+    if (!itemsSafe) {
+      return { project, changed: false, error: 'setWholeField: ' + fieldName + ' contains an unsafe id/color value' };
+    }
   }
   const next = cloneRoomState({ projects: { p: project } }).projects.p;
   (next as Record<string, unknown>)[fieldName] = msg.value;

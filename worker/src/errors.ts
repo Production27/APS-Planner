@@ -8,6 +8,7 @@
 // observability system.
 import { jsonResponse } from './http.ts';
 import { resolveCaller } from './users.ts';
+import { requireAdmin } from './users-admin.ts';
 
 export const CLIENT_ERROR_LOG_KEY = "client_errors";
 export const CLIENT_ERROR_LOG_CAP = 200;
@@ -70,10 +71,8 @@ export async function handleReportError(request: Request, env: Env, corsHeaders:
 export async function handleErrorsList(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   let body: { token?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const caller = await resolveCaller(env, body);
-  if (!caller || caller.role !== "admin") {
-    return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
-  }
+  const admin = await requireAdmin(env, await resolveCaller(env, body), corsHeaders);
+  if (admin.error) return admin.error;
   const raw = await env.USERS_KV.get(CLIENT_ERROR_LOG_KEY);
   return jsonResponse({ errors: raw ? JSON.parse(raw) : [] }, 200, corsHeaders);
 }

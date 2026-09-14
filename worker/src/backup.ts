@@ -7,6 +7,7 @@
 import { jsonResponse } from './http.ts';
 import { getRoomStub } from './room-stub.ts';
 import { resolveCaller } from './users.ts';
+import { requireAdmin } from './users-admin.ts';
 import type { RoomState, Project, Job, BoardCard, CalendarEvent } from './types.ts';
 
 // The external backup FILE shape — an array-based projection of the
@@ -139,18 +140,6 @@ export async function runRestore(env: Env, backupKey: string): Promise<{ restore
   return { restoredFrom: backupKey };
 }
 
-// Requires a real Admin-tier account's own credentials — same
-// resolveIdentity() every other authenticated endpoint uses.
-export async function checkAdminAuth(request: Request, env: Env): Promise<boolean> {
-  try {
-    const body = await request.clone().json() as { token?: string };
-    const caller = await resolveCaller(env, body);
-    return !!(caller && caller.role === "admin");
-  } catch (e) {
-    return false;
-  }
-}
-
 // The four route handlers below were previously inlined directly in the
 // router's fetch() body rather than wrapped in named functions like every
 // other route — pulled out here as a pure mechanical extract-function (no
@@ -158,9 +147,10 @@ export async function checkAdminAuth(request: Request, env: Env): Promise<boolea
 // dispatcher, same as every other route.
 
 export async function handleTriggerBackup(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
-  if (!(await checkAdminAuth(request, env))) {
-    return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
-  }
+  let body: { token?: string };
+  try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
+  const admin = await requireAdmin(env, await resolveCaller(env, body), corsHeaders);
+  if (admin.error) return admin.error;
   try {
     const key = await runBackup(env);
     return jsonResponse({ success: true, key }, 200, corsHeaders);
@@ -171,9 +161,10 @@ export async function handleTriggerBackup(request: Request, env: Env, corsHeader
 }
 
 export async function handleListBackups(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
-  if (!(await checkAdminAuth(request, env))) {
-    return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
-  }
+  let body: { token?: string };
+  try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
+  const admin = await requireAdmin(env, await resolveCaller(env, body), corsHeaders);
+  if (admin.error) return admin.error;
   const list = await env.BACKUP_BUCKET.list({ prefix: "backups/" });
   const backups = list.objects
     .sort((a, b) => new Date(b.uploaded).getTime() - new Date(a.uploaded).getTime())
@@ -194,10 +185,8 @@ export async function handleListBackups(request: Request, env: Env, corsHeaders:
 export async function handleDownloadBackup(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   let body: { token?: string; key?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const dlCaller = await resolveCaller(env, body);
-  if (!dlCaller || dlCaller.role !== "admin") {
-    return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
-  }
+  const admin = await requireAdmin(env, await resolveCaller(env, body), corsHeaders);
+  if (admin.error) return admin.error;
   const key = body.key;
   if (!key) return jsonResponse({ error: "Missing key" }, 400, corsHeaders);
 
@@ -218,10 +207,8 @@ export async function handleDownloadBackup(request: Request, env: Env, corsHeade
 export async function handleRestoreBackup(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   let body: { token?: string; key?: string; confirm?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
-  const restoreCaller = await resolveCaller(env, body);
-  if (!restoreCaller || restoreCaller.role !== "admin") {
-    return jsonResponse({ error: "Unauthorized" }, 401, corsHeaders);
-  }
+  const admin = await requireAdmin(env, await resolveCaller(env, body), corsHeaders);
+  if (admin.error) return admin.error;
   const key = body.key;
   const confirm = body.confirm;
   if (!key) return jsonResponse({ error: "Missing key" }, 400, corsHeaders);
