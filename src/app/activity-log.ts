@@ -53,18 +53,25 @@ export function toggleActivitySidebar(): void {
   if (isOpen) renderActivityLogSidebar();
 
   if (gridEl && targetWidth !== null) {
+    // .home-grid's default transition (.45s) is tuned for the
+    // widget-expand toggle, not this — starting both this sidebar's own
+    // .25s width transition and the grid's recompute at the same instant
+    // still isn't enough, since the grid's animation would keep visibly
+    // trickling for longer after the sidebar's had already finished
+    // sliding (see .home-grid.sidebar-sync's own CSS comment). Borrow the
+    // sidebar's own duration/easing for the length of this one toggle so
+    // they finish together, then hand it back once settled.
+    gridEl.classList.add('sidebar-sync');
     applyHomeReflowTracks(targetWidth);
-    // applyHomeReflowTracks() just wrote new column widths onto
-    // .home-grid, which has its OWN separate CSS transition on
-    // grid-template-columns (.45s) — re-measuring the workflow
-    // mini-board's bars immediately would land mid-flight of THAT
-    // transition, the exact mismeasurement toggleHomeWidgetExpand()
-    // already works around for the same reason. Wait for THAT transition
-    // to settle before re-measuring, same pattern it uses (this part
-    // doesn't need to be immediate — only the visible column shift did).
     const onGridSettled = function (e2: Event) {
       if (e2.target !== gridEl) return;
       gridEl.removeEventListener('transitionend', onGridSettled);
+      gridEl.classList.remove('sidebar-sync');
+      // applyHomeReflowTracks() wrote new column widths onto .home-grid —
+      // re-measuring the workflow mini-board's bars immediately would
+      // land mid-flight of that transition, the exact mismeasurement
+      // toggleHomeWidgetExpand() already works around for the same
+      // reason. Only safe to do now that it's settled.
       renderHomeWorkflowMiniBoard();
     };
     gridEl.addEventListener('transitionend', onGridSettled);

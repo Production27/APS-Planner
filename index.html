@@ -1675,6 +1675,17 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .home-grid.is-resizing-live,
   .home-grid.is-resizing-live .home-grid-left,
   .home-grid.is-resizing-live .home-grid-right { transition: none; }
+  /* Used only while the Activity Log sidebar is opening/closing (see
+     toggleActivitySidebar()) — its own width transition is .25s, but this
+     grid's default .45s cubic-bezier is tuned for the widget-expand
+     toggle. Starting both together still isn't enough: the grid's own
+     animation kept visibly trickling for ~150ms AFTER the sidebar had
+     already finished sliding (measured directly, frame by frame) — read
+     as sluggish/laggy (Karl: "still slow") even though both started at
+     the same instant. Matching this transition's duration/easing to the
+     sidebar's own for the length of that one interaction makes them
+     finish together instead of one trailing the other. */
+  .home-grid.sidebar-sync { transition: grid-template-columns .25s ease; }
   /* One widget can be "expanded in place" (see toggleHomeWidgetExpand()) —
      its own grid row/column grows via an inline style JS sets on
      .home-grid/.home-grid-left/.home-grid-right (HOME_REFLOW_TRACK),
