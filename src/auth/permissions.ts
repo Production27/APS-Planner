@@ -13,9 +13,8 @@ declare global {
   function applyPermissionGating(): void;
   function updateProjectToggle(): void;
   // currentAssignedProjectId stays a real `var` in index.html (not owned
-  // here) — still-in-index.html Project Management code
-  // (switchProject()/enforceProjectScopeForRole(), a later phase) reads/
-  // writes it directly, so a real module-local binding here would
+  // here) — src/app/project.ts's switchProject()/enforceProjectScopeForRole()
+  // read/write it directly, so a real module-local binding here would
   // silently diverge from what that code sees. currentUserRole/
   // roleConfirmed are the same situation but declared once in
   // src/shared-globals.d.ts instead, since src/app/maintenance.ts also

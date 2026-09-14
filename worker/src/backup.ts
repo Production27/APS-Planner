@@ -3,7 +3,7 @@
 // the room's own shape.
 // External backup FILE shape (v3: jobs/boardCards/calendarEvents as
 // arrays, deletedIds, boardColumns, fieldOptions, header) is kept stable
-// for continuity with existing backups and index.html's importData().
+// for continuity with existing backups and the client's downloadBackupFile().
 import { jsonResponse } from './http.ts';
 import { getRoomStub } from './room-stub.ts';
 import { resolveCaller } from './users.ts';
@@ -11,7 +11,7 @@ import type { RoomState, Project, Job, BoardCard, CalendarEvent } from './types.
 
 // The external backup FILE shape — an array-based projection of the
 // room's own map-based Project shape, kept stable for continuity with
-// existing backups and index.html's importData().
+// existing backups and the client's downloadBackupFile().
 export interface AppFormatProject {
   id?: string;
   name: string;
@@ -139,11 +139,8 @@ export async function runRestore(env: Env, backupKey: string): Promise<{ restore
   return { restoredFrom: backupKey };
 }
 
-// Backups used to be gated by the shared team password alone, with no tie
-// to individual accounts at all. Now they require a real Admin-tier
-// account's own credentials — same resolveIdentity() every other
-// authenticated endpoint uses, just requiring username+password instead of
-// a single shared secret.
+// Requires a real Admin-tier account's own credentials — same
+// resolveIdentity() every other authenticated endpoint uses.
 export async function checkAdminAuth(request: Request, env: Env): Promise<boolean> {
   try {
     const body = await request.clone().json() as { token?: string };

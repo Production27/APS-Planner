@@ -3854,15 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-14.4';
-
-// checkForNewerVersion() moved to src/app/version-check.ts.
-// checkMaintenanceStatus()/applyMaintenanceStatus()/
-// toggleMaintenancePanel()/setMaintenanceMode() moved to
-// src/app/maintenance.ts (see worker's maintenance.ts for the backend
-// half).
-// reportClientError() and its window 'error'/'unhandledrejection'
-// listeners moved to src/app/error-reporting.ts.
+const APP_VERSION = '2026-09-14.5';
 
 // `var`, not `const` — src/app/project.ts's bundled migrateFromLegacy()/
 // enforceFixedProjectSet() read this from a separate <script> tag, which
@@ -4039,21 +4031,6 @@ var COLOR_PRESETS = [
   '#8e7cc3','#c0c0c0','#424242','#6c757d'
 ];
 
-// ensureJobAndTaskIds() moved to src/core/jobs.ts. forEachVisibleSubUnit()/
-// flattenJobs()/getHiddenTaskOrders()/buildSubUnitClusters()/
-// CALENDAR_JOB_SPAN_TASK_PREFIX/isCalendarJobSpanTaskId()/
-// buildCalendarJobRows()/DUE_MARKER_TASK_ID/getJobDueMarkerTask() moved to
-// src/views/gantt.ts.
-
-// The job/phase data model (normalizeTasksToColumns/ensureJobTasksMatchColumns/
-// dedupeTaskIdsAcrossPhases/makeBlankPhaseTasks/makePhaseCard/splitJobIntoPhases/
-// addJobPhase/removeJobPhase/unsplitJobFromPhases/splitPhaseIntoSubPhases/
-// addPhaseSubUnit/removePhaseSubUnit/unsplitPhaseFromSubPhases/ensureJobHasCards/
-// migrateOrphanedCards), the auto-derive-column logic (deriveColumnForTasks/
-// setCardColumn/runColumnEntryActions/syncCardColumns/ensureCardIds), and job
-// visibility/finished-status (isJobVisibleToMe/getVisibleJobs/isTaskFinished/
-// isJobFinished) moved to src/core/jobs.ts.
-
 // ===== CALENDAR-ONLY EVENTS =====
 // Deliberately NOT jobs/tasks — no job.tasks entry, no linked board card,
 // never touches the Gantt or Board. `exceptions` holds per-occurrence
@@ -4106,8 +4083,7 @@ var startDate, endDate;
 // a named constant (rather than deleting every `ganttViewMode === 'tasks'`
 // check that referenced it) so this stays a small, low-risk change instead
 // of touching every one of those checks throughout renderGantt().
-// `var`, not `const` — src/views/gantt.ts's bundled renderGantt() (Phase
-// 6c) reads this.
+// `var`, not `const` — src/views/gantt.ts's bundled renderGantt() reads this.
 var ganttViewMode = 'tasks';
 
 // ===== CONDENSED VIEW: PER-PHASE SUB-PHASE COLLAPSE =====
@@ -4121,10 +4097,8 @@ var ganttViewMode = 'tasks';
 // to other users. Keyed by phase id (globally unique) rather than job id,
 // since a job's OTHER phases stay exactly as they are regardless of one
 // phase's collapse state.
-// `var`, not `let` — src/views/gantt.ts's bundled renderGantt() (Phase
-// 6c) reads this.
+// `var`, not `let` — src/views/gantt.ts's bundled renderGantt() reads this.
 var collapsedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_collapsed_phases_v1') || '[]', []));
-// togglePhaseCollapse() moved to src/views/gantt.ts.
 
 // ===== TASKS VIEW: DEFAULT-COLLAPSED PHASES/SUB-PHASES =====
 // Every phase and sub-phase in Tasks view starts CONDENSED (one bar,
@@ -4148,8 +4122,6 @@ var collapsedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_collap
 // `var`, not `let` — src/views/gantt.ts's bundled row builder reads these.
 var tasksExpandedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_tasks_expanded_phases_v1') || '[]', []));
 var tasksExpandedSubPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_tasks_expanded_subphases_v1') || '[]', []));
-// getSubUnitKey()/toggleTasksPhaseExpanded()/toggleTasksSubPhaseExpanded()/
-// expandAllGantt()/collapseAllGantt() moved to src/views/gantt.ts.
 
 // ===== TASKS VIEW: FOCUS ON ONE JOB =====
 // Clicking a job's name pill isolates the Gantt to just that job — every
@@ -4161,8 +4133,6 @@ var tasksExpandedSubPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt
 // page load and whenever the active project changes (see switchProject()).
 // `var`, not `let` — src/views/gantt.ts's bundled row builder reads this.
 var ganttFocusedJobId = null;
-// toggleGanttJobFocus()/clearGanttJobFocus()/syncGanttJobFocusBanner()/
-// buildPhaseSubTags() moved to src/views/gantt.ts.
 // Same palette as COLOR_PRESETS (job/task colors), just softened toward
 // pastel — used only for the board column color picker, so picking a
 // board color is its own distinct, intentionally-gentler palette rather
@@ -4240,8 +4210,6 @@ var draftAttachments = [];
 // `var` — src/views/job-form.ts's bundled functions read/write this too.
 var jmDraftAttachments = [];
 
-// isJobVisibleToMe()/getVisibleJobs() moved to src/core/jobs.ts.
-
 // ===== CALENDAR EVENT VISIBILITY =====
 // A calendar event's own 'all'/'private'/'members' setting (see the
 // Visibility field in the event modal, saveCalendarEventFromModal()).
@@ -4273,8 +4241,6 @@ var jmDraftAttachments = [];
 // session.
 // `var` — src/views/board.ts's renderBoard() reads this.
 var cachedUserRoster = null;
-// displayNameForUsername()/getLeadRoster()/ensureUserRosterLoaded() moved
-// to src/app/user-roster.ts.
 
 // ===== VIEW AS A MEMBER (Admin only — not even Project Admin) =====
 // Lets an Admin preview the ENTIRE app — Job Manager, Board, Calendar,
@@ -4289,7 +4255,6 @@ var cachedUserRoster = null;
 // `var` — src/views/calendar.ts's isCalendarEventVisibleToMe() reads this.
 var viewAsUsername = null;
 let viewAsRole = null;
-// setViewAs() moved to src/app/users-admin.ts.
 
 // `var`, not `const` — src/views/board.ts's buildCardEl() reads this.
 var CUSTOM_FIELD_DEFS = [
@@ -4352,53 +4317,9 @@ var activeProjectId = null;
 var freshLocalSeed = false;
 var freshLocalSeedProjectIds = [];
 
-// Project management (PROJECT MANAGEMENT + FIXED PROJECT SET sections:
-// migrateFromLegacy()/loadProjects()/saveProjects()/getActiveProject()/
-// switchProject()/enforceProjectScopeForRole()/enforceFixedProjectSet()/
-// loadActiveProjectData()/saveActiveProject()/toggleProject()/
-// updateProjectToggle()/renderAll()/applyPermissionGating()/saveJobs()/
-// autoArchiveJobs()/saveBoardColumns()+friends) and the cross-project
-// job-link data model (loadLinkEnabledPref()/isLinkEnabledLocally()/
-// getLinkedReferenceJobs()/jumpToLinkedJobReference()/linkJobs()/
-// setJobLinkEnabled()/unlinkJobById()) moved to src/app/project.ts.
-
-// freshLoadOverlayTimer/showFreshLoadOverlay()/hideFreshLoadOverlay()/init() moved to src/app/boot.ts.
-
-/* loadFieldOptions()/loadTasks() removed — hierarchical
-   loadActiveProjectData() handles this */
-
-// The new-user tutorial/coachmark system (maybeShowTutorialPrompt() and
-// everything it leads to) moved to src/app/onboarding.ts.
-
-// The settings dropdown (positionSettingsMenu()/toggleSettingsMenu()/
-// closeSettingsMenu()/armSettingsMenuAutoClose()/
-// cancelSettingsMenuAutoClose() and its own hover/keydown wiring) moved
-// to src/app/settings-menu.ts.
-
-// editingJobIdAtMouseDown, the mousedown listener, and the click-outside-closes-the-drawer listener moved to src/app/boot.ts.
-
-/* loadHeader() removed — loadActiveProjectData() sets
-   #headerTitle/#headerSubtitle directly from the per-project data now.
-   loadThemeColor() (a 1-line wrapper that only ever called
-   applyThemeColor()) removed alongside it — applyThemeColor() itself is
-   still called directly from its other live call sites, so nothing
-   actually depended on the wrapper. */
-
-// Dark mode (applyDarkMode()/loadDarkModePref()/toggleDarkMode()), the
-// theme-color picker (DEFAULT_THEME_COLOR/normalizeThemeColor()/
-// getSavedThemeColor()/applyThemeColor()/buildThemePresets()/
-// updateThemePreview()/openThemeModal()/closeThemeModal()/applyTheme()/
-// resetThemeDefault()), and the per-project background photo
-// (applyProjectBgVisual()) moved to src/app/theme.ts.
-
 // homeExpandedWidgetId stays here as a real `var` (src/views/board.ts's
 // own bundled code still reads it directly).
 var homeExpandedWidgetId = null;
-
-// computeDateRange() moved to src/views/gantt.ts.
-
-// isSyncingScroll/setHeaderScroll()/setupScrollSync() moved to
-// src/views/gantt.ts.
 
 // ===== CALENDAR TAB =====
 // `var`, not `let` — src/views/calendar.ts's bundled navigation/dispatch
@@ -4415,33 +4336,18 @@ var calDragState = null;
 var CAL_BAR_GAP = 3;
 var CAL_DAYNUM_H = 26;
 
-// onPanelResize() moved to src/utils/ui.ts. Each of its three callers
-// (Calendar/Home-workflow/Board-workflow) now registers its own panel
-// directly in its own file, at that module's top level.
-
 // ===== CALENDAR-ONLY EVENTS: Add/Edit modal =====
 // Deliberately simple (explicit Save, not autosave like the job form) —
 // this is a small, self-contained modal, not worth the bulletproofing
 // machinery built for Job Manager/the card popup.
 
 // ===== GANTT BAR RESIZE & MOVE (drag edges to resize, drag body to move) =====
-// `var`, not `let` — isBusyEditing() and init()'s periodic re-render
-// check (both still in this file) read these, and the bundled drag code
-// in src/views/gantt.ts reads/writes them.
+// `var`, not `let` — isBusyEditing() (src/sync/connection.ts) and init()'s
+// periodic re-render check (src/app/boot.ts) read these, and the bundled
+// drag code in src/views/gantt.ts reads/writes them.
 var barResizeState = null;
 var barMoveState = null;
 var tickResizeState = null;
-
-
-// showDatePopover()/hideDatePopover()/showTooltip() moved to
-// src/views/gantt.ts.
-// moveTooltip()/hideTooltip() moved to src/utils/ui.ts.
-
-// buildColorPresets()/updateJobColorSwatch()/toggleJobColorPanel()/toggleMobileField()/collapseAllMobileFields()/renderJobCustomFieldsGrid()/renderJobTeamFieldsGrid()/collectJobCustomFieldValues()/JM_ATTACHMENT_PANEL_CONFIG+renderJobAttachments()/handleJobAttachmentUpload()/removeJobAttachment() moved to src/views/job-form.ts.
-// openManageFields()/closeManageFields()/renderManageFieldsBody()/buildManageFieldGroup()/addFieldOption()/removeFieldOption()/formatFileSize()/renderAttachments()/handleAttachmentUpload()/removeAttachment() moved to src/views/board.ts.
-
-// toggleActivitySidebar()/timeAgo()/getLogProp()/renderActivityLogSidebar()
-// moved to src/app/activity-log.ts.
 
 // A column's "too long in this stage" threshold — per-column
 // (col.stalledAfterDays, see setColumnStalledThreshold()) since stages
@@ -4449,15 +4355,6 @@ var tickResizeState = null;
 // weeks; Active sitting untouched for the same span is a problem).
 // Falls back to this when a column has never had it set.
 var DEFAULT_STALLED_AFTER_DAYS = 14;
-
-// The panel-home/panel-board onPanelResize() registrations now live in
-// src/views/home.ts and src/views/board.ts respectively — both onPanelResize()
-// itself and renderHomeWorkflowMiniBoard()/renderBoardWorkflowStrip() are
-// real bundled code now, so there's no load-order reason left to keep
-// these calls here.
-
-// The global Escape-key handler, the modal-click-outside-closes handlers,
-// and the headerSubtitle keydown/paste handlers moved to src/app/boot.ts.
 
 // ===== ROOM SYNC (Durable Object backend) =====
 // Replaces Liveblocks — see the migration plan and worker/src/ (formerly
@@ -4487,19 +4384,10 @@ var DEFAULT_STALLED_AFTER_DAYS = 14;
 // uses it to open a WebSocket to the Worker's Durable Object.
 const API_BASE_URL = "https://aps-planner-staging.production-db3.workers.dev/";
 
-// TOMBSTONE_TTL_MS/mergeTombstones() moved to src/app/boot.ts.
-
-// DISPLAY_NAME_KEY/USERNAME_KEY/getStoredDisplayName()/getStoredUsername()/
-// getStoredSessionToken()/setStoredSessionToken()/decodeSessionTokenPayload()/
-// isSessionTokenUsable() moved to src/auth/session.ts.
-// PERMISSION_TIERS/getEffectiveRole()/hasMinTier()/
-// applyIdentityFromTokenPayload() moved to src/auth/permissions.ts.
-
 // currentUserRole/currentAssignedProjectId/roleConfirmed stay real `var`s
-// here (not moved) — switchProject()/enforceProjectScopeForRole()/
-// updateProjectToggle() and other still-in-index.html Project Management
-// code (a later phase) read/write them directly, so src/auth/
-// permissions.ts's bundled applyIdentityFromTokenPayload()/
+// here — switchProject()/enforceProjectScopeForRole()/updateProjectToggle()
+// (src/app/project.ts) and other files read/write them directly, so
+// src/auth/permissions.ts's bundled applyIdentityFromTokenPayload()/
 // getEffectiveRole() reference them as ambient globals instead.
 
 // Set from the Worker's confirmed identity after a successful login — see
@@ -4531,11 +4419,6 @@ var currentAssignedProjectId = null;
 // not open.
 var roleConfirmed = false;
 
-// The login overlay (showLoginOverlay()/hideLoginOverlay()/setLoginBanner()/
-// setLoginBusy()/waitForLoginSubmit()/the form-submit and password-toggle
-// listeners), reauthenticate()/reauthenticateOnce()/getSessionToken() moved
-// to src/auth/login.ts.
-
 // ---- Connection state ----
 // `var`, not `let` — src/sync/presence.ts's bundled sendPresenceUpdate() reads this.
 var roomSocket = null;
@@ -4551,8 +4434,6 @@ var pendingWrites = new Map();
 // `var` — src/sync/inbound.ts's bundled applyRoomSnapshot()/the focusout
 // listener read and write this.
 var pendingRemoteRefresh = false;
-
-// fetchRoomToken()/buildRoomWsUrl() moved to src/auth/login.ts.
 
 // ===== PRESENCE (who's currently viewing which tab/project) =====
 // Deliberately a fully separate, best-effort system, not routed through
@@ -4578,7 +4459,6 @@ var latestPresenceUsers = [];
 // `var`, not `const` — src/sync/presence.ts's bundled presence code reads this.
 var myPresenceSessionId = genId();
 
-// init()/boot() moved to src/app/boot.ts.
 boot();
 </script>
 </body>

@@ -41,7 +41,7 @@ export function closeSettingsMenu(): void {
 // own comment); only one is ever visible at a time, but listening on both is
 // harmless. Touch taps don't fire mouseenter/mouseleave the same way a real
 // pointer does, so this is effectively inert on mobile — tap-to-toggle and
-// the existing click-outside-closes handler (still in index.html) are
+// the existing click-outside-closes handler (src/app/boot.ts) are
 // unaffected.
 const SETTINGS_MENU_AUTOCLOSE_MS = 1000;
 let settingsMenuCloseTimer: ReturnType<typeof setTimeout> | null = null;

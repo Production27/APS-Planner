@@ -1,5 +1,5 @@
 // Small, generic UI helpers with no shared-app-state reads/writes of
-// their own — used across every view. Moved verbatim from index.html.
+// their own — used across every view.
 
 // Shared show/hide for the app's 9 modal dialogs (deleteModal, cardModal,
 // calendarEventModal, archivedJobsModal, backupsModal, manageUsersModal,

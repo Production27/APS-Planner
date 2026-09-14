@@ -64,10 +64,10 @@ function flushPendingRoomPush(): void {
   }
 }
 
-// A page close/refresh within that 300ms window used to lose the edit
-// entirely (a bug fixed earlier, kept fixed here): saved to localStorage
-// synchronously, but the debounced push never fires. Flush any pending
-// push the moment the tab is hidden or about to unload.
+// Without this, a page close/refresh within that 300ms window loses the
+// edit entirely: it's saved to localStorage synchronously, but the
+// debounced push never fires. Flush any pending push the moment the tab
+// is hidden or about to unload.
 function flushPendingSync(): void {
   flushAutoSaveJobForm();
   flushCardAutosave();
@@ -182,10 +182,10 @@ function removeProjectFromShared(projectId: string): void {
 }
 
 // A rare sync race (see the comment above enforceFixedProjectSet()'s
-// caller in index.html — a stray empty "Untitled Project" reached
-// production once already) can leave a genuinely empty, still-default-
-// named "Untitled Project" sitting in the shared room. This app is fixed
-// to exactly two projects and has no user-facing way to delete one, so
+// call in src/app/boot.ts's init() — a stray empty "Untitled Project"
+// reached production once already) can leave a genuinely empty,
+// still-default-named "Untitled Project" sitting in the shared room.
+// This app is fixed to exactly two projects and has no user-facing way to delete one, so
 // instead of leaving it to keep syncing down to every client forever,
 // prune it automatically on every snapshot: remove it locally AND tell
 // the shared room to drop it too (removeProjectFromShared()) so it
@@ -220,8 +220,7 @@ function deleteFromSharedMap(projectId: string | null, mapKey: string, id: strin
 }
 function deleteJobFromShared(projectId: string, jobId: string | number): void { deleteFromSharedMap(projectId, 'jobsMap', jobId); }
 // Signatures below match the ambient declarations already made by
-// src/views/board.ts/calendar.ts (written before this phase, when these
-// were still untyped JS in index.html) — TypeScript's global declaration
+// src/views/board.ts/calendar.ts — TypeScript's global declaration
 // merging requires this file's real implementation to match exactly.
 function deleteCardFromShared(projectId: string | null, cardId: string): void { deleteFromSharedMap(projectId, 'boardCardsMap', cardId); }
 function deleteCalendarEventFromShared(projectId: string | null, eventId: string): void { deleteFromSharedMap(projectId, 'calendarEventsMap', eventId); }

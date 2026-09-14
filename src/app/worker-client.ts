@@ -4,14 +4,13 @@
 import { getSessionToken, reauthenticateOnce } from '../auth/login';
 import { setStoredSessionToken } from '../auth/session';
 
-// Was a plain window.open(url) with credentials in the query string —
-// window.open() can only do a GET navigation, so moving to POST+JSON-body
-// auth (matching every other endpoint here) means fetching the file
-// ourselves and handing the browser the resulting blob instead of letting
-// it navigate directly (see downloadBackupFile() in src/app/backups.ts).
-// Shared by downloadBackupFile()/postUsersEndpoint()/uploadAttachmentFile()
-// (still in index.html) — each used to hand-roll the identical "fetch, if
-// 401 clear the stored token + force a fresh login + refetch" cycle.
+// Shared by downloadBackupFile() (src/app/backups.ts), postUsersEndpoint()
+// (below), and uploadAttachmentFile() (src/views/board.ts) — the "fetch,
+// if 401 clear the stored token + force a fresh login + refetch" cycle
+// every authenticated request needs. downloadBackupFile() uses this
+// (rather than a plain navigation) because auth here is POST+JSON-body,
+// matching every other endpoint, and window.open() can only do a GET —
+// so it fetches the file itself and hands the browser the resulting blob.
 // buildOptions is a function of the token (not a fixed options object)
 // since the retry needs the NEW token reauthenticateOnce() just minted,
 // not the stale one that got the 401.

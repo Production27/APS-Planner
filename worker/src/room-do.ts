@@ -162,7 +162,7 @@ export class ApsRoom {
   // meantime it shows up as a ghost bubble nobody can dismiss (reported
   // live twice: once as a stray "TM" bubble, once as a duplicate "Josh"
   // bubble on someone else's screen). Since the client re-sends setPresence
-  // periodically (see the index.html heartbeat), a live connection's
+  // periodically (see the client's src/sync/presence.ts setInterval), a live connection's
   // lastSeen never goes stale; one that stops updating gets quietly
   // dropped from the broadcast list on the next presence event, without
   // needing to actually close the underlying socket.
@@ -223,14 +223,15 @@ export class ApsRoom {
       return;
     }
     // 'admin' always bypasses project scoping, same as every other project-
-    // restriction check in this app (see switchProject()/
-    // enforceProjectScopeForRole() in index.html) — an admin account can
-    // have a stored assignedProjectId left over from before being promoted
-    // (the client already ignores it for role==='admin'), and this check
-    // was missing that same exemption, incorrectly blocking an unrestricted
-    // admin's own cross-project writes (e.g. linking a job to the other
-    // project — see linkJobs() in index.html, which deliberately writes to
-    // BOTH fixed projects for exactly this feature).
+    // restriction check in this app (see the client's switchProject()/
+    // enforceProjectScopeForRole() in src/app/project.ts) — an admin account
+    // can have a stored assignedProjectId left over from before being
+    // promoted (the client already ignores it for role==='admin'), and this
+    // check was missing that same exemption, incorrectly blocking an
+    // unrestricted admin's own cross-project writes (e.g. linking a job to
+    // the other project — see the client's linkJobs(), also in
+    // src/app/project.ts, which deliberately writes to BOTH fixed projects
+    // for exactly this feature).
     if (msg && msg.projectId && attachment && attachment.role !== 'admin' && attachment.assignedProjectId && msg.projectId !== attachment.assignedProjectId) {
       ws.send(JSON.stringify({ type: 'error', msgId: msg.msgId, message: 'Forbidden: outside your assigned project' }));
       return;

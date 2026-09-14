@@ -1,5 +1,5 @@
-// Permission tiers, lowest to highest — matches PERMISSION_TIERS in
-// index.html. Used both to validate incoming role values in
+// Permission tiers, lowest to highest — matches PERMISSION_TIERS in the
+// client's src/auth/permissions.ts. Used both to validate incoming role values in
 // handleUsersAdd/handleUsersUpdate, and (via tierAtLeast()) to enforce
 // content-write permissions in ApsRoom.webSocketMessage(). Deliberately
 // a plain string array, not a literal-tuple type — callers check it

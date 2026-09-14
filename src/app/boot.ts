@@ -1,13 +1,7 @@
 // Boot glue: init() (the app's own startup sequence, once a session
 // token is available), the fresh-device loading overlay, the global
-// Escape-key and click-outside handlers, and the two small boot-only
-// fragments that used to sit under the stale "Room Sync"/"Presence"
-// banners in index.html (mergeTombstones() and the boot() IIFE itself,
-// which awaits a session token then calls init()). This is Phase 11 of
-// the extraction plan — last by necessity, same as the original
-// architecture roadmap's own boot()/init(): nothing here can be
-// meaningfully extracted until everything it wires together already has
-// been, which by this phase, it finally has.
+// Escape-key and click-outside handlers, mergeTombstones(), and the
+// boot() IIFE itself (awaits a session token, then calls init()).
 import { loadDarkModePref, closeThemeModal } from './theme';
 import { maybeShowTutorialPrompt } from './onboarding';
 import { getSessionToken } from '../auth/login';
@@ -26,8 +20,8 @@ import { syncCardColumns } from '../core/jobs';
 import { closeDeleteJobModal } from '../views/job-list';
 import { cancelEdit, initJobFormAutosaveListeners, buildColorPresets } from '../views/job-form';
 
-// How long a delete tombstone (see recordTombstone()/deleteFromSharedMap(),
-// both still in index.html) sticks around before it's pruned locally.
+// How long a delete tombstone (see recordTombstone()/deleteFromSharedMap()
+// in src/sync/outbound.ts) sticks around before it's pruned locally.
 // Needs to outlast any realistically-stale tab/device so its eventual
 // reconnect-replay still gets blocked from resurrecting whatever it
 // deleted (the server enforces this too — see worker/src/room-state.ts —

@@ -31,12 +31,11 @@ export function toggleDarkMode(): void {
 }
 
 // ===== THEME COLOR =====
-// Was a header-background gradient picker (start/end color) back when
-// .app-header was a visible gradient bar — now that it's display:none
-// (see its own rule), this drives --primary/--primary-light instead,
-// which is what buttons, active tabs, badges, and the Home banner
-// actually render from. A single picked color becomes --primary-light
-// (what most of those render as flat); --primary (the darker anchor
+// .app-header is display:none (see its own rule), so this picker drives
+// --primary/--primary-light instead — what buttons, active tabs, badges,
+// and the Home banner actually render from. A single picked color
+// becomes --primary-light (what most of those render as flat); --primary
+// (the darker anchor
 // gradients pair it with) is derived via darkenColor() rather than
 // picked separately, since one color is simpler for the person picking
 // it, and every existing --primary/--primary-light consumer already

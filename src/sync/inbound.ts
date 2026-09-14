@@ -9,8 +9,8 @@
 // place in the whole app where a bug could silently overwrite or lose a
 // teammate's work instead of just misbehaving on one screen.
 //
-// mergeTombstones() (shared with src/sync/outbound.ts, which also reads
-// it) stays in index.html — small, pure, shared infrastructure with no
+// mergeTombstones() (src/app/boot.ts, also read by src/sync/outbound.ts)
+// is referenced here as an ambient global rather than imported — no
 // natural single owner among the sync files.
 import { isBusyEditing } from './connection';
 import { renderPresenceAvatars, PresenceUser } from './presence';

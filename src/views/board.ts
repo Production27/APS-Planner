@@ -35,9 +35,8 @@
 // above owns the "real" implementation both surfaces share — Job
 // Manager's own mirrored grids/attachment panel (renderJobCustomFieldsGrid/
 // renderJobTeamFieldsGrid/collectJobCustomFieldValues/
-// JM_ATTACHMENT_PANEL_CONFIG, still in index.html until Job Manager itself
-// is extracted) call these as ambient globals, same forward-reference
-// pattern as everything else not yet moved.
+// JM_ATTACHMENT_PANEL_CONFIG, in src/views/job-form.ts) call these as
+// ambient globals rather than importing them.
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
 // isJobVisibleToMe(), renderGantt(), renderJobList(), renderCalendar(),
@@ -1401,7 +1400,7 @@ function setColumnWorkflowItem(colId: string, itemId: string, event?: Event): vo
   showToast('Workflow item updated', 'success');
 }
 
-// See runColumnEntryActions() (index.html) for what this actually does
+// See runColumnEntryActions() (src/core/jobs.ts) for what this actually does
 // when a card lands here — materializes the column's Default Checklist
 // onto the card immediately (rather than lazily, the first time someone
 // happens to open My Checklist or the card) and assigns it, turning it

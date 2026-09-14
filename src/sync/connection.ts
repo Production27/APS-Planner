@@ -194,11 +194,10 @@ async function setupLiveblocksSync(): Promise<void> {
     // a real module (and its types) for it at compile time, which fails
     // for an arbitrary runtime CDN URL with no local declarations; a
     // non-literal specifier is exactly what makes TS fall back to typing
-    // the whole result as `any` instead, same as this dynamic import
-    // already behaved (untyped) before this file existed. esbuild's own
-    // bundling behavior is unaffected either way — an absolute
-    // http(s) specifier is already left external, not bundled, regardless
-    // of whether it's a literal or a variable.
+    // the whole result as `any` instead. esbuild's own bundling behavior
+    // is unaffected either way — an absolute http(s) specifier is already
+    // left external, not bundled, regardless of whether it's a literal or
+    // a variable.
     const reconnectingWebSocketSpecifier = 'https://esm.sh/reconnecting-websocket@4.4.0';
     const { default: ReconnectingWebSocketCtor } = await import(reconnectingWebSocketSpecifier);
 

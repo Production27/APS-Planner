@@ -42,11 +42,12 @@ declare global {
 // card.checklists (one array per board-column stage, keyed by column id)
 // replaced a single flat card.checklist array — see BOARD_COLUMNS'
 // defaultChecklist and getChecklistForStageInProject() (the My Checklist
-// tab, a later phase). Whatever legacy items existed land in the card's
-// CURRENT column, since that's the best guess for which stage they
-// belonged to. Mirrors the job.comments/job.notes migration pattern
-// elsewhere in index.html. Idempotent and cheap (one property check) —
-// call defensively anywhere card.checklists gets read or written.
+// tab). Whatever legacy items existed land in the card's CURRENT column,
+// since that's the best guess for which stage they belonged to. Mirrors
+// the job.comments/job.notes migration pattern in
+// src/core/jobs.ts's ensureJobAndTaskIds(). Idempotent and cheap (one
+// property check) — call defensively anywhere card.checklists gets read
+// or written.
 function ensureCardChecklists(card: BoardCard): void {
   if (!card || card.checklists) return;
   card.checklists = {};
@@ -59,8 +60,8 @@ function ensureCardChecklists(card: BoardCard): void {
 
 // ===== CHECKLIST STAGE VISIBILITY (whole-checklist-per-stage assignment) =====
 // A board-column stage's whole checklist can optionally be restricted to
-// one or more real user accounts (see setMyChecklistStageAssignee(), a
-// later phase's "My Checklist" tab) — everyone else, except admins,
+// one or more real user accounts (see setMyChecklistStageAssignee()
+// below, the "My Checklist" tab) — everyone else, except admins,
 // doesn't see that stage's checklist at all. This mirrors
 // card.checklists' shape: card.checklistAssignees is a plain
 // { [columnId]: username[] } map; an absent/empty array means "everyone
@@ -80,7 +81,7 @@ function isChecklistStageVisibleToMe(assigneesMap: Record<string, unknown> | und
   if (!assignedTo.length) return true;
   // While previewing (viewAsUsername set), the bypass reflects the
   // SIMULATED account's own role, not the real admin's — see hasMinTier()
-  // and index.html's "View as" section for the fuller rationale.
+  // and src/app/users-admin.ts's setViewAs() for the fuller rationale.
   const effectiveRole = getEffectiveRole();
   if (effectiveRole === 'admin') return true;
   const asUsername = viewAsUsername || getStoredUsername();
@@ -106,8 +107,8 @@ function getOpenChecklistItemsForCard(card: BoardCard): string[] {
     templ.filter(function (d) { return storedIds.indexOf(d.id) === -1; }).map(function (d): ChecklistItem { return { id: d.id, text: d.text, done: false, assignee: '' }; })
   );
   // Once any item on this stage has been flagged required (the "killer
-  // item" set — see toggleMyChecklistItemRequired(), a later phase),
-  // only THOSE gate a move; a stage nobody's triaged yet still gates on
+  // item" set — see toggleMyChecklistItemRequired() below), only THOSE
+  // gate a move; a stage nobody's triaged yet still gates on
   // everything so this never silently goes quiet just because required
   // flags haven't been set up.
   const hasRequired = checklist.some(function (i) { return i.required; });
@@ -578,9 +579,8 @@ function persistMyChecklistChange(projectId: string): void {
 // item looked up by id first. mutateFn(item, items) does the
 // mutation-specific work; returning `false` from it skips the
 // persist+render tail (used when there's genuinely nothing to save, e.g.
-// a sub-item id that no longer exists — matches what each of these did
-// individually before). addMyChecklistItem() (creates a brand-new item,
-// nothing to look up) and deleteMyChecklistItem() (branches on template
+// a sub-item id that no longer exists). addMyChecklistItem() (creates a
+// brand-new item, nothing to look up) and deleteMyChecklistItem() (branches on template
 // metadata that doesn't depend on the item still existing, and must
 // still persist+render even when it doesn't) don't fit this shape and
 // stay as their own separate implementations below.

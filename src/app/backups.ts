@@ -1,8 +1,6 @@
-// Backups (shared room, via the Cloudflare Worker). Used to be gated by
-// a separate shared team password, unrelated to individual accounts. Now
-// uses the caller's own logged-in session token — same as every other
-// authenticated action — and the Worker itself additionally requires
-// that account be Admin-tier.
+// Backups (shared room, via the Cloudflare Worker). Uses the caller's own
+// logged-in session token — same as every other authenticated action —
+// and the Worker itself additionally requires that account be Admin-tier.
 import { openModal, closeModal, showToast } from '../utils/ui';
 import { postUsersEndpoint, fetchWithReauth } from './worker-client';
 

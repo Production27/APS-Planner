@@ -1,35 +1,23 @@
 // Job Manager: the job edit/create form itself — phase/sub-phase strips
 // and switching, the fixed task grid (dates/duration), the linked-job
 // section, addNewJob()/editJob()/cancelEdit(), refreshJobFormIfOpen(),
-// and the whole autosave system. This was the highest-scrutiny slice of
-// the whole index.html extraction: two real, already-fixed production
-// bugs are documented in code comments below (an unphased job's date
-// edits silently never saving — see autoSaveJobForm()'s targetPhase
-// comment — and a task-id collision bug across job phases, fixed in
-// dedupeTaskIdsAcrossPhases(), now in src/core/jobs.ts), plus the
-// linked-job UI, which had no test coverage at all before this phase.
-// Regression tests were written locking in today's exact behavior before
-// any of this moved — see tests/unit-job-form.spec.js.
+// the whole autosave system, and the color/mobile-field/custom-fields/
+// attachments panel (buildColorPresets/toggleMobileField/
+// renderJobCustomFieldsGrid/renderJobTeamFieldsGrid/
+// JM_ATTACHMENT_PANEL_CONFIG+wrappers). See tests/unit-job-form.spec.js.
 //
-// currentGridTasks/editingPhaseId/editingSubPhaseId/jobLinkPickerOpen
-// become real module state here (not ambient) — every reader and writer
-// of each moved into this file together, same as job-list.ts's
-// deleteTargetJobId in Phase 8. jmDraftAttachments stays a `var` in
-// index.html instead (converted from `let`) since index.html's own
-// JM_ATTACHMENT_PANEL_CONFIG (Job Manager's attachment panel, still
-// there — see src/views/board.ts's shared renderAttachmentPanel()) reads
-// and writes it too.
+// currentGridTasks/editingPhaseId/editingSubPhaseId/jobLinkPickerOpen are
+// real module state here (not ambient) — every reader and writer of each
+// lives in this file. jmDraftAttachments stays an ambiently-declared
+// `var` (declared in index.html) rather than real module state.
 //
 // The job/phase data model (splitJobIntoPhases/addJobPhase/removeJobPhase/
 // unsplitJobFromPhases/splitPhaseIntoSubPhases/addPhaseSubUnit/
 // removePhaseSubUnit/unsplitPhaseFromSubPhases/ensureJobHasCards/
 // ensureJobTasksMatchColumns/isJobVisibleToMe) is a real import from
-// src/core/jobs.ts (Phase 10 of the extraction plan). The linked-job data
-// model (getOtherFixedProjectId/isLinkEnabledLocally/linkJobs/
-// setJobLinkEnabled/unlinkJobById) and the rest of project management
-// stay in index.html for a later slice of that same phase — called here
-// as ambient globals, same forward-reference pattern as the rest of this
-// extraction.
+// src/core/jobs.ts. The linked-job data model (getOtherFixedProjectId/
+// isLinkEnabledLocally/linkJobs/setJobLinkEnabled/unlinkJobById), real in
+// src/app/project.ts, is referenced here as an ambient global instead.
 import type { Job, Phase, Task } from '../core/types';
 import { findJob, getJobPhases, getPhaseSubUnits, getPhaseCard, getPrimaryPhaseCard } from '../core/models';
 import { escapeHtml } from '../utils/html';

@@ -81,7 +81,17 @@ declare global {
   // eslint-disable-next-line no-var
   var latestPresenceUsers: PresenceUser[];
 
-  // ----- functions (still `function`-declared in index.html) -----
+  // ----- functions called ambiently (bare, not imported) from more than
+  // one src/ file — most are real functions elsewhere in src/ by now
+  // (saveJobs/saveProjects/saveBoardColumns/applyPermissionGating/
+  // updateProjectToggle in src/app/project.ts, logActivity in
+  // src/sync/outbound.ts, isJobVisibleToMe/getJobDueMarkerTask in
+  // src/core/jobs.ts and src/views/gantt.ts, mergeTombstones in
+  // src/app/boot.ts, renderJobList/renderGantt/renderBoard/
+  // renderHomeDashboard/refreshJobFormIfOpen in their own view files);
+  // isFinishedColumnId is the one still genuinely index.html-only. Kept
+  // declared here rather than converted to a real import at every call
+  // site — this file is just the one place their shared type is defined.
   function saveJobs(): void;
   function saveProjects(): void;
   function saveBoardColumns(): void;
@@ -97,8 +107,8 @@ declare global {
   function renderHomeDashboard(): void;
   function refreshJobFormIfOpen(jobId: string): void;
   // The anonymous shape (rather than any one file's own CalJob/GanttJob
-  // pseudo-type) is the deliberate common denominator every caller of
-  // this one index.html function satisfies.
+  // pseudo-type) is the deliberate common denominator every caller
+  // satisfies.
   function getJobDueMarkerTask(job: { id: string; name: string; [key: string]: unknown }, phaseId: string | null): { id: string; name: string; start?: string; finish?: string; [key: string]: unknown } | null;
 }
 

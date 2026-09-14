@@ -92,9 +92,9 @@ export function emptyRoomState(): RoomState {
 // connection's blast radius matches on both reads and writes. A
 // blankProject() stand-in is sent for the non-assigned project rather than
 // omitting it from `projects` entirely, so the client always sees the same
-// fixed set of project ids it always has (see FIXED_PROJECT_NAMES/
-// enforceFixedProjectSet() in index.html) — omitting the key would
-// exercise that create-if-missing path instead.
+// fixed set of project ids it always has (see the client's
+// FIXED_PROJECT_NAMES/enforceFixedProjectSet() in src/app/project.ts) —
+// omitting the key would exercise that create-if-missing path instead.
 export function filterRoomStateForAttachment(roomState: RoomState, attachment: Attachment | null | undefined): RoomState {
   if (!attachment || attachment.role === "admin" || !attachment.assignedProjectId) return roomState;
   const filtered: RoomState = { projects: {} };
@@ -107,9 +107,10 @@ export function filterRoomStateForAttachment(roomState: RoomState, attachment: A
 }
 
 // Same identity-spoofing issue as handleLogActivity below, but for
-// comment/reply author fields embedded inside a job — postJobComment()/
-// postJobReply() in index.html stamp `author` from the client's own
-// editable localStorage display name, not a verified identity. Rather
+// comment/reply author fields embedded inside a job — the client's
+// postJobComment()/postJobReply() (src/views/job-comments.ts) stamp
+// `author` from the client's own editable localStorage display name, not
+// a verified identity. Rather
 // than validating the whole job object (the worker deliberately treats
 // job/card content as an otherwise-unvalidated blob — see the
 // architecture notes on that), this only ever touches the two already-
@@ -118,8 +119,8 @@ export function filterRoomStateForAttachment(roomState: RoomState, attachment: A
 // genuinely new this write (its id isn't in existingJob's corresponding
 // array) AND it's a live post (`when` is truthy — `when: null` is this
 // codebase's existing marker for an imported/historical note, see
-// ensureJobAndTaskIds() in index.html, and must pass through untouched,
-// same as anything already persisted).
+// ensureJobAndTaskIds() in the client's src/core/jobs.ts, and must pass
+// through untouched, same as anything already persisted).
 export function sanitizeJobCommentAuthors(job: Job, existingJob: Job | undefined, attachment: Attachment | null | undefined): void {
   if (!Array.isArray(job.comments) || !attachment || !attachment.displayName) return;
   const existingComments = (existingJob && existingJob.comments) || [];
@@ -308,7 +309,7 @@ export function fieldsChangedExcluding(a: Record<string, unknown>, b: Record<str
   return false;
 }
 
-// pushProjectToShared() (index.html) always sends the ENTIRE project's
+// The client's pushProjectToShared() (src/sync/outbound.ts) always sends the ENTIRE project's
 // jobs/boardCards/calendarEvents/name/header on every save, not a diff —
 // every job gets a freshly stamped updatedAt on every push regardless of
 // whether it actually changed. So "is this field present in the message"
@@ -516,9 +517,9 @@ export interface RemoveProjectResult {
 }
 
 // Removes a project entirely — a real capability now (used once to clean
-// up a stray empty project a client-side bug created; see the fix in
-// applyRoomSnapshot()'s isFirstSnapshot handling in index.html). Project
-// deletion is still not exposed anywhere in the app's own UI otherwise.
+// up a stray empty project a client-side bug created; see the fix in the
+// client's applyRoomSnapshot() isFirstSnapshot handling, src/sync/inbound.ts).
+// Project deletion is still not exposed anywhere in the app's own UI otherwise.
 export function removeProject(state: RoomState, projectId: string): RemoveProjectResult {
   if (!state.projects[projectId]) return { state, changed: false };
   const next = cloneRoomState(state);

@@ -1,12 +1,11 @@
 // Job Manager: the job list sidebar (search/filter, per-card duplicate/
 // delete buttons, the "+ Add Job" tile), archive/restore (including the
 // Archived Jobs modal), duplicateJob(), and the delete-job confirmation
-// flow. The rest of Job Manager (the actual job/phase/task editing form,
-// autosave, comments — see src/views/job-comments.ts) stays in
-// index.html until later phases; this file calls that remaining code
-// (editJob/addNewJob/cancelEdit/isJobFinished/getVisibleJobs/
-// ensureJobHasCards/syncCardColumns and friends) as ambient globals, same
-// forward-reference pattern as the rest of this extraction.
+// flow. The rest of Job Manager — the actual job/phase/task editing form
+// and autosave (src/views/job-form.ts), comments (src/views/job-comments.ts) —
+// lives elsewhere; this file calls that (editJob/addNewJob/cancelEdit/
+// isJobFinished/getVisibleJobs/ensureJobHasCards/syncCardColumns and
+// friends) as ambient globals rather than importing it.
 import type { Job } from '../core/types';
 import { findJob, getJobPhases, getPhaseCard, getJobCards, getPrimaryPhaseCard } from '../core/models';
 import { escapeHtml } from '../utils/html';

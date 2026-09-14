@@ -91,7 +91,7 @@ declare global {
   var GANTT_BAR_H: number;
   // eslint-disable-next-line no-var
   var GANTT_BAR_PAD: number;
-  // Shared with autoArchiveJobs() (still in index.html) — how far back a
+  // Shared with autoArchiveJobs() (src/app/project.ts) — how far back a
   // job/task can be and still show up before being treated as archived.
   const ARCHIVE_CUTOFF_DAYS: number;
   function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
@@ -492,9 +492,9 @@ function startBarMove(e: MouseEvent, jobId: string, taskId: string, bar: HTMLEle
   document.addEventListener('mouseup', onBarMoveEnd);
 }
 
-// rAF-coalesced the same way requestGanttZoom() is (see the GANTT
-// PINCH-TO-ZOOM block, still in index.html) — a raw mousemove can fire far
-// more often than this can usefully repaint, and every tick was doing a
+// rAF-coalesced the same way requestGanttZoom() below is — a raw
+// mousemove can fire far more often than this can usefully repaint, and
+// every tick was doing a
 // tooltip innerHTML write immediately followed by an offsetWidth/
 // offsetHeight read (see moveTooltip()), which forces a synchronous layout
 // flush of whatever DOM writes are still pending (the bar's own style.left/
@@ -700,7 +700,7 @@ function collapseAllGantt(): void {
 // Clicking a job's name pill isolates the Gantt to just that job. NOT
 // persisted to localStorage — a short-lived "let me focus on this one
 // job" tool, reset on every page load and whenever the active project
-// changes (see switchProject(), still in index.html).
+// changes (see switchProject() in src/app/project.ts).
 function toggleGanttJobFocus(jobId: string): void {
   ganttFocusedJobId = (ganttFocusedJobId === jobId) ? null : jobId;
   renderGantt();
@@ -990,16 +990,16 @@ function buildSubPhaseRow(job: Job, phase: Phase, seg: GanttSegment): GanttRow {
 
 // Tasks view: every phase/sub-phase starts CONDENSED by default —
 // explicitly expanding one (see tasksExpandedPhaseIds/
-// tasksExpandedSubPhaseIds above toggleTasksPhaseExpanded()/
-// toggleTasksSubPhaseExpanded(), both still in index.html) peels it open
-// independently of every other phase/sub-phase.
+// tasksExpandedSubPhaseIds above, toggleTasksPhaseExpanded()/
+// toggleTasksSubPhaseExpanded() below) peels it open independently of
+// every other phase/sub-phase.
 function buildVisibleTaskRows(): GanttRow[] {
   const hiddenOrders = getHiddenTaskOrders();
   const rows: GanttRow[] = [];
   getVisibleJobs().concat(getLinkedReferenceJobs()).forEach((job) => {
     if (job.archived) return;
-    // See ganttFocusedJobId/toggleGanttJobFocus() (both still in
-    // index.html) — isolates the chart to one job's rows when set, Tasks
+    // See ganttFocusedJobId/toggleGanttJobFocus() above — isolates the
+    // chart to one job's rows when set, Tasks
     // view only. Whichever side of a linked pair is isolated, the other
     // side stays visible too — a job's .link.jobId only ever points at
     // its actual linked counterpart (linkJobs() always pairs across the
@@ -2074,7 +2074,7 @@ function setHeaderScroll(px: number): void {
 }
 
 // Called from home.ts (whenever the Home dashboard's expanded Gantt
-// widget switches to this tab) and from index.html's own init(), in
+// widget switches to this tab) and from src/app/boot.ts's init(), in
 // addition to this file's own renderGantt()/scrollToToday() — re-wiring
 // on every call is deliberate (see below), so any of those callers is
 // safe even if scroll sync is already set up.

@@ -37,11 +37,6 @@
 // both are declared ambient below and must stay structurally identical
 // to board.ts's own matching declarations.
 //
-// The onPanelResize('panel-home', renderHomeWorkflowMiniBoard, 200)
-// registration call deliberately stays a top-level statement in
-// index.html instead — see the comment above renderHomeWorkflowMiniBoard()
-// below for why.
-//
 // Several functions here reuse Calendar's own privately-typed shapes
 // (CalJob/CalRow/CalSeg, none exported) to lay out real job/event bars;
 // rather than exporting those types just for this one cross-file reuse,
@@ -452,9 +447,9 @@ function buildHomeOverdueRows(): HomeOverdueRow[] {
     const isDueSoon = !isOverdue && dueDate <= dueSoonCutoff;
     if (!isOverdue && !isDueSoon) return;
     // Splits the "due soon" half into its own today/later tiers for the
-    // widget's own alert (see renderHomeOverdueWidget(), a later phase) —
-    // unused by anything that only cared about isOverdue before this, so
-    // adding it here is additive, not a shape change.
+    // widget's own alert (see renderHomeOverdueWidget() below) — unused
+    // by anything that only cares about isOverdue, so this is additive,
+    // not a shape change.
     const isToday = !isOverdue && dueDate.getTime() === todayMidnight.getTime();
     const phases = getJobPhases(job);
     const phase = phases.find(function (p) { return (p.id || null) === (card.phaseId || null); });
@@ -633,7 +628,7 @@ interface HomeGanttUnclosedRow {
 }
 
 // Feeds the Gantt widget's own "needs attention" alert (see
-// renderHomeTodayScheduleWidget(), a later phase) — NOT "any task is
+// renderHomeTodayScheduleWidget() below) — NOT "any task is
 // behind schedule" (that read as noisy — a single slipped task is normal
 // mid-job), but Karl's own, narrower bar: the entire phase's schedule has
 // finished (every one of its tasks' effective due dates has already
@@ -1132,20 +1127,6 @@ function renderHomeWorkflowMiniBoard(): void {
 // fires 'resize' many times in quick succession and this does a full
 // innerHTML rebuild, not just a style write (unlike applyHomeReflowTracks()'s
 // own undebounced resize listener, which only writes inline styles).
-//
-// The onPanelResize() REGISTRATION call itself deliberately stays a
-// top-level statement in index.html, not here — dist/app.bundle.js (an
-// IIFE) loads and runs to completion BEFORE index.html's own remaining
-// inline <script> even begins, so a top-level call to the still-ambient
-// onPanelResize() from inside this bundled module would throw
-// "onPanelResize is not defined" immediately, aborting the WHOLE
-// bundle's execution before any of main.ts's window.x = x assignments
-// ever ran, failing the whole test suite including unrelated tests.
-// index.html's own two sibling onPanelResize() calls (for
-// panel-calendar/panel-board) already prove this exact pattern is safe
-// once the call is a plain index.html statement: by the time index.html's
-// script reaches it, the bundle has already finished and
-// window.renderHomeWorkflowMiniBoard already exists.
 
 // Expanded-in-place Board (see toggleHomeWidgetExpand()) — real kanban
 // columns built from the exact same buildCardEl() the real Board tab

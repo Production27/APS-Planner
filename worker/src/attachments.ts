@@ -11,8 +11,9 @@
 // could render/execute as a document (HTML, SVG with embedded <script>,
 // anything else) is ever allowed to come back as Content-Disposition:
 // inline. Deliberately matches the client's own isImage heuristic
-// (file.type.startsWith('image/'), see index.html's attachment upload)
-// minus svg+xml, rather than an arbitrary allowlist, so real photo
+// (file.type.startsWith('image/'), see src/views/board.ts's
+// handleAttachmentPanelUpload()) minus svg+xml, rather than an arbitrary
+// allowlist, so real photo
 // attachments keep rendering as thumbnails exactly as before.
 import { jsonResponse } from './http.ts';
 import { resolveIdentityFromToken, resolveCaller } from './users.ts';

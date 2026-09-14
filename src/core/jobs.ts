@@ -3,20 +3,7 @@
 // split/add/remove/un-split, ensureJobHasCards()/migrateOrphanedCards(),
 // the auto-derive-column-from-dates logic (deriveColumnForTasks/
 // setCardColumn/runColumnEntryActions/syncCardColumns), and job
-// visibility/finished-status. This is the first slice of Phase 10 of the
-// extraction plan ("Project management & the shared job/phase data
-// model") — the rest (switchProject/loadActiveProjectData/renderAll/
-// applyPermissionGating, the project bootstrap, and the linked-job data
-// model) stays in index.html for a later slice of the same phase.
-//
-// Two real, already-fixed production bugs live in this exact file (moved
-// verbatim from index.html, comments intact): dedupeTaskIdsAcrossPhases()
-// fixes a task-id collision bug (dragging one phase's bar visibly moved
-// another phase's), and deriveColumnForTasks()'s priority-order comment
-// documents a real bug report (a manual drag was losing to whichever
-// board happened to be "active today" elsewhere on the same job).
-// Regression tests were written locking in today's exact behavior for
-// both before this code moved — see tests/unit-jobs-model.spec.js.
+// visibility/finished-status. See tests/unit-jobs-model.spec.js.
 import type { Job, Phase, SubPhase, Task, BoardCard, BoardColumn } from './types';
 import { getJobPhases, getPhaseSubUnits, getPhaseCard, getPrimaryPhaseCard } from './models';
 import { genId } from '../utils/id';
@@ -294,12 +281,12 @@ export function ensureJobHasCards(job: Job): void {
   // its own card directly and immediately (see removeJobPhase()) — the only
   // other way a card ends up phase-orphaned is a remote-merge race (the
   // card arrives before the phase does, or vice versa), and that's handled
-  // by applyLiveblocksState()'s grace-period-aware phase-orphan recovery.
-  // This function runs on every load (loadActiveProjectData(), right after
-  // a remote merge), so an immediate delete here used to win the race
-  // against that grace period every time — deleting (and tombstoning) a
-  // phase-card the instant it arrived, before the phase itself had any
-  // chance to catch up moments later.
+  // by applyRoomSnapshot()'s grace-period-aware phase-orphan recovery. This
+  // function runs on every load (loadActiveProjectData(), right after a
+  // remote merge), so an immediate delete here would win the race against
+  // that grace period every time — deleting (and tombstoning) a phase-card
+  // the instant it arrived, before the phase itself had any chance to
+  // catch up moments later.
 
   phases.forEach(function (phase) {
     const pid = phase.id || null;

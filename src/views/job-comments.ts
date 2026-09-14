@@ -1,18 +1,9 @@
 // Job Manager: comments/replies on a job. Pure logic + rendering for the
 // Job Manager drawer's own comments panel (#jobCommentsPanel) — the
-// actual "post a comment"/"post a reply" functions (postJobComment/
-// postJobReply) are also called directly by Home's Job Chat widget (see
-// postHomeJobChatComment()/addHomeJobReply() in home.ts), which is why
-// this file exists separately from the rest of Job Manager (still in
-// index.html) rather than waiting for that whole extraction — Phase 6 of
-// the extraction plan already required resolving one shared-infra tangle
-// (board.ts's custom fields/attachments) before Job Manager could move at
-// all, and this comment system is the next such shared piece: home.ts
-// real-imports formatCommentWhen/postJobComment/postJobReply from here,
-// while Job Manager's own remaining index.html code (addJobComment(),
-// deleteJobComment(), the drawer's compose box, etc.) still lives there
-// and calls everything below as ambient globals — same forward-reference
-// pattern as the rest of this extraction.
+// "post a comment"/"post a reply" functions (postJobComment/postJobReply)
+// are also called directly by Home's Job Chat widget (see
+// postHomeJobChatComment()/addHomeJobReply() in home.ts), which real-
+// imports formatCommentWhen/postJobComment/postJobReply from here.
 import type { Job } from '../core/types';
 import { findJob } from '../core/models';
 import { escapeHtml } from '../utils/html';
@@ -227,7 +218,7 @@ export function handleJobCommentKey(event: KeyboardEvent): void {
 }
 
 // Kept in sync with #jobCommentsPanel's own .collapsed (see
-// editJob()/openJobDrawer() in index.html) — otherwise the drawer stays
+// editJob()/openJobDrawer() in src/views/job-form.ts) — otherwise the drawer stays
 // its full two-panel width and the now-narrow collapsed panel just sits
 // centered in a lot of dead space instead of the window actually getting
 // smaller.

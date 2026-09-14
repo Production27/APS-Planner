@@ -1,17 +1,11 @@
 // Project management: the two-fixed-project bootstrap/migration, loading
 // and saving the whole `projects` map, switchProject() (the single
-// highest-blast-radius function in the app — it touches every already-
-// extracted view's own close/flush logic on every switch, for every
-// user), renderAll()/applyPermissionGating(), the per-field save
-// wrappers, and the cross-project job-link data model. This is the
-// second (and largest) slice of Phase 10 of the extraction plan
-// ("Project management & the shared job/phase data model") — deliberately
-// last among the risky work, same reasoning Sync/Presence was last in the
-// original architecture roadmap: a mistake here can affect every user in
-// a project at once. Regression tests cover switchProject()'s own
+// highest-blast-radius function in the app — it touches every view's own
+// close/flush logic on every switch, for every user),
+// renderAll()/applyPermissionGating(), the per-field save wrappers, and
+// the cross-project job-link data model. switchProject()'s own
 // flush-before-switch/fail-closed/scope-restriction guards and the
-// linked-job data model before this code moved — see
-// tests/unit-project.spec.js.
+// linked-job data model are covered by tests/unit-project.spec.js.
 import { genId, safeJsonParse } from '../utils/id';
 import { showToast } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';

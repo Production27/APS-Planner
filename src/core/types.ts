@@ -2,10 +2,10 @@
 // this app's real objects carry many more fields (customFields,
 // checklists, comments, header info, etc.) than the model-lookup
 // functions in models.ts ever touch. Typing exactly the fields those
-// functions read/return is enough to make THIS extraction type-safe
-// without pretending to fully model shapes nothing here needs yet —
-// tightening these is a fine follow-up whenever a later phase's
-// functions actually need the rest typed too.
+// functions read/return is enough to keep this type-safe without
+// pretending to fully model shapes nothing here needs — tightening these
+// is a fine follow-up whenever some function actually needs the rest
+// typed too.
 
 export interface Task {
   id: string;
@@ -46,7 +46,7 @@ export interface Job {
   phases?: Phase[];
   // A "linked reference" is a read-only copy of a job from the OTHER
   // fixed project, shown inline for visibility (see getLinkedReferenceJobs()
-  // in index.html) — link points back at its real counterpart.
+  // in src/app/project.ts) — link points back at its real counterpart.
   isLinkedReference?: boolean;
   linkedFromProjectName?: string;
   link?: { jobId: string } | null;

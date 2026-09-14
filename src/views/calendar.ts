@@ -23,12 +23,12 @@
 //
 // saveCalendarEvents()/logActivity()/deleteCalendarEventFromShared()/
 // getVisibleJobs()/flattenJobs()/buildCalendarJobRows()/isTaskFinished()/
-// isDarkColor()/editJob() stay in index.html on purpose (the
-// Gantt-clustering-coupled row builder noted above — real in
-// src/views/gantt.ts now, but still typed here with this file's own
-// CalJob/CalRow shapes rather than imported, per the declare block's own
-// comment below — or genuinely separate concerns like Job Manager's own
-// edit-drawer) and are referenced below as ambient globals.
+// isDarkColor()/editJob() are all real functions elsewhere in src/, but
+// referenced below as ambient globals rather than imported — getVisibleJobs()/
+// flattenJobs()/buildCalendarJobRows()/isTaskFinished() specifically because
+// this file types them with its own CalJob/CalRow shapes rather than the
+// real functions' Job/Task ones (see the declare block's own comment
+// below); the rest are just not yet converted to real imports.
 import type { CalendarEvent, CalendarEventOccurrence, Job } from '../core/types';
 import { addMonths, toIsoDate, formatTimeLabel, timeToMinutes, getDaysDiff } from '../utils/date';
 import { genId } from '../utils/id';
@@ -1199,9 +1199,9 @@ function renderDayCalendarView(): void {
 }
 
 // ===== CALENDAR: BAR DRAG-TO-RESCHEDULE =====
-// The data-mutating half of the drag/gesture cluster — see this file's
-// header comment for why the purely-visual swipe/wheel navigation stayed
-// in index.html.
+// The data-mutating half of the drag/gesture cluster — the purely-visual
+// swipe/wheel navigation (initCalendarDragHandlers and friends) is later
+// in this file.
 
 function handleCalBarMouseDown(e: MouseEvent): void {
   const bar = (e.target as Element).closest('.cal-event-bar') as HTMLElement | null;
@@ -1376,7 +1376,7 @@ function handleCalBarMouseUp(e: MouseEvent): void {
 
   const isMobile = window.matchMedia('(max-width: 480px), (max-height: 480px)').matches;
 
-  // A real swipe (see handleCalSwipeEnd, still in index.html) already ran
+  // A real swipe (see handleCalSwipeEnd below) already ran
   // on this same gesture's touchend, which always fires before the
   // mousedown/mouseup pair that gets synthesized from a touch — so by the
   // time we're here, it's already decided this was "swipe the month", not
