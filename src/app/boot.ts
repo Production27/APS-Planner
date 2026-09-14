@@ -24,11 +24,7 @@ import { closeSettingsMenu } from './settings-menu';
 import { loadLinkEnabledPref, loadProjects, enforceFixedProjectSet, loadActiveProjectData, autoArchiveJobs, renderAll } from './project';
 import { syncCardColumns } from '../core/jobs';
 import { closeDeleteJobModal } from '../views/job-list';
-import { cancelEdit, initJobFormAutosaveListeners } from '../views/job-form';
-
-declare global {
-  function buildColorPresets(): void;
-}
+import { cancelEdit, initJobFormAutosaveListeners, buildColorPresets } from '../views/job-form';
 
 // How long a delete tombstone (see recordTombstone()/deleteFromSharedMap(),
 // both still in index.html) sticks around before it's pruned locally.

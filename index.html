@@ -3854,7 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-12.6';
+const APP_VERSION = '2026-09-14.1';
 
 // checkForNewerVersion() moved to src/app/version-check.ts.
 // checkMaintenanceStatus()/applyMaintenanceStatus()/
@@ -4735,131 +4735,7 @@ var tickResizeState = null;
 // src/views/gantt.ts.
 // moveTooltip()/hideTooltip() moved to src/utils/ui.ts.
 
-// ===== JOB MANAGER =====
-function buildColorPresets() {
-  const container = document.getElementById('colorPresets');
-  container.innerHTML = '';
-  COLOR_PRESETS.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'color-preset';
-    div.style.background = c;
-    div.dataset.color = c;
-    div.onclick = () => {
-      document.getElementById('f_color').value = c;
-      container.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
-      div.classList.add('selected');
-      updateJobColorSwatch();
-      scheduleAutoSaveJobForm();
-    };
-    container.appendChild(div);
-  });
-}
-
-function updateJobColorSwatch() {
-  document.getElementById('jobColorToggleSwatch').style.background = document.getElementById('f_color').value;
-}
-
-function toggleJobColorPanel(forceOpen) {
-  const panel = document.getElementById('jobColorPickerPanel');
-  const arrow = document.getElementById('jobColorToggleArrow');
-  const open = forceOpen != null ? forceOpen : !panel.classList.contains('open');
-  panel.classList.toggle('open', open);
-  arrow.classList.toggle('open', open);
-}
-
-// Mobile-only accordion for the job drawer's fields (Job Name/Tasks/
-// Description/Due Date/Custom Fields/Checklist/Attachments/Comments) — see
-// the .mobile-collapsible rules under @media (max-width:480px). Harmless
-// on desktop: nothing there hides .mobile-field-body regardless of this
-// class, so toggling it has no visual effect above that width.
-function toggleMobileField(headerEl) {
-  const section = headerEl.closest('.mobile-collapsible');
-  if (section) section.classList.toggle('expanded');
-}
-
-// Every field collapsed is the resting state each time a job is opened —
-// called from editJob()/addNewJob(), not just once, since the same
-// drawer/section elements are reused (repopulated in place) across jobs
-// rather than rebuilt, so a section left expanded on one job would
-// otherwise still be expanded when the next one opens.
-function collapseAllMobileFields() {
-  document.querySelectorAll('.mobile-collapsible.expanded').forEach(function(el) {
-    el.classList.remove('expanded');
-  });
-}
-
-// toggleJobCommentsPanel() moved to src/views/job-comments.ts.
-
-// renderJobList()/filterJobList()/updateJobCount() moved to src/views/job-list.ts.
-
-// Task grid rendering, phase/sub-phase strip UI, the linked-job section,
-// addNewJob()/editJob()/cancelEdit()/refreshJobFormIfOpen(), and the whole
-// job form autosave system moved to src/views/job-form.ts.
-
-// archiveJob()/restoreJob()/openArchivedJobsModal()/closeArchivedJobsModal()/refreshArchivedJobsListIfOpen()/renderArchivedJobsList()/archiveCurrentJob()/duplicateJob()/promptDeleteJob()/confirmDelete()/executeDelete()/closeDeleteJobModal() moved to src/views/job-list.ts.
-
-// Backups, error log, and Manage Users admin UI moved to src/app/backups.ts, src/app/errors.ts, and src/app/users-admin.ts.
-
-/* loadBoardCards()/loadBoardColumns() removed — like loadFieldOptions()/
-   loadHeader() above, superseded by the hierarchical
-   loadActiveProjectData(), which reads boardCards/BOARD_COLUMNS from
-   the per-project data directly. */
-
-// slugifyColumnId()/showAddColumnForm()/hideAddColumnForm()/
-// handleAddColumnKey()/submitAddColumn() moved to src/views/board.ts.
-
-// renderFieldDefHtml()/renderCustomFieldsGrid()/renderTeamFieldsGrid()/collectCustomFieldValues() moved to src/views/board.ts.
-
-// ===== JOB MANAGER: same card fields as the modal above, mirrored onto
-// the job form so a job's linked card can be fully edited from either
-// place. Both read/write the same boardCards entry, so edits made in one
-// show up in the other next time it's opened. =====
-function renderJobCustomFieldsGrid(values) {
-  values = values || {};
-  const grid = document.getElementById('jmCustomFieldsGrid');
-  if (!grid) return;
-  const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) === -1);
-  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); }, 'jm')).join('');
-  applyPermissionGating(); // rebuilt on every job-form open, outside renderAll()'s own sweep
-}
-
-// See renderTeamFieldsGrid() above for why pm/foreman/members are split
-// out here.
-function renderJobTeamFieldsGrid(values) {
-  values = values || {};
-  const grid = document.getElementById('jmTeamFieldsGrid');
-  if (!grid) return;
-  const defs = CUSTOM_FIELD_DEFS.filter(d => TEAM_FIELD_KEYS.indexOf(d.key) !== -1);
-  grid.innerHTML = defs.map(def => renderFieldDefHtml(def, values[def.key] || '', function() { renderJobTeamFieldsGrid(collectJobCustomFieldValues()); }, 'jm')).join('');
-  applyPermissionGating();
-}
-
-function collectJobCustomFieldValues() {
-  const values = {};
-  document.querySelectorAll('#jmCustomFieldsGrid [data-field], #jmTeamFieldsGrid [data-field]').forEach(el => {
-    if (el.type === 'checkbox') {
-      if (!values[el.dataset.field]) values[el.dataset.field] = [];
-      if (el.checked) values[el.dataset.field].push(el.value);
-    } else {
-      values[el.dataset.field] = el.value.trim();
-    }
-  });
-  return values;
-}
-
-// MAX_ATTACHMENT_SIZE/attachmentDownloadUrl()/attachmentSrc()/uploadAttachmentFile()/deleteAttachmentFile()/renderAttachmentPanel()/handleAttachmentPanelUpload()/removeAttachmentPanelItem() moved to src/views/board.ts.
-
-const JM_ATTACHMENT_PANEL_CONFIG = {
-  draftArrayGetter: function() { return jmDraftAttachments; },
-  draftArraySetter: function(arr) { jmDraftAttachments = arr; },
-  containerId: 'jmAttachmentItems',
-  removeHandlerName: 'removeJobAttachment',
-  flushFn: flushAutoSaveJobForm
-};
-function renderJobAttachments() { renderAttachmentPanel(JM_ATTACHMENT_PANEL_CONFIG); }
-function handleJobAttachmentUpload(e) { handleAttachmentPanelUpload(e, JM_ATTACHMENT_PANEL_CONFIG); }
-function removeJobAttachment(id) { removeAttachmentPanelItem(id, JM_ATTACHMENT_PANEL_CONFIG); }
-
+// buildColorPresets()/updateJobColorSwatch()/toggleJobColorPanel()/toggleMobileField()/collapseAllMobileFields()/renderJobCustomFieldsGrid()/renderJobTeamFieldsGrid()/collectJobCustomFieldValues()/JM_ATTACHMENT_PANEL_CONFIG+renderJobAttachments()/handleJobAttachmentUpload()/removeJobAttachment() moved to src/views/job-form.ts.
 // openManageFields()/closeManageFields()/renderManageFieldsBody()/buildManageFieldGroup()/addFieldOption()/removeFieldOption()/formatFileSize()/renderAttachments()/handleAttachmentUpload()/removeAttachment() moved to src/views/board.ts.
 
 function toggleActivitySidebar() {

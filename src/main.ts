@@ -149,6 +149,9 @@ import {
   closeJobDrawer, addNewJob, editJob, refreshJobFormIfOpen, scheduleAutoSaveJobForm,
   flushAutoSaveJobForm, cancelPendingJobAutosave, setJobNameHint, showTaskRowWarnings,
   autoSaveJobForm, initJobFormAutosaveListeners, cancelEdit,
+  buildColorPresets, updateJobColorSwatch, toggleJobColorPanel, toggleMobileField, collapseAllMobileFields,
+  renderJobCustomFieldsGrid, renderJobTeamFieldsGrid, collectJobCustomFieldValues, renderJobAttachments,
+  handleJobAttachmentUpload, removeJobAttachment,
 } from './views/job-form';
 import {
   getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
@@ -499,6 +502,17 @@ declare global {
     autoSaveJobForm: typeof autoSaveJobForm;
     initJobFormAutosaveListeners: typeof initJobFormAutosaveListeners;
     cancelEdit: typeof cancelEdit;
+    buildColorPresets: typeof buildColorPresets;
+    updateJobColorSwatch: typeof updateJobColorSwatch;
+    toggleJobColorPanel: typeof toggleJobColorPanel;
+    toggleMobileField: typeof toggleMobileField;
+    collapseAllMobileFields: typeof collapseAllMobileFields;
+    renderJobCustomFieldsGrid: typeof renderJobCustomFieldsGrid;
+    renderJobTeamFieldsGrid: typeof renderJobTeamFieldsGrid;
+    collectJobCustomFieldValues: typeof collectJobCustomFieldValues;
+    renderJobAttachments: typeof renderJobAttachments;
+    handleJobAttachmentUpload: typeof handleJobAttachmentUpload;
+    removeJobAttachment: typeof removeJobAttachment;
     isCalendarEventTaskId: typeof isCalendarEventTaskId;
     parseCalendarEventTaskId: typeof parseCalendarEventTaskId;
     defaultRepeatUntil: typeof defaultRepeatUntil;
@@ -1039,6 +1053,17 @@ window.showTaskRowWarnings = showTaskRowWarnings;
 window.autoSaveJobForm = autoSaveJobForm;
 window.initJobFormAutosaveListeners = initJobFormAutosaveListeners;
 window.cancelEdit = cancelEdit;
+window.buildColorPresets = buildColorPresets;
+window.updateJobColorSwatch = updateJobColorSwatch;
+window.toggleJobColorPanel = toggleJobColorPanel;
+window.toggleMobileField = toggleMobileField;
+window.collapseAllMobileFields = collapseAllMobileFields;
+window.renderJobCustomFieldsGrid = renderJobCustomFieldsGrid;
+window.renderJobTeamFieldsGrid = renderJobTeamFieldsGrid;
+window.collectJobCustomFieldValues = collectJobCustomFieldValues;
+window.renderJobAttachments = renderJobAttachments;
+window.handleJobAttachmentUpload = handleJobAttachmentUpload;
+window.removeJobAttachment = removeJobAttachment;
 window.isCalendarEventTaskId = isCalendarEventTaskId;
 window.parseCalendarEventTaskId = parseCalendarEventTaskId;
 window.defaultRepeatUntil = defaultRepeatUntil;

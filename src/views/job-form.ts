@@ -41,7 +41,7 @@ import { hasMinTier } from '../auth/permissions';
 import { queueSharedSync } from '../sync/outbound';
 import { renderGantt } from './gantt';
 import { renderCalendar } from './calendar';
-import { renderBoard } from './board';
+import { renderBoard, renderFieldDefHtml, renderAttachmentPanel, handleAttachmentPanelUpload, removeAttachmentPanelItem } from './board';
 import { renderJobList, archiveJob, restoreJob } from './job-list';
 import { renderJobComments } from './job-comments';
 import {
@@ -53,18 +53,11 @@ import {
 declare global {
   // eslint-disable-next-line no-var
   var jmDraftAttachments: unknown[];
-  function renderJobCustomFieldsGrid(values: Record<string, unknown>): void;
-  function renderJobTeamFieldsGrid(values: Record<string, unknown>): void;
-  function renderJobAttachments(): void;
-  function collectJobCustomFieldValues(): Record<string, unknown>;
   function getOtherFixedProjectId(projectId: string | null): string | null;
   function isLinkEnabledLocally(jobId: string): boolean;
   function linkJobs(jobA: Job, projectAId: string | null, jobBId: string, projectBId: string): boolean;
   function setJobLinkEnabled(jobId: string, projectId: string | null, enabled: boolean): void;
   function unlinkJobById(jobId: string, projectId: string | null): void;
-  function updateJobColorSwatch(): void;
-  function toggleJobColorPanel(forceOpen?: boolean): void;
-  function collapseAllMobileFields(): void;
 }
 
 // ===== Fixed task grid =====
@@ -1125,3 +1118,106 @@ export function cancelEdit(): void {
   (document.getElementById('jobCommentsPanel') as HTMLElement).style.display = 'none';
   renderJobList();
 }
+
+// ===== JOB MANAGER: color picker/mobile-accordion chrome =====
+export function buildColorPresets(): void {
+  const container = document.getElementById('colorPresets')!;
+  container.innerHTML = '';
+  COLOR_PRESETS.forEach((c: string) => {
+    const div = document.createElement('div');
+    div.className = 'color-preset';
+    div.style.background = c;
+    div.dataset.color = c;
+    div.onclick = () => {
+      (document.getElementById('f_color') as HTMLInputElement).value = c;
+      container.querySelectorAll('.color-preset').forEach((p) => p.classList.remove('selected'));
+      div.classList.add('selected');
+      updateJobColorSwatch();
+      scheduleAutoSaveJobForm();
+    };
+    container.appendChild(div);
+  });
+}
+
+export function updateJobColorSwatch(): void {
+  (document.getElementById('jobColorToggleSwatch') as HTMLElement).style.background = (document.getElementById('f_color') as HTMLInputElement).value;
+}
+
+export function toggleJobColorPanel(forceOpen?: boolean): void {
+  const panel = document.getElementById('jobColorPickerPanel')!;
+  const arrow = document.getElementById('jobColorToggleArrow')!;
+  const open = forceOpen != null ? forceOpen : !panel.classList.contains('open');
+  panel.classList.toggle('open', open);
+  arrow.classList.toggle('open', open);
+}
+
+// Mobile-only accordion for the job drawer's fields (Job Name/Tasks/
+// Description/Due Date/Custom Fields/Checklist/Attachments/Comments) — see
+// the .mobile-collapsible rules under @media (max-width:480px). Harmless
+// on desktop: nothing there hides .mobile-field-body regardless of this
+// class, so toggling it has no visual effect above that width.
+export function toggleMobileField(headerEl: HTMLElement): void {
+  const section = headerEl.closest('.mobile-collapsible');
+  if (section) section.classList.toggle('expanded');
+}
+
+// Every field collapsed is the resting state each time a job is opened —
+// called from editJob()/addNewJob(), not just once, since the same
+// drawer/section elements are reused (repopulated in place) across jobs
+// rather than rebuilt, so a section left expanded on one job would
+// otherwise still be expanded when the next one opens.
+export function collapseAllMobileFields(): void {
+  document.querySelectorAll('.mobile-collapsible.expanded').forEach(function (el) {
+    el.classList.remove('expanded');
+  });
+}
+
+// ===== JOB MANAGER: same card fields as the card modal (see
+// src/views/board.ts's renderCustomFieldsGrid()/renderTeamFieldsGrid()),
+// mirrored onto the job form so a job's linked card can be fully edited
+// from either place. Both read/write the same boardCards entry, so edits
+// made in one show up in the other next time it's opened. =====
+export function renderJobCustomFieldsGrid(values: Record<string, unknown>): void {
+  values = values || {};
+  const grid = document.getElementById('jmCustomFieldsGrid');
+  if (!grid) return;
+  const defs = CUSTOM_FIELD_DEFS.filter((d) => TEAM_FIELD_KEYS.indexOf(d.key) === -1);
+  grid.innerHTML = defs.map((def) => renderFieldDefHtml(def, values[def.key] || '', function () { renderJobCustomFieldsGrid(collectJobCustomFieldValues()); }, 'jm')).join('');
+  applyPermissionGating(); // rebuilt on every job-form open, outside renderAll()'s own sweep
+}
+
+// See renderJobCustomFieldsGrid() above for why pm/foreman/members are
+// split out here (mirrors board.ts's renderTeamFieldsGrid()).
+export function renderJobTeamFieldsGrid(values: Record<string, unknown>): void {
+  values = values || {};
+  const grid = document.getElementById('jmTeamFieldsGrid');
+  if (!grid) return;
+  const defs = CUSTOM_FIELD_DEFS.filter((d) => TEAM_FIELD_KEYS.indexOf(d.key) !== -1);
+  grid.innerHTML = defs.map((def) => renderFieldDefHtml(def, values[def.key] || '', function () { renderJobTeamFieldsGrid(collectJobCustomFieldValues()); }, 'jm')).join('');
+  applyPermissionGating();
+}
+
+export function collectJobCustomFieldValues(): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  document.querySelectorAll('#jmCustomFieldsGrid [data-field], #jmTeamFieldsGrid [data-field]').forEach((el) => {
+    const input = el as HTMLInputElement;
+    if (input.type === 'checkbox') {
+      if (!values[input.dataset.field!]) values[input.dataset.field!] = [];
+      if (input.checked) (values[input.dataset.field!] as string[]).push(input.value);
+    } else {
+      values[input.dataset.field!] = input.value.trim();
+    }
+  });
+  return values;
+}
+
+const JM_ATTACHMENT_PANEL_CONFIG = {
+  draftArrayGetter: function () { return jmDraftAttachments as any[]; },
+  draftArraySetter: function (arr: unknown[]) { jmDraftAttachments = arr; },
+  containerId: 'jmAttachmentItems',
+  removeHandlerName: 'removeJobAttachment',
+  flushFn: flushAutoSaveJobForm,
+};
+export function renderJobAttachments(): void { renderAttachmentPanel(JM_ATTACHMENT_PANEL_CONFIG); }
+export function handleJobAttachmentUpload(e: Event): void { handleAttachmentPanelUpload(e, JM_ATTACHMENT_PANEL_CONFIG); }
+export function removeJobAttachment(id: number): void { removeAttachmentPanelItem(id, JM_ATTACHMENT_PANEL_CONFIG); }
