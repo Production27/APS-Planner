@@ -2,10 +2,8 @@ const { test, expect } = require('@playwright/test');
 const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 
 // Job Manager's list rendering, archive/restore, duplicateJob, and the
-// delete-job flow — moved from index.html to src/views/job-list.ts in
-// Phase 8 of the extraction plan. None of this had any test coverage
-// before, and delete is irreversible, so per the plan these are written
-// before/alongside the extraction rather than after.
+// delete-job flow (src/views/job-list.ts). Delete is irreversible, so
+// this is covered thoroughly below.
 
 test('renderJobList: search filters by name, and hides archived jobs from the main list', async ({ page }) => {
   await seedSession(page, { role: 'admin' });

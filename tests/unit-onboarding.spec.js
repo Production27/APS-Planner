@@ -4,14 +4,11 @@ const { test, expect } = require('@playwright/test');
 
 const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).toString();
 
-// Direct unit tests for the new-user tutorial/coachmark system extracted
-// to src/app/onboarding.ts. Written alongside the move (not before it,
-// per the extraction plan) since this cluster has zero shared-state
-// writes and nothing else in the app depends on it — the lowest-risk
-// phase of the whole plan. getStoredUsername() is real now (src/auth/
-// session.ts) — these tests seed localStorage's real backing key
-// directly rather than stubbing the function, same fix applied to the
-// Phase 2 test breakage this same session.
+// Direct unit tests for the new-user tutorial/coachmark system
+// (src/app/onboarding.ts). getStoredUsername() is a real import from
+// src/auth/session.ts, so these tests seed localStorage's real backing
+// key directly rather than stubbing the function — reassigning
+// window.getStoredUsername wouldn't redirect what onboarding.ts calls.
 
 test('tutorialStateKey: keyed per-username, falls back to "anon" with nothing stored', async ({ page }) => {
   await page.goto(FIXTURE_URL);

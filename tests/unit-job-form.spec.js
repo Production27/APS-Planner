@@ -1,13 +1,10 @@
 const { test, expect } = require('@playwright/test');
 const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 
-// Job Manager's phase/sub-phase editing, autosave, and linked-job UI —
-// moved from index.html to src/views/job-form.ts in Phase 9 of the
-// extraction plan, the highest-scrutiny phase: two real, already-fixed
-// production bugs live in this code (documented in code comments), and
-// the linked-job UI had zero test coverage before this. These tests lock
-// in today's exact behavior; the autosave regression pin below was
-// verified via break-then-restore before this phase's code moved.
+// Job Manager's phase/sub-phase editing, autosave, and linked-job UI
+// (src/views/job-form.ts). Two real, already-fixed production bugs live
+// in this code (documented in its own comments) — the autosave
+// regression pin below locks in the fix for one of them.
 
 test('REGRESSION PIN: an unphased job\'s task dates actually save via autosave (the historical targetPhase bug)', async ({ page }) => {
   await seedSession(page, { role: 'admin' });

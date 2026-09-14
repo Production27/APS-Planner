@@ -140,12 +140,6 @@ export async function runRestore(env: Env, backupKey: string): Promise<{ restore
   return { restoredFrom: backupKey };
 }
 
-// The four route handlers below were previously inlined directly in the
-// router's fetch() body rather than wrapped in named functions like every
-// other route — pulled out here as a pure mechanical extract-function (no
-// logic change) so index.ts can eventually be a uniform one-line-per-route
-// dispatcher, same as every other route.
-
 export async function handleTriggerBackup(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   let body: { token?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }

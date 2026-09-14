@@ -4,9 +4,8 @@ const { test, expect } = require('@playwright/test');
 
 const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).toString();
 
-// Direct unit tests for the checklist core primitives extracted to
-// src/views/checklist.ts's Phase CL-a (against the REAL built bundle,
-// same approach as tests/unit-presence.spec.js).
+// Direct unit tests for the checklist core primitives (src/views/checklist.ts)
+// — against the REAL built bundle, same approach as tests/unit-presence.spec.js.
 
 test('ensureCardChecklists: migrates a legacy flat card.checklist into card.checklists keyed by the card\'s current column', async ({ page }) => {
   await page.goto(FIXTURE_URL);

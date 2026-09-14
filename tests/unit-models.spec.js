@@ -5,11 +5,9 @@ const { test, expect } = require('@playwright/test');
 const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).toString();
 
 // Direct read-back tests for the job/task/phase/card lookup layer
-// extracted to src/core/models.ts in Phase 3 of the architecture
-// roadmap — against the REAL built bundle (see tests/unit-utils.spec.js
-// for the same approach applied to Phase 2's utilities). `jobs`/
-// `boardCards` are seeded directly here since these functions read them
-// as ambient globals (unchanged call-site contract — see models.ts's own
+// (src/core/models.ts) — against the REAL built bundle (same approach as
+// tests/unit-utils.spec.js). `jobs`/`boardCards` are seeded directly here
+// since these functions read them as ambient globals (see models.ts's own
 // comment on why), exactly the way index.html's own loadActiveProjectData()
 // populates them at boot.
 

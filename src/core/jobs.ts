@@ -111,13 +111,10 @@ export function ensureJobTasksMatchColumns(job: Job): void {
 // whose tasks contain a matching id, so a shared id makes every later
 // unit's interaction with that task silently resolve to the earlier one
 // instead — dragging phase 2's bar visibly moving phase 1's, with no
-// error anywhere. Confirmed on real production data; the most likely
-// origin is a stale snapshot merging back in during one of this session's
-// now-fixed sync gaps, before a job actually had phases to worry about
-// colliding across. Runs on every load (this function already does, via
-// loadActiveProjectData()) so it self-heals without needing a one-off
-// migration script — keeps each duplicate's own dates/notes/etc, just
-// hands it a fresh id.
+// error anywhere. Confirmed on real production data. Runs on every load
+// (this function already does, via loadActiveProjectData()) so it
+// self-heals without needing a one-off migration script — keeps each
+// duplicate's own dates/notes/etc, just hands it a fresh id.
 export function dedupeTaskIdsAcrossPhases(job: Job): void {
   const seen = new Set<string>();
   job.phases!.forEach(function (phase) {

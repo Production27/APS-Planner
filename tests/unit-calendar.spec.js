@@ -5,9 +5,8 @@ const { test, expect } = require('@playwright/test');
 const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).toString();
 
 // Direct unit tests for the calendar-event recurrence/visibility layer
-// extracted to src/views/calendar.ts in Phase 5 of the architecture
-// roadmap — against the REAL built bundle (same approach as
-// tests/unit-utils.spec.js and tests/unit-models.spec.js).
+// (src/views/calendar.ts) — against the REAL built bundle (same approach
+// as tests/unit-utils.spec.js and tests/unit-models.spec.js).
 
 test('getCalendarEventOccurrences: a non-repeating event yields exactly one occurrence', async ({ page }) => {
   await page.goto(FIXTURE_URL);

@@ -1,13 +1,12 @@
 const { test, expect } = require('@playwright/test');
 const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 
-// Job Manager's own comments/replies drawer UI (#jobCommentsPanel) — moved
-// from index.html to src/views/job-comments.ts in Phase 7 of the
-// extraction plan. postJobComment()/postJobReply()'s underlying logic was
-// already indirectly exercised via Home's Job Chat widget tests
-// (teamsync.spec.js), but the Job Manager drawer's own surface — opening
+// Job Manager's own comments/replies drawer UI (#jobCommentsPanel,
+// src/views/job-comments.ts). postJobComment()/postJobReply()'s underlying
+// logic is also indirectly exercised via Home's Job Chat widget tests
+// (teamsync.spec.js); this file covers the drawer's own surface — opening
 // a job, the comment/reply panel, delete buttons, the important flag/
-// badge, and the collapse toggle — had no direct coverage before.
+// badge, and the collapse toggle.
 
 test('Job Manager drawer: posting a comment via the real UI renders it and updates the collapsed tab badge', async ({ page }) => {
   await seedSession(page, { role: 'admin' });

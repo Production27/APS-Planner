@@ -4,9 +4,9 @@ const { test, expect } = require('@playwright/test');
 
 const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).toString();
 
-// Direct unit tests for the Home dashboard's widget DATA BUILDERS,
-// extracted to src/views/home.ts's Phase HD-c — against the REAL built
-// bundle (same approach as tests/unit-calendar.spec.js). These are pure
+// Direct unit tests for the Home dashboard's widget DATA BUILDERS
+// (src/views/home.ts) — against the REAL built bundle (same approach as
+// tests/unit-calendar.spec.js). These are pure
 // functions (jobs/boardCards in, row arrays out), so isJobVisibleToMe()/
 // isFinishedColumnId() (still ambient — real implementations stay in
 // index.html) are stubbed directly in each test rather than needing the

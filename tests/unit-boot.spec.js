@@ -1,12 +1,9 @@
 const { test, expect } = require('@playwright/test');
 const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 
-// Boot glue — init()/boot(), mergeTombstones(), and the global Escape-key/
-// click-outside handlers — moved from index.html to src/app/boot.ts in
-// Phase 11, the last phase of the extraction plan. None of these had
-// direct test coverage before (every existing test just relies on boot()
-// having already run, without exercising the Escape/click-outside
-// handlers or mergeTombstones() themselves).
+// Boot glue (src/app/boot.ts) — init()/boot(), mergeTombstones(), and the
+// global Escape-key/click-outside handlers. No other test exercises these
+// directly; everything else just relies on boot() having already run.
 
 test('mergeTombstones: keeps entries from both sides, and drops any older than the TTL', async ({ page }) => {
   await seedSession(page, { role: 'admin' });

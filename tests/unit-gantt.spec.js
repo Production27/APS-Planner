@@ -4,12 +4,10 @@ const { test, expect } = require('@playwright/test');
 
 const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).toString();
 
-// Direct unit tests for the Gantt visible-row builder extracted to
-// src/views/gantt.ts in Phase 6b of the architecture roadmap — against
-// the REAL built bundle (same approach as tests/unit-utils.spec.js and
-// tests/unit-models.spec.js). buildVisibleTaskRows() is pure data
-// transformation (no DOM reads/writes), which is exactly why it was
-// picked as Gantt's second slice after the already-tested drag mechanics.
+// Direct unit tests for the Gantt visible-row builder (src/views/gantt.ts)
+// — against the REAL built bundle (same approach as
+// tests/unit-utils.spec.js and tests/unit-models.spec.js).
+// buildVisibleTaskRows() is pure data transformation (no DOM reads/writes).
 //
 // This fixture has no real index.html app state, so every ambient global
 // buildVisibleTaskRows() calls that normally lives in index.html

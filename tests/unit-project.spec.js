@@ -1,16 +1,14 @@
 const { test, expect } = require('@playwright/test');
 const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 
-// Project management — switchProject() (the single highest-blast-radius
-// function in the app, per the extraction plan: it touches every already-
-// extracted view's own close/flush logic on every switch, for every
-// user), applyPermissionGating(), toggleProject(), and autoArchiveJobs() —
-// moved from index.html to src/app/project.ts in the second slice of
-// Phase 10. The cross-project restriction path already had one test
-// (teamsync.spec.js); these cover what didn't: the happy-path switch
-// itself (including that a pending edit on the OLD project actually
-// flushes before the switch, not after), the fail-closed guard, and the
-// permission-gating sweep.
+// Project management (src/app/project.ts) — switchProject() (the single
+// highest-blast-radius function in the app: it touches every view's own
+// close/flush logic on every switch, for every user), applyPermissionGating(),
+// toggleProject(), and autoArchiveJobs(). The cross-project restriction
+// path already had one test (teamsync.spec.js); these cover what didn't:
+// the happy-path switch itself (including that a pending edit on the OLD
+// project actually flushes before the switch, not after), the fail-closed
+// guard, and the permission-gating sweep.
 
 test('switchProject: switches active project data, and flushes a pending edit on the OLD project before switching away from it', async ({ page }) => {
   await seedSession(page, { role: 'admin' });

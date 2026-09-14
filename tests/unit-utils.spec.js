@@ -4,11 +4,10 @@ const { test, expect } = require('@playwright/test');
 
 const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).toString();
 
-// Direct unit tests for the pure utilities extracted to src/utils/ in
-// Phase 2 of the architecture roadmap — loaded against the REAL built
-// bundle (tests/unit-fixture.html), not a reimplementation, so these
-// exercise exactly what index.html itself ships. Run `npm run build`
-// first if dist/app.bundle.js doesn't exist yet.
+// Direct unit tests for the pure utilities in src/utils/ — loaded against
+// the REAL built bundle (tests/unit-fixture.html), not a reimplementation,
+// so these exercise exactly what index.html itself ships. Run
+// `npm run build` first if dist/app.bundle.js doesn't exist yet.
 
 test('genId: produces a non-empty string, different each call', async ({ page }) => {
   await page.goto(FIXTURE_URL);

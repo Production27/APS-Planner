@@ -140,11 +140,10 @@ test('model layer read-back: a job created through the real UI comes back from f
   await page.locator('#f_job').fill(jobName);
   await page.evaluate(() => flushAutoSaveJobForm());
 
-  // findJob() is the bundled Phase 3 extraction (src/core/models.ts) —
-  // this confirms the moved function still resolves a job that was just
-  // created through the real save path, with the shape everything else
-  // in the app expects back from it (job.id === the id it was found by,
-  // idx pointing at its real position in the jobs array).
+  // findJob() (src/core/models.ts) — this confirms it resolves a job that
+  // was just created through the real save path, with the shape everything
+  // else in the app expects back from it (job.id === the id it was found
+  // by, idx pointing at its real position in the jobs array).
   const result = await page.evaluate((name) => {
     const idx = jobs.findIndex((j) => j.name === name);
     const job = jobs[idx];
@@ -188,9 +187,8 @@ test('isBusyEditing(): an open modal (e.g. the card detail modal) also counts as
   await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
 
   // The Fix 3 test above covers the Board/Gantt/Calendar drag-state
-  // branch of isBusyEditing() — this covers the separate open-modal
-  // branch, which wasn't exercised by any existing test before this
-  // move (src/sync/connection.ts, Phase 7b).
+  // branch of isBusyEditing() (src/sync/connection.ts) — this covers the
+  // separate open-modal branch.
   const result = await page.evaluate(() => {
     const before = isBusyEditing();
     const modal = document.getElementById('cardModal');
@@ -684,9 +682,9 @@ test('gantt bar drag (real mouse events): dragging a bar body moves its dates, e
   await page.goto(APP_URL);
   await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
   await page.evaluate(() => switchTabMorphed('gantt'));
-  // switchTabMorphed() finishes its morph transition asynchronously (see
-  // its own note in the calendar Phase 5d work) — the panel isn't
-  // reliably laid out with real pixel dimensions until it settles, which
+  // switchTabMorphed() finishes its morph transition asynchronously —
+  // the panel isn't reliably laid out with real pixel dimensions until
+  // it settles, which
   // this test's real page.mouse coordinates depend on (unlike the other
   // Gantt tests here, which drive handlers directly and never need real
   // on-screen positions). getActiveTab() flips before the CSS morph
@@ -753,9 +751,9 @@ test('regression: hovering two different Gantt date headers shows each one\'s ow
   await page.waitForFunction(() => getActiveTab() === 'gantt');
   await page.waitForTimeout(1500);
 
-  // Real bug found while porting buildDateHeader() to src/views/gantt.ts
-  // (Phase 6c): the loop's `current` Date is one object mutated in place
-  // across every iteration, so every day-header's click/mouseenter
+  // Real bug in buildDateHeader() (src/views/gantt.ts): the loop's
+  // `current` Date is one object mutated in place across every
+  // iteration, so every day-header's click/mouseenter
   // closure captured the SAME object — by the time a user actually
   // hovered one, `current` already held the loop's final date, so every
   // header showed the same (wrong, last-in-range) popover date. Fixed by
@@ -1760,9 +1758,8 @@ test('switchTabMorphed: clicking the tab you\'re already on navigates to Home in
 
   // switchTabMorphed() is asynchronous (it runs the real switch inside a
   // View Transitions API callback) — getActiveTab() read in the same
-  // synchronous tick still reports the OLD tab (a known characteristic
-  // documented back in Phase 5d of the original architecture roadmap).
-  // Each step here is its own evaluate() + waitForFunction() instead of
+  // synchronous tick still reports the OLD tab. Each step here is its
+  // own evaluate() + waitForFunction() instead of
   // one combined evaluate(), so the transition genuinely settles between
   // the two switchTabMorphed() calls.
   await page.evaluate(() => switchTabMorphed('gantt'));

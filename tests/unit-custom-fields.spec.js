@@ -3,12 +3,8 @@ const { APP_URL, WORKER_ORIGIN, seedSession, mockRoomWebSocket } = require('./he
 
 // Custom fields (renderFieldDefHtml/renderCustomFieldsGrid/renderTeamFieldsGrid/
 // collectCustomFieldValues) and attachments (renderAttachmentPanel and
-// friends) — moved from index.html to src/views/board.ts in Phase 6 of the
-// extraction plan, resolving the Board-modal/Job-Manager shared-infra
-// tangle. This generic rendering/upload machinery had no direct test
-// coverage before (only the card modal's due-date/title fields were
-// tested) despite Job Manager's own mirrored grids and attachment panel
-// depending on the exact same functions.
+// friends) — shared rendering/upload machinery in src/views/board.ts, also
+// used by Job Manager's own mirrored grids and attachment panel.
 
 test('renderCustomFieldsGrid: renders a select field\'s real options and a multiselect field from the team roster', async ({ page }) => {
   await seedSession(page, { role: 'admin' });

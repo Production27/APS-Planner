@@ -1,14 +1,12 @@
 const { test, expect } = require('@playwright/test');
 const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 
-// The job/phase data model and auto-derive-column logic — moved from
-// index.html to src/core/jobs.ts in Phase 10 of the extraction plan.
+// The job/phase data model and auto-derive-column logic (src/core/jobs.ts).
 // deriveColumnForTasks() and dedupeTaskIdsAcrossPhases() each carry a
 // documented, already-fixed past production bug in their own code
 // comments (a manual-drag-loses-to-active-today priority bug, and a
-// task-id-collision-across-phases bug) — neither had direct test
-// coverage before this phase, only indirect mentions in other tests'
-// comments.
+// task-id-collision-across-phases bug) — both are pinned as regression
+// tests below.
 
 test('REGRESSION PIN: deriveColumnForTasks priority order — scheduleDisconnected beats everything, then the manual override beats "active today"', async ({ page }) => {
   await seedSession(page, { role: 'admin' });

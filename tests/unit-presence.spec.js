@@ -4,9 +4,8 @@ const { test, expect } = require('@playwright/test');
 
 const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).toString();
 
-// Direct unit tests for the presence-avatar rendering extracted to
-// src/sync/presence.ts in Phase 7a of the architecture roadmap — against
-// the REAL built bundle (same approach as tests/unit-utils.spec.js).
+// Direct unit tests for the presence-avatar rendering (src/sync/presence.ts)
+// — against the REAL built bundle (same approach as tests/unit-utils.spec.js).
 // renderPresenceAvatars() only touches one specific element
 // (#presenceAvatars), which this blank fixture doesn't have — created
 // directly in each test rather than adding app markup the fixture would

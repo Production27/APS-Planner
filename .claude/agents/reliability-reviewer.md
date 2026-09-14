@@ -7,8 +7,6 @@ model: sonnet
 
 You review reliability in TeamSync: a frontend split between `index.html` (markup/styling plus a small amount of genuinely-cross-script `var` boot glue — most actual logic lives in `src/`, see `src/views/`, `src/app/`, `src/auth/`, `src/sync/`, `src/core/`, `src/utils/`) and a Cloudflare Durable Object backend split across `worker/src/*.ts` modules (entry point `worker/src/index.ts`). There's a real Playwright suite (`tests/`) and `node:test` unit tests for the worker (`worker/src/*.test.mjs`), but no linter. The app has two user-facing error-surfacing channels: `showToast(...)` for discrete action failures, and `setSyncIndicator(...)` for ongoing sync-health status — plus some deliberately-silent fire-and-forget paths (documented, e.g. periodic version checks, presence heartbeats).
 
-If `SESSION_HANDOFF.md` exists in the repo root, read it first — it's a session-to-session continuity file (not always present; it's gitignored, not committed) that may document already-fixed timing/race bugs with root causes. Don't re-report anything it already documents as fixed; look instead for the *next* instance of the same underlying failure class elsewhere in the codebase, since a bug pattern that occurred once tends to recur.
-
 Focus areas:
 
 1. **Error-surfacing consistency**: for each `fetch(` call site (mostly in `src/app/*.ts` and `src/auth/*.ts` — grep the whole tree, not just one file), determine which channel (if any) surfaces a failure to the user, and whether the choice makes sense (e.g. a user-initiated save failing silently would be a real problem; a background heartbeat failing silently is fine). Flag any catch block that swallows an error with no user feedback AND no comment explaining why it's safe to.
