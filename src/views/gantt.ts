@@ -1221,9 +1221,24 @@ function renderLeftPanelRows(visibleRows: GanttRow[], grid: HTMLElement, gridWid
     // same truncation-survives-because-it's-first treatment as phaseName
     // alone got, just one level deeper.
     const phaseLabel = subPhaseName ? (subPhaseName + (phaseName ? ' (' + phaseName + ')' : '')) : phaseName;
+    const rowKey = ganttRowKey(job.id, task.id, phaseId, subPhaseId);
     {
       const bg = document.createElement('div');
       bg.className = 'row-bg';
+      // '::flat' — this row's OWN plain `rowKey` (shared with the timeline
+      // bar/border/etc. in renderTimelineBars()) sits GANTT_BAR_PAD lower
+      // than this element's flat, unpadded top (the bar is a shorter pill
+      // vertically centered within the row; this spans the row's full
+      // height) — a REAL, always-present ~7px difference, not something
+      // this reorder animation caused. animateReorderedBars() stores one
+      // old-position number per key, so two elements sharing a row but
+      // sitting at genuinely different heights need genuinely different
+      // keys, or whichever gets captured second silently clobbers the
+      // first's stored position — corrupting THAT element's delta (this
+      // is exactly what broke the very first version of this suffix
+      // scheme: the padded bar's own animation started from the flat
+      // row's position instead of its own).
+      bg.dataset.rowKey = rowKey + '::flat';
       bg.style.top = (visibleRowIdx * GANTT_ROW_H) + 'px';
       bg.style.width = gridWidth + 'px';
       grid.appendChild(bg);
@@ -1237,6 +1252,10 @@ function renderLeftPanelRows(visibleRows: GanttRow[], grid: HTMLElement, gridWid
       row.className = 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '') + (job.isLinkedReference ? ' linked-ref' : '');
       row.dataset.jobId = job.id;
       row.dataset.taskId = task.id;
+      // Same flat (unpadded) alignment as `bg` just above — see its own
+      // comment on why this needs its own suffixed key rather than the
+      // plain `rowKey` the timeline side uses.
+      row.dataset.rowKey = rowKey + '::flat';
       // Jobs view: the job-name pill already says everything there is to
       // say for a condensed row, so it's the only label — no redundant
       // plain-text repeat of the same name next to it. Leads view swaps
@@ -1376,6 +1395,15 @@ function drawTodayLine(grid: HTMLElement, today: Date, totalDays: number): void 
 // this is the one phase whose real output isn't a return value.
 // buildRowModel() creates it, this function fills it, and
 // drawConnectorLines() below reads the same object afterward.
+//
+// Shared with renderLeftPanelRows() below — both build their own separate
+// DOM for the exact same logical row (one in #timelineGrid, one in
+// #leftBody), so animateReorderedBars() needs the identical key from both
+// sides to recognize them as the same row and move them together.
+function ganttRowKey(jobId: string, taskId: string | undefined, phaseId: string | null | undefined, subPhaseId: string | null | undefined): string {
+  return jobId + '::' + (taskId || '') + '::' + (phaseId || '') + '::' + (subPhaseId || '');
+}
+
 function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMap: Record<string, JobBarMapEntry[]>): void {
   let barVisibleIdx = 0;
   visibleRows.forEach(function (entry) {
@@ -1396,18 +1424,18 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
       // grid.innerHTML reset) so animateReorderedBars() can tell "this is
       // the same row, just moved" from "this is a different row that
       // happens to land at the same top" — see its own comment for why
-      // that distinction matters. Applied to EVERY element this row draws
-      // at this top, not just `bar` itself — a job-span row's actual
-      // VISIBLE content (the border outline, the job-name label, the due
-      // marker, the day-by-day segments below) are all separate elements
-      // layered over `bar`, which is left transparent and only exists as a
-      // fallback drag/click target (see its own comment). Tagging just
-      // `bar` meant only that invisible element animated on reorder while
-      // everything actually visible snapped instantly, then its own subtle
-      // border trailed in afterward — read as "the bar snaps, then the
-      // animation follows" (Karl's own description) rather than the bar
-      // itself visibly moving.
-      const rowKey = job.id + '::' + (task.id || '') + '::' + (phaseId || '') + '::' + (subPhaseId || '');
+      // that distinction matters. Applied to EVERY element this row draws,
+      // not just `bar` itself — a job-span row's actual VISIBLE content
+      // (the border outline, the job-name label, the due marker, the
+      // day-by-day segments below) are all separate elements layered over
+      // `bar`, which is left transparent and only exists as a fallback
+      // drag/click target (see its own comment) — AND renderLeftPanelRows()
+      // builds its own separate .task-row for this exact same row in the
+      // sidebar, which needs the identical key (see ganttRowKey()) so it
+      // animates in step too, instead of snapping while the timeline side
+      // glides (Karl's own report: "phases moving independently of the
+      // individual job bars").
+      const rowKey = ganttRowKey(job.id, task.id, phaseId, subPhaseId);
       const bar = document.createElement('div');
       bar.className = 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '') + (task.isDueMarker ? ' due-marker-bar' : '');
       bar.dataset.dragged = 'false';
@@ -1569,7 +1597,10 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             const dueLine = document.createElement('div');
             dueLine.className = 'job-span-due-line';
             dueLine.dataset.jobId = job.id;
-            dueLine.dataset.rowKey = rowKey;
+            // Its own vertically-CENTERED offset (row-half, not
+            // GANTT_BAR_PAD) — needs its own suffixed key for the same
+            // reason `bg`/`row` do (see their own comment).
+            dueLine.dataset.rowKey = rowKey + '::centerline';
             dueLine.style.left = lineLeft + 'px';
             dueLine.style.width = lineWidth + 'px';
             dueLine.style.top = (barVisibleIdx * GANTT_ROW_H + Math.round(GANTT_ROW_H / 2) - 1) + 'px';
@@ -1973,11 +2004,24 @@ function restoreScrollPosition(savedScrollTop: number, savedScrollLeft: number):
 // current on-screen position, transform included, so a render that
 // interrupts an in-flight one still computes a real, correct delta and
 // continues the motion smoothly instead of snapping.
+// #timelineGrid (the bars) and #leftBody (renderLeftPanelRows()'s own
+// separate .task-row/.row-bg for the exact same rows, in a completely
+// different container) both need every row-keyed element gathered
+// together — otherwise the sidebar just snaps while the timeline glides,
+// which is exactly what read as "phases moving independently of the
+// individual job bars" (Karl's own report).
+function allRowKeyedElements(): HTMLElement[] {
+  const grid = document.getElementById('timelineGrid');
+  const leftBody = document.getElementById('leftBody');
+  const out: HTMLElement[] = [];
+  if (grid) grid.querySelectorAll<HTMLElement>('[data-row-key]').forEach(function (el) { out.push(el); });
+  if (leftBody) leftBody.querySelectorAll<HTMLElement>('[data-row-key]').forEach(function (el) { out.push(el); });
+  return out;
+}
+
 function captureBarTopsByRowKey(): Record<string, number> {
   const tops: Record<string, number> = {};
-  const grid = document.getElementById('timelineGrid');
-  if (!grid) return tops;
-  grid.querySelectorAll<HTMLElement>('[data-row-key]').forEach(function (el) {
+  allRowKeyedElements().forEach(function (el) {
     const key = el.dataset.rowKey as string;
     tops[key] = el.getBoundingClientRect().top;
   });
@@ -1997,17 +2041,16 @@ function captureBarTopsByRowKey(): Record<string, number> {
 function animateReorderedBars(oldTops: Record<string, number>): void {
   if (!Object.keys(oldTops).length) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const grid = document.getElementById('timelineGrid');
-  if (!grid) return;
 
   // Pass 1 — READ ONLY. A row can draw many elements sharing one row key
   // (every day-segment/tick in a job-span row, easily a dozen-plus for a
   // month-long sub-unit — see rowKey's own comment), and a cascaded drag
   // (cascadeShiftLaterTasks()) can reorder several DIFFERENT rows in the
   // same render on top of that. Collect every element that actually needs
-  // to animate here, without writing anything yet.
+  // to animate here (across both #timelineGrid and #leftBody — see
+  // allRowKeyedElements()'s own comment), without writing anything yet.
   const toAnimate: { el: HTMLElement; delta: number }[] = [];
-  grid.querySelectorAll<HTMLElement>('[data-row-key]').forEach(function (el) {
+  allRowKeyedElements().forEach(function (el) {
     const key = el.dataset.rowKey as string;
     const oldTop = oldTops[key];
     if (oldTop === undefined) return;
@@ -2043,8 +2086,11 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
   // has to be explicitly cleared afterward too, not just overridden by a
   // class, since an inline style always wins over a class's CSS rule
   // regardless of specificity), just amortized across every element here
-  // instead of paid once per element.
-  void grid.offsetHeight;
+  // instead of paid once per element. Reading it off body rather than a
+  // specific container — the elements being animated now span two
+  // separate containers (#timelineGrid and #leftBody, see
+  // allRowKeyedElements()) — flushes layout for the whole page either way.
+  void document.body.offsetHeight;
 
   // Pass 3 — WRITE ONLY. Clears each element's transition override (letting
   // .gantt-bar-reorder's own CSS transition apply) and marks it animating.
