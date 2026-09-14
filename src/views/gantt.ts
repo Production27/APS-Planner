@@ -1986,6 +1986,8 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
     // measurement (same coordinate space, viewport-relative).
     const newTop = el.getBoundingClientRect().top;
     const delta = oldTop - newTop;
+    // TEMPORARY DEBUG — remove once diagnosed.
+    console.log('[gantt-debug] animateReorderedBars t=' + Math.round(performance.now()) + ' key=' + key + ' oldTop=' + Math.round(oldTop) + ' newTop=' + Math.round(newTop) + ' delta=' + Math.round(delta) + ' alreadyAnimating=' + el.classList.contains('gantt-bar-reorder'));
     if (Math.abs(delta) < 1) return;
     el.style.transition = 'none';
     el.style.transform = 'translateY(' + delta + 'px)';
@@ -2015,6 +2017,8 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
 
 function renderGantt(): void {
   syncGanttJobFocusBanner();
+  // TEMPORARY DEBUG — remove once diagnosed.
+  console.log('[gantt-debug] renderGantt() called at t=' + Math.round(performance.now()));
 
   const oldBarTops = captureBarTopsByRowKey();
 

@@ -46,6 +46,8 @@ function handleRoomMessage(msg: any): void {
   if (msg.type === 'snapshot') {
     const isFirst = !roomEverConnected;
     roomEverConnected = true;
+    // TEMPORARY DEBUG — remove once diagnosed.
+    console.log('[gantt-debug] snapshot message received at t=' + Math.round(performance.now()) + ' isFirst=' + isFirst);
     applyRoomSnapshot(msg.projects || {}, isFirst);
     return;
   }
