@@ -70,8 +70,15 @@ export class ApsRoom {
       if (!imported || typeof imported !== 'object' || typeof imported.projects !== 'object') {
         return new Response(JSON.stringify({ error: 'expected { projects: {...} }' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
+      const previousState = this.roomState;
       this.roomState = imported;
-      await this.persist();
+      try {
+        await this.persist();
+      } catch (e) {
+        this.roomState = previousState;
+        console.error('Failed to persist imported room state:', e);
+        return new Response(JSON.stringify({ error: 'Failed to save imported state' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+      }
       this.broadcastSnapshot();
       return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     }
@@ -255,12 +262,31 @@ export class ApsRoom {
       ws.send(JSON.stringify(Object.assign({ type: 'snapshot' }, filterRoomStateForAttachment(this.roomState as RoomState, attachment))));
       return;
     }
-    if (result.ack) ws.send(JSON.stringify(result.ack));
-
     if (result.changed) {
+      // Persist BEFORE acking: the client's pendingWrites/
+      // armStuckWriteWatch() (src/sync/outbound.ts) treats an ack as "the
+      // server has safely stored this" and clears its own retry tracking
+      // the moment one arrives. Acking first and persisting after made
+      // that promise false — a persist() failure between the two left the
+      // client believing a write succeeded that was never actually
+      // durable. this.roomState is rolled back on failure so this DO's
+      // own in-memory state doesn't drift from what's actually on disk,
+      // and the client gets an error (not silence) so its own retry path
+      // — the actual safety net — has something to act on.
+      const previousState = this.roomState;
       this.roomState = result.state;
-      await this.persist();
+      try {
+        await this.persist();
+      } catch (e) {
+        this.roomState = previousState;
+        console.error('Failed to persist room state:', e);
+        ws.send(JSON.stringify({ type: 'error', msgId: msg.msgId, message: 'Failed to save — please retry' }));
+        return;
+      }
+      if (result.ack) ws.send(JSON.stringify(result.ack));
       this.broadcastSnapshot();
+    } else if (result.ack) {
+      ws.send(JSON.stringify(result.ack));
     }
   }
 

@@ -32,7 +32,20 @@
   ],
   "kv_namespaces": [
     { "binding": "USERS_KV", "id": "1bfbded278d54b2ea1789fe4d8cceb2f" }
-  ]
+  ],
+
+  // Runs scheduled() in index.ts (which calls runBackup() — the CURRENT,
+  // Durable-Object-backed backup, not to be confused with the old
+  // Liveblocks-era "lucky-snow-8179" Worker that held this exact cron
+  // schedule until 2026-09-14 and had been silently backing up a stale,
+  // pre-migration data source into the same R2 bucket/prefix the whole
+  // time. That schedule is now cleared; this is the only automated
+  // backup trigger for this app going forward. Same 6-hour cadence the
+  // old one used, so retention/frequency stays continuous through the
+  // switchover.
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  }
 
   // ROOM_TOKEN_SECRET is a Worker secret (set via `wrangler secret put`
   // or the dashboard's "Encrypt" toggle) — it is NOT declared here on

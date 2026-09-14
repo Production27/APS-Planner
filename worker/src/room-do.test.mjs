@@ -10,13 +10,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ApsRoom } from './room-do.ts';
 
-function makeFakeState(wsList = []) {
+function makeFakeState(wsList = [], opts = {}) {
   const store = new Map();
   let getCalls = 0;
   return {
     storage: {
       async get(key) { getCalls++; return store.get(key); },
-      async put(key, val) { store.set(key, val); }
+      async put(key, val) {
+        if (opts.putFails) throw new Error('simulated storage.put failure');
+        store.set(key, val);
+      }
     },
     getWebSockets() { return wsList; },
     _store: store,
@@ -129,6 +132,42 @@ test('a valid, authorized write persists to storage and broadcasts a scoped snap
   assert.ok(observerSnapshot.projects.p1.jobs['job-1']);
 });
 
+// ── webSocketMessage: a failed persist must not ack (the ack-before-
+// persist bug — the client treats an ack as "durably saved" and clears
+// its own retry tracking the moment one arrives) ──
+
+test('webSocketMessage sends an error, not an ack, when storage.put() fails, and rolls back in-memory state', async () => {
+  const writerWs = makeFakeWs({ username: 'e', role: 'editor', assignedProjectId: null });
+  const state = makeFakeState([writerWs], { putFails: true });
+  const room = new ApsRoom(state, {});
+  room.roomState = { projects: {} };
+  const previousState = room.roomState;
+
+  await room.webSocketMessage(writerWs, JSON.stringify({
+    type: 'upsertJob', projectId: 'p1', job: { id: 'job-1', updatedAt: 1 }, msgId: 7
+  }));
+
+  assert.equal(writerWs._sent.find(m => m.type === 'ack'), undefined, 'must not ack a write that was never durably saved');
+  const errorMsg = writerWs._sent.find(m => m.type === 'error');
+  assert.ok(errorMsg, 'the client should be told the save failed so its own retry logic can act');
+  assert.equal(errorMsg.msgId, 7);
+  assert.equal(room.roomState, previousState, 'in-memory roomState must roll back to match what is actually on disk');
+});
+
+test('webSocketMessage acks only after persist() actually succeeds', async () => {
+  const writerWs = makeFakeWs({ username: 'e', role: 'editor', assignedProjectId: null });
+  const state = makeFakeState([writerWs]);
+  const room = new ApsRoom(state, {});
+
+  await room.webSocketMessage(writerWs, JSON.stringify({
+    type: 'upsertJob', projectId: 'p1', job: { id: 'job-1', updatedAt: 1 }, msgId: 8
+  }));
+
+  const ack = writerWs._sent.find(m => m.type === 'ack');
+  assert.ok(ack, 'a successful, durably-persisted write should still be acked');
+  assert.ok(state._store.get('room').projects.p1.jobs['job-1'], 'the write must actually be in storage by the time the ack is sent');
+});
+
 // ── fetch(): /internal/kick-user ──
 
 test('fetch /internal/kick-user closes only the sockets matching the target username', async () => {
@@ -162,6 +201,20 @@ test('fetch /internal/export then /internal/import round-trips the room state', 
   const importBody = await importRes.json();
   assert.equal(importBody.success, true);
   assert.deepEqual(room.roomState, { projects: { p2: { name: 'Imported' } } });
+});
+
+test('fetch /internal/import returns 500 and rolls back roomState when storage.put() fails', async () => {
+  const state = makeFakeState([], { putFails: true });
+  const room = new ApsRoom(state, {});
+  room.roomState = { projects: { p1: { name: 'Original' } } };
+  const previousState = room.roomState;
+
+  const res = await room.fetch(new Request('https://internal/internal/import', {
+    method: 'POST', body: JSON.stringify({ projects: { p2: { name: 'Imported' } } })
+  }));
+
+  assert.equal(res.status, 500);
+  assert.equal(room.roomState, previousState, 'a failed restore must not leave the in-memory state pointing at data that was never saved');
 });
 
 test('fetch /internal/import rejects a body that is not { projects: {...} }', async () => {
