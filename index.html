@@ -26,6 +26,15 @@
        same literal at 20+/7+ sites respectively (a mechanical audit
        finding, not new colors) before being promoted to tokens here. */
     --primary-tint: #eef1fa; --danger-tint: #ffebee;
+    /* Each of these is one exact value reused verbatim at 2-5 call
+       sites (another mechanical-audit finding) — named here with zero
+       visual change. Deliberately NOT merged into fewer, closer-together
+       shades (e.g. --divider/--divider-strong ARE visually very close)
+       — that's a real design judgment call about acceptable subtle
+       color shifts across a dozen+ elements, not a mechanical rename. */
+    --table-header-bg: #f8f9fa; --table-header-border: #dee2e6;
+    --row-alt-bg: #fafafa; --btn-gradient-end: #f4f5f8;
+    --kanban-column-bg: #eceef4; --divider: #f0f0f0; --divider-strong: #e9ecef;
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
     --shadow-hover: 0 4px 20px rgba(0,0,0,0.15);
     --radius: 10px;
@@ -216,7 +225,7 @@
      icon-only redesign). Each button keeps its own title="" for
      identification via native tooltip, same as any icon-rail sidebar (VS
      Code's activity bar, Slack's app rail, etc). */
-  .rail-tab-row { display: flex; align-items: center; gap: var(--s-1); padding: var(--s-2); border-bottom: 1px solid var(--border); background: #fafafa; }
+  .rail-tab-row { display: flex; align-items: center; gap: var(--s-1); padding: var(--s-2); border-bottom: 1px solid var(--border); background: var(--row-alt-bg); }
   /* Outline Ring (Option F — Karl's pick after trying Option D live,
      same "which switch design" evaluation the pressed-button mockup
      went through). Quietest of the set on purpose: no background or
@@ -363,7 +372,7 @@
      separate "‹ Prev"/"Next ›" text buttons. */
   .cal-nav-group {
     display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
-    background: linear-gradient(180deg, #ffffff 0%, #f4f5f8 100%);
+    background: linear-gradient(180deg, #ffffff 0%, var(--btn-gradient-end) 100%);
     box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 2px rgba(0,0,0,0.04);
   }
   .cal-nav-btn {
@@ -517,22 +526,22 @@
      slack) so the task rows below line up with the bar rows next to
      them instead of starting 10px lower. */
   .left-header {
-    display: flex; background: #f8f9fa; border-bottom: 2px solid #dee2e6;
+    display: flex; background: var(--table-header-bg); border-bottom: 2px solid var(--table-header-border);
     font-weight: 700; font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.6px;
     color: #495057; height: 58px; flex-shrink: 0;
   }
-  .left-header .col { padding: var(--s-2) var(--s-2-5); display: flex; align-items: center; border-right: 1px solid #e9ecef; }
+  .left-header .col { padding: var(--s-2) var(--s-2-5); display: flex; align-items: center; border-right: 1px solid var(--divider-strong); }
   .left-header .col-start { width: 88px; } .left-header .col-finish { width: 88px; } .left-header .col-jobs { flex: 1; border-right: none; }
   .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
   /* 40px — kept in sync with GANTT_ROW_H (see its declaration near
      "let dayWidth"), which drives the matching right-panel bar rows. */
-  .task-row { display: flex; height: 40px; border-bottom: 1px solid #f0f0f0; font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
+  .task-row { display: flex; height: 40px; border-bottom: 1px solid var(--divider); font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
   .task-row:hover { background: #e3f2fd; }
-  .task-row:nth-child(even) { background: #fafafa; }
+  .task-row:nth-child(even) { background: var(--row-alt-bg); }
   .task-row:nth-child(even):hover { background: #e3f2fd; }
-  .task-row .col { padding: 0 var(--s-2-5); border-right: 1px solid #f0f0f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
+  .task-row .col { padding: 0 var(--s-2-5); border-right: 1px solid var(--divider); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
   .task-row .col-start { width: 88px; color: var(--text-light); font-size: var(--t-xs); }
   .task-row .col-finish { width: 88px; color: var(--text-light); font-size: var(--t-xs); }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
@@ -555,7 +564,7 @@
 
   /* ===== TIMELINE HEADER (scrolls with body) ===== */
   .timeline-header-wrap {
-    height: 58px; background: #f8f9fa; border-bottom: 2px solid #dee2e6;
+    height: 58px; background: var(--table-header-bg); border-bottom: 2px solid var(--table-header-border);
     overflow: hidden;
     flex-shrink: 0; position: relative;
   }
@@ -577,23 +586,23 @@
     border-right: 1px solid var(--border); display: flex;
     align-items: center; justify-content: center;
     font-size: var(--t-2xs); font-weight: 700; color: var(--primary-light);
-    background: #f8f9fa; text-align: center; padding: var(--s-0-5);
+    background: var(--table-header-bg); text-align: center; padding: var(--s-0-5);
     cursor: pointer; transition: background 0.2s;
     user-select: none;
   }
   .timeline-header .week-header:hover { background: #e8eaf6; }
   .timeline-header .day-header {
     position: absolute; top: 24px; height: 34px;
-    border-right: 1px solid #e9ecef; display: flex;
+    border-right: 1px solid var(--divider-strong); display: flex;
     flex-direction: column; align-items: center; justify-content: center;
-    font-size: var(--t-2xs); color: var(--text-light); background: #f8f9fa;
+    font-size: var(--t-2xs); color: var(--text-light); background: var(--table-header-bg);
     cursor: pointer; transition: background 0.2s, color 0.2s;
     user-select: none;
   }
   .timeline-header .day-header:hover { background: #e3f2fd; color: var(--primary); }
   .timeline-header .day-header .day-num { font-weight: 700; font-size: var(--t-xs); }
   .timeline-header .day-header .day-name { font-size: var(--t-3xs); color: var(--text-faint); text-transform: uppercase; }
-  .timeline-header .day-header.weekend { background: #f0f0f0; color: #aaa; }
+  .timeline-header .day-header.weekend { background: var(--divider); color: #aaa; }
   .timeline-header .day-header.weekend:hover { background: var(--border); }
   .timeline-header .day-header.today-header {
     background: var(--danger-tint) !important; color: var(--accent) !important;
@@ -615,7 +624,7 @@
   .timeline-grid { position: relative; min-height: 100%; }
   .grid-line {
     position: absolute; top: 0; bottom: 0; width: 1px;
-    background: #f0f0f0; pointer-events: none;
+    background: var(--divider); pointer-events: none;
   }
   .grid-line.weekend-line { background: var(--border); }
   .grid-line.today-line-bg {
@@ -853,7 +862,7 @@
   }
 
   .row-bg { position: absolute; left: 0; right: 0; height: 40px; border-bottom: 1px solid #f5f5f5; }
-  .row-bg:nth-child(even) { background: #fafafa; }
+  .row-bg:nth-child(even) { background: var(--row-alt-bg); }
   /* Sits in .gantt-top-row next to .gantt-view-toggle-row, sharing that
      row's background/border rather than carrying its own — see the
      comment on .gantt-top-row. justify-content pushes the buttons to the
@@ -966,7 +975,7 @@
   @media (min-width: 1101px) {
     body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
   }
-  .manager-sidebar-header { padding: var(--s-3-5) var(--s-4); border-bottom: 1px solid var(--border); background: #fafafa; transition: padding 0.15s ease; }
+  .manager-sidebar-header { padding: var(--s-3-5) var(--s-4); border-bottom: 1px solid var(--border); background: var(--row-alt-bg); transition: padding 0.15s ease; }
   .manager-sidebar-header h2 { font-size: var(--t-md); font-weight: 700; color: var(--text); margin-bottom: var(--s-2-5); display: flex; align-items: center; gap: var(--s-2); transition: margin 0.15s ease, justify-content 0.15s ease; }
   /* The toggle IS the Jobs icon, not a separate button elsewhere — click
      it closed to open the rail, click it open to close it again (see
@@ -1279,7 +1288,7 @@
   .btn-primary { background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: white; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); }
   .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 3px 6px rgba(26,35,126,0.3), 0 8px 18px rgba(26,35,126,0.35); }
   .btn-primary:active { box-shadow: 0 -1px 0 rgba(255,255,255,0.12) inset, 0 2px 4px rgba(0,0,0,0.2) inset, 0 1px 3px rgba(26,35,126,0.35); }
-  .btn-secondary { background: linear-gradient(180deg, #ffffff 0%, #f4f5f8 100%); color: var(--text); border: 1px solid var(--border); box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 2px rgba(0,0,0,0.04), 0 2px 5px rgba(0,0,0,0.06); }
+  .btn-secondary { background: linear-gradient(180deg, #ffffff 0%, var(--btn-gradient-end) 100%); color: var(--text); border: 1px solid var(--border); box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 2px rgba(0,0,0,0.04), 0 2px 5px rgba(0,0,0,0.06); }
   .btn-secondary:hover { background: linear-gradient(180deg, #ffffff 0%, #eef0f4 100%); border-color: #c8ccd6; box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 3px 8px rgba(0,0,0,0.1); transform: translateY(-1px); }
   .btn-secondary:active { background: #eceef2; box-shadow: 0 1px 3px rgba(0,0,0,0.1) inset; }
   .btn-success { background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%); color: white; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(46,125,50,0.25), 0 4px 10px rgba(46,125,50,0.25); }
@@ -1335,7 +1344,7 @@
   /* one per real gap between adjacent groups, above the bracket line */
   .wf-flow-arrow { position: absolute; top: 4px; transform: translateX(-50%); color: var(--text-light); opacity: 0.7; display: flex; pointer-events: none; }
   .board-wrapper::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
-  .board-column { width: 245px; min-width: 245px; background: #eceef4; border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; box-shadow: 0 6px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.04); transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
+  .board-column { width: 245px; min-width: 245px; background: var(--kanban-column-bg); border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; box-shadow: 0 6px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.04); transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
   .board-column.dragging-col { opacity: 0.35; transform: scale(0.98); cursor: grabbing; }
   .board-column.drag-over-col { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08); border-color: var(--primary-light); }
   .board-column-header { display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) var(--s-3-5) var(--s-2); font-size: var(--t-base); font-weight: 700; color: var(--text); flex-shrink: 0; cursor: grab; user-select: none; }
@@ -1352,7 +1361,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .board-add-column-btn:hover { border-color: var(--primary-light); background: rgba(57,73,171,0.15); color: var(--primary-ondark); }
   .board-add-column-form {
     display: none;
-    background: #eceef4;
+    background: var(--kanban-column-bg);
     border-radius: var(--radius);
     padding: var(--s-2-5);
     width: 270px;
@@ -1551,7 +1560,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      that there's no per-group header to hang it off of. */
   .my-checklist-add-bar {
     display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap;
-    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
     padding: var(--s-2-5) var(--s-3); margin-bottom: var(--s-4);
   }
   .my-checklist-add-bar select, .my-checklist-add-bar input[type="text"] {
@@ -1729,7 +1738,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      ignores dark mode entirely. */
   .job-chat-compose {
     display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap;
-    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
     padding: var(--s-2-5) var(--s-3); margin-bottom: var(--s-3-5);
   }
   .job-chat-compose select, .job-chat-compose input[type="text"] {
@@ -2048,7 +2057,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
   /* Attachments */
   .attachment-item { display: flex; align-items: center; gap: var(--s-2-5); padding: var(--s-2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: var(--s-2); }
-  .attachment-item .att-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #f0f0f0; }
+  .attachment-item .att-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: var(--divider); }
   .attachment-item .att-icon { width: 40px; height: 40px; border-radius: 6px; background: var(--primary-tint); display: flex; align-items: center; justify-content: center; font-size: var(--t-xl); flex-shrink: 0; }
   .attachment-item .att-info { flex: 1; min-width: 0; }
   .attachment-item .att-name { font-size: var(--t-sm); font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
@@ -2187,7 +2196,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .cal-event-bar.linked-ref { filter: saturate(0.55); border: 1px dashed rgba(0,0,0,0.3); cursor: pointer; }
 
   /* ===== TOOLTIP ===== */
-  .tooltip { position: fixed; background: rgba(33,33,33,0.95); color: white; padding: var(--s-3) var(--s-4); border-radius: 10px; font-size: var(--t-sm); z-index: 1000; pointer-events: none; opacity: 0; transition: opacity 0.15s; box-shadow: 0 6px 20px rgba(0,0,0,0.3); max-width: 320px; line-height: 1.6; }
+  .tooltip { position: fixed; background: rgba(33,33,33,0.95); color: white; padding: var(--s-3) var(--s-4); border-radius: var(--radius); font-size: var(--t-sm); z-index: 1000; pointer-events: none; opacity: 0; transition: opacity 0.15s; box-shadow: 0 6px 20px rgba(0,0,0,0.3); max-width: 320px; line-height: 1.6; }
   .tooltip.show { opacity: 1; }
   .tooltip .tt-title { font-weight: 700; margin-bottom: var(--s-1-5); font-size: var(--t-base); }
   .tooltip .tt-row { display: flex; gap: var(--s-2-5); margin-bottom: var(--s-0-5); }
@@ -2255,7 +2264,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
   .onb-cm-dim { position: fixed; inset: 0; z-index: 5000; opacity: 0; pointer-events: none; transition: opacity .2s ease; }
   .onb-cm-dim.show { opacity: 1; pointer-events: auto; }
-  .onb-cm-hole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1), width .28s cubic-bezier(.22,.61,.36,1), height .28s cubic-bezier(.22,.61,.36,1); pointer-events: none; }
+  .onb-cm-hole { position: fixed; border-radius: var(--radius); box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1), width .28s cubic-bezier(.22,.61,.36,1), height .28s cubic-bezier(.22,.61,.36,1); pointer-events: none; }
   .onb-cm-ring { position: absolute; inset: -4px; border-radius: 12px; border: 2px solid #fff; box-shadow: 0 0 0 3px rgba(57,73,171,0.55); pointer-events: none; }
   .onb-cm-card { position: fixed; width: 250px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: var(--s-3-5) var(--s-4) var(--s-3); transition: top .28s cubic-bezier(.22,.61,.36,1), left .28s cubic-bezier(.22,.61,.36,1); }
   .onb-cm-step-label { font-size: var(--t-2xs); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--primary-light); margin-bottom: var(--s-1); }
@@ -2386,7 +2395,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     display: flex; align-items: center; justify-content: space-between;
     padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--border);
     font-size: var(--t-base); font-weight: 700; color: var(--text); flex-shrink: 0;
-    background: #fafafa;
+    background: var(--row-alt-bg);
   }
   .activity-sidebar-close {
     background: none; border: none; color: #aaa; font-size: var(--t-md); cursor: pointer;
@@ -2862,7 +2871,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   body.dark-mode .left-header { color: var(--text-light); }
   /* .week-header's own base rule (further up) colors its label text
-     var(--primary-light) — fine against its light-mode #f8f9fa
+     var(--primary-light) — fine against its light-mode var(--table-header-bg)
      background, unreadable against the dark #1a1d25 it gets right above
      in dark mode, and never had its own override until now. */
   body.dark-mode .timeline-header .week-header { color: var(--primary-ondark); }
@@ -3101,16 +3110,16 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        except Jobs, so anything nested inside it — the dropdown included,
        when it used to live there — was unreachable from any other
        mobile view). -->
-  <button class="mobile-view-btn settings-menu-wrap" onclick="toggleSettingsMenu()" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg></button>
-  <button class="mobile-view-btn active" data-view="jobs" title="Jobs" onclick="setMobileView('jobs')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
+  <button class="mobile-view-btn settings-menu-wrap" onclick="toggleSettingsMenu()" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg></button>
+  <button class="mobile-view-btn active" data-view="jobs" title="Jobs" aria-label="Jobs" onclick="setMobileView('jobs')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
   <!-- No Home button here either (see setMobileView()'s own comment) —
        same "turn off the tab you're in" gesture as desktop: tapping
        whichever view is already active switches to Home instead of
        re-selecting it. -->
-  <button class="mobile-view-btn" data-view="checklist" title="Checklist" onclick="setMobileView('checklist')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-  <button class="mobile-view-btn" data-view="calendar" title="Calendar" onclick="setMobileView('calendar')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></button>
-  <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" onclick="setMobileView('gantt')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></button>
-  <button class="mobile-view-btn" data-view="board" title="Board" onclick="setMobileView('board')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></button>
+  <button class="mobile-view-btn" data-view="checklist" title="Checklist" aria-label="Checklist" onclick="setMobileView('checklist')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="mobile-view-btn" data-view="calendar" title="Calendar" aria-label="Calendar" onclick="setMobileView('calendar')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></button>
+  <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" aria-label="Gantt Chart" onclick="setMobileView('gantt')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></button>
+  <button class="mobile-view-btn" data-view="board" title="Board" aria-label="Board" onclick="setMobileView('board')"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></button>
 </div>
 
 <!-- Shared by both the desktop rail-tab-row's settings trigger and the
@@ -3213,7 +3222,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
          toggleJobRail(). Independent of which tab is active, same as
          before. -->
     <div class="manager-sidebar-header">
-      <h2><button class="job-rail-toggle-icon" onclick="toggleJobRail()" id="jobRailToggleBtn" title="Show Jobs list"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 5l7 7-7 7" stroke="#3949ab" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button class="job-rail-add-btn" data-min-tier="projectAdmin" onclick="addNewJob()" title="Add a new job">+</button><div class="presence-avatars" id="presenceAvatars"></div></h2>
+      <h2><button class="job-rail-toggle-icon" onclick="toggleJobRail()" id="jobRailToggleBtn" title="Show Jobs list" aria-label="Show Jobs list"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 5l7 7-7 7" stroke="#3949ab" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button class="job-rail-add-btn" data-min-tier="projectAdmin" onclick="addNewJob()" title="Add a new job" aria-label="Add a new job">+</button><div class="presence-avatars" id="presenceAvatars"></div></h2>
       <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
     </div>
     <!-- Clips .job-list's fixed 260px width down when the rail is
@@ -3353,11 +3362,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
                  Mobile zooms by pinch instead (see the GANTT PINCH-TO-ZOOM
                  JS block); these stay for mouse/keyboard-only desktop use
                  where there's no pinch gesture available at all. -->
-            <button class="gantt-zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
-            <button class="gantt-zoom-btn" onclick="zoomOut()" title="Zoom out">−</button>
-            <button class="gantt-zoom-btn" onclick="resetZoom()" title="Reset zoom">⟲</button>
-            <button onclick="fitToView()" title="Fit to view">⤢</button>
-            <button onclick="scrollToToday()" title="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
+            <button class="gantt-zoom-btn" onclick="zoomIn()" title="Zoom in" aria-label="Zoom in">+</button>
+            <button class="gantt-zoom-btn" onclick="zoomOut()" title="Zoom out" aria-label="Zoom out">−</button>
+            <button class="gantt-zoom-btn" onclick="resetZoom()" title="Reset zoom" aria-label="Reset zoom">⟲</button>
+            <button onclick="fitToView()" title="Fit to view" aria-label="Fit to view">⤢</button>
+            <button onclick="scrollToToday()" title="Jump to today" aria-label="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
           </div>
         </div>
         <div class="gantt-panels-row">
@@ -3392,7 +3401,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         <div class="form-container" id="jobForm" style="display:none;">
           <div class="form-title-row">
             <h3 id="formTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Job</h3>
-            <button class="duplicate-job-btn" id="duplicateJobBtn" data-min-tier="projectAdmin" onclick="duplicateJob(editingJobId, event)" title="Duplicate job" style="display:none;"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>
+            <button class="duplicate-job-btn" id="duplicateJobBtn" data-min-tier="projectAdmin" onclick="duplicateJob(editingJobId, event)" title="Duplicate job" aria-label="Duplicate job" style="display:none;"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>
           </div>
           <div class="job-current-board-indicator" id="jobCurrentBoardIndicator" style="display:none;"></div>
           <div class="form-group mobile-collapsible">
@@ -3488,13 +3497,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
                .mobile-collapsible/toggleMobileField above, which is the
                phone-width accordion for this and the other job-drawer
                sections; this one defaults collapsed on desktop instead. -->
-          <button class="job-comments-tab" id="jobCommentsTab" onclick="toggleJobCommentsPanel()" title="Show comments">
+          <button class="job-comments-tab" id="jobCommentsTab" onclick="toggleJobCommentsPanel()" title="Show comments" aria-label="Show comments">
             <svg viewBox="0 0 24 24" width="17" height="17" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg>
             <span class="job-comments-tab-count" id="jobCommentsTabCount">0</span>
             <span class="job-comments-tab-important-dot" id="jobCommentsTabImportantDot" title="Contains an important comment"></span>
           </button>
           <h4 onclick="toggleMobileField(this)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> Comments
-            <button class="job-comments-collapse-btn" onclick="event.stopPropagation(); toggleJobCommentsPanel();" title="Collapse">›</button>
+            <button class="job-comments-collapse-btn" onclick="event.stopPropagation(); toggleJobCommentsPanel();" title="Collapse" aria-label="Collapse comments panel">›</button>
           </h4>
           <div class="mobile-field-body">
             <div class="job-comments-list" id="jobCommentsList"></div>
@@ -3523,7 +3532,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   <div class="activity-sidebar collapsed" id="activitySidebar">
     <div class="activity-sidebar-header">
       <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Activity Log</span>
-      <button class="activity-sidebar-close" onclick="toggleActivitySidebar()" title="Close"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <button class="activity-sidebar-close" onclick="toggleActivitySidebar()" title="Close" aria-label="Close activity log"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div class="activity-sidebar-body" id="activitySidebarBody">
       <div class="activity-log-empty">Open to see recent changes</div>

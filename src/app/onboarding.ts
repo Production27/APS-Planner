@@ -55,7 +55,7 @@ function ensureOnbNotifDom(): HTMLElement {
     '<div class="onb-notif-head">' +
       '<span class="onb-notif-icon"><svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L2 8l10 5 8-4.2V15h2V8L12 3z" fill="#3949ab"/><path d="M6 12.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-3.5l-6 3-6-3z" fill="#3949ab" opacity="0.55"/></svg></span>' +
       '<span class="onb-notif-title">New here? Take a quick tour</span>' +
-      '<button class="onb-notif-x" onclick="tutorialNotifLater()" title="Close">&times;</button>' +
+      '<button class="onb-notif-x" onclick="tutorialNotifLater()" title="Close" aria-label="Dismiss tour notification">&times;</button>' +
     '</div>' +
     '<div class="onb-notif-text">A quick overview, then a walkthrough of the buttons on this page — about a minute.</div>' +
     '<div class="onb-notif-actions">' +
