@@ -1911,9 +1911,20 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
   });
 }
 
+// Given a stable id and removed-then-recreated on every call (rather than
+// just appended) so redrawConnectorLinesLive() below can call this
+// repeatedly on a rAF loop while bars are still animating, without
+// stacking a fresh SVG on top of the last one every frame. The normal
+// (non-animating) render path already gets this for free from
+// setupDateRangeAndGrid()'s own grid.innerHTML wipe — this only matters
+// for redraws that happen BETWEEN full renders.
+const GANTT_CONNECTOR_SVG_ID = 'ganttConnectorSvg';
 function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarMapEntry[]>, grid: HTMLElement): void {
+  const existing = document.getElementById(GANTT_CONNECTOR_SVG_ID);
+  if (existing) existing.remove();
   const svgNs = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNs, 'svg');
+  svg.setAttribute('id', GANTT_CONNECTOR_SVG_ID);
   svg.setAttribute('style', 'position:absolute;top:0;left:0;width:' + gridWidth + 'px;height:100%;pointer-events:none;z-index:30;overflow:visible;');
   Object.values(jobBarMap).forEach(function (bars) {
     if (bars.length < 2) return;
@@ -1948,6 +1959,30 @@ function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarM
     }
   });
   grid.appendChild(svg);
+}
+
+// The line(s) connecting a multi-phase job's separate bars into one
+// visible "whole project" run (Karl's own description) are drawn ONCE per
+// render, from each bar's FINAL rest position — reasonable when nothing's
+// moving, but when a reorder animation is playing, those bars slide
+// smoothly while this connector just sat at its post-render position the
+// entire time, reading as the job's own bars fully snapping ahead of it/
+// behind it rather than the connector tracking them. jobBarMap's `top` is
+// a static number computed once at render time, but its `bar` field is a
+// live DOM reference — reading each bar's REAL current on-screen position
+// every frame (instead of the stale stored number) and redrawing through
+// the same drawConnectorLines() lets the connector track the actual
+// motion. Only top needs live-tracking: left/width are date-driven, never
+// touched by a row-reorder.
+function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number, grid: HTMLElement): void {
+  const gridTop = grid.getBoundingClientRect().top;
+  const liveMap: Record<string, JobBarMapEntry[]> = {};
+  Object.keys(jobBarMap).forEach(function (jobId) {
+    liveMap[jobId] = jobBarMap[jobId].map(function (entry) {
+      return { left: entry.left, width: entry.width, top: entry.bar.getBoundingClientRect().top - gridTop, bar: entry.bar, jobColor: entry.jobColor };
+    });
+  });
+  drawConnectorLines(gridWidth, liveMap, grid);
 }
 
 function restoreScrollPosition(savedScrollTop: number, savedScrollLeft: number): void {
@@ -2038,7 +2073,18 @@ function captureBarTopsByRowKey(): Record<string, number> {
 // no prior entry (brand new, or the very first render of this session,
 // when oldTops is empty) just appears at its final spot, unanimated, same
 // as before this existed.
-function animateReorderedBars(oldTops: Record<string, number>): void {
+// Single source of truth for how long a reorder move takes — read by both
+// the transition set on each element below AND redrawConnectorLinesLive()'s
+// own tracking loop, so the connector lines linking a multi-phase job's
+// separate bars ("the full project bar", per Karl's own description) keep
+// pace with the bars for exactly as long as they're actually moving,
+// instead of one hardcoded number living in CSS and a second one here that
+// could quietly drift apart. Slowed twice now on direct feedback that
+// shorter durations still read as too quick even once every piece was
+// moving in sync.
+const GANTT_REORDER_MS = 1800;
+
+function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number): void {
   if (!Object.keys(oldTops).length) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -2092,10 +2138,11 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
   // allRowKeyedElements()) — flushes layout for the whole page either way.
   void document.body.offsetHeight;
 
-  // Pass 3 — WRITE ONLY. Clears each element's transition override (letting
-  // .gantt-bar-reorder's own CSS transition apply) and marks it animating.
+  // Pass 3 — WRITE ONLY. Sets the real transition (duration sourced from
+  // GANTT_REORDER_MS above, not the .gantt-bar-reorder class — see its own
+  // comment) and marks each element animating.
   toAnimate.forEach(function (a) {
-    a.el.style.transition = '';
+    a.el.style.transition = 'transform ' + GANTT_REORDER_MS + 'ms ease-in-out, box-shadow 150ms ease, filter 150ms ease';
     a.el.classList.add('gantt-bar-reorder');
   });
 
@@ -2115,6 +2162,30 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
       el.style.transform = '';
     });
   });
+
+  // The line(s) connecting a multi-phase job's bars into one visible run
+  // are otherwise drawn once, from the bars' FINAL positions, and then
+  // just sit there for the whole GANTT_REORDER_MS while the bars they
+  // connect glide past underneath — read as the connector not moving in
+  // sync with its own job's phases (Karl's own report). Re-drawing it from
+  // each bar's REAL current position on every frame for exactly as long as
+  // the bars are actually moving keeps it visually attached to them
+  // throughout, not just before and after.
+  const grid = document.getElementById('timelineGrid');
+  if (grid) {
+    const start = performance.now();
+    (function trackConnectors() {
+      redrawConnectorLinesLive(jobBarMap, gridWidth, grid);
+      if (performance.now() - start < GANTT_REORDER_MS) {
+        requestAnimationFrame(trackConnectors);
+      } else {
+        // One final pass from the real, static (not live-measured) final
+        // positions — removes any last-frame sub-pixel drift from reading
+        // getBoundingClientRect() instead of the exact authored numbers.
+        drawConnectorLines(gridWidth, jobBarMap, grid);
+      }
+    })();
+  }
 }
 
 function renderGantt(): void {
@@ -2131,7 +2202,7 @@ function renderGantt(): void {
   drawConnectorLines(gridWidth, jobBarMap, grid);
   restoreScrollPosition(savedScrollTop, savedScrollLeft);
 
-  animateReorderedBars(oldBarTops);
+  animateReorderedBars(oldBarTops, jobBarMap, gridWidth);
 }
 
 function scrollToToday(): void {
