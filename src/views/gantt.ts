@@ -1931,14 +1931,32 @@ function restoreScrollPosition(savedScrollTop: number, savedScrollLeft: number):
 // "old" DOM element to read a position back off of once that's run, since
 // every bar is a brand-new document.createElement() on every render, not
 // an existing one being moved.
+//
+// Deliberately getBoundingClientRect().top, NOT el.style.top: a bar mid-
+// reorder-animation already has its FINAL row's `top` set (only its
+// `transform` is what's still animating away from it — see
+// animateReorderedBars()), so el.style.top reads as the destination, not
+// where it visually is right now. That distinction is exactly what broke
+// this the first time it shipped: this app's own sync layer broadcasts a
+// confirmation snapshot back to the very client that made a change (see
+// room-do.ts's broadcastSnapshot() — it doesn't exclude the sender), which
+// often lands well inside this animation's ~1s window and forces a second
+// render on top of the first. Reading el.style.top there would see
+// oldTop === newTop (both already the destination) and conclude nothing
+// moved, so the freshly rebuilt bar would just appear at rest with no
+// transform at all — silently truncating the animation after a fraction
+// of a second, which read as "it barely animated"/"nothing happened"
+// (Karl's own report). getBoundingClientRect() reflects the bar's TRUE
+// current on-screen position, transform included, so a render that
+// interrupts an in-flight one still computes a real, correct delta and
+// continues the motion smoothly instead of snapping.
 function captureBarTopsByRowKey(): Record<string, number> {
   const tops: Record<string, number> = {};
   const grid = document.getElementById('timelineGrid');
   if (!grid) return tops;
   grid.querySelectorAll<HTMLElement>('.task-bar[data-row-key]').forEach(function (el) {
     const key = el.dataset.rowKey as string;
-    const top = parseFloat(el.style.top);
-    if (!isNaN(top)) tops[key] = top;
+    tops[key] = el.getBoundingClientRect().top;
   });
   return tops;
 }
@@ -1962,9 +1980,13 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
     const key = el.dataset.rowKey as string;
     const oldTop = oldTops[key];
     if (oldTop === undefined) return;
-    const newTop = parseFloat(el.style.top);
+    // Freshly (re)created by the rebuild above, no transform applied yet
+    // — this is its real resting position, directly comparable to
+    // captureBarTopsByRowKey()'s own getBoundingClientRect()-based
+    // measurement (same coordinate space, viewport-relative).
+    const newTop = el.getBoundingClientRect().top;
     const delta = oldTop - newTop;
-    if (isNaN(delta) || Math.abs(delta) < 1) return;
+    if (Math.abs(delta) < 1) return;
     el.style.transition = 'none';
     el.style.transform = 'translateY(' + delta + 'px)';
     // Force the browser to commit that starting position before clearing
