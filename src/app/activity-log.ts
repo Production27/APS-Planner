@@ -6,6 +6,7 @@
 import { escapeHtml } from '../utils/html';
 import { hasMinTier } from '../auth/permissions';
 import { getActiveProject } from './project';
+import { applyHomeReflowTracks, renderHomeWorkflowMiniBoard } from '../views/home';
 
 export function toggleActivitySidebar(): void {
   const sidebar = document.getElementById('activitySidebar')!;
@@ -21,6 +22,30 @@ export function toggleActivitySidebar(): void {
   const isOpen = !sidebar.classList.contains('collapsed');
   btn.classList.toggle('active', isOpen);
   if (isOpen) renderActivityLogSidebar();
+
+  // This sidebar's own width transition resizes .panels-container (a flex
+  // sibling), which in turn resizes the Home dashboard's grid — but that
+  // grid's column widths are pinned to real pixel values (see
+  // applyHomeReflowTracks()) that don't self-adjust the way fr units
+  // would, and opening/closing this sidebar never fires a real `window`
+  // resize event to trigger the recompute a widget-expand click or an
+  // actual window resize would (Karl's report: the layout correctly
+  // shifts on open, once something else happens to re-render Home, but
+  // never shifts back on close). Re-measure once THIS transition settles,
+  // same "wait for transitionend, not the synchronous class toggle"
+  // pattern toggleHomeWidgetExpand() uses for its own layout-affecting
+  // transition — only while Home is actually the visible tab, since
+  // measuring a hidden #panel-home would read a zero width.
+  const homePanel = document.getElementById('panel-home');
+  if (homePanel && homePanel.classList.contains('active')) {
+    const onSettled = function (e: Event) {
+      if (e.target !== sidebar || (e as TransitionEvent).propertyName !== 'width') return;
+      sidebar.removeEventListener('transitionend', onSettled);
+      applyHomeReflowTracks();
+      renderHomeWorkflowMiniBoard();
+    };
+    sidebar.addEventListener('transitionend', onSettled);
+  }
 }
 
 export function timeAgo(ts: number): string {
