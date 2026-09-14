@@ -1391,16 +1391,27 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
     if (validDates && s && f) {
       const startIdx = getDaysDiff(startDate, s);
       const duration = getDaysDiff(s, f) + 1;
+      // Stable identity across a full rebuild (every render tears down and
+      // recreates every element here — see setupDateRangeAndGrid()'s
+      // grid.innerHTML reset) so animateReorderedBars() can tell "this is
+      // the same row, just moved" from "this is a different row that
+      // happens to land at the same top" — see its own comment for why
+      // that distinction matters. Applied to EVERY element this row draws
+      // at this top, not just `bar` itself — a job-span row's actual
+      // VISIBLE content (the border outline, the job-name label, the due
+      // marker, the day-by-day segments below) are all separate elements
+      // layered over `bar`, which is left transparent and only exists as a
+      // fallback drag/click target (see its own comment). Tagging just
+      // `bar` meant only that invisible element animated on reorder while
+      // everything actually visible snapped instantly, then its own subtle
+      // border trailed in afterward — read as "the bar snaps, then the
+      // animation follows" (Karl's own description) rather than the bar
+      // itself visibly moving.
+      const rowKey = job.id + '::' + (task.id || '') + '::' + (phaseId || '') + '::' + (subPhaseId || '');
       const bar = document.createElement('div');
       bar.className = 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '') + (task.isDueMarker ? ' due-marker-bar' : '');
       bar.dataset.dragged = 'false';
-      // Stable identity across a full rebuild (every render tears down and
-      // recreates every bar — see setupDateRangeAndGrid()'s grid.innerHTML
-      // reset) so animateReorderedBars() can tell "this is the same row,
-      // just moved" from "this is a different row that happens to land at
-      // the same top" — see its own comment for why that distinction
-      // matters.
-      bar.dataset.rowKey = job.id + '::' + (task.id || '') + '::' + (phaseId || '') + '::' + (subPhaseId || '');
+      bar.dataset.rowKey = rowKey;
       if (duration === 1) bar.classList.add('milestone');
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
@@ -1419,6 +1430,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
         labelWrap.dataset.jobId = job.id;
         labelWrap.dataset.phaseId = phaseId || '';
         labelWrap.dataset.subPhaseId = subPhaseId || '';
+        labelWrap.dataset.rowKey = rowKey;
         labelWrap.dataset.origLeft = String(startIdx * dayWidth);
         labelWrap.style.left = (startIdx * dayWidth) + 'px';
         labelWrap.style.width = (duration * dayWidth) + 'px';
@@ -1466,6 +1478,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
         borderOverlay.dataset.jobId = job.id;
         borderOverlay.dataset.phaseId = phaseId || '';
         borderOverlay.dataset.subPhaseId = subPhaseId || '';
+        borderOverlay.dataset.rowKey = rowKey;
         borderOverlay.dataset.origLeft = String(startIdx * dayWidth);
         borderOverlay.style.left = (startIdx * dayWidth) + 'px';
         borderOverlay.style.width = (duration * dayWidth) + 'px';
@@ -1507,6 +1520,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
           dueEl.className = 'job-span-due-marker';
           dueEl.dataset.jobId = job.id;
           dueEl.dataset.dragged = 'false';
+          dueEl.dataset.rowKey = rowKey;
           dueEl.style.left = dueLeft + 'px';
           dueEl.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
           dueEl.style.background = markerColor;
@@ -1555,6 +1569,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             const dueLine = document.createElement('div');
             dueLine.className = 'job-span-due-line';
             dueLine.dataset.jobId = job.id;
+            dueLine.dataset.rowKey = rowKey;
             dueLine.style.left = lineLeft + 'px';
             dueLine.style.width = lineWidth + 'px';
             dueLine.style.top = (barVisibleIdx * GANTT_ROW_H + Math.round(GANTT_ROW_H / 2) - 1) + 'px';
@@ -1715,6 +1730,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
           tick.dataset.phaseId = phaseId || '';
           tick.dataset.subPhaseId = isCollapsedRow ? ((dt.t.subPhaseId as string | undefined) || '') : (subPhaseId || '');
           tick.dataset.taskId = dt.t.id;
+          tick.dataset.rowKey = rowKey;
           tick.dataset.origLeft = String(tickLeft);
           tick.style.left = tickLeft + 'px';
           tick.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
@@ -1761,6 +1777,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             hash.dataset.jobId = job.id;
             hash.dataset.phaseId = phaseId || '';
             hash.dataset.subPhaseId = isCollapsedRow ? '' : (subPhaseId || '');
+            hash.dataset.rowKey = rowKey;
             hash.dataset.origLeft = String(segLeft);
             hash.style.left = segLeft + 'px';
             hash.style.width = segWidth + 'px';
@@ -1780,6 +1797,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             solid.dataset.phaseId = phaseId || '';
             solid.dataset.subPhaseId = isCollapsedRow ? ((dt.t.subPhaseId as string | undefined) || '') : (subPhaseId || '');
             solid.dataset.dragged = 'false';
+            solid.dataset.rowKey = rowKey;
             solid.dataset.origLeft = String(segLeft);
             solid.style.left = segLeft + 'px';
             solid.style.width = segWidth + 'px';
@@ -1816,6 +1834,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             hatch.dataset.jobId = job.id;
             hatch.dataset.phaseId = phaseId || '';
             hatch.dataset.subPhaseId = isCollapsedRow ? '' : (subPhaseId || '');
+            hatch.dataset.rowKey = rowKey;
             hatch.dataset.origLeft = String(segLeft);
             hatch.style.left = segLeft + 'px';
             hatch.style.width = segWidth + 'px';
@@ -1925,12 +1944,16 @@ function restoreScrollPosition(savedScrollTop: number, savedScrollLeft: number):
   });
 }
 
-// Captures each bar's current row position, keyed by the same stable
-// dataset.rowKey renderTimelineBars() writes on every bar, BEFORE
-// setupDateRangeAndGrid()'s grid.innerHTML reset wipes them — there's no
-// "old" DOM element to read a position back off of once that's run, since
-// every bar is a brand-new document.createElement() on every render, not
-// an existing one being moved.
+// Captures every row-tagged element's current position, keyed by the same
+// stable dataset.rowKey renderTimelineBars() writes on `bar` AND every
+// other element sharing its row (labelWrap/borderOverlay/dueEl/dueLine/
+// tick/hash/solid/hatch — see rowKey's own comment for why all of them
+// need this, not just `bar`), BEFORE setupDateRangeAndGrid()'s
+// grid.innerHTML reset wipes them — there's no "old" DOM element to read a
+// position back off of once that's run, since every one of them is a
+// brand-new document.createElement() on every render, not an existing one
+// being moved. Not scoped to any one class — any element carrying
+// data-row-key gets the same treatment uniformly.
 //
 // Deliberately getBoundingClientRect().top, NOT el.style.top: a bar mid-
 // reorder-animation already has its FINAL row's `top` set (only its
@@ -1954,7 +1977,7 @@ function captureBarTopsByRowKey(): Record<string, number> {
   const tops: Record<string, number> = {};
   const grid = document.getElementById('timelineGrid');
   if (!grid) return tops;
-  grid.querySelectorAll<HTMLElement>('.task-bar[data-row-key]').forEach(function (el) {
+  grid.querySelectorAll<HTMLElement>('[data-row-key]').forEach(function (el) {
     const key = el.dataset.rowKey as string;
     tops[key] = el.getBoundingClientRect().top;
   });
@@ -1976,7 +1999,7 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const grid = document.getElementById('timelineGrid');
   if (!grid) return;
-  grid.querySelectorAll<HTMLElement>('.task-bar[data-row-key]').forEach(function (el) {
+  grid.querySelectorAll<HTMLElement>('[data-row-key]').forEach(function (el) {
     const key = el.dataset.rowKey as string;
     const oldTop = oldTops[key];
     if (oldTop === undefined) return;
@@ -1986,8 +2009,6 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
     // measurement (same coordinate space, viewport-relative).
     const newTop = el.getBoundingClientRect().top;
     const delta = oldTop - newTop;
-    // TEMPORARY DEBUG — remove once diagnosed.
-    console.log('[gantt-debug] animateReorderedBars t=' + Math.round(performance.now()) + ' key=' + key + ' oldTop=' + Math.round(oldTop) + ' newTop=' + Math.round(newTop) + ' delta=' + Math.round(delta) + ' alreadyAnimating=' + el.classList.contains('gantt-bar-reorder'));
     if (Math.abs(delta) < 1) return;
     el.style.transition = 'none';
     el.style.transform = 'translateY(' + delta + 'px)';
@@ -2017,8 +2038,6 @@ function animateReorderedBars(oldTops: Record<string, number>): void {
 
 function renderGantt(): void {
   syncGanttJobFocusBanner();
-  // TEMPORARY DEBUG — remove once diagnosed.
-  console.log('[gantt-debug] renderGantt() called at t=' + Math.round(performance.now()));
 
   const oldBarTops = captureBarTopsByRowKey();
 
