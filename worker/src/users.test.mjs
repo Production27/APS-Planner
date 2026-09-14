@@ -42,7 +42,7 @@ test('hashPasswordPBKDF2: a different password produces a different hash', async
   assert.notEqual(hashA, hashB);
 });
 
-test('resolveIdentityFromToken resolves a valid token, wiring through to room-token.js correctly', async () => {
+test('resolveIdentityFromToken resolves a valid token, wiring through to room-token.ts correctly', async () => {
   const fakeEnv = { ROOM_TOKEN_SECRET: 'test-secret' };
   const token = await signRoomToken(fakeEnv.ROOM_TOKEN_SECRET, {
     username: 'alice', displayName: 'Alice', role: 'admin', assignedProjectId: null

@@ -1,4 +1,3 @@
-// --- USER MANAGEMENT HANDLERS (unchanged) ---
 import { jsonResponse } from './http.ts';
 import { VALID_TIERS } from './tiers.ts';
 import { getRoomStub } from './room-stub.ts';

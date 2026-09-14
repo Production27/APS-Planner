@@ -7,9 +7,7 @@
 
   // Matches the currently deployed script exactly (confirmed via the
   // Cloudflare API's /workers/scripts/aps-planner-staging/settings and
-  // /workers/durable_objects/namespaces before this file was written —
-  // see worker/README.md for the manual-paste deploy history this is
-  // adopting). Do not add a `vars` block without also setting
+  // /workers/durable_objects/namespaces). Do not add a `vars` block without also setting
   // `keep_vars: true` first — wrangler treats this file as the source of
   // truth and will delete any dashboard-set vars not listed here.
   "keep_vars": true,
@@ -36,10 +34,10 @@
     { "binding": "USERS_KV", "id": "1bfbded278d54b2ea1789fe4d8cceb2f" }
   ]
 
-  // ROOM_TOKEN_SECRET and TEAM_PASSWORD are Worker secrets (set via
-  // `wrangler secret put` or the dashboard's "Encrypt" toggle) — they are
-  // NOT declared here on purpose. Secrets live outside this config file's
-  // source-of-truth model and survive a `wrangler deploy` automatically;
-  // there is no field in wrangler.jsonc that would let us "declare but
-  // not set" one, so the correct move is to just leave them out.
+  // ROOM_TOKEN_SECRET is a Worker secret (set via `wrangler secret put`
+  // or the dashboard's "Encrypt" toggle) — it is NOT declared here on
+  // purpose. Secrets live outside this config file's source-of-truth
+  // model and survive a `wrangler deploy` automatically; there is no
+  // field in wrangler.jsonc that would let us "declare but not set" one,
+  // so the correct move is to just leave it out.
 }
