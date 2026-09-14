@@ -100,7 +100,20 @@ export function renderJobList(): void {
     // Clicking the job that's already open closes the drawer instead of
     // just re-loading it — a toggle, same as clicking an already-selected
     // item elsewhere in the app typically does.
-    card.onclick = () => { if (editingJobId === job.id) cancelEdit(); else editJob(job.id); };
+    const activate = () => { if (editingJobId === job.id) cancelEdit(); else editJob(job.id); };
+    card.onclick = activate;
+    // tabIndex/role/keydown: this is the primary way into Job Manager's
+    // edit view, so it needs to be reachable without a mouse the same way
+    // the copy/delete buttons nested inside it already are (real
+    // <button> elements, natively focusable). event.stopPropagation() on
+    // those buttons' own onclick already keeps a click on them from also
+    // triggering this handler; Enter/Space here mirrors that same intent
+    // for the keyboard path.
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+    };
     list.appendChild(card);
   });
 

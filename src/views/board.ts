@@ -1258,6 +1258,16 @@ function buildCardEl(card: BoardCard): HTMLElement {
   el.addEventListener('click', () => openEditCard(card.id));
   el.addEventListener('dragstart', handleCardDragStart);
   el.addEventListener('dragend', handleCardDragEnd);
+  // Opening the edit modal is the primary interaction and needs a
+  // keyboard path independent of the drag gesture (dragging itself stays
+  // mouse/touch-only — the mobile "Move to" <select> above is the
+  // existing keyboard-reachable way to change a card's column).
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-label', 'Open ' + (card.title || 'card'));
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditCard(card.id); }
+  });
   return el;
 }
 

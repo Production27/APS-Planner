@@ -1308,7 +1308,17 @@ function renderLeftPanelRows(visibleRows: GanttRow[], grid: HTMLElement, gridWid
       // for attention despite being the smaller of the two.
       const mainLabelHtml = mainLabel ? '<span class="task-row-name">' + mainLabel + '</span> ' : '';
       row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabelHtml + jobPill + phasePillHtml + subPillHtml + noteDot + '</div>';
-      row.addEventListener('click', () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); });
+      const openRow = () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); };
+      row.addEventListener('click', openRow);
+      // Opening a row is the primary keyboard-reachable action here — the
+      // nested pills' own click-to-toggle handlers below stay mouse-only,
+      // same scoping as the timeline bars further down (dragging/resizing
+      // a bar also stays mouse/touch-only).
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(); }
+      });
       if (isTasksMode) {
         const jobPillEl = row.querySelector('.task-row-jobname');
         if (jobPillEl) jobPillEl.addEventListener('click', function (e) { e.stopPropagation(); toggleGanttJobFocus(job.id); });
@@ -1506,16 +1516,24 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
           // startBarMove wiring either — dragging isn't offered for a
           // linked reference's bar, so its due marker shouldn't be
           // draggable on its own either.
+          let openDueEl: () => void;
           if (job.isLinkedReference) {
             dueEl.classList.add('linked-ref');
-            dueEl.addEventListener('click', function () { jumpToLinkedJobReference(job); });
+            openDueEl = () => jumpToLinkedJobReference(job);
+            dueEl.addEventListener('click', openDueEl);
           } else {
             dueEl.addEventListener('mousedown', function (e) { startBarMove(e, job.id, DUE_MARKER_TASK_ID, dueEl, false, phaseId); });
-            dueEl.addEventListener('click', function () {
+            openDueEl = () => {
               if (dueEl.dataset.dragged === 'true') { dueEl.dataset.dragged = 'false'; return; }
               editJob(job.id, phaseId);
-            });
+            };
+            dueEl.addEventListener('click', openDueEl);
           }
+          dueEl.tabIndex = 0;
+          dueEl.setAttribute('role', 'button');
+          dueEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDueEl(); }
+          });
           grid.appendChild(dueEl);
 
           let lineLeft: number | null = null, lineWidth = 0;
@@ -1575,9 +1593,18 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
       bar.addEventListener('mouseenter', e => showTooltip(e, job, task));
       bar.addEventListener('mouseleave', hideTooltip);
       bar.addEventListener('mousemove', moveTooltip);
-      bar.addEventListener('click', () => {
+      const openBar = () => {
         if (bar.dataset.dragged === 'true') { bar.dataset.dragged = 'false'; return; }
         if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId);
+      };
+      bar.addEventListener('click', openBar);
+      // Same open-via-keyboard treatment as the sidebar row above — the
+      // drag-to-reschedule/resize handles (mousedown-based, below) stay
+      // mouse/touch-only.
+      bar.tabIndex = 0;
+      bar.setAttribute('role', 'button');
+      bar.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBar(); }
       });
 
       // Read-only: a linked reference job's bar is never draggable/
@@ -1755,19 +1782,26 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             solid.addEventListener('mouseenter', function (e) { showTooltip(e, job, dt.t); });
             solid.addEventListener('mouseleave', hideTooltip);
             solid.addEventListener('mousemove', moveTooltip);
+            let openSolid: () => void;
             if (isCollapsedRow) {
               solid.addEventListener('mousedown', function (e) { startBarMove(e, job.id, dt.t.id!, solid, true, phaseId, dt.t.subPhaseId as string | null); });
-              solid.addEventListener('click', function () {
+              openSolid = function () {
                 if (solid.dataset.dragged === 'true') { solid.dataset.dragged = 'false'; return; }
                 editJob(job.id, phaseId, dt.t.subPhaseId as string | null);
-              });
+              };
             } else {
               solid.addEventListener('mousedown', function (e) { startBarMove(e, job.id, dt.t.id!, solid); });
-              solid.addEventListener('click', function () {
+              openSolid = function () {
                 if (solid.dataset.dragged === 'true') { solid.dataset.dragged = 'false'; return; }
                 editJob(job.id, phaseId, subPhaseId);
-              });
+              };
             }
+            solid.addEventListener('click', openSolid);
+            solid.tabIndex = 0;
+            solid.setAttribute('role', 'button');
+            solid.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSolid(); }
+            });
             grid.appendChild(solid);
           } else {
             const hatch = document.createElement('div');

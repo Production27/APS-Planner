@@ -1384,10 +1384,16 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   .board-card { background: var(--card); border-radius: var(--radius); padding: var(--s-2-5) var(--s-3); box-shadow: var(--shadow); cursor: grab; border-left: 4px solid var(--primary-light); transition: box-shadow 0.15s, transform 0.15s; }
   .board-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
-  /* Mobile-only "Move to" fallback for touch, where native HTML5 drag
-     doesn't work — see the @media (max-width:480px) rule that reveals
-     this and buildCardEl() for where it's built. */
-  .board-card-move-select { display: none; }
+  /* Mobile-only VISUALLY (see the @media (max-width:480px) rule that
+     keeps it always shown there, for touch — native HTML5 drag doesn't
+     work there) — see buildCardEl() for where it's built. On a wider
+     viewport it's a standard visually-hidden-until-focused control
+     instead of display:none, so keyboard users (for whom the drag
+     gesture that changes a card's column isn't operable at all) can Tab
+     to it as the same fallback mobile already had, without it being
+     visible to mouse users the rest of the time. */
+  .board-card-move-select { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .board-card-move-select:focus-visible { position: static; width: 100%; height: auto; margin: var(--s-2) 0 0; padding: var(--s-1-5) var(--s-2); overflow: visible; clip: auto; white-space: normal; border: 1px solid var(--border); border-radius: 6px; font-size: var(--t-sm); font-family: inherit; background: var(--card); color: var(--text); display: block; }
   .board-card.dragging { opacity: 0.4; }
   .board-card .board-card-title { font-size: var(--t-base); font-weight: 700; color: var(--text); margin-bottom: var(--s-1); word-break: break-word; }
   .board-card .board-card-meta { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-3); }

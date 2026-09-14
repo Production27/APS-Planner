@@ -711,7 +711,7 @@ function buildCalBarHtml(seg: CalSeg, left: number, top: number, width: number):
   }
   if (innerBlocksHtml) content = '<span class="cal-bar-content">' + content + '</span>';
 
-  return '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; ' + styleExtra + '" title="' +
+  return '<div class="' + classes.join(' ') + '" style="left:' + left + 'px; top:' + top + 'px; width:' + width + 'px; height:' + CAL_BAR_H + 'px; ' + styleExtra + '" tabindex="0" role="button" title="' +
     escapeHtml(task.name) + (isCalEvt || isJobSpan ? '' : ' — ' + escapeHtml(job.name) + (seg.phaseName ? ' — ' + escapeHtml(seg.phaseName) : '') + (seg.subPhaseName ? ' — ' + escapeHtml(seg.subPhaseName) : '')) + (job.isLinkedReference ? ' (linked, read-only — click to open in ' + escapeHtml(job.linkedFromProjectName || 'its project') + ')' : '') + '" data-cal-job-id="' + job.id + '" data-cal-task-id="' + task.id + '" data-cal-phase-id="' + (seg.phaseId || '') + '" data-cal-sub-phase-id="' + (seg.subPhaseId || '') + '" data-cal-linked="' + (job.isLinkedReference ? '1' : '') + '" data-cal-seg-start="' + seg.isTrueStart + '" data-cal-seg-end="' + seg.isTrueEnd + '" data-cal-task-start="' + (task.start || '') + '" data-cal-task-finish="' + (task.finish || '') + '">' +
     dragHandles + innerBlocksHtml + content + '</div>';
 }
@@ -823,6 +823,14 @@ function renderMonthCalendar(): void {
   const getCell = (row: number, col: number) => cellEls[row * 7 + col];
   cellEls.forEach(function (cell) {
     cell.addEventListener('click', function (e) { if ((e.target as Element).closest('.cal-day') === cell) openDayView(cell.dataset.date || ''); });
+    // Opening the day view is the primary keyboard-reachable action here
+    // — the event bars laid over these cells (built separately below) get
+    // their own tabIndex/keydown where they're created.
+    cell.tabIndex = 0;
+    cell.setAttribute('role', 'button');
+    cell.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDayView(cell.dataset.date || ''); }
+    });
   });
 
   let barsHtml = '';
@@ -912,6 +920,11 @@ function renderWeekCalendar(): void {
   const getCell = (col: number) => cellEls[col];
   cellEls.forEach(function (cell) {
     cell.addEventListener('click', function (e) { if ((e.target as Element).closest('.cal-day') === cell) openDayView(cell.dataset.date || ''); });
+    cell.tabIndex = 0;
+    cell.setAttribute('role', 'button');
+    cell.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDayView(cell.dataset.date || ''); }
+    });
   });
 
   // Build continuous segments across the week (like month view but 1 row)
@@ -1034,7 +1047,7 @@ function renderWeekHourGrid(cellDates: Date[], timedCalRows: { job: CalJob; task
       const laneWidthPct = 100 / laneCount;
       const leftPct = (it.lane || 0) * laneWidthPct;
       const timeLabel = formatTimeLabel(it.task.time);
-      eventsHtml += '<div class="week-timed-event" style="top:' + top + 'px; height:' + height + 'px; left:calc(' + leftPct + '% + 2px); width:calc(' + laneWidthPct + '% - 4px); background:' + (it.task.color || it.job.color || '#7e57c2') + ';" title="' + escapeHtml(it.task.name) + (timeLabel ? ' — ' + timeLabel : '') + '" data-cal-job-id="' + it.job.id + '" data-cal-task-id="' + it.task.id + '">' +
+      eventsHtml += '<div class="week-timed-event" style="top:' + top + 'px; height:' + height + 'px; left:calc(' + leftPct + '% + 2px); width:calc(' + laneWidthPct + '% - 4px); background:' + (it.task.color || it.job.color || '#7e57c2') + ';" tabindex="0" role="button" title="' + escapeHtml(it.task.name) + (timeLabel ? ' — ' + timeLabel : '') + '" data-cal-job-id="' + it.job.id + '" data-cal-task-id="' + it.task.id + '">' +
         (timeLabel ? '<span class="wte-time">' + escapeHtml(timeLabel) + '</span>' : '') +
         escapeHtml(it.task.name) + '</div>';
     });
@@ -1064,10 +1077,13 @@ function renderWeekHourGrid(cellDates: Date[], timedCalRows: { job: CalJob; task
     });
   });
   colsEl.querySelectorAll<HTMLElement>('.week-timed-event').forEach(function (el) {
-    el.addEventListener('click', function (e) {
-      e.stopPropagation();
+    const openEvent = function () {
       const parsed = parseCalendarEventTaskId(el.dataset.calTaskId || '');
       openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
+    };
+    el.addEventListener('click', function (e) { e.stopPropagation(); openEvent(); });
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openEvent(); }
     });
   });
 
@@ -1170,13 +1186,13 @@ function renderDayCalendarView(): void {
       // flattenCalendarEventsForRange()), so skip the redundant repeat.
       const sub = (item.task.name && item.task.name !== item.job.name)
         ? '<div class="day-view-item-sub">' + escapeHtml(item.task.name) + '</div>' : '';
-      return '<div class="day-view-item" data-day-idx="' + idx + '">' +
+      return '<div class="day-view-item" data-day-idx="' + idx + '" tabindex="0" role="button">' +
         '<span class="day-view-item-swatch" style="background:' + color + ';"></span>' +
         '<div class="day-view-item-text"><div class="day-view-item-title">' + escapeHtml(item.job.name) + '</div>' + sub + '</div>' +
       '</div>';
     }).join('');
     daysEl.querySelectorAll<HTMLElement>('.day-view-item').forEach(function (el) {
-      el.addEventListener('click', function () {
+      const openItem = function () {
         const item = items[parseInt(el.dataset.dayIdx || '', 10)];
         if (!item) return;
         if (item.task.isCalendarEvent) {
@@ -1185,6 +1201,10 @@ function renderDayCalendarView(): void {
         } else {
           calendarOpenJob(item.job.id, item.task.id, item.phaseId);
         }
+      };
+      el.addEventListener('click', openItem);
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openItem(); }
       });
     });
   }
@@ -1203,6 +1223,65 @@ function renderDayCalendarView(): void {
 // swipe/wheel navigation (initCalendarDragHandlers and friends) is later
 // in this file.
 
+interface CalBarTarget {
+  task: CalTask;
+  job: CalJob;
+  calEventId: string | null;
+  calEventSourceDate: string | null;
+  phaseId: string | null;
+  subPhaseId: string | null;
+}
+
+// Resolves a .cal-event-bar element's own dataset back to the job/task
+// (or standalone calendar event) it represents. Shared by
+// handleCalBarMouseDown below (which uses this to seed a potential drag)
+// and handleCalBarKeyDown further down (which uses it to open the exact
+// same edit target a click-without-drag would, since Enter/Space never
+// goes through a drag at all).
+function resolveCalBarTarget(bar: HTMLElement): CalBarTarget | null {
+  const jobId = bar.dataset.calJobId!;
+  const taskId = bar.dataset.calTaskId!;
+  let task: CalTask | undefined;
+  let job: CalJob | undefined;
+  let calEventId: string | null = null;
+  let calEventSourceDate: string | null = null;
+  let phaseId: string | null = bar.dataset.calPhaseId || null;
+  let subPhaseId: string | null = bar.dataset.calSubPhaseId || null;
+  if (taskId === DUE_MARKER_TASK_ID) {
+    const jf = findJob(jobId);
+    if (!jf) return null;
+    job = jf.job;
+    const dueTask = getJobDueMarkerTask(job, phaseId);
+    if (!dueTask) return null;
+    task = dueTask;
+  } else if (isCalendarEventTaskId(taskId)) {
+    const parsed = parseCalendarEventTaskId(taskId);
+    const evt = calendarEvents.find((e) => e.id === parsed.eventId);
+    if (!evt) return null;
+    const occ = getCalendarEventOccurrences(evt, null, null).find((o) => o.sourceDate === parsed.sourceDate);
+    if (!occ) return null;
+    calEventId = parsed.eventId;
+    calEventSourceDate = parsed.sourceDate;
+    job = { id: 'calevt-job-' + evt.id, name: evt.title };
+    task = { id: taskId, name: evt.title, start: toIsoDate(occ.start), finish: toIsoDate(occ.finish) };
+  } else if (isCalendarJobSpanTaskId(taskId)) {
+    const jf = findJob(jobId);
+    if (!jf) return null;
+    job = jf.job;
+    task = { id: taskId, name: job.name, start: bar.dataset.calTaskStart, finish: bar.dataset.calTaskFinish, isJobSpan: true };
+    if (!task.start || !task.finish) return null;
+  } else {
+    const found = findTask(jobId, taskId);
+    if (!found) return null;
+    task = found.task;
+    job = found.job;
+    phaseId = found.phaseId || null;
+    subPhaseId = found.subPhaseId || null;
+  }
+  if (!task || !job) return null;
+  return { task, job, calEventId, calEventSourceDate, phaseId, subPhaseId };
+}
+
 function handleCalBarMouseDown(e: MouseEvent): void {
   const bar = (e.target as Element).closest('.cal-event-bar') as HTMLElement | null;
   if (!bar) return;
@@ -1220,44 +1299,9 @@ function handleCalBarMouseDown(e: MouseEvent): void {
     return;
   }
 
-  let task: CalTask | undefined;
-  let job: CalJob | undefined;
-  let calEventId: string | null = null;
-  let calEventSourceDate: string | null = null;
-  let phaseId: string | null = bar.dataset.calPhaseId || null;
-  let subPhaseId: string | null = bar.dataset.calSubPhaseId || null;
-  if (taskId === DUE_MARKER_TASK_ID) {
-    const jf = findJob(jobId);
-    if (!jf) return;
-    job = jf.job;
-    const dueTask = getJobDueMarkerTask(job, phaseId);
-    if (!dueTask) return;
-    task = dueTask;
-  } else if (isCalendarEventTaskId(taskId)) {
-    const parsed = parseCalendarEventTaskId(taskId);
-    const evt = calendarEvents.find((e) => e.id === parsed.eventId);
-    if (!evt) return;
-    const occ = getCalendarEventOccurrences(evt, null, null).find((o) => o.sourceDate === parsed.sourceDate);
-    if (!occ) return;
-    calEventId = parsed.eventId;
-    calEventSourceDate = parsed.sourceDate;
-    job = { id: 'calevt-job-' + evt.id, name: evt.title };
-    task = { id: taskId, name: evt.title, start: toIsoDate(occ.start), finish: toIsoDate(occ.finish) };
-  } else if (isCalendarJobSpanTaskId(taskId)) {
-    const jf = findJob(jobId);
-    if (!jf) return;
-    job = jf.job;
-    task = { id: taskId, name: job.name, start: bar.dataset.calTaskStart, finish: bar.dataset.calTaskFinish, isJobSpan: true };
-    if (!task.start || !task.finish) return;
-  } else {
-    const found = findTask(jobId, taskId);
-    if (!found) return;
-    task = found.task;
-    job = found.job;
-    phaseId = found.phaseId || null;
-    subPhaseId = found.subPhaseId || null;
-  }
-  if (!task || !job) return;
+  const resolved = resolveCalBarTarget(bar);
+  if (!resolved) return;
+  const { task, job, calEventId, calEventSourceDate, phaseId, subPhaseId } = resolved;
 
   // Due-marker and calendar-event bars render no drag-zone sub-elements
   // (see renderMonthCalendar/renderWeekCalendar) when they're a single-day
@@ -1289,6 +1333,31 @@ function handleCalBarMouseDown(e: MouseEvent): void {
 
   document.addEventListener('mousemove', handleCalBarMouseMove);
   document.addEventListener('mouseup', handleCalBarMouseUp);
+}
+
+// Keyboard equivalent of a click-without-drag on a bar — dragging itself
+// (rescheduling/resizing) stays mouse/touch-only, same scoping as the
+// Gantt/Board fixes elsewhere, but every bar can still be opened without
+// a mouse. Mirrors handleCalBarMouseUp's own `!moved` branch exactly,
+// just without ever setting up calDragState in the first place.
+function handleCalBarKeyDown(e: KeyboardEvent): void {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const bar = (e.target as Element).closest('.cal-event-bar') as HTMLElement | null;
+  if (!bar) return;
+  e.preventDefault();
+  const jobId = bar.dataset.calJobId!;
+  const taskId = bar.dataset.calTaskId!;
+
+  if (bar.dataset.calLinked === '1') {
+    const refJob = getLinkedReferenceJobs().find((j) => j.id === jobId);
+    if (refJob) jumpToLinkedJobReference(refJob);
+    return;
+  }
+
+  const resolved = resolveCalBarTarget(bar);
+  if (!resolved) return;
+  if (resolved.calEventId !== null) openEditCalendarEvent(resolved.calEventId, resolved.calEventSourceDate || undefined);
+  else calendarOpenJob(jobId, taskId, resolved.phaseId);
 }
 
 // rAF-coalesced the same way the Gantt drag handlers are (see
@@ -1508,6 +1577,8 @@ function initCalendarDragHandlers(): void {
   if (!daysEl) return;
   daysEl.removeEventListener('mousedown', handleCalBarMouseDown);
   daysEl.addEventListener('mousedown', handleCalBarMouseDown);
+  daysEl.removeEventListener('keydown', handleCalBarKeyDown);
+  daysEl.addEventListener('keydown', handleCalBarKeyDown);
 
   // Swipe left/right to go to next/prev month/day, following the finger
   // live — mobile month & day mode only (see @media(max-width:480px);
