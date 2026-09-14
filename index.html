@@ -655,6 +655,13 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15); border: 1px solid rgba(0,0,0,0.08);
   }
+  /* Applied only for the duration of animateReorderedBars()'s FLIP-style
+     move (see gantt.ts) — slowed and eased gently on purpose so a bar
+     changing row order (a job/task moving past another) is easy to
+     actually track, not just a barely-perceptible snap. Approved directly
+     against a working mockup (plain slide, no lift/bounce) rather than
+     guessed at — see gantt.ts's own comment on this class. */
+  .task-bar.gantt-bar-reorder { transition: transform .9s cubic-bezier(.4,0,.2,1), box-shadow 0.15s, filter 0.15s; }
   .task-bar:hover {
     transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,0.25);
     z-index: 50; filter: brightness(1.1);

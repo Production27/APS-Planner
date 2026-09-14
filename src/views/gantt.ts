@@ -1394,6 +1394,13 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
       const bar = document.createElement('div');
       bar.className = 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '') + (task.isDueMarker ? ' due-marker-bar' : '');
       bar.dataset.dragged = 'false';
+      // Stable identity across a full rebuild (every render tears down and
+      // recreates every bar — see setupDateRangeAndGrid()'s grid.innerHTML
+      // reset) so animateReorderedBars() can tell "this is the same row,
+      // just moved" from "this is a different row that happens to land at
+      // the same top" — see its own comment for why that distinction
+      // matters.
+      bar.dataset.rowKey = job.id + '::' + (task.id || '') + '::' + (phaseId || '') + '::' + (subPhaseId || '');
       if (duration === 1) bar.classList.add('milestone');
       bar.style.left = (startIdx * dayWidth) + 'px';
       bar.style.width = (duration * dayWidth) + 'px';
@@ -1918,8 +1925,76 @@ function restoreScrollPosition(savedScrollTop: number, savedScrollLeft: number):
   });
 }
 
+// Captures each bar's current row position, keyed by the same stable
+// dataset.rowKey renderTimelineBars() writes on every bar, BEFORE
+// setupDateRangeAndGrid()'s grid.innerHTML reset wipes them — there's no
+// "old" DOM element to read a position back off of once that's run, since
+// every bar is a brand-new document.createElement() on every render, not
+// an existing one being moved.
+function captureBarTopsByRowKey(): Record<string, number> {
+  const tops: Record<string, number> = {};
+  const grid = document.getElementById('timelineGrid');
+  if (!grid) return tops;
+  grid.querySelectorAll<HTMLElement>('.task-bar[data-row-key]').forEach(function (el) {
+    const key = el.dataset.rowKey as string;
+    const top = parseFloat(el.style.top);
+    if (!isNaN(top)) tops[key] = top;
+  });
+  return tops;
+}
+
+// Called once the rebuild above has finished — every bar now sits at its
+// FINAL row position. For any bar whose row key existed before AND whose
+// top actually changed (a job/task reordering past another, per date
+// changes, an expand/collapse, etc.), fake a "before" frame by offsetting
+// it back to its old position via transform (cheap, GPU-only, doesn't
+// re-trigger layout the way animating `top` itself would), then let it
+// transition to transform:none — i.e. its real new position. A bar with
+// no prior entry (brand new, or the very first render of this session,
+// when oldTops is empty) just appears at its final spot, unanimated, same
+// as before this existed.
+function animateReorderedBars(oldTops: Record<string, number>): void {
+  if (!Object.keys(oldTops).length) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const grid = document.getElementById('timelineGrid');
+  if (!grid) return;
+  grid.querySelectorAll<HTMLElement>('.task-bar[data-row-key]').forEach(function (el) {
+    const key = el.dataset.rowKey as string;
+    const oldTop = oldTops[key];
+    if (oldTop === undefined) return;
+    const newTop = parseFloat(el.style.top);
+    const delta = oldTop - newTop;
+    if (isNaN(delta) || Math.abs(delta) < 1) return;
+    el.style.transition = 'none';
+    el.style.transform = 'translateY(' + delta + 'px)';
+    // Force the browser to commit that starting position before clearing
+    // `transition: none` below — otherwise both style changes can get
+    // batched into one recalc and there's never a "before" frame to
+    // animate away from (this bit the first pass at this exact technique
+    // in the approved mockup, worth not repeating: an inline
+    // `transition: none` also has to be explicitly cleared afterward, not
+    // just overridden by a class — an inline style always wins over a
+    // class's CSS rule regardless of specificity).
+    void el.offsetHeight;
+    el.style.transition = '';
+    el.classList.add('gantt-bar-reorder');
+    requestAnimationFrame(function () {
+      el.style.transform = 'translateY(0)';
+    });
+    el.addEventListener('transitionend', function handler(e) {
+      if (e.propertyName !== 'transform') return;
+      el.removeEventListener('transitionend', handler);
+      el.classList.remove('gantt-bar-reorder');
+      el.style.transition = '';
+      el.style.transform = '';
+    });
+  });
+}
+
 function renderGantt(): void {
   syncGanttJobFocusBanner();
+
+  const oldBarTops = captureBarTopsByRowKey();
 
   const { grid, header, leftBody, totalDays, containerH, gridWidth, savedScrollLeft, savedScrollTop } = setupDateRangeAndGrid();
   const today = buildDateHeader(totalDays, grid, header);
@@ -1929,6 +2004,8 @@ function renderGantt(): void {
   renderTimelineBars(visibleRows, grid, jobBarMap);
   drawConnectorLines(gridWidth, jobBarMap, grid);
   restoreScrollPosition(savedScrollTop, savedScrollLeft);
+
+  animateReorderedBars(oldBarTops);
 }
 
 function scrollToToday(): void {
