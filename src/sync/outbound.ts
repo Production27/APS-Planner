@@ -22,6 +22,7 @@
 import { setSyncIndicator } from './connection';
 import { USERNAME_KEY, DISPLAY_NAME_KEY, getStoredDisplayName, setStoredSessionToken } from '../auth/session';
 import { normalizeThemeColor, getSavedThemeColor } from '../app/theme';
+import { renderActivityLogSidebar } from '../app/activity-log';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomSocket, activeProjectId, projects, saveProjects(),

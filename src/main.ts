@@ -38,6 +38,7 @@ import {
   resetUserPasswordUI, removeUserUI, changeMyPasswordUI, setViewAs,
 } from './app/users-admin';
 import { displayNameForUsername, getLeadRoster, ensureUserRosterLoaded } from './app/user-roster';
+import { toggleActivitySidebar, timeAgo, getLogProp, renderActivityLogSidebar } from './app/activity-log';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 import {
   normalizeTasksToColumns, ensureJobTasksMatchColumns, dedupeTaskIdsAcrossPhases, makeBlankPhaseTasks, makePhaseCard,
@@ -280,6 +281,10 @@ declare global {
     displayNameForUsername: typeof displayNameForUsername;
     getLeadRoster: typeof getLeadRoster;
     ensureUserRosterLoaded: typeof ensureUserRosterLoaded;
+    toggleActivitySidebar: typeof toggleActivitySidebar;
+    timeAgo: typeof timeAgo;
+    getLogProp: typeof getLogProp;
+    renderActivityLogSidebar: typeof renderActivityLogSidebar;
     positionSettingsMenu: typeof positionSettingsMenu;
     toggleSettingsMenu: typeof toggleSettingsMenu;
     closeSettingsMenu: typeof closeSettingsMenu;
@@ -860,6 +865,10 @@ window.setViewAs = setViewAs;
 window.displayNameForUsername = displayNameForUsername;
 window.getLeadRoster = getLeadRoster;
 window.ensureUserRosterLoaded = ensureUserRosterLoaded;
+window.toggleActivitySidebar = toggleActivitySidebar;
+window.timeAgo = timeAgo;
+window.getLogProp = getLogProp;
+window.renderActivityLogSidebar = renderActivityLogSidebar;
 window.positionSettingsMenu = positionSettingsMenu;
 window.toggleSettingsMenu = toggleSettingsMenu;
 window.closeSettingsMenu = closeSettingsMenu;

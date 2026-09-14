@@ -23,6 +23,7 @@ import { DEFAULT_THEME_COLOR } from '../app/theme';
 import { ensureCardIds, ensureJobAndTaskIds } from '../core/jobs';
 import { Job } from '../core/types';
 import { enforceFixedProjectSet } from '../app/project';
+import { renderActivityLogSidebar } from '../app/activity-log';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomEverConnected, activeProjectId, projects, latestPresenceUsers,

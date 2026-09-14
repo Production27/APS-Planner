@@ -3854,7 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-14.3';
+const APP_VERSION = '2026-09-14.4';
 
 // checkForNewerVersion() moved to src/app/version-check.ts.
 // checkMaintenanceStatus()/applyMaintenanceStatus()/
@@ -4440,100 +4440,8 @@ var tickResizeState = null;
 // buildColorPresets()/updateJobColorSwatch()/toggleJobColorPanel()/toggleMobileField()/collapseAllMobileFields()/renderJobCustomFieldsGrid()/renderJobTeamFieldsGrid()/collectJobCustomFieldValues()/JM_ATTACHMENT_PANEL_CONFIG+renderJobAttachments()/handleJobAttachmentUpload()/removeJobAttachment() moved to src/views/job-form.ts.
 // openManageFields()/closeManageFields()/renderManageFieldsBody()/buildManageFieldGroup()/addFieldOption()/removeFieldOption()/formatFileSize()/renderAttachments()/handleAttachmentUpload()/removeAttachment() moved to src/views/board.ts.
 
-function toggleActivitySidebar() {
-  const sidebar = document.getElementById('activitySidebar');
-  const btn = document.getElementById('activityToggleBtn');
-  // Defense-in-depth for OPENING only — the trigger button is already
-  // data-min-tier gated, but this is also reachable from the sidebar's own
-  // close button, which must always be allowed to close it regardless of
-  // tier (e.g. if it was left open across a mid-session downgrade — see
-  // renderActivityLogSidebar()'s own force-close for that same case).
-  const wasOpen = !sidebar.classList.contains('collapsed');
-  if (!wasOpen && !hasMinTier('projectAdmin')) return;
-  sidebar.classList.toggle('collapsed');
-  const isOpen = !sidebar.classList.contains('collapsed');
-  btn.classList.toggle('active', isOpen);
-  if (isOpen) renderActivityLogSidebar();
-}
-
-function timeAgo(ts) {
-  const sec = Math.round((Date.now() - ts) / 1000);
-  if (sec < 60) return sec + 's ago';
-  const min = Math.round(sec / 60);
-  if (min < 60) return min + 'm ago';
-  const hr = Math.round(min / 60);
-  if (hr < 24) return hr + 'h ago';
-  const day = Math.round(hr / 24);
-  return day + 'd ago';
-}
-
-function getLogProp(item, key) {
-  // LiveList items stored via push() come back as LiveObject instances
-  if (item && typeof item.get === 'function') return item.get(key);
-  return item ? item[key] : undefined;
-}
-
-function renderActivityLogSidebar() {
-  const bodyEl = document.getElementById('activitySidebarBody');
-  // Defense-in-depth, and the actual fix for the case that matters: this
-  // gets called from several places whenever the room data changes (not
-  // just from toggleActivitySidebar() opening it), so if the sidebar was
-  // already open when a tier downgrade landed mid-session, those refreshes
-  // would otherwise keep quietly re-populating it — the trigger button
-  // being hidden doesn't un-open an already-open sidebar. Force it closed
-  // and blank here instead.
-  if (!hasMinTier('projectAdmin')) {
-    const sidebar = document.getElementById('activitySidebar');
-    if (sidebar) sidebar.classList.add('collapsed');
-    const btn = document.getElementById('activityToggleBtn');
-    if (btn) btn.classList.remove('active');
-    if (bodyEl) bodyEl.innerHTML = '';
-    return;
-  }
-  const p = getActiveProject();
-  const items = [];
-
-  // Merge local fallback entries — logActivity() pushes here immediately
-  // so an offline/not-yet-synced action still shows up right away.
-  localActivityLog.forEach(function(item) { items.push(item); });
-
-  // Merge the project's synced activity log (populated from the room's
-  // snapshot by applyRoomSnapshot() — see "local.activityLog =" there).
-  // This used to read a live Liveblocks LiveList directly; that variable
-  // (liveblocksRoot) no longer exists post-migration, which silently
-  // broke this whole function (threw before ever reaching the render
-  // below) until caught live in production.
-  if (p && Array.isArray(p.activityLog)) {
-    p.activityLog.forEach(function(item) { items.push(item); });
-  }
-
-  // Deduplicate by exact who+what+when match
-  const seen = new Set();
-  const unique = [];
-  items.forEach(function(item) {
-    const key = (getLogProp(item, 'who') || '') + '|' + (getLogProp(item, 'what') || '') + '|' + (getLogProp(item, 'when') || 0);
-    if (!seen.has(key)) { seen.add(key); unique.push(item); }
-  });
-
-  if (!unique.length) {
-    bodyEl.innerHTML = '<div class="activity-log-empty">No activity yet.</div>';
-    return;
-  }
-
-  // Sort by time descending
-  unique.sort(function(a, b) { return (getLogProp(b, 'when') || 0) - (getLogProp(a, 'when') || 0); });
-
-  const html = unique.slice(0, 50).map(function(item) {
-    const when = getLogProp(item, 'when') || Date.now();
-    const who = escapeHtml(getLogProp(item, 'who') || 'Someone');
-    const what = escapeHtml(getLogProp(item, 'what') || '');
-    return '<div class="activity-log-item">' +
-      '<div class="activity-log-time">' + timeAgo(when) + '</div>' +
-      '<div><span class="activity-log-who">' + who + '</span> <span class="activity-log-what">' + what + '</span></div>' +
-    '</div>';
-  }).join('');
-  bodyEl.innerHTML = html;
-}
+// toggleActivitySidebar()/timeAgo()/getLogProp()/renderActivityLogSidebar()
+// moved to src/app/activity-log.ts.
 
 // A column's "too long in this stage" threshold — per-column
 // (col.stalledAfterDays, see setColumnStalledThreshold()) since stages

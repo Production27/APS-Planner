@@ -29,6 +29,7 @@ import { renderHomeDashboard } from '../views/home';
 import { cancelEdit } from '../views/job-form';
 import { applyThemeColor, applyProjectBgVisual, getSavedThemeColor, normalizeThemeColor, DEFAULT_THEME_COLOR } from './theme';
 import { ensureCardIds, ensureJobTasksMatchColumns, ensureJobHasCards, migrateOrphanedCards, ensureJobAndTaskIds } from '../core/jobs';
+import { renderActivityLogSidebar } from './activity-log';
 
 declare global {
   function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
