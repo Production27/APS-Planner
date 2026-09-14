@@ -5,9 +5,13 @@ const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 // generated on (font hinting/antialiasing differs) — Playwright already
 // namespaces snapshot files by platform for exactly this reason, so these
 // only ever compare against a baseline generated in CI (ubuntu-latest),
-// never one generated on a dev machine. See SESSION_HANDOFF.md /
-// project_architecture_roadmap for how the baseline files here were
-// produced.
+// never one generated on a dev machine. A -win32.png baseline has never
+// been committed (there's no Windows runner in CI to generate one from)
+// — running this file locally on Windows will always report these 4 as
+// "no baseline, writing actual" rather than a real pass/fail; that's
+// expected, not a bug. To regenerate the real (linux) baselines after a
+// deliberate visual change, run this file's CI job with
+// --update-snapshots and commit the resulting *-linux.png files.
 //
 // The clock is frozen so nothing date-relative (a "today" marker, a
 // relative activity-log timestamp) drifts the render between the day a

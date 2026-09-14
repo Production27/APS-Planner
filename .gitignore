@@ -4,3 +4,9 @@ test-results/
 playwright-report/
 dist/
 worker/worker-configuration.d.ts
+# Session-to-session continuity notes an AI assistant writes for itself —
+# real content, genuinely useful across sessions, but not meant to be
+# committed (it's a working scratch file, not documentation for a human
+# contributor). Several test/config comments reference it defensively
+# ("if it exists") rather than assuming it's there.
+SESSION_HANDOFF.md

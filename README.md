@@ -11,12 +11,18 @@ team working on a fixed pair of projects. User-facing product name is
 Plain HTML/CSS/JS shipped as static files — no framework, no server-side
 rendering.
 
-- **`index.html`** — the page itself: all markup and styling, plus the
-  parts of the app's logic (Job Manager, login/auth, admin, backups,
-  onboarding) that haven't been split into their own files yet.
-- **`src/`** — TypeScript modules for the rest of the app's logic,
-  compiled and bundled into a single script the page loads:
-  - `src/views/` — Board, Calendar, Gantt, Checklist, Home dashboard
+- **`index.html`** — the page's markup and styling, plus a small amount
+  of cross-script `var` data declarations and boot glue that genuinely
+  needs to live there. Almost all of the app's actual logic lives in
+  `src/` below.
+- **`src/`** — TypeScript modules for the app's logic, compiled and
+  bundled into a single script the page loads:
+  - `src/views/` — Board, Calendar, Gantt, Checklist, Job Manager, Home
+    dashboard
+  - `src/app/` — cross-cutting app concerns: project switching, the
+    admin/user-management panel, backups, maintenance mode, onboarding,
+    activity log, theming, settings
+  - `src/auth/` — login, session/token handling, permission tiers
   - `src/sync/` — real-time sync with the backend (connection handling,
     inbound/outbound messages, presence)
   - `src/core/` — shared data types and models

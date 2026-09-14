@@ -8,10 +8,10 @@ function base64Url(str) {
   return Buffer.from(str, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-// Matches decodeSessionTokenPayload()/isSessionTokenUsable() in index.html
-// (documented in SESSION_HANDOFF.md) — the client only ever checks `exp`
-// locally, never the signature, so ".fakesig" is accepted as a locally-
-// valid-looking token without needing the real ROOM_TOKEN_SECRET.
+// Matches decodeSessionTokenPayload()/isSessionTokenUsable() in
+// src/auth/session.ts — the client only ever checks `exp` locally, never
+// the signature, so ".fakesig" is accepted as a locally-valid-looking
+// token without needing the real ROOM_TOKEN_SECRET.
 function fakeSessionToken({ username, displayName, role, assignedProjectId, ttlMs = 60 * 60 * 1000 }) {
   const payload = { username, displayName, role, assignedProjectId: assignedProjectId || null, exp: Date.now() + ttlMs };
   return base64Url(JSON.stringify(payload)) + '.fakesig';

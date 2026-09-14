@@ -21,6 +21,11 @@
     --bg: #f5f6fa; --card: #ffffff; --border: #e0e0e0;
     --text: #2c3e50; --text-light: #666; --text-faint: #6b7684;
     --success: #28a745; --danger: #dc3545; --warning: #f0ad4e;
+    /* A light tint of --primary/--danger, for a hover/active/badge
+       background paired with that color's text — copy-pasted as the
+       same literal at 20+/7+ sites respectively (a mechanical audit
+       finding, not new colors) before being promoted to tokens here. */
+    --primary-tint: #eef1fa; --danger-tint: #ffebee;
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
     --shadow-hover: 0 4px 20px rgba(0,0,0,0.15);
     --radius: 10px;
@@ -186,7 +191,7 @@
     display: flex; align-items: center; gap: 9px; padding: var(--s-2-5) var(--s-3); border-radius: 6px;
     font-size: var(--t-base); font-weight: 600; color: var(--text); cursor: pointer; transition: background 0.15s;
   }
-  .settings-dropdown-item:hover { background: #eef1fa; color: var(--primary); }
+  .settings-dropdown-item:hover { background: var(--primary-tint); color: var(--primary); }
   .settings-dropdown-item.toggle-item { justify-content: space-between; }
   .settings-dropdown-divider { height: 1px; background: var(--border); margin: var(--s-1-5) var(--s-1); }
   .mini-toggle { width: 34px; height: 18px; border-radius: 10px; background: #ccc; position: relative; transition: background 0.2s; flex-shrink: 0; }
@@ -415,7 +420,7 @@
      better than a heavy border alone, especially on an otherwise-empty
      cell — a thick outline around blank white space stood out as an odd,
      broken-looking box rather than a normal highlighted grid cell. */
-  .cal-day.cal-today { background: #eef1fa; box-shadow: 0 0 0 1px var(--primary) inset; }
+  .cal-day.cal-today { background: var(--primary-tint); box-shadow: 0 0 0 1px var(--primary) inset; }
   body.dark-mode .cal-day.cal-today { background: rgba(57,73,171,0.18); }
   .cal-day-num { font-size: var(--t-base); font-weight: 700; color: var(--text-light); margin-bottom: var(--s-1); flex-shrink: 0; text-align: center; }
   .cal-day.cal-today .cal-day-num { color: var(--primary); }
@@ -460,7 +465,7 @@
      rest of the space. */
   .day-agenda-list { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-0-5) 0 var(--s-2); }
   .day-view-item { display: flex; align-items: center; gap: var(--s-2-5); padding: var(--s-2-5) var(--s-2); border-radius: 8px; cursor: pointer; transition: background 0.15s; }
-  .day-view-item:hover { background: #eef1fa; }
+  .day-view-item:hover { background: var(--primary-tint); }
   .day-view-item-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .day-view-item-text { flex: 1; min-width: 0; }
   .day-view-item-title { font-size: var(--t-base); font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -488,7 +493,7 @@
      to sit side by side (which is what .left-panel's own border-right/
      box-shadow would otherwise cut through). The panels row below it is
      where .left-panel's border/shadow actually starts. */
-  .gantt-top-row { display: flex; height: 45px; box-sizing: border-box; background: #eef1fa; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .gantt-top-row { display: flex; height: 45px; box-sizing: border-box; background: var(--primary-tint); border-bottom: 1px solid var(--border); flex-shrink: 0; }
   /* touch-action here (not just on .timeline-body) covers a pinch that
      starts with a finger over the date header or task-list column too —
      see the comment in setupScrollSync() on why the pinch listeners
@@ -591,7 +596,7 @@
   .timeline-header .day-header.weekend { background: #f0f0f0; color: #aaa; }
   .timeline-header .day-header.weekend:hover { background: var(--border); }
   .timeline-header .day-header.today-header {
-    background: #ffebee !important; color: var(--accent) !important;
+    background: var(--danger-tint) !important; color: var(--accent) !important;
     font-weight: 700;
   }
   .timeline-header .day-header.today-header .day-num { color: var(--accent); }
@@ -864,7 +869,7 @@
     font-size: var(--t-base); font-weight: 700; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s;
   }
-  .gantt-toolbar button:hover { background: #eef1fa; color: var(--primary); border-color: var(--primary-light); box-shadow: 0 3px 6px rgba(26,35,126,0.15); transform: translateY(-1px); }
+  .gantt-toolbar button:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); box-shadow: 0 3px 6px rgba(26,35,126,0.15); transform: translateY(-1px); }
   .gantt-toolbar button:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,0.1) inset; }
   /* See ganttFocusedJobId/syncGanttJobFocusBanner() — sits ahead of the icon
      buttons, pushed to the toolbar's left edge via margin-right: auto so the
@@ -1018,15 +1023,21 @@
   .job-card .job-card-title { font-weight: 700; font-size: var(--t-base); color: var(--text); margin-bottom: var(--s-1); display: flex; align-items: center; gap: var(--s-1-5); }
   .job-card .job-card-meta { font-size: var(--t-xs); color: var(--text-light); display: flex; gap: var(--s-3); align-items: center; }
   .job-card .color-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); }
-  .job-card .note-icon { font-size: var(--t-2xs); color: var(--warning); }
+  /* #b26a00 not var(--warning): same fix as .board-card-override-badge
+     below — raw --warning (#f0ad4e) on a light card background is a
+     1.95:1 contrast ratio, well under the 4.5:1 small-text needs. Dark
+     mode keeps var(--warning) itself, which already reads fine against
+     a dark card background (see the dark-mode override just below). */
+  .job-card .note-icon { font-size: var(--t-2xs); color: #b26a00; }
+  body.dark-mode .job-card .note-icon { color: var(--warning); }
   .job-card .delete-btn { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; font-size: var(--t-md); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-  .job-card .delete-btn:hover { background: #ffebee; color: var(--danger); }
+  .job-card .delete-btn:hover { background: var(--danger-tint); color: var(--danger); }
   .job-card .copy-btn { position: absolute; top: 8px; right: 34px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-  .job-card .copy-btn:hover { background: #eef1fa; color: var(--primary); }
+  .job-card .copy-btn:hover { background: var(--primary-tint); color: var(--primary); }
   .form-title-row { display: flex; align-items: center; gap: var(--s-2-5); margin-bottom: var(--s-6); }
   .duplicate-job-btn { width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; color: var(--text-faint); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; margin-left: auto; }
-  .duplicate-job-btn:hover { background: #eef1fa; color: var(--primary); }
-  .job-card-board-tag { font-size: var(--t-2xs); font-weight: 600; color: var(--text-light); background: #eef1fa; padding: 1px var(--s-2) 1px var(--s-1-25); border-radius: 999px; display: inline-flex; align-items: center; gap: var(--s-1); }
+  .duplicate-job-btn:hover { background: var(--primary-tint); color: var(--primary); }
+  .job-card-board-tag { font-size: var(--t-2xs); font-weight: 600; color: var(--text-light); background: var(--primary-tint); padding: 1px var(--s-2) 1px var(--s-1-25); border-radius: 999px; display: inline-flex; align-items: center; gap: var(--s-1); }
   body.dark-mode .job-card-board-tag { background: rgba(57,73,171,0.18); }
   .job-card-board-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .job-card-phase-dots { display: inline-flex; align-items: center; gap: var(--s-1); padding: var(--s-0-5) 0; }
@@ -1034,7 +1045,7 @@
   body.dark-mode .job-card-phase-dots .job-card-board-dot { border-color: rgba(255,255,255,0.25); }
   .job-current-board-indicator { display: flex; align-items: center; gap: var(--s-1-5); font-size: var(--t-sm); color: var(--text-light); margin: calc(-1 * var(--s-3-5)) 0 var(--s-5); }
   .job-phase-strip { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1-5); }
-  .job-phase-chip { display: inline-flex; align-items: center; gap: var(--s-1-5); padding: var(--s-1-25) var(--s-2-5); border-radius: 999px; background: #eef1fa; color: var(--text-light); font-size: var(--t-sm); font-weight: 600; cursor: pointer; border: 1.5px solid transparent; }
+  .job-phase-chip { display: inline-flex; align-items: center; gap: var(--s-1-5); padding: var(--s-1-25) var(--s-2-5); border-radius: 999px; background: var(--primary-tint); color: var(--text-light); font-size: var(--t-sm); font-weight: 600; cursor: pointer; border: 1.5px solid transparent; }
   .job-phase-chip.active { background: var(--primary-light); color: #fff; }
   body.dark-mode .job-phase-chip { background: rgba(255,255,255,0.08); }
   body.dark-mode .job-phase-chip.active { background: var(--primary-light); color: #fff; }
@@ -1050,7 +1061,7 @@
   .job-subphase-strip { margin: var(--s-1-5) 0 0 var(--s-5); padding-left: var(--s-2-5); border-left: 2px solid #dcdfe6; }
   body.dark-mode .job-subphase-strip { border-left-color: rgba(255,255,255,0.15); }
   .job-subphase-strip .job-phase-chip { font-size: var(--t-xs); padding: var(--s-1) var(--s-2-5); }
-  .job-link-active-row { display: flex; align-items: center; gap: var(--s-2-5); padding: var(--s-2) var(--s-3); border-radius: 8px; background: #eef1fa; font-size: var(--t-sm); font-weight: 600; color: var(--text); }
+  .job-link-active-row { display: flex; align-items: center; gap: var(--s-2-5); padding: var(--s-2) var(--s-3); border-radius: 8px; background: var(--primary-tint); font-size: var(--t-sm); font-weight: 600; color: var(--text); }
   body.dark-mode .job-link-active-row { background: rgba(255,255,255,0.08); }
   .job-link-active-row .job-link-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .job-link-picker-row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
@@ -1107,7 +1118,7 @@
   }
   .job-comments-panel h4 { font-size: var(--t-lg); font-weight: 700; margin-bottom: var(--s-3-5); color: var(--text); display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
   .job-comments-collapse-btn { margin-left: auto; background: none; border: none; color: var(--text-light); font-size: var(--t-xl); line-height: 1; cursor: pointer; padding: var(--s-0-5) var(--s-1-5); border-radius: 4px; }
-  .job-comments-collapse-btn:hover { background: #eef1fa; color: var(--primary); }
+  .job-comments-collapse-btn:hover { background: var(--primary-tint); color: var(--primary); }
   /* Collapsed (the default each time a job opens — see editJob()/
      the justCreated branch) shrinks the panel down to a narrow tab
      standing in for it, showing just the comment count; the full h4/
@@ -1127,7 +1138,7 @@
   .job-comments-panel.collapsed {
     flex-basis: 44px; width: 44px; padding: var(--s-5) 0; align-items: center; cursor: pointer;
   }
-  .job-comments-panel.collapsed:hover { background: #eef1fa; }
+  .job-comments-panel.collapsed:hover { background: var(--primary-tint); }
   .job-comments-panel.collapsed h4,
   .job-comments-panel.collapsed .mobile-field-body { display: none; }
   .job-comments-panel.collapsed .job-comments-tab {
@@ -1150,7 +1161,7 @@
   .job-comment-when { font-size: var(--t-xs); color: var(--text-light); flex-shrink: 0; }
   .job-comment-text { font-size: var(--t-base); color: var(--text); white-space: pre-wrap; word-break: break-word; }
   .job-comment-delete { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: var(--t-lg); line-height: 1; padding: var(--s-0-5) var(--s-1-25); border-radius: 4px; flex-shrink: 0; }
-  .job-comment-delete:hover { color: var(--danger); background: #ffebee; }
+  .job-comment-delete:hover { color: var(--danger); background: var(--danger-tint); }
   .job-comments-input-row { flex-shrink: 0; display: flex; flex-direction: column; gap: var(--s-2); }
   .job-comments-input-row textarea {
     width: 100%; min-height: 60px; padding: var(--s-2) var(--s-2-5); border: 1px solid var(--border);
@@ -1311,7 +1322,9 @@
   .wf-seg.unassigned .wf-seg-label { color: var(--text-light); font-weight: 600; }
   .wf-count { background: rgba(0,0,0,0.06); color: var(--text-light); font-size: var(--t-2xs); padding: 1px var(--s-1-5); border-radius: 8px; font-weight: 700; font-variant-numeric: tabular-nums; }
   body.dark-mode .wf-count { background: rgba(255,255,255,0.08); }
-  .wf-stalled { color: var(--warning); font-size: var(--t-2xs); font-weight: 700; display: flex; align-items: center; gap: var(--s-0-5); }
+  /* Same light/dark split as .job-card .note-icon above, same reason. */
+  .wf-stalled { color: #b26a00; font-size: var(--t-2xs); font-weight: 700; display: flex; align-items: center; gap: var(--s-0-5); }
+  body.dark-mode .wf-stalled { color: var(--warning); }
   /* the bracket — an explicit drawn path (angled ticks flaring outward,
      not a squared-off corner), not a border/pseudo-element trick, so
      the angle reads crisply at any segment width. Drawn over every
@@ -1399,8 +1412,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .board-card .board-card-meta { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-3); }
   .board-card .board-card-meta-line { font-size: var(--t-sm); color: var(--text-faint); font-weight: 500; }
   body.dark-mode .board-card .board-card-meta-line { color: #98a0ae; }
-  .board-card .board-card-due { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: #eef1fa; color: var(--text-light); }
-  .board-card .board-card-due.overdue { background: #ffebee; color: var(--danger); }
+  .board-card .board-card-due { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: var(--primary-tint); color: var(--text-light); }
+  .board-card .board-card-due.overdue { background: var(--danger-tint); color: var(--danger); }
   .board-card.manual-override { border-left-style: dashed; box-shadow: 0 2px 5px rgba(0,0,0,0.14), inset 0 0 0 1px rgba(240,173,78,0.5); }
   .board-card-override-badge { display: inline-flex; align-items: center; gap: var(--s-0-75); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-1-75); border-radius: 999px; background: #fff3e0; color: #b26a00; margin-bottom: var(--s-1-5); cursor: pointer; }
   .board-card-override-badge:hover { background: #ffe4b3; }
@@ -1829,7 +1842,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      later additions layered on top of it. */
   .home-widget-alert.tier-today { background: #fef3e2; color: #a0620c; }
   body.dark-mode .home-widget-alert.tier-today { background: rgba(240,173,78,0.2); color: var(--warning); }
-  .home-widget-alert.tier-soon { background: #eef1fa; color: var(--primary-light); }
+  .home-widget-alert.tier-soon { background: var(--primary-tint); color: var(--primary-light); }
   body.dark-mode .home-widget-alert.tier-soon { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
   .home-widget-alert-text { flex: 1; }
   .home-widget-alert-dismiss {
@@ -2036,7 +2049,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   /* Attachments */
   .attachment-item { display: flex; align-items: center; gap: var(--s-2-5); padding: var(--s-2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: var(--s-2); }
   .attachment-item .att-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #f0f0f0; }
-  .attachment-item .att-icon { width: 40px; height: 40px; border-radius: 6px; background: #eef1fa; display: flex; align-items: center; justify-content: center; font-size: var(--t-xl); flex-shrink: 0; }
+  .attachment-item .att-icon { width: 40px; height: 40px; border-radius: 6px; background: var(--primary-tint); display: flex; align-items: center; justify-content: center; font-size: var(--t-xl); flex-shrink: 0; }
   .attachment-item .att-info { flex: 1; min-width: 0; }
   .attachment-item .att-name { font-size: var(--t-sm); font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
   .attachment-item .att-size { font-size: var(--t-2xs); color: var(--text-light); }
@@ -2045,8 +2058,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
   /* Card front badges */
   .board-card-badges { display: flex; flex-wrap: wrap; gap: var(--s-1-5); margin-top: var(--s-1-5); }
-  .board-card-badges .cf-pill { font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: #eef1fa; color: var(--primary-light); }
-  .board-card-badges .mini-badge { display: inline-flex; align-items: center; gap: var(--s-0-75); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: #eef1fa; color: var(--text-light); }
+  .board-card-badges .cf-pill { font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: var(--primary-tint); color: var(--primary-light); }
+  .board-card-badges .mini-badge { display: inline-flex; align-items: center; gap: var(--s-0-75); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: var(--primary-tint); color: var(--text-light); }
   .board-card-badges .mini-badge.checklist-complete { background: #e6f4ea; color: var(--success); }
 
   /* Manage custom fields modal */
@@ -2054,7 +2067,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .manage-field-group { margin-bottom: var(--s-5); }
   .manage-field-group h5 { font-size: var(--t-sm); font-weight: 700; color: var(--text); margin-bottom: var(--s-2); }
   .manage-field-chips { display: flex; flex-wrap: wrap; gap: var(--s-1-5); margin-bottom: var(--s-2); }
-  .manage-field-chip { display: inline-flex; align-items: center; gap: var(--s-1-5); background: #eef1fa; color: var(--primary); font-size: var(--t-xs); font-weight: 600; padding: var(--s-1) var(--s-1-5) var(--s-1) var(--s-2-5); border-radius: 999px; }
+  .manage-field-chip { display: inline-flex; align-items: center; gap: var(--s-1-5); background: var(--primary-tint); color: var(--primary); font-size: var(--t-xs); font-weight: 600; padding: var(--s-1) var(--s-1-5) var(--s-1) var(--s-2-5); border-radius: 999px; }
   .manage-field-chip button { background: none; border: none; color: var(--primary-light); cursor: pointer; font-size: var(--t-base); line-height: 1; }
   .manage-field-chip button:hover { color: var(--danger); }
   .manage-field-add-row { display: flex; gap: var(--s-2); }
@@ -2083,15 +2096,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     border-radius: 6px; font-size: var(--t-sm); font-weight: 600; color: var(--text);
     cursor: pointer; transition: background 0.15s;
   }
-  .board-col-settings-item:hover { background: #eef1fa; color: var(--primary); }
-  .board-col-settings-item.danger:hover { background: #ffebee; color: var(--danger); }
+  .board-col-settings-item:hover { background: var(--primary-tint); color: var(--primary); }
+  .board-col-settings-item.danger:hover { background: var(--danger-tint); color: var(--danger); }
   .board-col-settings-divider { height: 1px; background: var(--border); margin: var(--s-1) var(--s-1-5); }
   .board-col-color-toggle {
     display: flex; align-items: center; justify-content: space-between;
     padding: var(--s-2) var(--s-3); border-radius: 6px; font-size: var(--t-sm); font-weight: 600;
     color: var(--text); cursor: pointer; transition: background 0.15s;
   }
-  .board-col-color-toggle:hover { background: #eef1fa; color: var(--primary); }
+  .board-col-color-toggle:hover { background: var(--primary-tint); color: var(--primary); }
   .board-col-color-toggle .col-color-swatch {
     width: 14px; height: 14px; border-radius: 50%;
     border: 2px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
@@ -2106,7 +2119,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     padding: var(--s-2) var(--s-3); border-radius: 6px; font-size: var(--t-sm); font-weight: 600;
     color: var(--text); cursor: pointer; transition: background 0.15s;
   }
-  .board-col-gantt-toggle:hover { background: #eef1fa; color: var(--primary); }
+  .board-col-gantt-toggle:hover { background: var(--primary-tint); color: var(--primary); }
   .board-col-gantt-switch {
     width: 30px; height: 17px; border-radius: 10px; background: #ccc;
     position: relative; flex-shrink: 0; transition: background 0.2s;
@@ -2150,7 +2163,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      onto the plain (non-danger) hover by mistake; every other item in
      this menu hovers blue, not red. :not(.danger) here (missing before)
      keeps this from also overriding .danger:hover's own unconditional
-     #ffebee/var(--danger) rule above, which needs to stay red — a plain
+     var(--danger-tint)/var(--danger) rule above, which needs to stay red — a plain
      .board-col-settings-item:hover selector matches danger items too,
      since it doesn't exclude them on its own. */
   body.dark-mode .board-col-settings-item:not(.danger):hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
@@ -2380,7 +2393,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s; line-height: 1;
   }
-  .activity-sidebar-close:hover { background: #ffebee; color: var(--danger); }
+  .activity-sidebar-close:hover { background: var(--danger-tint); color: var(--danger); }
   .activity-sidebar-body { flex: 1; overflow-y: auto; padding: var(--s-2-5); }
 
   body.dark-mode .activity-sidebar { background: var(--card); border-left-color: var(--border); }
@@ -2975,7 +2988,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        lines instead of just letting the toolbar run tight/scroll. */
     white-space: nowrap; flex-shrink: 0;
   }
-  .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: #eef1fa; color: var(--primary); border-color: var(--primary-light); }
+  .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); }
   body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn { border-color: var(--border); color: var(--text-light); }
   body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
   .job-card.archived { opacity: 0.55; }
@@ -3303,7 +3316,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
                empty-cell-to-click affordance for adding an event the way
                month/week's grid cells do. -->
           <button class="btn btn-secondary" id="calAddEventBtn" data-min-tier="editor" onclick="openAddCalendarEvent(toIsoDate(calendarViewDate))" style="display:none;">+ Add</button>
-          <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap: var(--s-1);background:#eef1fa;padding: var(--s-0-75);border-radius:8px;">
+          <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap: var(--s-1);background:var(--primary-tint);padding: var(--s-0-75);border-radius:8px;">
             <button class="btn btn-secondary" id="calViewMonth" onclick="setCalendarView('month')" style="padding: var(--s-1-5) var(--s-3-5);font-size: var(--t-sm);">Month</button>
             <button class="btn btn-secondary" id="calViewWeek" onclick="setCalendarView('week')" style="padding: var(--s-1-5) var(--s-3-5);font-size: var(--t-sm);">Week</button>
           </div>

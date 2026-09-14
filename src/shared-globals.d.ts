@@ -21,64 +21,38 @@ import type { PresenceUser } from './sync/presence';
 declare global {
   // ----- data state (still `var`/`const`-declared in index.html) -----
   const API_BASE_URL: string;
-  // eslint-disable-next-line no-var
   var jobs: Job[];
-  // eslint-disable-next-line no-var
   var boardCards: BoardCard[];
-  // eslint-disable-next-line no-var
   var BOARD_COLUMNS: BoardColumn[];
-  // eslint-disable-next-line no-var
   var WORKFLOW_ITEMS: WorkflowItem[];
-  // eslint-disable-next-line no-var
   var DEFAULT_BOARD_COLUMNS: { id: string; label: string }[];
-  // eslint-disable-next-line no-var
   var DEFAULT_STALLED_AFTER_DAYS: number;
-  // eslint-disable-next-line no-var
   var COLOR_PRESETS: string[];
-  // eslint-disable-next-line no-var
   var activeProjectId: string | null;
-  // eslint-disable-next-line no-var
   var currentUserRole: string | null;
-  // eslint-disable-next-line no-var
   var roleConfirmed: boolean;
   // Every field this shape lists is actually read by at least one src/
   // file's push functions (jobs/boardCards/calendarEvents/header/
   // boardColumns/fieldOptions/workflowItems/fieldRevisions/deletedIds/
   // ...) — a narrower per-project type isn't worth maintaining just for
   // the handful of call sites that only read one field off it.
-  // eslint-disable-next-line no-var
   var projects: Record<string, any>;
-  // eslint-disable-next-line no-var
   var editingJobId: string | null;
-  // eslint-disable-next-line no-var
   var homeExpandedWidgetId: string | null;
-  // eslint-disable-next-line no-var
   var draggedCardId: string | null;
-  // eslint-disable-next-line no-var
   var draggedColId: string | null;
-  // eslint-disable-next-line no-var
   var cachedUserRoster: { username: string; displayName: string; isLead: boolean }[] | null;
-  // eslint-disable-next-line no-var
   var viewAsUsername: string | null;
-  // eslint-disable-next-line no-var
   var calendarViewMode: string;
-  // eslint-disable-next-line no-var
   var CAL_BAR_H: number;
-  // eslint-disable-next-line no-var
   var CAL_BAR_GAP: number;
-  // eslint-disable-next-line no-var
   var CAL_DAYNUM_H: number;
-  // eslint-disable-next-line no-var
   var DUE_MARKER_TASK_ID: string;
   // `close` is required because src/sync/outbound.ts's logout() calls
   // roomSocket.close() directly.
-  // eslint-disable-next-line no-var
   var roomSocket: { readyState: number; send: (data: string) => void; close: () => void; addEventListener: (type: string, listener: (event: any) => void) => void } | null;
-  // eslint-disable-next-line no-var
   var roomEverConnected: boolean;
-  // eslint-disable-next-line no-var
   var pendingWrites: Map<string, { msg: Record<string, unknown>; sentAt: number }>;
-  // eslint-disable-next-line no-var
   var latestPresenceUsers: PresenceUser[];
 
   // ----- functions called ambiently (bare, not imported) from more than

@@ -120,7 +120,7 @@ test('job CRUD: creating a job via the UI lands in the underlying data model', a
   await page.evaluate(() => flushAutoSaveJobForm());
 
   // Verified against the actual data model, not the DOM — a save that
-  // "looks right" on screen isn't proof it stuck (see SESSION_HANDOFF.md).
+  // "looks right" on screen isn't proof it stuck.
   const savedJobExists = await page.evaluate((name) => {
     const proj = getActiveProject();
     return !!(proj && Object.values(proj.jobs || {}).some((j) => j.name === name));

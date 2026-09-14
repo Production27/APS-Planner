@@ -1,9 +1,9 @@
 // @ts-check
 const { defineConfig } = require('@playwright/test');
 
-// index.html is a single static file with no build step — tested directly
-// via file://, same as every past manual verification pass documented in
-// SESSION_HANDOFF.md. No webServer needed.
+// The app is served directly via file:// (index.html + the already-built
+// dist/app.bundle.js) rather than through a dev server — no webServer
+// needed here, just `npm run build` beforehand so dist/ is current.
 module.exports = defineConfig({
   testDir: '.',
   fullyParallel: true,
