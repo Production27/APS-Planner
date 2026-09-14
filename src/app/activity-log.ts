@@ -8,6 +8,9 @@ import { hasMinTier } from '../auth/permissions';
 import { getActiveProject } from './project';
 import { applyHomeReflowTracks, renderHomeWorkflowMiniBoard } from '../views/home';
 
+// Must match .activity-sidebar's own CSS `width: 300px`.
+const ACTIVITY_SIDEBAR_WIDTH = 300;
+
 export function toggleActivitySidebar(): void {
   const sidebar = document.getElementById('activitySidebar')!;
   const btn = document.getElementById('activityToggleBtn')!;
@@ -18,10 +21,6 @@ export function toggleActivitySidebar(): void {
   // renderActivityLogSidebar()'s own force-close for that same case).
   const wasOpen = !sidebar.classList.contains('collapsed');
   if (!wasOpen && !hasMinTier('projectAdmin')) return;
-  sidebar.classList.toggle('collapsed');
-  const isOpen = !sidebar.classList.contains('collapsed');
-  btn.classList.toggle('active', isOpen);
-  if (isOpen) renderActivityLogSidebar();
 
   // This sidebar's own width transition resizes .panels-container (a flex
   // sibling), which in turn resizes the Home dashboard's grid — but that
@@ -29,22 +28,46 @@ export function toggleActivitySidebar(): void {
   // applyHomeReflowTracks()) that don't self-adjust the way fr units
   // would, and opening/closing this sidebar never fires a real `window`
   // resize event to trigger the recompute a widget-expand click or an
-  // actual window resize would (Karl's report: the layout correctly
-  // shifts on open, once something else happens to re-render Home, but
-  // never shifts back on close). Re-measure once THIS transition settles,
-  // same "wait for transitionend, not the synchronous class toggle"
-  // pattern toggleHomeWidgetExpand() uses for its own layout-affecting
-  // transition — only while Home is actually the visible tab, since
-  // measuring a hidden #panel-home would read a zero width.
+  // actual window resize would (Karl's original report: the layout never
+  // shifted back on close). Measure .home-grid's width and compute its
+  // POST-toggle target BEFORE actually toggling — reading it after would
+  // land mid-transition (a moving target, not the real end value) and
+  // waiting for the sidebar's own transitionend before even starting the
+  // grid's recompute is what produced the first fix's OWN bug: a visible
+  // ~700ms stall (250ms sidebar transition, THEN a separate 450ms grid
+  // transition, one after the other) before anything moved (Karl: "like a
+  // solid second later"). Computing the target up front lets both
+  // transitions run in parallel instead, so the dashboard visibly shifts
+  // in step with the sidebar sliding, the same feel widget-expand already
+  // has.
   const homePanel = document.getElementById('panel-home');
-  if (homePanel && homePanel.classList.contains('active')) {
-    const onSettled = function (e: Event) {
-      if (e.target !== sidebar || (e as TransitionEvent).propertyName !== 'width') return;
-      sidebar.removeEventListener('transitionend', onSettled);
-      applyHomeReflowTracks();
+  const gridEl = homePanel && homePanel.classList.contains('active')
+    ? document.querySelector('#panel-home .home-grid') as HTMLElement | null : null;
+  const targetWidth = gridEl
+    ? gridEl.getBoundingClientRect().width + (wasOpen ? ACTIVITY_SIDEBAR_WIDTH : -ACTIVITY_SIDEBAR_WIDTH)
+    : null;
+
+  sidebar.classList.toggle('collapsed');
+  const isOpen = !sidebar.classList.contains('collapsed');
+  btn.classList.toggle('active', isOpen);
+  if (isOpen) renderActivityLogSidebar();
+
+  if (gridEl && targetWidth !== null) {
+    applyHomeReflowTracks(targetWidth);
+    // applyHomeReflowTracks() just wrote new column widths onto
+    // .home-grid, which has its OWN separate CSS transition on
+    // grid-template-columns (.45s) — re-measuring the workflow
+    // mini-board's bars immediately would land mid-flight of THAT
+    // transition, the exact mismeasurement toggleHomeWidgetExpand()
+    // already works around for the same reason. Wait for THAT transition
+    // to settle before re-measuring, same pattern it uses (this part
+    // doesn't need to be immediate — only the visible column shift did).
+    const onGridSettled = function (e2: Event) {
+      if (e2.target !== gridEl) return;
+      gridEl.removeEventListener('transitionend', onGridSettled);
       renderHomeWorkflowMiniBoard();
     };
-    sidebar.addEventListener('transitionend', onSettled);
+    gridEl.addEventListener('transitionend', onGridSettled);
   }
 }
 

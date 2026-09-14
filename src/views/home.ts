@@ -272,7 +272,16 @@ const HOME_REFLOW_TRACK: Record<string, { col: string; row: number | null }> = {
   calendar: { col: 'right', row: 0 }, gantt: { col: 'right', row: 1 }
 };
 
-function applyHomeReflowTracks(): void {
+// totalWidthOverride lets a caller whose own action is ALSO resizing
+// .home-grid's container via a separate CSS transition (see
+// toggleActivitySidebar()) supply the container's known END width up
+// front, so this can write the new columns — and start ITS OWN
+// grid-template-columns transition — immediately, in parallel with that
+// other transition, instead of measuring the live (mid-transition, still
+// wrong) DOM and only starting once the other one finishes. Every other
+// caller (widget expand, window resize) omits it and keeps measuring the
+// real DOM, unchanged.
+function applyHomeReflowTracks(totalWidthOverride?: number): void {
   const grid = document.querySelector('#panel-home .home-grid') as HTMLElement | null;
   const leftGroup = document.querySelector('#panel-home .home-grid-left') as HTMLElement | null;
   const rightGroup = document.querySelector('#panel-home .home-grid-right') as HTMLElement | null;
@@ -293,7 +302,7 @@ function applyHomeReflowTracks(): void {
   // 3fr/0.55fr/0.55fr ratio with Job Chat at its usual size, so closing
   // Job Chat up doesn't also grow the hero; the freed space goes to the
   // opposite (already-smaller) side instead.
-  const totalW = grid.getBoundingClientRect().width;
+  const totalW = totalWidthOverride !== undefined ? totalWidthOverride : grid.getBoundingClientRect().width;
   const gapPx = 16;
   const trackSpace = Math.max(0, totalW - gapPx * 2);
   function weightedPx(weights: number[]): number[] {
