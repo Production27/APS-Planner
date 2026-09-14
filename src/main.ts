@@ -35,8 +35,9 @@ import { openErrorsModal, closeErrorsModal, loadErrorsList } from './app/errors'
 import {
   openManageUsersModal, closeManageUsersModal, TIER_LABELS, loadUsersList, populateUserFormProjectSelect,
   onUserFormTierChange, showAddUserForm, showEditUserForm, hideUserFormPanel, submitUserForm,
-  resetUserPasswordUI, removeUserUI, changeMyPasswordUI,
+  resetUserPasswordUI, removeUserUI, changeMyPasswordUI, setViewAs,
 } from './app/users-admin';
+import { displayNameForUsername, getLeadRoster, ensureUserRosterLoaded } from './app/user-roster';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard, getJobCards, getPrimaryPhaseCard } from './core/models';
 import {
   normalizeTasksToColumns, ensureJobTasksMatchColumns, dedupeTaskIdsAcrossPhases, makeBlankPhaseTasks, makePhaseCard,
@@ -275,6 +276,10 @@ declare global {
     resetUserPasswordUI: typeof resetUserPasswordUI;
     removeUserUI: typeof removeUserUI;
     changeMyPasswordUI: typeof changeMyPasswordUI;
+    setViewAs: typeof setViewAs;
+    displayNameForUsername: typeof displayNameForUsername;
+    getLeadRoster: typeof getLeadRoster;
+    ensureUserRosterLoaded: typeof ensureUserRosterLoaded;
     positionSettingsMenu: typeof positionSettingsMenu;
     toggleSettingsMenu: typeof toggleSettingsMenu;
     closeSettingsMenu: typeof closeSettingsMenu;
@@ -851,6 +856,10 @@ window.submitUserForm = submitUserForm;
 window.resetUserPasswordUI = resetUserPasswordUI;
 window.removeUserUI = removeUserUI;
 window.changeMyPasswordUI = changeMyPasswordUI;
+window.setViewAs = setViewAs;
+window.displayNameForUsername = displayNameForUsername;
+window.getLeadRoster = getLeadRoster;
+window.ensureUserRosterLoaded = ensureUserRosterLoaded;
 window.positionSettingsMenu = positionSettingsMenu;
 window.toggleSettingsMenu = toggleSettingsMenu;
 window.closeSettingsMenu = closeSettingsMenu;

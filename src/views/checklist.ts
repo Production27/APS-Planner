@@ -30,6 +30,7 @@ import { closeAllColSettings, openEditCard } from './board';
 import { openModal, closeModal, showToast, toggleMsDropdown, msSetAll, msDropdownLabelText } from '../utils/ui';
 import { getEffectiveRole, hasMinTier } from '../auth/permissions';
 import { getStoredUsername } from '../auth/session';
+import { ensureUserRosterLoaded } from '../app/user-roster';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, activeProjectId, saveJobs(), etc.) are declared once

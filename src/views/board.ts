@@ -41,12 +41,12 @@
 //
 // Several functions this file calls but does NOT define — setCardColumn(),
 // isJobVisibleToMe(), renderGantt(), renderJobList(), renderCalendar(),
-// saveWorkflowItems(), hasMinTier(), getLeadRoster(), saveFieldOptions(),
+// saveWorkflowItems(), hasMinTier(), saveFieldOptions(),
 // renderJobCustomFieldsGrid(), renderJobTeamFieldsGrid(),
 // collectJobCustomFieldValues(), deleteCardFromShared(),
 // refreshJobFormIfOpen(), syncCardColumns(), isFinishedColumn(),
-// isFinishedColumnId(), displayNameForUsername(), applyPermissionGating(),
-// ensureUserRosterLoaded(), saveJobs(), renderHomeDashboard(),
+// isFinishedColumnId(), applyPermissionGating(),
+// saveJobs(), renderHomeDashboard(),
 // renderFixedTaskGrid() — stay in index.html on purpose (checklist
 // business rules, modal-chrome/permission plumbing shared across many
 // modals, Job Manager's own still-inline mirror functions, or genuinely
@@ -68,6 +68,7 @@ import { getStoredSessionToken } from '../auth/session';
 import { fetchWithReauth } from '../app/worker-client';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 import { buildHomeStageSummary, buildHomeStalledRows } from './home';
+import { displayNameForUsername, getLeadRoster, ensureUserRosterLoaded } from '../app/user-roster';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, saveJobs(), hasMinTier(), etc.) are
@@ -93,13 +94,11 @@ declare global {
   function saveFieldOptions(): void;
   function renderCalendar(): void;
   function renderHomeWorkflowExpandedBoard(): void;
-  function getLeadRoster(currentValueUsername: string): { username: string; displayName: string }[];
   function renderJobCustomFieldsGrid(values: Record<string, unknown>): void;
   function renderJobTeamFieldsGrid(values: Record<string, unknown>): void;
   function collectJobCustomFieldValues(): Record<string, unknown>;
   function deleteCardFromShared(projectId: string | null, cardId: string): void;
   function isFinishedColumn(col: BoardColumn): boolean;
-  function displayNameForUsername(username: string): string;
 }
 
 // ===== BOARD: COLUMN DRAG & DROP =====
@@ -1491,10 +1490,10 @@ function reconnectCard(cardId: string, event?: Event): void {
 
 // ===== BOARD: CUSTOM FIELDS =====
 // One shared per-field renderer for both grids (Team + Custom Fields) and
-// both surfaces (card modal here + Job Manager, still in index.html until
-// it's extracted in a later phase — its renderJobCustomFieldsGrid()/
-// renderJobTeamFieldsGrid()/collectJobCustomFieldValues() mirror this
-// file's own three below, reading/writing the same card.customFields).
+// both surfaces (card modal here + Job Manager's own renderJobCustomFieldsGrid()/
+// renderJobTeamFieldsGrid()/collectJobCustomFieldValues() in
+// src/views/job-form.ts, which mirror this file's own three below, reading/
+// writing the same card.customFields).
 // `onNeedsRoster` is called once the user-select/multiselect branches need
 // to lazy-load cachedUserRoster and re-render themselves; each caller
 // passes its own "re-render me with my current values" closure.

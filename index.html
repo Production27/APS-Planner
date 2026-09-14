@@ -3854,7 +3854,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-14.2';
+const APP_VERSION = '2026-09-14.3';
 
 // checkForNewerVersion() moved to src/app/version-check.ts.
 // checkMaintenanceStatus()/applyMaintenanceStatus()/
@@ -4270,52 +4270,11 @@ var jmDraftAttachments = [];
 // success with zero accounts sets it to []) — a failed fetch is not
 // cached, so the next render retries instead of the dropdown silently
 // looking identical to "no accounts exist" forever for the rest of the
-// session. userRosterLoadError holds the last failure's message, purely
-// so the dropdown can tell the user something actually went wrong instead
-// of just showing "Everyone" with no explanation either way.
+// session.
 // `var` — src/views/board.ts's renderBoard() reads this.
 var cachedUserRoster = null;
-let userRosterLoadError = null;
-
-// PM/Foreman ('user-select' fields) only offer accounts marked as a Lead
-// (see the Classification field in Manage Users / handleUsersAdd's
-// newIsLead). If a job's already-stored value belongs to an account that
-// isn't (or is no longer) a Lead, keep it in the list anyway so the
-// dropdown doesn't silently blank out an existing pick.
-// pm/foreman ('user-select' fields) store a USERNAME, not a display name —
-// resolve it for display purposes (board card face, etc.). Falls back to
-// the raw username if the roster hasn't loaded yet or the account is gone,
-// same defensive fallback getLeadRoster() uses.
-function displayNameForUsername(username) {
-  const match = (cachedUserRoster || []).find(function(u) { return u.username === username; });
-  return match ? match.displayName : username;
-}
-
-function getLeadRoster(currentValueUsername) {
-  const roster = cachedUserRoster || [];
-  const leads = roster.filter(function(u) { return u.isLead; });
-  if (currentValueUsername && !leads.some(function(u) { return u.username === currentValueUsername; })) {
-    const existing = roster.find(function(u) { return u.username === currentValueUsername; });
-    if (existing) leads.push(existing);
-  }
-  return leads;
-}
-async function ensureUserRosterLoaded() {
-  if (cachedUserRoster) return cachedUserRoster;
-  try {
-    const data = await postUsersEndpoint('users/roster');
-    cachedUserRoster = data.users || [];
-    userRosterLoadError = null;
-  } catch (e) {
-    console.error('Failed to load team roster for checklist assignment:', e);
-    userRosterLoadError = e.message || String(e);
-    // Single choke point every caller of ensureUserRosterLoaded() goes
-    // through, so this covers all of them at once rather than needing a
-    // toast at each of the 5 call sites individually.
-    showToast("Couldn't load the team list — " + userRosterLoadError, 'error');
-  }
-  return cachedUserRoster || [];
-}
+// displayNameForUsername()/getLeadRoster()/ensureUserRosterLoaded() moved
+// to src/app/user-roster.ts.
 
 // ===== VIEW AS A MEMBER (Admin only — not even Project Admin) =====
 // Lets an Admin preview the ENTIRE app — Job Manager, Board, Calendar,
@@ -4325,34 +4284,12 @@ async function ensureUserRosterLoaded() {
 // (see hasMinTier() below, which checks viewAsRole instead of
 // currentUserRole whenever viewAsUsername is set) — so the whole UI
 // gates itself exactly the way it would for that account, buttons and
-// all. The View As control itself is the one deliberate exception:
-// setViewAs() above tests currentUserRole directly rather than going
-// through hasMinTier(), so the admin can always change or exit the
-// simulation regardless of how restrictive the tier being previewed is.
-// (Reachable only via the Admin-only Manage Users modal — see
-// loadUsersList()'s per-row buttons — rather than its own standalone
-// control, so there's no separate visibility toggle to keep in sync
-// here any more.) Session-only, like ganttFocusedJobId — not persisted,
-// and cleared on project switch (see
-// switchProject()).
+// all. Session-only, like ganttFocusedJobId — not persisted, and cleared
+// on project switch (see switchProject()).
 // `var` — src/views/calendar.ts's isCalendarEventVisibleToMe() reads this.
 var viewAsUsername = null;
 let viewAsRole = null;
-
-// Admin-only roster WITH role — the public roster (cachedUserRoster, via
-// /users/roster) deliberately strips role for privacy (see its own
-// comment) — but View As now lives entirely inside the (Admin-only)
-// Manage Users modal, whose own user list (see loadUsersList()) already
-// carries role, so there's no separate roster fetch/cache needed here
-// any more (used to be cachedAdminUserRoster/ensureAdminUserRosterLoaded(),
-// hitting the same /users/list endpoint Manage Users does — redundant
-// once both live in the same place).
-function setViewAs(username, role) {
-  if (currentUserRole !== 'admin') return;
-  viewAsUsername = username || null;
-  viewAsRole = viewAsUsername ? (role || null) : null;
-  renderAll();
-}
+// setViewAs() moved to src/app/users-admin.ts.
 
 // `var`, not `const` — src/views/board.ts's buildCardEl() reads this.
 var CUSTOM_FIELD_DEFS = [

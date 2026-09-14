@@ -57,7 +57,7 @@ declare global {
   // eslint-disable-next-line no-var
   var draggedColId: string | null;
   // eslint-disable-next-line no-var
-  var cachedUserRoster: { username: string; displayName: string }[] | null;
+  var cachedUserRoster: { username: string; displayName: string; isLead: boolean }[] | null;
   // eslint-disable-next-line no-var
   var viewAsUsername: string | null;
   // eslint-disable-next-line no-var
@@ -89,7 +89,6 @@ declare global {
   function isJobVisibleToMe(job: Job): boolean;
   function isFinishedColumnId(colId: string): boolean;
   function applyPermissionGating(): void;
-  function ensureUserRosterLoaded(): Promise<void>;
   function updateProjectToggle(): void;
   function mergeTombstones(a: Record<string, number> | undefined, b: Record<string, number>): Record<string, number>;
   function renderJobList(): void;

@@ -21,11 +21,13 @@
 // logic reused here, not Calendar-specific. Declared as ambient globals
 // below since this file's render functions call them directly.
 //
-// ensureUserRosterLoaded()/saveCalendarEvents()/logActivity()/
-// deleteCalendarEventFromShared()/getVisibleJobs()/flattenJobs()/
-// buildCalendarJobRows()/isTaskFinished()/isDarkColor()/editJob() stay in
-// index.html on purpose (the Gantt-clustering-coupled row builder noted
-// above, or genuinely separate concerns like Job Manager's own
+// saveCalendarEvents()/logActivity()/deleteCalendarEventFromShared()/
+// getVisibleJobs()/flattenJobs()/buildCalendarJobRows()/isTaskFinished()/
+// isDarkColor()/editJob() stay in index.html on purpose (the
+// Gantt-clustering-coupled row builder noted above — real in
+// src/views/gantt.ts now, but still typed here with this file's own
+// CalJob/CalRow shapes rather than imported, per the declare block's own
+// comment below — or genuinely separate concerns like Job Manager's own
 // edit-drawer) and are referenced below as ambient globals.
 import type { CalendarEvent, CalendarEventOccurrence, Job } from '../core/types';
 import { addMonths, toIsoDate, formatTimeLabel, timeToMinutes, getDaysDiff } from '../utils/date';
@@ -36,6 +38,7 @@ import { findJob, findTask, getPhaseCard } from '../core/models';
 import { openModal, closeModal, showToast, moveTooltip, hideTooltip, msDropdownLabelText, onPanelResize } from '../utils/ui';
 import { getEffectiveRole, hasMinTier } from '../auth/permissions';
 import { getStoredUsername } from '../auth/session';
+import { ensureUserRosterLoaded } from '../app/user-roster';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS-style shared state, saveJobs()-style shared functions,

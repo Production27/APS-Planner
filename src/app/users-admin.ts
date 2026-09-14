@@ -3,9 +3,26 @@ import { openModal, closeModal, showToast } from '../utils/ui';
 import { escapeHtml } from '../utils/html';
 import { getStoredUsername, setStoredSessionToken } from '../auth/session';
 import { postUsersEndpoint } from './worker-client';
+import { renderAll } from './project';
 
-declare global {
-  function setViewAs(username: string, role: string): void;
+// Lets an Admin preview the ENTIRE app — Job Manager, Board, Calendar,
+// Gantt — exactly as a specific Member would see it: both their DATA
+// visibility (see isJobVisibleToMe()/isCalendarEventVisibleToMe()/
+// isChecklistStageVisibleToMe()) and their actual PERMISSION TIER (see
+// hasMinTier() in src/auth/permissions.ts, which checks viewAsRole instead
+// of currentUserRole whenever viewAsUsername is set) — so the whole UI
+// gates itself exactly the way it would for that account, buttons and all.
+// This function itself is the one deliberate exception: it tests
+// currentUserRole directly rather than going through hasMinTier(), so the
+// admin can always change or exit the simulation regardless of how
+// restrictive the tier being previewed is. Session-only, like
+// ganttFocusedJobId — not persisted, and cleared on project switch (see
+// switchProject() in src/app/project.ts).
+export function setViewAs(username: string, role: string): void {
+  if (currentUserRole !== 'admin') return;
+  viewAsUsername = username || null;
+  viewAsRole = viewAsUsername ? (role || null) : null;
+  renderAll();
 }
 
 export function openManageUsersModal(): void {
