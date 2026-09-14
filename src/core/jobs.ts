@@ -580,3 +580,31 @@ export function isJobFinished(job: Job): boolean {
   if (!job.tasks || !job.tasks.length) return false;
   return job.tasks.every(function (t) { return isTaskFinished(job, t); });
 }
+
+// Schema-lock for a freshly-loaded project's jobs array: backfills any
+// missing id/order/archived, and migrates the old single free-text notes
+// field into a comment thread the first time it sees a job that still has
+// one (after this, job.comments is always an array, so it's never
+// re-migrated). Runs on every project load/save (see loadActiveProjectData()/
+// saveActiveProject() in src/app/project.ts) so older locally-cached data
+// self-heals without a one-off migration script.
+export function ensureJobAndTaskIds(arr: Job[]): Job[] {
+  (arr || []).forEach(function (job, i) {
+    if (!job.id) job.id = genId();
+    if (typeof job.order !== 'number') job.order = i;
+    if (typeof job.archived !== 'boolean') job.archived = false;
+    if (!Array.isArray(job.comments)) {
+      // The old single free-text notes field became a comment thread —
+      // carry any existing text forward as the first entry instead of
+      // silently dropping it.
+      job.comments = (job.notes && (job.notes as string).trim())
+        ? [{ id: genId(), author: 'Imported note', text: (job.notes as string).trim(), when: null }]
+        : [];
+    }
+    (job.tasks || []).forEach(function (task, j) {
+      if (!task.id) task.id = genId();
+      if (typeof task.order !== 'number') task.order = j;
+    });
+  });
+  return arr;
+}

@@ -24,12 +24,16 @@ test('buildVisibleTaskRows: an unphased job with an un-expanded sub-unit collaps
   const result = await page.evaluate(() => {
     window.getVisibleJobs = () => jobs;
     window.getLinkedReferenceJobs = () => [];
-    window.getHiddenTaskOrders = () => new Set();
     window.getSubUnitKey = (job, phaseId, subPhaseId) => job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
-    window.getJobDueMarkerTask = () => null;
     window.ganttFocusedJobId = null;
     tasksExpandedPhaseIds = new Set();
     tasksExpandedSubPhaseIds = new Set(); // nothing expanded — default collapsed
+    // getHiddenTaskOrders()/getJobDueMarkerTask() are real, module-scoped
+    // exports of gantt.ts now (not stubbable via window.* — bare calls from
+    // this same bundled module resolve to the real function) — so their
+    // real inputs (BOARD_COLUMNS, boardCards) get set instead.
+    BOARD_COLUMNS = [];
+    boardCards = [];
 
     jobs = [{
       id: 'job-1', name: 'Test Job', color: '#3949ab', archived: false,
@@ -57,14 +61,17 @@ test('buildVisibleTaskRows: expanding the sub-unit yields one row per dated task
   const result = await page.evaluate(() => {
     window.getVisibleJobs = () => jobs;
     window.getLinkedReferenceJobs = () => [];
-    window.getHiddenTaskOrders = () => new Set();
     window.getSubUnitKey = (job, phaseId, subPhaseId) => job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
-    window.getJobDueMarkerTask = () => null;
     window.ganttFocusedJobId = null;
     tasksExpandedPhaseIds = new Set();
     // Unphased job's default phase/sub-unit both carry id:null — matches
     // getSubUnitKey('job-1', null, null) above.
     tasksExpandedSubPhaseIds = new Set(['job-1::p0::s0']);
+    // getHiddenTaskOrders()/getJobDueMarkerTask() are real, module-scoped
+    // exports of gantt.ts now — their real inputs (BOARD_COLUMNS,
+    // boardCards) get set instead of stubbing via window.*.
+    BOARD_COLUMNS = [];
+    boardCards = [];
 
     jobs = [{
       id: 'job-1', name: 'Test Job', color: '#3949ab', archived: false,
@@ -88,12 +95,16 @@ test('buildVisibleTaskRows: a job\'s due-date marker gets its own row on the fir
   const result = await page.evaluate(() => {
     window.getVisibleJobs = () => jobs;
     window.getLinkedReferenceJobs = () => [];
-    window.getHiddenTaskOrders = () => new Set();
     window.getSubUnitKey = (job, phaseId, subPhaseId) => job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
-    window.getJobDueMarkerTask = (job) => ({ id: '__due__', name: 'Due Date', start: '2026-09-20', finish: '2026-09-20', order: -1, isDueMarker: true });
     window.ganttFocusedJobId = null;
     tasksExpandedPhaseIds = new Set();
     tasksExpandedSubPhaseIds = new Set(['job-1::p0::s0']);
+    // getHiddenTaskOrders()/getJobDueMarkerTask() are real, module-scoped
+    // exports of gantt.ts now (not stubbable via window.*) — a due marker
+    // comes from a real boardCards entry with a `due` date on this job's
+    // (unphased, so phaseId: null) card, same as getPhaseCard() reads.
+    BOARD_COLUMNS = [];
+    boardCards = [{ jobId: 'job-1', phaseId: null, due: '2026-09-20' }];
 
     jobs = [{
       id: 'job-1', name: 'Test Job', color: '#3949ab', archived: false,

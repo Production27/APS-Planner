@@ -38,8 +38,15 @@ import { showToast, moveTooltip, hideTooltip } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 
 // Ambient globals this file shares verbatim with other src/ files
-// (BOARD_COLUMNS, saveJobs(), showToast(), getJobDueMarkerTask(), etc.)
-// are declared once in src/shared-globals.d.ts, not repeated here.
+// (BOARD_COLUMNS, saveJobs(), showToast(), etc.) are declared once in
+// src/shared-globals.d.ts, not repeated here. DUE_MARKER_TASK_ID/
+// getJobDueMarkerTask() are real exports of THIS file now (see near the
+// bottom) — src/shared-globals.d.ts still ambiently declares them too,
+// for src/views/calendar.ts's own bare references to keep resolving;
+// that central declaration is intentionally left alone rather than
+// converted, since calendar.ts and this file would otherwise need to
+// agree on one exact shared type for a value each already types its own
+// way (GanttTask vs CalTask).
 declare global {
   // eslint-disable-next-line no-var
   var dayWidth: number;
@@ -59,7 +66,6 @@ declare global {
   // same real function.
   function getVisibleJobs(): Job[];
   function getLinkedReferenceJobs(): Job[];
-  function getHiddenTaskOrders(): Set<number>;
   // A phase's own id can be null (an unphased job's synthetic default
   // phase — see getJobPhases()), so this has to accept null keys too.
   // eslint-disable-next-line no-var
@@ -2115,6 +2121,232 @@ function setupScrollSync(): void {
   timelineBody.onwheel = handleGanttWheelZoom;
 }
 
+// ===== Row builders shared with Calendar (src/views/calendar.ts consumes
+// flattenJobs()/buildCalendarJobRows()/isCalendarJobSpanTaskId() as
+// ambient globals — its own comment explains why: they're really this
+// file's own task-clustering logic reused there, not Calendar-specific,
+// so this is their real home despite Calendar being the only render
+// surface for some of them) =====
+
+// A job's due date (card.due) isn't a task — it doesn't live in job.tasks
+// and Job Manager never shows it as one — but it still needs to appear on
+// the Gantt/Calendar and be draggable like a task bar. This synthesizes a
+// single-day pseudo-task at render time (start === finish naturally gets
+// the app's existing "milestone" single-day styling) that the Gantt/
+// Calendar drag handlers special-case by id instead of writing through
+// findTask()/job.tasks.
+const DUE_MARKER_TASK_ID = '__due__';
+function getJobDueMarkerTask(job: Job, phaseId: string | null): GanttTask | null {
+  const card = getPhaseCard(job, phaseId);
+  if (!card || !card.due) return null;
+  if (isNaN(new Date(card.due + 'T00:00:00').getTime())) return null;
+  return { id: DUE_MARKER_TASK_ID, name: 'Due Date', start: card.due, finish: card.due, notes: '', color: job.color, order: -1, isDueMarker: true };
+}
+
+// Shared job -> phase -> sub-unit walk behind flattenJobs() (Gantt Tasks
+// view) and buildCalendarJobRows() (Calendar) — the genuinely-matching
+// pair. Skips archived jobs, folds in linked reference jobs the same way
+// both callers already did, visits every phase then every sub-unit within
+// it (including the synthetic single-entry wrap an unphased job/phase
+// gets from getJobPhases()/getPhaseSubUnits()), and appends that phase's
+// one due-marker row on the FIRST sub-unit only — there's no per-sub-phase
+// card to carry a second one, so it must never be duplicated across every
+// sub-phase.
+// subUnitCallback(job, jobIdx, phase, phaseName, subUnit, subIdx,
+// subPhaseName) does each caller's own per-sub-unit row shaping;
+// dueRowBuilder(...) builds that caller's own due-marker row shape (only
+// called when a due task actually exists).
+//
+// buildVisibleTaskRows() (this file's own collapse-aware nested helper,
+// inside renderGantt()) is deliberately NOT built on this — it's tightly
+// coupled to Gantt-only collapse state (collapsedPhaseIds/
+// tasksExpandedPhaseIds/tasksExpandedSubPhaseIds/ganttFocusedJobId) and
+// produces a genuinely different row shape (collapse-aware synthetic
+// phase/sub-phase rows). Forcing it through this walker would mean
+// threading Gantt-specific collapse logic into code the other two
+// callers don't need — worse for long-term readability than the current
+// split, not better.
+function forEachVisibleSubUnit(
+  jobsArr: Job[],
+  subUnitCallback: (job: any, jobIdx: number, phase: Phase, phaseName: string | null, subUnit: SubPhase, subIdx: number, subPhaseName: string | null) => void,
+  dueRowBuilder: (job: any, jobIdx: number, phase: Phase, phaseName: string | null, subUnit: SubPhase, subPhaseName: string | null, dueTask: GanttTask) => void
+): void {
+  const combined = (jobsArr || []).concat(getLinkedReferenceJobs() as Job[]);
+  combined.forEach(function (job: any, jobIdx: number) {
+    if (job.archived) return;
+    getJobPhases(job).forEach(function (phase) {
+      const phaseName = phase.isDefault ? null : phase.name;
+      getPhaseSubUnits(phase).forEach(function (subUnit, subIdx) {
+        const subPhaseName = subUnit.isDefault ? null : subUnit.name;
+        subUnitCallback(job, jobIdx, phase, phaseName, subUnit, subIdx, subPhaseName);
+        if (!job.isLinkedReference && subIdx === 0) {
+          const dueTask = getJobDueMarkerTask(job, phase.id);
+          if (dueTask) dueRowBuilder(job, jobIdx, phase, phaseName, subUnit, subPhaseName, dueTask);
+        }
+      });
+    });
+  });
+}
+
+function flattenJobs(jobsArr: Job[]): any[] {
+  const hiddenOrders = getHiddenTaskOrders();
+  const rows: any[] = [];
+  forEachVisibleSubUnit(jobsArr, function (job, jobIdx, phase, phaseName, subUnit, subIdx, subPhaseName) {
+    (subUnit.tasks || []).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    (subUnit.tasks || []).forEach(function (task, taskIdx) {
+      if (hiddenOrders.has(task.order as number)) return;
+      rows.push({ job: job, jobIdx: jobIdx, task: task, taskIdx: taskIdx, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
+    });
+  }, function (job, jobIdx, phase, phaseName, subUnit, subPhaseName, dueTask) {
+    rows.push({ job: job, jobIdx: jobIdx, task: dueTask, taskIdx: -1, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
+  });
+  return rows;
+}
+
+// ===== CALENDAR: COLLAPSED JOB ROWS =====
+// Calendar's own version of flattenJobs() — a job's sub-units start
+// CONDENSED into one bar each (spanning that sub-unit's own min-start/
+// max-finish) instead of one bar per task, using the exact same
+// tasksExpandedSubPhaseIds Set the Gantt's Tasks view already maintains
+// (see toggleTasksSubPhaseExpanded()) — expanding a sub-phase in either
+// view shows it expanded in both, since it's the same shared state, not
+// a separate Calendar-only copy.
+//
+// Deliberately simpler than the Gantt's two-level collapse (a whole
+// phase folds into one bar across all its sub-phases, and each
+// sub-phase separately folds into one bar across its own tasks): here,
+// a real sub-phase always gets its own bar rather than also being
+// foldable together with its siblings into one bar — a calendar shows
+// literal dates on a grid, and merging unrelated sub-phases' date
+// ranges into a single bar read as more confusing than useful for that,
+// unlike the Gantt's zoomable timeline where it's a genuine space-saver.
+// A phase-less/sub-phase-less job (the common case) still gets exactly
+// one collapsible bar per phase, via getPhaseSubUnits()'s synthetic
+// single-entry wrap — same as flattenJobs().
+function getHiddenTaskOrders(): Set<number> {
+  const hidden = new Set<number>();
+  BOARD_COLUMNS.forEach(function (c, i) { if (c.hideFromSchedule) hidden.add(i); });
+  return hidden;
+}
+// Groups a collapsed sub-phase's tasks into "clusters" — a cluster is a
+// maximal run of days with no missing day anywhere inside it (tasks
+// touching or overlapping stay one cluster; an actual scheduling gap
+// starts a new one). Within a cluster, day-bucketed sub-segments still
+// track exactly which task(s) cover each stretch (mirroring the Gantt
+// Tasks view's own collapsed-sub-phase day-sweep, renderGantt()'s
+// job-span drawing pass) so an overlap still reads as a hatch and a
+// hand-off between two tasks still reads as two different colors — but
+// that's rendered as ONE bordered bar per cluster (buildCalBarHtml's
+// nested inner blocks), not a separate bar for the overlap itself. A
+// real gap gets no bar at all over those days. Per the user: don't
+// connect a bar across an unscheduled day, but don't fragment a
+// genuinely-connected (touching/overlapping) run into multiple bars
+// either.
+function buildSubUnitClusters(job: any, subUnit: SubPhase, hiddenOrders: Set<number>): any[] {
+  const dated = (subUnit.tasks || []).filter(function (task) {
+    if (hiddenOrders.has(task.order as number)) return false;
+    if (!task.start || !task.finish) return false;
+    const s = new Date(task.start + 'T00:00:00'), f = new Date(task.finish + 'T00:00:00');
+    return !isNaN(s.getTime()) && !isNaN(f.getTime());
+  }).map(function (task) {
+    return { task: task, start: new Date(task.start + 'T00:00:00'), finish: new Date(task.finish + 'T00:00:00') };
+  });
+  if (!dated.length) return [];
+  let minStart = dated[0].start, maxFinish = dated[0].finish;
+  dated.forEach(function (dt) {
+    if (dt.start < minStart) minStart = dt.start;
+    if (dt.finish > maxFinish) maxFinish = dt.finish;
+  });
+  const totalDays = getDaysDiff(minStart, maxFinish) + 1;
+  const dayTasks: GanttTask[][] = [];
+  for (let i = 0; i < totalDays; i++) dayTasks.push([]);
+  dated.forEach(function (dt) {
+    const sIdx = getDaysDiff(minStart, dt.start), eIdx = getDaysDiff(minStart, dt.finish);
+    for (let d = Math.max(0, sIdx); d <= Math.min(totalDays - 1, eIdx); d++) dayTasks[d].push(dt.task);
+  });
+  const fineSegments: any[] = [];
+  let di = 0;
+  while (di < totalDays) {
+    const covering = dayTasks[di];
+    const key = covering.map(function (t) { return t.id; }).sort().join('|');
+    let dj = di;
+    while (dj + 1 < totalDays && dayTasks[dj + 1].map(function (t) { return t.id; }).sort().join('|') === key) dj++;
+    if (covering.length > 0) {
+      fineSegments.push({
+        startOffset: di, endOffset: dj,
+        // taskCount is the real "is this an overlap" signal — colors is
+        // deduped, so two overlapping tasks that both happen to be
+        // job-colored (the common case — see normalizeTasksToColumns())
+        // would otherwise collapse to a single color and look identical
+        // to a plain one-task segment, silently losing the overlap.
+        taskCount: covering.length,
+        colors: Array.from(new Set(covering.map(function (t) { return t.color || job.color || '#3949ab'; }))),
+      });
+    }
+    di = dj + 1;
+  }
+  // Merge fine segments into clusters wherever there's no day-gap between
+  // them (adjacent fine segments always represent a hand-off between
+  // different covering-task-sets, but that alone isn't a gap — only a
+  // missing offset between them is).
+  const clusters: any[] = [];
+  fineSegments.forEach(function (seg) {
+    const last = clusters[clusters.length - 1];
+    if (last && seg.startOffset === last.endOffset + 1) {
+      last.endOffset = seg.endOffset;
+      last.segs.push(seg);
+    } else {
+      clusters.push({ startOffset: seg.startOffset, endOffset: seg.endOffset, segs: [seg] });
+    }
+  });
+  return clusters.map(function (c) {
+    const start = new Date(minStart); start.setDate(start.getDate() + c.startOffset);
+    const finish = new Date(minStart); finish.setDate(finish.getDate() + c.endOffset);
+    return {
+      start: start, finish: finish,
+      // Re-based to the CLUSTER's own start (not the whole sub-phase's) —
+      // buildCalBarHtml positions these relative to the bar it's building,
+      // which is now exactly this cluster.
+      segments: c.segs.map(function (s: any) {
+        return { startOffset: s.startOffset - c.startOffset, endOffset: s.endOffset - c.startOffset, taskCount: s.taskCount, colors: s.colors };
+      }),
+    };
+  });
+}
+const CALENDAR_JOB_SPAN_TASK_PREFIX = 'calspan|';
+function isCalendarJobSpanTaskId(taskId: unknown): boolean {
+  return typeof taskId === 'string' && taskId.indexOf(CALENDAR_JOB_SPAN_TASK_PREFIX) === 0;
+}
+// Condenses a sub-phase's tasks into one bar per cluster
+// (buildSubUnitClusters) — unlike the Gantt's own Tasks view, the
+// Calendar never offers expanding back out to individual task bars
+// (deliberately no chevron/toggle here), and unlike the Gantt's own
+// collapsed-row look, a real scheduling gap between two of a sub-phase's
+// tasks gets no bar at all instead of one continuous bar painted
+// straight through it.
+function buildCalendarJobRows(jobsArr: Job[]): any[] {
+  const hiddenOrders = getHiddenTaskOrders();
+  const rows: any[] = [];
+  forEachVisibleSubUnit(jobsArr, function (job, jobIdx, phase, phaseName, subUnit, subIdx, subPhaseName) {
+    const clusters = buildSubUnitClusters(job, subUnit, hiddenOrders);
+    const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+    clusters.forEach(function (cluster, clusterIdx) {
+      const single = cluster.segments.length === 1 ? cluster.segments[0] : null;
+      const pseudoTask = {
+        id: CALENDAR_JOB_SPAN_TASK_PREFIX + job.id + '|' + (phase.id || '') + '|' + (subUnit.id || '') + '|' + clusterIdx,
+        name: job.name + namePart,
+        start: toIsoDate(cluster.start), finish: toIsoDate(cluster.finish),
+        notes: '', color: (single && single.taskCount === 1) ? single.colors[0] : job.color, order: 0, isJobSpan: true,
+        clusterSegments: cluster.segments,
+      };
+      rows.push({ job: job, task: pseudoTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
+    });
+  }, function (job, jobIdx, phase, phaseName, subUnit, subPhaseName, dueTask) {
+    rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
+  });
+  return rows;
+}
+
 export {
   cascadeShiftLaterTasks,
   startBarResizeRight,
@@ -2161,4 +2393,12 @@ export {
   showDatePopover,
   hideDatePopover,
   showTooltip,
+  DUE_MARKER_TASK_ID,
+  getJobDueMarkerTask,
+  forEachVisibleSubUnit,
+  flattenJobs,
+  getHiddenTaskOrders,
+  buildSubUnitClusters,
+  isCalendarJobSpanTaskId,
+  buildCalendarJobRows,
 };

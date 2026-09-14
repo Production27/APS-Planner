@@ -43,7 +43,7 @@ import {
   splitJobIntoPhases, addJobPhase, removeJobPhase, unsplitJobFromPhases, splitPhaseIntoSubPhases, addPhaseSubUnit,
   removePhaseSubUnit, unsplitPhaseFromSubPhases, ensureJobHasCards, migrateOrphanedCards, deriveColumnForTasks,
   setCardColumn, runColumnEntryActions, syncCardColumns, ensureCardIds, isJobVisibleToMe, getVisibleJobs,
-  isJobFinished, isTaskFinished,
+  isJobFinished, isTaskFinished, ensureJobAndTaskIds,
 } from './core/jobs';
 import {
   migrateFromLegacy, loadProjects, saveProjects, getActiveProject, switchProject, enforceProjectScopeForRole,
@@ -98,6 +98,8 @@ import {
   toggleTasksSubPhaseExpanded, expandAllGantt, collapseAllGantt, toggleGanttJobFocus, clearGanttJobFocus,
   syncGanttJobFocusBanner, buildPhaseSubTags, computeDateRange, showDatePopover, hideDatePopover, showTooltip,
   setHeaderScroll, setupScrollSync,
+  DUE_MARKER_TASK_ID, getJobDueMarkerTask, forEachVisibleSubUnit, flattenJobs, getHiddenTaskOrders,
+  buildSubUnitClusters, isCalendarJobSpanTaskId, buildCalendarJobRows,
 } from './views/gantt';
 import {
   sendPresenceUpdate, presenceAvatarColor, presenceInitials, presenceAnimDelay, renderPresenceAvatars,
@@ -380,6 +382,7 @@ declare global {
     // signature can't satisfy that intersection; GanttTask/CalTask aren't
     // structurally assignable to Task).
     isTaskFinished: (job: any, task: any) => boolean;
+    ensureJobAndTaskIds: typeof ensureJobAndTaskIds;
     migrateFromLegacy: typeof migrateFromLegacy;
     loadProjects: typeof loadProjects;
     saveProjects: typeof saveProjects;
@@ -600,6 +603,22 @@ declare global {
     showDatePopover: typeof showDatePopover;
     hideDatePopover: typeof hideDatePopover;
     showTooltip: typeof showTooltip;
+    DUE_MARKER_TASK_ID: typeof DUE_MARKER_TASK_ID;
+    // Declared loosely (not `typeof getJobDueMarkerTask`/`flattenJobs`/
+    // `buildCalendarJobRows`) — shared-globals.d.ts and calendar.ts each
+    // declare their own, differently-typed ambient versions of these names
+    // for their own bare references, which TS merges into an intersection
+    // with whatever's declared here; the real gantt.ts functions' plain
+    // Job[]-based signatures can't satisfy that intersection, so the
+    // assignments below cast through `any` for the same reason as
+    // `isTaskFinished` above.
+    getJobDueMarkerTask: (job: any, phaseId: string | null) => any;
+    forEachVisibleSubUnit: typeof forEachVisibleSubUnit;
+    flattenJobs: (jobsArr: any[]) => any[];
+    getHiddenTaskOrders: typeof getHiddenTaskOrders;
+    buildSubUnitClusters: typeof buildSubUnitClusters;
+    isCalendarJobSpanTaskId: typeof isCalendarJobSpanTaskId;
+    buildCalendarJobRows: (jobsArr: any[]) => any[];
     setHeaderScroll: typeof setHeaderScroll;
     setupScrollSync: typeof setupScrollSync;
     sendPresenceUpdate: typeof sendPresenceUpdate;
@@ -931,6 +950,7 @@ window.isJobVisibleToMe = isJobVisibleToMe;
 window.getVisibleJobs = getVisibleJobs;
 window.isJobFinished = isJobFinished;
 window.isTaskFinished = isTaskFinished as any;
+window.ensureJobAndTaskIds = ensureJobAndTaskIds;
 window.migrateFromLegacy = migrateFromLegacy;
 window.loadProjects = loadProjects;
 window.saveProjects = saveProjects;
@@ -1151,6 +1171,14 @@ window.computeDateRange = computeDateRange;
 window.showDatePopover = showDatePopover;
 window.hideDatePopover = hideDatePopover;
 window.showTooltip = showTooltip;
+window.DUE_MARKER_TASK_ID = DUE_MARKER_TASK_ID;
+window.getJobDueMarkerTask = getJobDueMarkerTask as any;
+window.forEachVisibleSubUnit = forEachVisibleSubUnit;
+window.flattenJobs = flattenJobs as any;
+window.getHiddenTaskOrders = getHiddenTaskOrders;
+window.buildSubUnitClusters = buildSubUnitClusters;
+window.isCalendarJobSpanTaskId = isCalendarJobSpanTaskId;
+window.buildCalendarJobRows = buildCalendarJobRows as any;
 window.setHeaderScroll = setHeaderScroll;
 window.setupScrollSync = setupScrollSync;
 window.sendPresenceUpdate = sendPresenceUpdate;

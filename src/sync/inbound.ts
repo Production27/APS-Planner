@@ -20,7 +20,8 @@ import { renderBoard } from '../views/board';
 import { renderCalendar, ensureCalendarEventIds } from '../views/calendar';
 import { genId } from '../utils/id';
 import { DEFAULT_THEME_COLOR } from '../app/theme';
-import { ensureCardIds } from '../core/jobs';
+import { ensureCardIds, ensureJobAndTaskIds } from '../core/jobs';
+import { Job } from '../core/types';
 import { enforceFixedProjectSet } from '../app/project';
 
 // Ambient globals this file shares verbatim with other src/ files
@@ -30,7 +31,6 @@ import { enforceFixedProjectSet } from '../app/project';
 declare global {
   // eslint-disable-next-line no-var
   var pendingRemoteRefresh: boolean;
-  function ensureJobAndTaskIds(arr: any[]): any[];
   function enforceProjectScopeForRole(): void;
   function loadActiveProjectData(): void;
   function renderAll(): void;
@@ -317,7 +317,7 @@ function applyRoomSnapshot(remoteProjects: Record<string, any>, isFirstSnapshot:
       // ── jobs (now a plain {id: job} object from the server, not a LiveMap) ──
       if (!projectSyncPending) {
         const j = Object.values(remoteJobs).filter(function (job: any) { return !local.deletedIds[String(job.id)]; });
-        ensureJobAndTaskIds(j);
+        ensureJobAndTaskIds(j as Job[]);
         j.forEach(function (job: any) { if (!job.notes) job.notes = ''; });
         j.sort(function (a: any, b: any) { return (a.order || 0) - (b.order || 0); });
         local.jobs = j;
