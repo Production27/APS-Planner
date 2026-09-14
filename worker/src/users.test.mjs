@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   normalizeUsername, normalizeUserRecord,
   genSaltHex, hashPasswordPBKDF2,
-  resolveIdentityFromToken
+  resolveIdentityFromToken,
+  getAuthFailureCount, bumpAuthFailure, AUTH_LOCKOUT_WINDOW_SECONDS
 } from './users.ts';
 import { signRoomToken } from './room-token.ts';
 
@@ -55,4 +56,34 @@ test('resolveIdentityFromToken resolves a valid token, wiring through to room-to
 test('resolveIdentityFromToken returns null for an invalid token', async () => {
   const fakeEnv = { ROOM_TOKEN_SECRET: 'test-secret' };
   assert.equal(await resolveIdentityFromToken(fakeEnv, 'garbage'), null);
+});
+
+function makeFakeKV() {
+  const store = new Map();
+  return {
+    async get(key) { return store.has(key) ? store.get(key) : null; },
+    async put(key, value, opts) { store.set(key, value); this._lastTtl = opts && opts.expirationTtl; },
+    _store: store
+  };
+}
+
+test('getAuthFailureCount returns 0 for a key that has never failed', async () => {
+  const fakeEnv = { USERS_KV: makeFakeKV() };
+  assert.equal(await getAuthFailureCount(fakeEnv, 'authfail:nobody'), 0);
+});
+
+test('getAuthFailureCount tolerates a corrupt (non-numeric) stored value', async () => {
+  const kv = makeFakeKV();
+  kv._store.set('authfail:alice', 'not-a-number');
+  assert.equal(await getAuthFailureCount({ USERS_KV: kv }, 'authfail:alice'), 0);
+});
+
+test('bumpAuthFailure increments the counter and sets it to expire after the lockout window', async () => {
+  const kv = makeFakeKV();
+  const fakeEnv = { USERS_KV: kv };
+  await bumpAuthFailure(fakeEnv, 'authfail:alice');
+  assert.equal(await getAuthFailureCount(fakeEnv, 'authfail:alice'), 1);
+  await bumpAuthFailure(fakeEnv, 'authfail:alice');
+  assert.equal(await getAuthFailureCount(fakeEnv, 'authfail:alice'), 2);
+  assert.equal(kv._lastTtl, AUTH_LOCKOUT_WINDOW_SECONDS);
 });
