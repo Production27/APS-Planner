@@ -493,13 +493,30 @@ function startBarMove(e: MouseEvent, jobId: string, taskId: string, bar: HTMLEle
     // a drag. The matching set can't change mid-drag (nothing else
     // touches these overlay elements while a drag is in progress), so
     // there's nothing to invalidate by caching it up front.
+    //
+    // Matched by rowKey (shared by every piece of one visual row — see
+    // ganttRowKey()'s own comment) rather than the (jobId, phaseId,
+    // subPhaseId) tuple this used to compare: a phase collapsed into one
+    // row that folds several real sub-phases together (isCollapsedRow in
+    // renderTimelineBars()) gives its border/label the ROW's own
+    // subPhaseId (null, standing for "all of them") but gives each
+    // colored day-segment its OWN task's real, specific subPhaseId —
+    // genuinely different values for pieces of the exact same row. Matching
+    // on that tuple meant grabbing the row's empty background dragged the
+    // border/label but left every colored segment behind, while grabbing a
+    // segment dragged it (and same-subphase siblings) but left the border
+    // behind — a real, visible "duplicate bar" of the row's own outline
+    // sitting apart from its own colored segments (Karl's own screenshot).
+    // `bar` here is whichever element's own mousedown started this drag
+    // (the base bar, or a specific segment), and every piece of this row —
+    // border, label, every tick/hash/solid segment regardless of which
+    // task or sub-phase it individually represents — already carries this
+    // same rowKey, so this reliably grabs the whole row's worth of pieces
+    // no matter which one the user actually grabbed.
     jobSpanOverlayEls: isJobSpan ? Array.from(document.querySelectorAll<HTMLElement>(
       '.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap, .job-span-border'
-    )).filter((tk) => {
-      return tk.dataset.jobId === jobId &&
-        (tk.dataset.phaseId || '') === (phaseId || '') &&
-        (tk.dataset.subPhaseId || '') === (subPhaseId || '');
-    }).map((tk) => ({ el: tk, origLeft: parseFloat(tk.dataset.origLeft || '0') })) : null,
+    )).filter((tk) => tk.dataset.rowKey === bar.dataset.rowKey)
+      .map((tk) => ({ el: tk, origLeft: parseFloat(tk.dataset.origLeft || '0') })) : null,
   };
 
   document.addEventListener('mousemove', onBarMoveMove);
