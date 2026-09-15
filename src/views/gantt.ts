@@ -314,11 +314,19 @@ function onBarResizeEnd(e: MouseEvent): void {
       newStart.setDate(newStart.getDate() - (currentDuration - 1));
       task.start = toIsoDate(newStart);
     }
-    saveJobs();
-    logActivity('rescheduled task "' + task.name + '"');
-    renderJobList();
-    refreshJobFormIfOpen(jobId);
-    showToast(side === 'right' ? 'Finish date updated' : 'Start date updated', 'success');
+    barResizeState = null;
+    renderGantt();
+    // Deferred past the render above — see onBarMoveEnd()'s own comment on
+    // why saving/logging/the job list/the toast shouldn't share the same
+    // synchronous burst as the reorder the user is actually watching.
+    setTimeout(function () {
+      saveJobs();
+      logActivity('rescheduled task "' + task.name + '"');
+      renderJobList();
+      refreshJobFormIfOpen(jobId);
+      showToast(side === 'right' ? 'Finish date updated' : 'Start date updated', 'success');
+    }, 0);
+    return;
   }
 
   barResizeState = null;
@@ -407,11 +415,17 @@ function onTickResizeEnd(e: MouseEvent): void {
     newFinish.setDate(newFinish.getDate() + currentDuration - 1);
     task.finish = toIsoDate(newFinish);
     cascadeShiftLaterTasks(jobId, taskId, currentDuration - initialDuration);
-    saveJobs();
-    logActivity('rescheduled task "' + task.name + '"');
-    renderJobList();
-    refreshJobFormIfOpen(jobId);
-    showToast('Finish date updated', 'success');
+    tickResizeState = null;
+    renderGantt();
+    // Deferred past the render above — see onBarMoveEnd()'s own comment.
+    setTimeout(function () {
+      saveJobs();
+      logActivity('rescheduled task "' + task.name + '"');
+      renderJobList();
+      refreshJobFormIfOpen(jobId);
+      showToast('Finish date updated', 'success');
+    }, 0);
+    return;
   }
 
   tickResizeState = null;
@@ -580,11 +594,26 @@ function onBarMoveEnd(e: MouseEvent): void {
           t.start = toIsoDate(ns);
           t.finish = toIsoDate(nf);
         });
-        saveJobs();
-        logActivity('moved job "' + jf.job.name + '"' + (phase.isDefault ? '' : ' phase "' + phase.name + '"') + (subUnit.isDefault ? '' : ' sub-phase "' + subUnit.name + '"'));
-        renderJobList();
-        refreshJobFormIfOpen(jobId);
-        showToast('Job dates updated', 'success');
+        bar.dataset.dragged = 'true';
+        barMoveState = null;
+        renderGantt();
+        // Deferred past the render above (see this function's own opening
+        // comment on why) — saving, activity-log, job-list and the toast
+        // are all real work a busy real project makes slow (see saveJobs()'s
+        // own autoArchiveJobs() scan and saveActiveProject()'s localStorage
+        // write), but none of it is what the user actually just let go of
+        // the mouse to see. Running it in the very same synchronous burst
+        // as the reorder itself made the animation wait behind it for a
+        // frame the user was already staring at, which read as the bar
+        // freezing for a beat right as it was meant to start moving.
+        setTimeout(function () {
+          saveJobs();
+          logActivity('moved job "' + jf.job.name + '"' + (phase.isDefault ? '' : ' phase "' + phase.name + '"') + (subUnit.isDefault ? '' : ' sub-phase "' + subUnit.name + '"'));
+          renderJobList();
+          refreshJobFormIfOpen(jobId);
+          showToast('Job dates updated', 'success');
+        }, 0);
+        return;
       }
       bar.dataset.dragged = 'true';
     } else {
@@ -602,17 +631,25 @@ function onBarMoveEnd(e: MouseEvent): void {
     const card = dueJf ? getPhaseCard(dueJf.job as Job, phaseId) : null;
     if (card) {
       card.due = toIsoDate(newStart);
-      saveJobs();
-      const jf = findJob(jobId);
-      logActivity('rescheduled due date for job "' + (jf ? jf.job.name : '') + '"');
-      renderJobList();
-      // Was missing here — the identical Calendar-side due-marker drag
-      // already calls this; card.due drives the Board's own "overdue"
-      // badge (see the isOverdue check), so without it a Gantt-side
-      // due-date drag left that badge stale.
-      renderBoard();
-      refreshJobFormIfOpen(jobId);
-      showToast('Due date updated', 'success');
+      bar.dataset.dragged = 'true';
+      barMoveState = null;
+      renderGantt();
+      // See the isJobSpan branch above for why this is deferred rather
+      // than run before the render the user is actually watching.
+      setTimeout(function () {
+        saveJobs();
+        const jf = findJob(jobId);
+        logActivity('rescheduled due date for job "' + (jf ? jf.job.name : '') + '"');
+        renderJobList();
+        // Was missing here — the identical Calendar-side due-marker drag
+        // already calls this; card.due drives the Board's own "overdue"
+        // badge (see the isOverdue check), so without it a Gantt-side
+        // due-date drag left that badge stale.
+        renderBoard();
+        refreshJobFormIfOpen(jobId);
+        showToast('Due date updated', 'success');
+      }, 0);
+      return;
     }
     bar.dataset.dragged = 'true';
   } else if (moved && deltaDays !== 0) {
@@ -625,12 +662,18 @@ function onBarMoveEnd(e: MouseEvent): void {
     // Keep the rest of the job's schedule connected — later tasks slide
     // along by the same delta instead of only the dragged one moving.
     cascadeShiftLaterTasks(jobId, taskId, deltaDays);
-    saveJobs();
-    logActivity('moved task "' + task.name + '"');
-    renderJobList();
-    refreshJobFormIfOpen(jobId);
-    showToast('Task dates updated', 'success');
     bar.dataset.dragged = 'true';
+    barMoveState = null;
+    renderGantt();
+    // See the isJobSpan branch above for why this is deferred.
+    setTimeout(function () {
+      saveJobs();
+      logActivity('moved task "' + task.name + '"');
+      renderJobList();
+      refreshJobFormIfOpen(jobId);
+      showToast('Task dates updated', 'success');
+    }, 0);
+    return;
   } else {
     bar.dataset.dragged = 'false';
   }
