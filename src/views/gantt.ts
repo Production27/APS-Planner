@@ -2156,7 +2156,17 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   // GANTT_REORDER_MS above, not the .gantt-bar-reorder class — see its own
   // comment) and marks each element animating.
   toAnimate.forEach(function (a) {
-    a.el.style.transition = 'transform ' + GANTT_REORDER_MS + 'ms ease-in-out, box-shadow 150ms ease, filter 150ms ease';
+    // Not ease-in-out: its slow-start S-curve spends roughly its first
+    // 150ms moving in sub-pixel fractions (measured directly: 0.02px,
+    // 0.05px, 0.09px, 0.13px per frame...) — genuinely imperceptible on a
+    // real screen, so the bar visually reads as frozen for that whole
+    // stretch and then suddenly, jarringly starts moving once the
+    // per-frame delta finally clears about a pixel. That dead-then-jump
+    // start is what read as "jitters as it starts to move" (Karl's own
+    // report). ease-out carries real, visible velocity from frame one and
+    // only tapers at the landing end, which is the half of ease-in-out
+    // that was actually wanted.
+    a.el.style.transition = 'transform ' + GANTT_REORDER_MS + 'ms ease-out, box-shadow 150ms ease, filter 150ms ease';
     a.el.classList.add('gantt-bar-reorder');
   });
 
