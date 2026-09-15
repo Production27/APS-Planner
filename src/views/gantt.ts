@@ -1919,6 +1919,30 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
 // setupDateRangeAndGrid()'s own grid.innerHTML wipe — this only matters
 // for redraws that happen BETWEEN full renders.
 const GANTT_CONNECTOR_SVG_ID = 'ganttConnectorSvg';
+// Pure geometry — shared between the normal (full) draw below and
+// redrawConnectorLinesLive()'s per-frame path-only updates, so the elbow-
+// routing logic only exists in one place.
+function computeConnectorPathD(a: JobBarMapEntry, b: JobBarMapEntry): string {
+  const x1 = a.left + a.width;
+  const y1 = a.top + GANTT_BAR_H / 2;
+  const x2 = b.left;
+  const y2 = b.top + GANTT_BAR_H / 2;
+  if (x2 >= x1) {
+    // Normal case: successor starts at/after predecessor ends — the
+    // gap between the bars is empty, so a simple mid-point elbow is fine.
+    const midX = (x1 + x2) / 2;
+    return 'M ' + x1 + ' ' + y1 + ' L ' + midX + ' ' + y1 + ' L ' + midX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
+  }
+  // Overlap case: successor starts before predecessor ends, so a
+  // straight-through elbow would cut across one or both bars. Route it
+  // out to the right of the predecessor, through the empty gap between
+  // the rows, then down/up into the left of the successor.
+  const laneY = Math.min(a.top, b.top) + GANTT_BAR_H + GANTT_BAR_PAD + 3;
+  const rightX = x1 + 10;
+  const leftX = x2 - 10;
+  return 'M ' + x1 + ' ' + y1 + ' L ' + rightX + ' ' + y1 + ' L ' + rightX + ' ' + laneY + ' L ' + leftX + ' ' + laneY + ' L ' + leftX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
+}
+
 function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarMapEntry[]>, grid: HTMLElement): void {
   const existing = document.getElementById(GANTT_CONNECTOR_SVG_ID);
   if (existing) existing.remove();
@@ -1926,32 +1950,19 @@ function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarM
   const svg = document.createElementNS(svgNs, 'svg');
   svg.setAttribute('id', GANTT_CONNECTOR_SVG_ID);
   svg.setAttribute('style', 'position:absolute;top:0;left:0;width:' + gridWidth + 'px;height:100%;pointer-events:none;z-index:30;overflow:visible;');
-  Object.values(jobBarMap).forEach(function (bars) {
+  Object.keys(jobBarMap).forEach(function (jobId) {
+    const bars = jobBarMap[jobId];
     if (bars.length < 2) return;
     for (let i = 0; i < bars.length - 1; i++) {
       const a = bars[i], b = bars[i + 1];
-      const x1 = a.left + a.width;
-      const y1 = a.top + GANTT_BAR_H / 2;
-      const x2 = b.left;
-      const y2 = b.top + GANTT_BAR_H / 2;
       const path = document.createElementNS(svgNs, 'path');
-      let d;
-      if (x2 >= x1) {
-        // Normal case: successor starts at/after predecessor ends — the
-        // gap between the bars is empty, so a simple mid-point elbow is fine.
-        const midX = (x1 + x2) / 2;
-        d = 'M ' + x1 + ' ' + y1 + ' L ' + midX + ' ' + y1 + ' L ' + midX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
-      } else {
-        // Overlap case: successor starts before predecessor ends, so a
-        // straight-through elbow would cut across one or both bars. Route
-        // it out to the right of the predecessor, through the empty gap
-        // between the rows, then down/up into the left of the successor.
-        const laneY = Math.min(a.top, b.top) + GANTT_BAR_H + GANTT_BAR_PAD + 3;
-        const rightX = x1 + 10;
-        const leftX = x2 - 10;
-        d = 'M ' + x1 + ' ' + y1 + ' L ' + rightX + ' ' + y1 + ' L ' + rightX + ' ' + laneY + ' L ' + leftX + ' ' + laneY + ' L ' + leftX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
-      }
-      path.setAttribute('d', d);
+      // Identifies this exact pair so redrawConnectorLinesLive() can find
+      // and update just its `d`, without touching (or recreating) any
+      // other path — see that function's own comment on why per-frame DOM
+      // node churn here specifically was worth avoiding.
+      path.setAttribute('data-job-id', jobId);
+      path.setAttribute('data-pair-index', String(i));
+      path.setAttribute('d', computeConnectorPathD(a, b));
       path.setAttribute('stroke', a.jobColor || '#3949ab');
       path.setAttribute('stroke-width', '2');
       path.setAttribute('fill', 'none');
@@ -1970,28 +1981,38 @@ function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarM
 // behind it rather than the connector tracking them. jobBarMap's `top` is
 // a static number computed once at render time, but its `bar` field is a
 // live DOM reference — reading each bar's REAL current on-screen position
-// every frame (instead of the stale stored number) and redrawing through
-// the same drawConnectorLines() lets the connector track the actual
-// motion. Only top needs live-tracking: left/width are date-driven, never
-// touched by a row-reorder.
+// every frame (instead of the stale stored number) and recomputing just
+// this pair's `d` lets the connector track the actual motion. Only top
+// needs live-tracking: left/width are date-driven, never touched by a
+// row-reorder.
 //
-// Takes the FULL jobBarMap every call, not just the job(s) actually
-// reordering — drawConnectorLines() wipes and rebuilds the whole SVG each
-// time, so passing only a subset would make every OTHER job's connector
-// line vanish for the duration of the animation instead of just sitting
-// still. liveJobIds scopes the (real, layout-reading) getBoundingClientRect()
-// work to only the jobs that need it; everything else reuses its already-
-// correct static position.
-function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, gridWidth: number, grid: HTMLElement): void {
+// Deliberately does NOT go through drawConnectorLines() — that tears down
+// and rebuilds the entire SVG (every path, for every job, not just the
+// one moving) from scratch, which is real DOM-node churn to repeat on
+// every single animation frame for the whole ~1s+ reorder. Real per-frame
+// node creation/destruction is exactly the kind of main-thread work that
+// can drop frames and read as uneven, "lurching" motion on an actual
+// device even when the underlying CSS transition curve itself measures
+// perfectly smooth (Karl's own report, after the easing-curve fix alone
+// didn't resolve it). Updating only the `d` attribute of the SPECIFIC
+// already-existing <path> for each moving pair (tagged with
+// data-job-id/data-pair-index by drawConnectorLines() itself) touches
+// nothing else in the DOM at all.
+function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, grid: HTMLElement): void {
+  const svg = document.getElementById(GANTT_CONNECTOR_SVG_ID);
+  if (!svg) return;
   const gridTop = grid.getBoundingClientRect().top;
-  const liveMap: Record<string, JobBarMapEntry[]> = {};
-  Object.keys(jobBarMap).forEach(function (jobId) {
-    if (!liveJobIds.has(jobId)) { liveMap[jobId] = jobBarMap[jobId]; return; }
-    liveMap[jobId] = jobBarMap[jobId].map(function (entry) {
-      return { left: entry.left, width: entry.width, top: entry.bar.getBoundingClientRect().top - gridTop, bar: entry.bar, jobColor: entry.jobColor };
-    });
+  liveJobIds.forEach(function (jobId) {
+    const bars = jobBarMap[jobId];
+    if (!bars || bars.length < 2) return;
+    for (let i = 0; i < bars.length - 1; i++) {
+      const path = svg.querySelector<SVGPathElement>('path[data-job-id="' + jobId + '"][data-pair-index="' + i + '"]');
+      if (!path) continue;
+      const liveA: JobBarMapEntry = { left: bars[i].left, width: bars[i].width, top: bars[i].bar.getBoundingClientRect().top - gridTop, bar: bars[i].bar, jobColor: bars[i].jobColor };
+      const liveB: JobBarMapEntry = { left: bars[i + 1].left, width: bars[i + 1].width, top: bars[i + 1].bar.getBoundingClientRect().top - gridTop, bar: bars[i + 1].bar, jobColor: bars[i + 1].jobColor };
+      path.setAttribute('d', computeConnectorPathD(liveA, liveB));
+    }
   });
-  drawConnectorLines(gridWidth, liveMap, grid);
 }
 
 function restoreScrollPosition(savedScrollTop: number, savedScrollLeft: number): void {
@@ -2217,7 +2238,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   if (grid && movedJobIds.size) {
     const start = performance.now();
     (function trackConnectors() {
-      redrawConnectorLinesLive(jobBarMap, movedJobIds, gridWidth, grid);
+      redrawConnectorLinesLive(jobBarMap, movedJobIds, grid);
       if (performance.now() - start < GANTT_REORDER_MS) {
         requestAnimationFrame(trackConnectors);
       } else {
