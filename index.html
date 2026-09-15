@@ -13,6 +13,12 @@
      precondition for a custom in-app pinch gesture to work at all. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>TeamSync | Live Gantt + Job Manager</title>
+<!-- Bar Mark favicon — two stacked schedule bars, same shape every Gantt
+     row uses. Inline SVG data URI so there's no separate asset file to
+     keep in sync if the mark ever changes; one shared markup reused for
+     both sizes since SVG scales cleanly to whatever each context needs. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7.2' fill='%232c3e50'/%3E%3Crect x='6.4' y='10.4' width='12' height='4.6' rx='2.3' fill='%23e53935'/%3E%3Crect x='6.4' y='17.2' width='19.2' height='4.6' rx='2.3' fill='white' fill-opacity='.92'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7.2' fill='%232c3e50'/%3E%3Crect x='6.4' y='10.4' width='12' height='4.6' rx='2.3' fill='%23e53935'/%3E%3Crect x='6.4' y='17.2' width='19.2' height='4.6' rx='2.3' fill='white' fill-opacity='.92'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
@@ -2348,7 +2354,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   #loginOverlay.show { display: flex; }
   .login-card { width: 100%; max-width: 380px; background: var(--card); color: var(--text); border-radius: var(--radius); box-shadow: var(--shadow-hover); padding: 36px var(--s-7) var(--s-7); }
   .login-brand { display: flex; flex-direction: column; align-items: center; margin-bottom: var(--s-6); }
-  .login-mark { width: 46px; height: 46px; border-radius: 12px; margin-bottom: var(--s-3-5); background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: var(--t-lg); letter-spacing: 0.5px; }
+  .login-mark { width: 46px; height: 46px; border-radius: 12px; margin-bottom: var(--s-3-5); background: #2c3e50; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(44,62,80,0.25), 0 4px 10px rgba(44,62,80,0.25); display: flex; align-items: center; justify-content: center; }
   .login-title { font-size: var(--t-xl); font-weight: 700; letter-spacing: 0.1px; text-align: center; }
   .login-sub { font-size: var(--t-base); color: var(--text-light); margin-top: var(--s-1); }
   .login-field { margin-bottom: var(--s-4); }
@@ -3069,7 +3075,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 <div id="loginOverlay">
   <div class="login-card">
     <div class="login-brand">
-      <div class="login-mark" aria-hidden="true">TS</div>
+      <div class="login-mark" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 32 32"><rect x="6.4" y="10.4" width="12" height="4.6" rx="2.3" fill="#e53935"/><rect x="6.4" y="17.2" width="19.2" height="4.6" rx="2.3" fill="#fff" fill-opacity=".92"/></svg>
+      </div>
       <div class="login-title">TeamSync</div>
       <div class="login-sub">Sign in to continue</div>
     </div>
