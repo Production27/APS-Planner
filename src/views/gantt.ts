@@ -1974,10 +1974,19 @@ function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarM
 // the same drawConnectorLines() lets the connector track the actual
 // motion. Only top needs live-tracking: left/width are date-driven, never
 // touched by a row-reorder.
-function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number, grid: HTMLElement): void {
+//
+// Takes the FULL jobBarMap every call, not just the job(s) actually
+// reordering — drawConnectorLines() wipes and rebuilds the whole SVG each
+// time, so passing only a subset would make every OTHER job's connector
+// line vanish for the duration of the animation instead of just sitting
+// still. liveJobIds scopes the (real, layout-reading) getBoundingClientRect()
+// work to only the jobs that need it; everything else reuses its already-
+// correct static position.
+function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, gridWidth: number, grid: HTMLElement): void {
   const gridTop = grid.getBoundingClientRect().top;
   const liveMap: Record<string, JobBarMapEntry[]> = {};
   Object.keys(jobBarMap).forEach(function (jobId) {
+    if (!liveJobIds.has(jobId)) { liveMap[jobId] = jobBarMap[jobId]; return; }
     liveMap[jobId] = jobBarMap[jobId].map(function (entry) {
       return { left: entry.left, width: entry.width, top: entry.bar.getBoundingClientRect().top - gridTop, bar: entry.bar, jobColor: entry.jobColor };
     });
@@ -2079,10 +2088,15 @@ function captureBarTopsByRowKey(): Record<string, number> {
 // separate bars ("the full project bar", per Karl's own description) keep
 // pace with the bars for exactly as long as they're actually moving,
 // instead of one hardcoded number living in CSS and a second one here that
-// could quietly drift apart. Slowed twice now on direct feedback that
-// shorter durations still read as too quick even once every piece was
-// moving in sync.
-const GANTT_REORDER_MS = 1800;
+// could quietly drift apart. Went .9s -> 1.3s -> 1.8s on direct feedback
+// that it read as too fast to track — then back down partway once every
+// element was ACTUALLY animating for its full stated duration instead of
+// being cut short by the various bugs fixed along the way (the interrupted-
+// echo snap, the untagged sidebar, the connector not tracking): once
+// nothing was silently truncating it anymore, 1.8s of real, uninterrupted
+// motion read as noticeably slower than what 1.8s had ever actually looked
+// like before.
+const GANTT_REORDER_MS = 1100;
 
 function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number): void {
   if (!Object.keys(oldTops).length) return;
@@ -2171,11 +2185,29 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   // each bar's REAL current position on every frame for exactly as long as
   // the bars are actually moving keeps it visually attached to them
   // throughout, not just before and after.
+  //
+  // Only the job(s) actually reordering need their connector re-MEASURED
+  // every frame — a rowKey's own job id is always its first `::` segment
+  // (see ganttRowKey()). Every other multi-phase job's connector still
+  // gets redrawn each frame (see redrawConnectorLinesLive()'s own comment
+  // on why it can't just be skipped), but reuses its already-correct
+  // static position instead of paying for a real getBoundingClientRect()
+  // read it doesn't need — real per-frame layout reads are exactly the
+  // kind of thing that can drag actual frame rate down and make a
+  // transition feel far slower than its stated duration, worth not
+  // reintroducing on a chart with many multi-phase jobs while tuning that
+  // duration back down.
+  const movedJobIds = new Set<string>();
+  toAnimate.forEach(function (a) {
+    const key = a.el.dataset.rowKey as string;
+    movedJobIds.add(key.slice(0, key.indexOf('::')));
+  });
+
   const grid = document.getElementById('timelineGrid');
-  if (grid) {
+  if (grid && movedJobIds.size) {
     const start = performance.now();
     (function trackConnectors() {
-      redrawConnectorLinesLive(jobBarMap, gridWidth, grid);
+      redrawConnectorLinesLive(jobBarMap, movedJobIds, gridWidth, grid);
       if (performance.now() - start < GANTT_REORDER_MS) {
         requestAnimationFrame(trackConnectors);
       } else {
