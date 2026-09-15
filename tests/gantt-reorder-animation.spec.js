@@ -158,3 +158,72 @@ test('two overlapping renders do not make a bar jump backward', async ({ page })
   }
   expect(maxBackwardStep).toBeGreaterThan(-1);
 });
+
+// Regression test for a real "duplicate ghost bar" reported via a
+// screenshot: during a Gantt reorder, a nearly-invisible shape appeared to
+// trail behind the real, moving bars. A job-span row's actual .task-bar
+// (its transparent, invisible-fill click-target underneath the colored
+// border/segments — see renderTimelineBars()'s own comment) has its own
+// base CSS rule (`.task-bar { transition: transform 0.15s, ... }`, meant
+// for ordinary hover/drag feedback) that every OTHER piece of the row
+// (.job-span-border, -solid, -hash, -tick) doesn't share. Without
+// explicitly overriding that with `transition: none` before writing a
+// fresh style.transform every animation frame, the browser's own 150ms
+// transition took over each write instead of applying it immediately, so
+// .task-bar spent the whole animation perpetually behind wherever it was
+// actually supposed to be — chasing a target that kept moving out from
+// under it a frame later. Its own faint 1px border and box-shadow (see its
+// own CSS) made that lag just barely visible: "basically transparent...
+// but I can tell when it moves" (Karl's own description).
+test('a job-span bar\'s invisible click-target does not lag behind its own border during a reorder', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+  await page.waitForTimeout(1500);
+
+  const setup = await page.evaluate(() => {
+    const jobA = jobs[0];
+    const jobB = jobs[1];
+    splitJobIntoPhases(jobA);
+    const phase1 = getJobPhases(jobA)[0];
+    addJobPhase(jobA);
+    const phase2 = getJobPhases(jobA)[1];
+    (phase1.tasks || []).forEach(t => { t.start = '2026-09-01'; t.finish = '2026-09-03'; });
+    (phase2.tasks || []).forEach(t => { t.start = '2026-09-05'; t.finish = '2026-09-07'; });
+    const subB = getPhaseSubUnits(getJobPhases(jobB)[0])[0];
+    (subB.tasks || []).forEach(t => { t.start = '2026-09-20'; t.finish = '2026-09-22'; });
+    renderGantt();
+    return { jobAId: jobA.id, phase2Id: phase2.id };
+  });
+
+  const result = await page.evaluate(({ jobAId, phase2Id }) => {
+    return new Promise((resolve) => {
+      const jobA = jobs.find(j => j.id === jobAId);
+      const phase2 = getJobPhases(jobA).find(p => p.id === phase2Id);
+      (phase2.tasks || []).forEach(t => { t.start = '2026-09-25'; t.finish = '2026-09-27'; });
+      renderGantt();
+
+      const rowKey = document.querySelector('.task-bar[data-row-key*="' + phase2Id + '"]').dataset.rowKey;
+      const samples = [];
+      const t0 = performance.now();
+
+      function sample() {
+        const bar = document.querySelector('.task-bar[data-row-key="' + rowKey + '"]');
+        const border = document.querySelector('.job-span-border[data-row-key="' + rowKey + '"]');
+        if (bar && border) {
+          samples.push({ barTop: bar.getBoundingClientRect().top, borderTop: border.getBoundingClientRect().top });
+        }
+        if (performance.now() - t0 < 1400) requestAnimationFrame(sample);
+        else resolve(samples);
+      }
+      requestAnimationFrame(sample);
+    });
+  }, setup);
+
+  let maxDesync = 0;
+  result.forEach(function (s) { maxDesync = Math.max(maxDesync, Math.abs(s.barTop - s.borderTop)); });
+  expect(maxDesync).toBeLessThan(1);
+});

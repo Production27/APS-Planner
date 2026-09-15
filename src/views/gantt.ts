@@ -2348,7 +2348,27 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   });
   if (!toAnimate.length) return;
 
-  toAnimate.forEach(function (a) { a.el.classList.add('gantt-bar-reorder'); });
+  // transition: none matters here, not just the class toggle — .task-bar's
+  // OWN base CSS rule sets `transition: transform 0.15s, ...` (for its
+  // normal hover/drag feedback), and without overriding that, this raw
+  // per-frame style.transform write below doesn't take effect immediately:
+  // the browser's own 150ms transition engine takes over and eases toward
+  // whatever value was JUST written, but by the very next frame (~16ms
+  // later) this loop has already written a NEWER target — so the element
+  // spends the whole animation perpetually 150ms behind, chasing a target
+  // that keeps moving out from under it, and never actually reaches where
+  // it's "supposed" to be until the whole thing ends. Every OTHER piece of
+  // a job-span row (.job-span-border, -solid, -hash, -tick) has no such
+  // rule of its own and tracks correctly — only .task-bar (the invisible-
+  // fill click-target underneath a job-span row, or the visible pill for a
+  // real task) has this, and its own faint 1px border/box-shadow (see its
+  // own CSS) is exactly transparent-but-visible enough to read as a ghost
+  // bar trailing the real one (Karl's own screenshot and description, "its
+  // basically transparent... but I can tell when it moves").
+  toAnimate.forEach(function (a) {
+    a.el.style.transition = 'none';
+    a.el.classList.add('gantt-bar-reorder');
+  });
 
   // Only the job(s) actually reordering need their connector recomputed
   // every frame — a rowKey's own job id is always its first `::` segment
@@ -2410,6 +2430,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
       if (progress >= 1) {
         a.el.classList.remove('gantt-bar-reorder');
         a.el.style.transform = '';
+        a.el.style.transition = '';
         delete barAnimOrigins[a.key];
       } else {
         stillActive = true;
