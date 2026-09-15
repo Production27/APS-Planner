@@ -2041,17 +2041,28 @@ const easeOutCubic = makeCubicBezierEase(0.58, 1);
 // start top, its already-known final top (jobBarMap's own `top`), and
 // how far through GANTT_REORDER_MS this frame is — needs no DOM reads at
 // all beyond the one-time `dataset.rowKey` lookup.
-function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, startTopsByRowKey: Record<string, number>, progress: number): void {
+// Reads each bar's live position from barAnimOrigins (see its own comment)
+// instead of a progress value passed in by the caller — both this and the
+// bars themselves now derive their per-frame position from that one
+// shared, persisted-across-renders source of truth, so they can never
+// drift out of sync with each other (Karl's own report, both on the bars
+// vs. task bars moving separately and on the connector not tracking its
+// own job's phases) regardless of how many overlapping renders land while
+// this is playing.
+function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, gridTop: number): void {
   const svg = document.getElementById(GANTT_CONNECTOR_SVG_ID);
   if (!svg) return;
-  const eased = easeOutCubic(progress);
+  const now = performance.now();
   liveJobIds.forEach(function (jobId) {
     const bars = jobBarMap[jobId];
     if (!bars || bars.length < 2) return;
     function liveEntry(entry: JobBarMapEntry): JobBarMapEntry {
       const key = entry.bar.dataset.rowKey;
-      const startTop = key !== undefined ? startTopsByRowKey[key] : undefined;
-      const top = startTop === undefined ? entry.top : startTop + (entry.top - startTop) * eased;
+      const origin = key !== undefined ? barAnimOrigins[key] : undefined;
+      if (!origin) return entry;
+      const fromTop = origin.fromTop - gridTop;
+      const progress = Math.min(1, (now - origin.startTime) / GANTT_REORDER_MS);
+      const top = fromTop + (entry.top - fromTop) * easeOutCubic(progress);
       return { left: entry.left, width: entry.width, top: top, bar: entry.bar, jobColor: entry.jobColor };
     }
     for (let i = 0; i < bars.length - 1; i++) {
@@ -2190,6 +2201,28 @@ const GANTT_REORDER_MS = 1100;
 // anything fixes it outright.
 let ganttReorderGeneration = 0;
 
+// Persists ACROSS renders, keyed by rowKey — deliberately not reset inside
+// animateReorderedBars() itself. A row already mid-flight from an earlier,
+// still-running render (the overlap this app's own sync echoes make
+// routine on a busy real project — see captureBarTopsByRowKey()'s own
+// comment) keeps its ORIGINAL fromTop/startTime here instead of a newer
+// render restarting them. An earlier version drove this motion with a
+// plain CSS `transition`, which has no way to "resume" a curve already in
+// progress — retriggering one mid-flight always restarts its FULL
+// duration from whatever position it's currently at, so a nearly-arrived
+// bar would suddenly crawl its last few pixels out over another whole
+// GANTT_REORDER_MS instead of just finishing. That read as a stutter right
+// at the handoff — the bars' own version of the connector's "jumps back a
+// little" (Karl's own report, persisting after the connector's own
+// version of this exact class of bug was fixed by tracking it
+// analytically instead of measuring/retriggering every frame). Storing
+// the ORIGINAL start here and computing each frame's transform from it
+// directly (see the shared rAF loop below) means an overlapping render
+// only ever updates WHERE the bar is headed, never WHEN its motion began,
+// so the same one deceleration curve runs start to finish regardless of
+// how many renders land while it's playing.
+const barAnimOrigins: Record<string, { fromTop: number; startTime: number }> = {};
+
 function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number): void {
   // Bumped UNCONDITIONALLY, before either early return below — every
   // render calls drawConnectorLines() once as part of its own normal flow
@@ -2211,6 +2244,17 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   if (!Object.keys(oldTops).length) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
+  const now = performance.now();
+
+  // Drop any origin whose animation has already fully finished, so a much
+  // later, unrelated move of the very same row starts a genuinely fresh
+  // deceleration instead of being treated as a continuation of one that
+  // ended long ago — and so this map doesn't just grow for the rest of the
+  // session.
+  Object.keys(barAnimOrigins).forEach(function (k) {
+    if (now - barAnimOrigins[k].startTime >= GANTT_REORDER_MS) delete barAnimOrigins[k];
+  });
+
   // Pass 1 — READ ONLY. A row can draw many elements sharing one row key
   // (every day-segment/tick in a job-span row, easily a dozen-plus for a
   // month-long sub-unit — see rowKey's own comment), and a cascaded drag
@@ -2218,7 +2262,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   // same render on top of that. Collect every element that actually needs
   // to animate here (across both #timelineGrid and #leftBody — see
   // allRowKeyedElements()'s own comment), without writing anything yet.
-  const toAnimate: { el: HTMLElement; delta: number }[] = [];
+  const toAnimate: { el: HTMLElement; key: string; delta: number }[] = [];
   allRowKeyedElements().forEach(function (el) {
     const key = el.dataset.rowKey as string;
     const oldTop = oldTops[key];
@@ -2228,145 +2272,75 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
     // captureBarTopsByRowKey()'s own getBoundingClientRect()-based
     // measurement (same coordinate space, viewport-relative).
     const newTop = el.getBoundingClientRect().top;
-    const delta = oldTop - newTop;
-    if (Math.abs(delta) < 1) return;
-    toAnimate.push({ el: el, delta: delta });
+    const origin = barAnimOrigins[key] || { fromTop: oldTop, startTime: now };
+    const delta = origin.fromTop - newTop;
+    if (Math.abs(delta) < 1) { delete barAnimOrigins[key]; return; }
+    barAnimOrigins[key] = origin;
+    toAnimate.push({ el: el, key: key, delta: delta });
   });
   if (!toAnimate.length) return;
 
-  // Pass 2 — WRITE ONLY (the "before" frame). Interleaving each element's
-  // own read/write/read/write (as this first did) forces a separate
-  // synchronous layout recalc PER ELEMENT — real, visible jank on any row
-  // with more than a couple of pieces, and worse, it let different
-  // elements' own requestAnimationFrame callbacks land on different actual
-  // frames, which is exactly what read as "the job bar and task bars move
-  // separately" (Karl's own report) — pieces of what should be one
-  // reorder drifting out of sync with each other. Writing every element's
-  // starting offset first, with no reads in between, then forcing exactly
-  // ONE reflow for the whole batch below, keeps this to a single recalc
-  // and guarantees every element commits its "before" frame at the same
-  // instant.
-  toAnimate.forEach(function (a) {
-    a.el.style.transition = 'none';
-    a.el.style.transform = 'translateY(' + a.delta + 'px)';
-  });
-  // ONE forced reflow for the whole batch — same reasoning as the
-  // single-element version's own comment (an inline `transition: none`
-  // has to be explicitly cleared afterward too, not just overridden by a
-  // class, since an inline style always wins over a class's CSS rule
-  // regardless of specificity), just amortized across every element here
-  // instead of paid once per element. Reading it off body rather than a
-  // specific container — the elements being animated now span two
-  // separate containers (#timelineGrid and #leftBody, see
-  // allRowKeyedElements()) — flushes layout for the whole page either way.
-  void document.body.offsetHeight;
+  toAnimate.forEach(function (a) { a.el.classList.add('gantt-bar-reorder'); });
 
-  // Pass 3 — WRITE ONLY. Sets the real transition (duration sourced from
-  // GANTT_REORDER_MS above, not the .gantt-bar-reorder class — see its own
-  // comment) and marks each element animating.
-  toAnimate.forEach(function (a) {
-    // Not ease-in-out: its slow-start S-curve spends roughly its first
-    // 150ms moving in sub-pixel fractions (measured directly: 0.02px,
-    // 0.05px, 0.09px, 0.13px per frame...) — genuinely imperceptible on a
-    // real screen, so the bar visually reads as frozen for that whole
-    // stretch and then suddenly, jarringly starts moving once the
-    // per-frame delta finally clears about a pixel. That dead-then-jump
-    // start is what read as "jitters as it starts to move" (Karl's own
-    // report). ease-out carries real, visible velocity from frame one and
-    // only tapers at the landing end, which is the half of ease-in-out
-    // that was actually wanted.
-    a.el.style.transition = 'transform ' + GANTT_REORDER_MS + 'ms ease-out, box-shadow 150ms ease, filter 150ms ease';
-    a.el.classList.add('gantt-bar-reorder');
-  });
-
-  // ONE shared rAF for the whole batch, not one per element — everything
-  // that needs to move starts moving on the exact same frame.
-  requestAnimationFrame(function () {
-    toAnimate.forEach(function (a) { a.el.style.transform = 'translateY(0)'; });
-  });
-
-  toAnimate.forEach(function (a) {
-    const el = a.el;
-    el.addEventListener('transitionend', function handler(e) {
-      if (e.propertyName !== 'transform') return;
-      el.removeEventListener('transitionend', handler);
-      el.classList.remove('gantt-bar-reorder');
-      el.style.transition = '';
-      el.style.transform = '';
-    });
-  });
-
-  // The line(s) connecting a multi-phase job's bars into one visible run
-  // are otherwise drawn once, from the bars' FINAL positions, and then
-  // just sit there for the whole GANTT_REORDER_MS while the bars they
-  // connect glide past underneath — read as the connector not moving in
-  // sync with its own job's phases (Karl's own report). Recomputing it
-  // from each bar's start/end top and how far through the duration this
-  // frame is (see redrawConnectorLinesLive()'s own comment on why that's
-  // analytical rather than measured) for exactly as long as the bars are
-  // actually moving keeps it visually attached to them throughout, not
-  // just before and after.
-  //
   // Only the job(s) actually reordering need their connector recomputed
   // every frame — a rowKey's own job id is always its first `::` segment
-  // (see ganttRowKey()). Every other multi-phase job's connector still
-  // gets redrawn each frame (see redrawConnectorLinesLive()'s own comment
-  // on why it can't just be skipped), but reuses its already-correct
-  // static position instead of computing one it doesn't need.
+  // (see ganttRowKey()). Every other multi-phase job's connector is left
+  // alone entirely below (redrawConnectorLinesLive() only touches
+  // liveJobIds), reusing whatever static position drawConnectorLines()
+  // already gave it.
   const movedJobIds = new Set<string>();
-  toAnimate.forEach(function (a) {
-    const key = a.el.dataset.rowKey as string;
-    movedJobIds.add(key.slice(0, key.indexOf('::')));
-  });
+  toAnimate.forEach(function (a) { movedJobIds.add(a.key.slice(0, a.key.indexOf('::'))); });
 
   const grid = document.getElementById('timelineGrid');
-  if (grid && movedJobIds.size) {
-    // oldTops (and captureBarTopsByRowKey() it comes from) is viewport-
-    // absolute (getBoundingClientRect().top) — correct for Pass 1's own
-    // delta above, since newTop there is measured the same way. But
-    // jobBarMap's own `top` (used below and in redrawConnectorLinesLive())
-    // is grid-relative — the literal CSS `top` renderTimelineBars() writes
-    // onto each bar, positioned absolutely inside #timelineGrid. Handing
-    // redrawConnectorLinesLive() the raw viewport-absolute oldTops made it
-    // interpolate between two different coordinate spaces: at progress 0
-    // (the instant a new animation loop takes over — see this generation
-    // counter's own comment on why that happens mid-flight) the computed
-    // top came out as a viewport-absolute number several dozen pixels away
-    // from whatever grid-relative value the connector had actually last
-    // drawn, i.e. exactly the leftover "jumps back a little" (Karl's own
-    // report) even after the multi-loop fight above was genuinely fixed.
-    // Converting once here, using #timelineGrid's own on-screen top (the
-    // element's box position doesn't move just because its own children
-    // got rebuilt), puts both ends of the interpolation in the same space.
-    const gridTop = grid.getBoundingClientRect().top;
-    const oldTopsGridRelative: Record<string, number> = {};
-    Object.keys(oldTops).forEach(function (k) { oldTopsGridRelative[k] = oldTops[k] - gridTop; });
+  const gridTop = grid ? grid.getBoundingClientRect().top : 0;
 
-    // Already bumped once, unconditionally, at the very top of this
-    // function — just capture the current value here rather than bumping
-    // again, so ANY older loop still running (from a render that started
-    // before this one, whether or not that earlier render needed its own
-    // new animation) checks this same counter below and stops itself the
-    // moment it sees a newer one has taken over, instead of continuing to
-    // fight over the same persistent <path> elements (see this counter's
-    // own comment for why that fight is exactly what read as "smooth,
-    // jump back, smooth, jump back" on a busy real project).
-    const myGeneration = ganttReorderGeneration;
-    const start = performance.now();
-    (function trackConnectors() {
-      if (myGeneration !== ganttReorderGeneration) return;
-      const progress = Math.min(1, (performance.now() - start) / GANTT_REORDER_MS);
-      redrawConnectorLinesLive(jobBarMap, movedJobIds, oldTopsGridRelative, progress);
-      if (progress < 1) {
-        requestAnimationFrame(trackConnectors);
+  // Already bumped once, unconditionally, at the very top of this function
+  // — just capture the current value here. Both bars and the connector now
+  // read their live position straight out of barAnimOrigins (a single
+  // shared source of truth) rather than a local `start` timestamp each
+  // loop invocation used to own, so a stale loop from an older, superseded
+  // render would actually compute the exact same values as the current
+  // one on any given frame — no more of the "smooth, jump back, smooth,
+  // jump back" fight that used to cause (Karl's own report). This check is
+  // now a performance optimization (only the newest render's loop keeps
+  // running instead of every superseded one piling up doing identical
+  // redundant work), not a correctness requirement.
+  const myGeneration = ganttReorderGeneration;
+
+  // ONE shared rAF loop drives both the bars' own transform AND the
+  // connector line(s) linking them, from the exact same per-frame timing
+  // source (barAnimOrigins) — they literally cannot drift apart from each
+  // other the way separately-timed loops could (Karl's own reports, both
+  // "the job bar and task bars move separately" and "the full project bar
+  // doesn't move in sync with the phases"). Needs no DOM reads at all
+  // beyond the one-time `dataset.rowKey` lookup in Pass 1 above, for the
+  // same reason redrawConnectorLinesLive()'s own comment gives.
+  (function tick() {
+    if (myGeneration !== ganttReorderGeneration) return;
+    let stillActive = false;
+    toAnimate.forEach(function (a) {
+      const origin = barAnimOrigins[a.key];
+      if (!origin) return;
+      const progress = Math.min(1, (performance.now() - origin.startTime) / GANTT_REORDER_MS);
+      a.el.style.transform = 'translateY(' + (a.delta * (1 - easeOutCubic(progress))) + 'px)';
+      if (progress >= 1) {
+        a.el.classList.remove('gantt-bar-reorder');
+        a.el.style.transform = '';
+        delete barAnimOrigins[a.key];
       } else {
-        // One final pass from the real, static, exact-not-eased-estimate
-        // final positions — removes any last-frame rounding drift from
-        // easeOutCubic()'s own approximation of the real CSS curve.
-        drawConnectorLines(gridWidth, jobBarMap, grid);
+        stillActive = true;
       }
-    })();
-  }
+    });
+    if (grid) redrawConnectorLinesLive(jobBarMap, movedJobIds, gridTop);
+    if (stillActive) {
+      requestAnimationFrame(tick);
+    } else if (grid) {
+      // One final pass from the real, static, exact-not-eased-estimate
+      // final positions — removes any last-frame rounding drift from
+      // easeOutCubic()'s own approximation of the real CSS curve.
+      drawConnectorLines(gridWidth, jobBarMap, grid);
+    }
+  })();
 }
 
 function renderGantt(): void {
