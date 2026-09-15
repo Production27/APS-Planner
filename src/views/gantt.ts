@@ -1285,20 +1285,25 @@ function renderLeftPanelRows(visibleRows: GanttRow[], grid: HTMLElement, gridWid
     {
       const bg = document.createElement('div');
       bg.className = 'row-bg';
-      // '::flat' — this row's OWN plain `rowKey` (shared with the timeline
-      // bar/border/etc. in renderTimelineBars()) sits GANTT_BAR_PAD lower
-      // than this element's flat, unpadded top (the bar is a shorter pill
-      // vertically centered within the row; this spans the row's full
-      // height) — a REAL, always-present ~7px difference, not something
-      // this reorder animation caused. animateReorderedBars() stores one
-      // old-position number per key, so two elements sharing a row but
-      // sitting at genuinely different heights need genuinely different
-      // keys, or whichever gets captured second silently clobbers the
-      // first's stored position — corrupting THAT element's delta (this
-      // is exactly what broke the very first version of this suffix
-      // scheme: the padded bar's own animation started from the flat
-      // row's position instead of its own).
-      bg.dataset.rowKey = rowKey + '::flat';
+      // Deliberately NOT given a dataset.rowKey (and so never animated by
+      // animateReorderedBars() — see allRowKeyedElements()) even though
+      // .task-row right below very much needs one. .task-row carries this
+      // row's own label — the whole reason it animates at all is so the
+      // label stays visually attached to the SAME bar as it moves (Karl's
+      // own report: "phases moving independently of the individual job
+      // bars"). .row-bg is pure zebra-stripe decoration: full page width,
+      // a full 40px row tall (vs. the bar's own shorter, inset pill), and
+      // solidly opaque. During a cascade where several rows swap places at
+      // once, two of these full-size opaque bands are, for a moment,
+      // BOTH still animating through the same stretch of screen the other
+      // one is vacating or approaching — completely fine for a narrow,
+      // often-transparent task bar, but a wide solid rectangle doing that
+      // reads as an obvious gray "ghost" bar sitting behind the real ones
+      // (reported via a screenshot showing exactly that during a
+      // multi-row reorder). Left unkeyed, this always just renders at its
+      // own correct final position immediately, same as before this
+      // animation feature existed — there's no label or identity riding
+      // on it that a viewer needs to track across the move.
       bg.style.top = (visibleRowIdx * GANTT_ROW_H) + 'px';
       bg.style.width = gridWidth + 'px';
       grid.appendChild(bg);
