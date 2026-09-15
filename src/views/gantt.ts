@@ -2091,11 +2091,14 @@ const easeOutCubic = makeCubicBezierEase(0.58, 1);
 // drift out of sync with each other (Karl's own report, both on the bars
 // vs. task bars moving separately and on the connector not tracking its
 // own job's phases) regardless of how many overlapping renders land while
-// this is playing.
-function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, gridTop: number): void {
+// this is playing. `now` is the caller's own tick()'s single shared
+// per-frame timestamp (see its own comment) rather than a fresh
+// performance.now() call here — this always runs after that frame's own
+// bar-position loop, so calling it again here would already be a little
+// later than what the bars themselves just used.
+function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, gridTop: number, now: number): void {
   const svg = document.getElementById(GANTT_CONNECTOR_SVG_ID);
   if (!svg) return;
-  const now = performance.now();
   liveJobIds.forEach(function (jobId) {
     const bars = jobBarMap[jobId];
     if (!bars || bars.length < 2) return;
@@ -2360,11 +2363,27 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   // same reason redrawConnectorLinesLive()'s own comment gives.
   (function tick() {
     if (myGeneration !== ganttReorderGeneration) return;
+    // Captured ONCE per frame and reused for every element below (and
+    // handed straight to redrawConnectorLinesLive()) instead of each
+    // element calling performance.now() itself inside the loop. On a busy
+    // real project toAnimate can hold a great many elements — every
+    // day-tick/hash/solid-segment sharing a row, across every row that
+    // moved (see toAnimate's own comment) — and that loop's own writes
+    // take real, if small, time to run. An element processed a few dozen
+    // iterations into the loop would otherwise compute its progress from
+    // a measurably later timestamp than one processed first, so bars
+    // (and the connector, measured later still) drift apart from each
+    // other by a growing amount as the element count grows — exactly the
+    // "isn't quite in sync" Karl's own report described, worse on exactly
+    // the busy real projects where toAnimate is largest. One shared clock
+    // for the whole frame means every element's position this frame is
+    // computed from the identical instant, regardless of list size.
+    const frameNow = performance.now();
     let stillActive = false;
     toAnimate.forEach(function (a) {
       const origin = barAnimOrigins[a.key];
       if (!origin) return;
-      const progress = Math.min(1, (performance.now() - origin.startTime) / GANTT_REORDER_MS);
+      const progress = Math.min(1, (frameNow - origin.startTime) / GANTT_REORDER_MS);
       a.el.style.transform = 'translateY(' + (a.delta * (1 - easeOutCubic(progress))) + 'px)';
       if (progress >= 1) {
         a.el.classList.remove('gantt-bar-reorder');
@@ -2374,7 +2393,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
         stillActive = true;
       }
     });
-    if (grid) redrawConnectorLinesLive(jobBarMap, movedJobIds, gridTop);
+    if (grid) redrawConnectorLinesLive(jobBarMap, movedJobIds, gridTop, frameNow);
     if (stillActive) {
       requestAnimationFrame(tick);
     } else if (grid) {
