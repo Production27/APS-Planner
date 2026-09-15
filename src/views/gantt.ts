@@ -1972,16 +1972,51 @@ function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarM
   grid.appendChild(svg);
 }
 
-// CSS's `ease-out` keyword is cubic-bezier(0, 0, 0.58, 1) — approximated
-// here as the standard ease-out cubic (1 - (1-t)^3), close enough by eye
-// for a thin connector line that isn't itself the focus, in exchange for
-// not needing a full cubic-bezier root-solver just for this. See
-// redrawConnectorLinesLive()'s own comment for why matching the curve
-// with real per-frame measurement instead was actively counterproductive.
-function easeOutCubic(t: number): number {
-  const c = 1 - t;
-  return 1 - c * c * c;
+// CSS's `ease-out` keyword is cubic-bezier(0, 0, 0.58, 1). An earlier
+// version of this approximated it with the standard "ease-out cubic"
+// (1 - (1-t)^3) as close enough by eye for a thin connector line — but
+// that curve is NOT the same shape as the real one applied to the bars
+// (see GANTT_REORDER_MS's own transition string): by roughly 40% through
+// the animation the two disagree by several real pixels. That only became
+// visible as a jump when an overlapping render's own connector loop takes
+// over (see redrawConnectorLinesLive()'s own comment on why that happens
+// on a busy real project) — the new loop's very first frame seeds from a
+// freshly-measured true bar position, while the old loop's last frame was
+// this approximation's own drifted value, so the switch itself reads as a
+// visible snap even though each loop's own motion was smooth on its own.
+// Solving the actual bezier removes the drift instead of just tolerating
+// it. x1=y1=0 and x3=y3=1 always hold for CSS timing functions, so only
+// x2/y2 vary per curve; Newton-Raphson (falling back to nothing fancier
+// since this curve has no vertical tangents) converges in a couple of
+// iterations for any progress value.
+function makeCubicBezierEase(x2: number, y2: number): (p: number) => number {
+  function bezierComponent(t: number, c2: number): number {
+    // c1 (the first control point) is always 0 for both x and y here.
+    const c = 3 * c2;
+    const b = 3 * (1 - c2) - c;
+    const a = 1 - b - c;
+    return ((a * t + b) * t + c) * t;
+  }
+  function bezierSlope(t: number, c2: number): number {
+    const c = 3 * c2;
+    const b = 3 * (1 - c2) - c;
+    const a = 1 - b - c;
+    return (3 * a * t + 2 * b) * t + c;
+  }
+  return function (p: number): number {
+    if (p <= 0) return 0;
+    if (p >= 1) return 1;
+    let t = p;
+    for (let i = 0; i < 8; i++) {
+      const x = bezierComponent(t, x2) - p;
+      const slope = bezierSlope(t, x2);
+      if (Math.abs(slope) < 1e-6) break;
+      t -= x / slope;
+    }
+    return bezierComponent(t, y2);
+  };
 }
+const easeOutCubic = makeCubicBezierEase(0.58, 1);
 
 // The line(s) connecting a multi-phase job's separate bars into one
 // visible "whole project" run (Karl's own description) are drawn ONCE per
@@ -2131,7 +2166,48 @@ function captureBarTopsByRowKey(): Record<string, number> {
 // like before.
 const GANTT_REORDER_MS = 1100;
 
+// A live, busy, multi-user project renders far more often than any small
+// test scenario ever does (Karl's own account: "a lot — many jobs, many
+// tasks" — this app's own sync layer broadcasts a confirmation snapshot
+// back to the client that made a change, and every OTHER connected
+// teammate's own edits do the same — see room-do.ts's broadcastSnapshot()
+// and captureBarTopsByRowKey()'s own comment on why the sender gets one
+// too). Each render's own animateReorderedBars() call starts an
+// independent trackConnectors() loop below, and unlike the bar elements
+// themselves (torn down and rebuilt fresh by every render, so an older
+// render's loop writing to a stale, already-detached element is a
+// harmless no-op), the connector's own <path> elements are deliberately
+// PERSISTENT across renders now (see redrawConnectorLinesLive()'s own
+// comment on why) — meaning if two renders' loops are ever both still
+// running at once, they both keep writing to the SAME live elements,
+// each computing its own progress from its own start time, with whichever
+// one's requestAnimationFrame callback happens to fire last in a given
+// frame "winning" that frame. That's exactly what reads as smooth motion
+// interrupted by small backward jumps, repeating (Karl's own description)
+// — an older, stale loop's already-passed progress overwriting a newer
+// loop's further-along one, back and forth, for as long as both keep
+// running. Only ever letting the MOST RECENT render's loop actually write
+// anything fixes it outright.
+let ganttReorderGeneration = 0;
+
 function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number): void {
+  // Bumped UNCONDITIONALLY, before either early return below — every
+  // render calls drawConnectorLines() once as part of its own normal flow
+  // (see renderGantt()), drawing a fresh, correct, static connector from
+  // THIS render's own data, regardless of whether THIS render happens to
+  // need a new animation of its own. An older render's still-running
+  // trackConnectors loop has to be told to stop right here, even when
+  // (especially when) this particular render has nothing new to animate —
+  // otherwise that fresh, correct state drawn a moment ago just gets
+  // immediately overwritten by the older loop's own stale, further-along
+  // progress on its very next frame. Bumping this only when toAnimate
+  // turned out non-empty (this function's own first version) missed
+  // exactly that case: a render that confirms already-final data (this
+  // app's sync layer echoes every change back to its own sender — see
+  // captureBarTopsByRowKey()'s own comment) needs no animation of its own,
+  // but still has to cancel whichever older loop is still running.
+  ganttReorderGeneration++;
+
   if (!Object.keys(oldTops).length) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -2245,10 +2321,42 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
 
   const grid = document.getElementById('timelineGrid');
   if (grid && movedJobIds.size) {
+    // oldTops (and captureBarTopsByRowKey() it comes from) is viewport-
+    // absolute (getBoundingClientRect().top) — correct for Pass 1's own
+    // delta above, since newTop there is measured the same way. But
+    // jobBarMap's own `top` (used below and in redrawConnectorLinesLive())
+    // is grid-relative — the literal CSS `top` renderTimelineBars() writes
+    // onto each bar, positioned absolutely inside #timelineGrid. Handing
+    // redrawConnectorLinesLive() the raw viewport-absolute oldTops made it
+    // interpolate between two different coordinate spaces: at progress 0
+    // (the instant a new animation loop takes over — see this generation
+    // counter's own comment on why that happens mid-flight) the computed
+    // top came out as a viewport-absolute number several dozen pixels away
+    // from whatever grid-relative value the connector had actually last
+    // drawn, i.e. exactly the leftover "jumps back a little" (Karl's own
+    // report) even after the multi-loop fight above was genuinely fixed.
+    // Converting once here, using #timelineGrid's own on-screen top (the
+    // element's box position doesn't move just because its own children
+    // got rebuilt), puts both ends of the interpolation in the same space.
+    const gridTop = grid.getBoundingClientRect().top;
+    const oldTopsGridRelative: Record<string, number> = {};
+    Object.keys(oldTops).forEach(function (k) { oldTopsGridRelative[k] = oldTops[k] - gridTop; });
+
+    // Already bumped once, unconditionally, at the very top of this
+    // function — just capture the current value here rather than bumping
+    // again, so ANY older loop still running (from a render that started
+    // before this one, whether or not that earlier render needed its own
+    // new animation) checks this same counter below and stops itself the
+    // moment it sees a newer one has taken over, instead of continuing to
+    // fight over the same persistent <path> elements (see this counter's
+    // own comment for why that fight is exactly what read as "smooth,
+    // jump back, smooth, jump back" on a busy real project).
+    const myGeneration = ganttReorderGeneration;
     const start = performance.now();
     (function trackConnectors() {
+      if (myGeneration !== ganttReorderGeneration) return;
       const progress = Math.min(1, (performance.now() - start) / GANTT_REORDER_MS);
-      redrawConnectorLinesLive(jobBarMap, movedJobIds, oldTops, progress);
+      redrawConnectorLinesLive(jobBarMap, movedJobIds, oldTopsGridRelative, progress);
       if (progress < 1) {
         requestAnimationFrame(trackConnectors);
       } else {
