@@ -1972,45 +1972,57 @@ function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarM
   grid.appendChild(svg);
 }
 
+// CSS's `ease-out` keyword is cubic-bezier(0, 0, 0.58, 1) — approximated
+// here as the standard ease-out cubic (1 - (1-t)^3), close enough by eye
+// for a thin connector line that isn't itself the focus, in exchange for
+// not needing a full cubic-bezier root-solver just for this. See
+// redrawConnectorLinesLive()'s own comment for why matching the curve
+// with real per-frame measurement instead was actively counterproductive.
+function easeOutCubic(t: number): number {
+  const c = 1 - t;
+  return 1 - c * c * c;
+}
+
 // The line(s) connecting a multi-phase job's separate bars into one
 // visible "whole project" run (Karl's own description) are drawn ONCE per
 // render, from each bar's FINAL rest position — reasonable when nothing's
 // moving, but when a reorder animation is playing, those bars slide
 // smoothly while this connector just sat at its post-render position the
 // entire time, reading as the job's own bars fully snapping ahead of it/
-// behind it rather than the connector tracking them. jobBarMap's `top` is
-// a static number computed once at render time, but its `bar` field is a
-// live DOM reference — reading each bar's REAL current on-screen position
-// every frame (instead of the stale stored number) and recomputing just
-// this pair's `d` lets the connector track the actual motion. Only top
-// needs live-tracking: left/width are date-driven, never touched by a
-// row-reorder.
+// behind it rather than the connector tracking them.
 //
-// Deliberately does NOT go through drawConnectorLines() — that tears down
-// and rebuilds the entire SVG (every path, for every job, not just the
-// one moving) from scratch, which is real DOM-node churn to repeat on
-// every single animation frame for the whole ~1s+ reorder. Real per-frame
-// node creation/destruction is exactly the kind of main-thread work that
-// can drop frames and read as uneven, "lurching" motion on an actual
-// device even when the underlying CSS transition curve itself measures
-// perfectly smooth (Karl's own report, after the easing-curve fix alone
-// didn't resolve it). Updating only the `d` attribute of the SPECIFIC
-// already-existing <path> for each moving pair (tagged with
-// data-job-id/data-pair-index by drawConnectorLines() itself) touches
-// nothing else in the DOM at all.
-function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, grid: HTMLElement): void {
+// Deliberately does NOT measure anything from the DOM — an earlier version
+// read each bar's real getBoundingClientRect() every frame, which (even
+// after a later fix stopped it from also recreating DOM nodes every
+// frame) still forced the browser to synchronously resolve the bar's
+// CURRENT transform-animated position back onto the main thread on every
+// single call. transform is normally cheap specifically because the
+// browser can run it entirely on the compositor thread without any main-
+// thread involvement per frame; reading layout geometry off an element
+// mid-transform defeats that, and repeating it 60 times a second is
+// exactly the kind of thing that reads as uneven, "lurching" motion on a
+// real device (Karl's own report, persisting after the DOM-churn fix
+// alone). Computing each bar's position analytically — its already-known
+// start top, its already-known final top (jobBarMap's own `top`), and
+// how far through GANTT_REORDER_MS this frame is — needs no DOM reads at
+// all beyond the one-time `dataset.rowKey` lookup.
+function redrawConnectorLinesLive(jobBarMap: Record<string, JobBarMapEntry[]>, liveJobIds: Set<string>, startTopsByRowKey: Record<string, number>, progress: number): void {
   const svg = document.getElementById(GANTT_CONNECTOR_SVG_ID);
   if (!svg) return;
-  const gridTop = grid.getBoundingClientRect().top;
+  const eased = easeOutCubic(progress);
   liveJobIds.forEach(function (jobId) {
     const bars = jobBarMap[jobId];
     if (!bars || bars.length < 2) return;
+    function liveEntry(entry: JobBarMapEntry): JobBarMapEntry {
+      const key = entry.bar.dataset.rowKey;
+      const startTop = key !== undefined ? startTopsByRowKey[key] : undefined;
+      const top = startTop === undefined ? entry.top : startTop + (entry.top - startTop) * eased;
+      return { left: entry.left, width: entry.width, top: top, bar: entry.bar, jobColor: entry.jobColor };
+    }
     for (let i = 0; i < bars.length - 1; i++) {
       const path = svg.querySelector<SVGPathElement>('path[data-job-id="' + jobId + '"][data-pair-index="' + i + '"]');
       if (!path) continue;
-      const liveA: JobBarMapEntry = { left: bars[i].left, width: bars[i].width, top: bars[i].bar.getBoundingClientRect().top - gridTop, bar: bars[i].bar, jobColor: bars[i].jobColor };
-      const liveB: JobBarMapEntry = { left: bars[i + 1].left, width: bars[i + 1].width, top: bars[i + 1].bar.getBoundingClientRect().top - gridTop, bar: bars[i + 1].bar, jobColor: bars[i + 1].jobColor };
-      path.setAttribute('d', computeConnectorPathD(liveA, liveB));
+      path.setAttribute('d', computeConnectorPathD(liveEntry(bars[i]), liveEntry(bars[i + 1])));
     }
   });
 }
@@ -2212,22 +2224,19 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   // are otherwise drawn once, from the bars' FINAL positions, and then
   // just sit there for the whole GANTT_REORDER_MS while the bars they
   // connect glide past underneath — read as the connector not moving in
-  // sync with its own job's phases (Karl's own report). Re-drawing it from
-  // each bar's REAL current position on every frame for exactly as long as
-  // the bars are actually moving keeps it visually attached to them
-  // throughout, not just before and after.
+  // sync with its own job's phases (Karl's own report). Recomputing it
+  // from each bar's start/end top and how far through the duration this
+  // frame is (see redrawConnectorLinesLive()'s own comment on why that's
+  // analytical rather than measured) for exactly as long as the bars are
+  // actually moving keeps it visually attached to them throughout, not
+  // just before and after.
   //
-  // Only the job(s) actually reordering need their connector re-MEASURED
+  // Only the job(s) actually reordering need their connector recomputed
   // every frame — a rowKey's own job id is always its first `::` segment
   // (see ganttRowKey()). Every other multi-phase job's connector still
   // gets redrawn each frame (see redrawConnectorLinesLive()'s own comment
   // on why it can't just be skipped), but reuses its already-correct
-  // static position instead of paying for a real getBoundingClientRect()
-  // read it doesn't need — real per-frame layout reads are exactly the
-  // kind of thing that can drag actual frame rate down and make a
-  // transition feel far slower than its stated duration, worth not
-  // reintroducing on a chart with many multi-phase jobs while tuning that
-  // duration back down.
+  // static position instead of computing one it doesn't need.
   const movedJobIds = new Set<string>();
   toAnimate.forEach(function (a) {
     const key = a.el.dataset.rowKey as string;
@@ -2238,13 +2247,14 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   if (grid && movedJobIds.size) {
     const start = performance.now();
     (function trackConnectors() {
-      redrawConnectorLinesLive(jobBarMap, movedJobIds, grid);
-      if (performance.now() - start < GANTT_REORDER_MS) {
+      const progress = Math.min(1, (performance.now() - start) / GANTT_REORDER_MS);
+      redrawConnectorLinesLive(jobBarMap, movedJobIds, oldTops, progress);
+      if (progress < 1) {
         requestAnimationFrame(trackConnectors);
       } else {
-        // One final pass from the real, static (not live-measured) final
-        // positions — removes any last-frame sub-pixel drift from reading
-        // getBoundingClientRect() instead of the exact authored numbers.
+        // One final pass from the real, static, exact-not-eased-estimate
+        // final positions — removes any last-frame rounding drift from
+        // easeOutCubic()'s own approximation of the real CSS curve.
         drawConnectorLines(gridWidth, jobBarMap, grid);
       }
     })();
