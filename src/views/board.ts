@@ -60,7 +60,8 @@ import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../c
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
-import { darkenColor } from '../utils/color';
+import { darkenColor, softenColor } from '../utils/color';
+import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 import { getStoredSessionToken } from '../auth/session';
@@ -78,14 +79,6 @@ declare global {
   // eslint-disable-next-line no-var
   var draftAttachments: unknown[];
   // eslint-disable-next-line no-var
-  var BOARD_COLOR_PRESETS: string[];
-  // eslint-disable-next-line no-var
-  var DEFAULT_TASK_DURATION_DAYS: number;
-  // eslint-disable-next-line no-var
-  var CUSTOM_FIELD_DEFS: CustomFieldDef[];
-  // eslint-disable-next-line no-var
-  var TEAM_FIELD_KEYS: string[];
-  // eslint-disable-next-line no-var
   var fieldOptions: Record<string, string[]>;
   function renderFixedTaskGrid(taskList: Task[]): void;
   function saveBoardCards(): void;
@@ -99,6 +92,60 @@ declare global {
   function deleteCardFromShared(projectId: string | null, cardId: string): void;
   function isFinishedColumn(col: BoardColumn): boolean;
 }
+
+// A stronger blend than utils/color.ts's own SOFTEN_AMOUNT (used for
+// Gantt bars): at 18%, already-light presets (yellow, cyan) barely
+// shifted while dark ones (navy, red) shifted a lot, so the palette read
+// as an inconsistent mix of "still vivid" and "clearly pastel" rather
+// than a uniform pastel set — confirmed by rendering an actual
+// side-by-side comparison. 30% reads as consistently pastel across every
+// hue. Local to this file — nothing else needs the raw blend amount,
+// only the resulting BOARD_COLOR_PRESETS below.
+const BOARD_COLOR_SOFTEN_AMOUNT = 0.30;
+// Real module-owned export now (moved out of index.html) — every other
+// reader is a test asserting against it, not another src/ file, so this
+// only needs wiring into window via main.ts, not src/shared-globals.d.ts.
+export const BOARD_COLOR_PRESETS = COLOR_PRESETS.map((c) => softenColor(c, BOARD_COLOR_SOFTEN_AMOUNT));
+
+// Fallback only — per-board default lives on col.defaultDuration, set from
+// each board's ⋮ settings menu (see setColumnDefaultDuration). Read by
+// src/views/job-form.ts too — see its own ambient declaration of this in
+// src/shared-globals.d.ts.
+export const DEFAULT_TASK_DURATION_DAYS = 5;
+
+// job.customFields is the store; this defines what fields exist, in what
+// order, and how each renders. Read by src/views/job-form.ts too — see
+// its own ambient declaration of this in src/shared-globals.d.ts.
+export const CUSTOM_FIELD_DEFS: CustomFieldDef[] = [
+  // Real-account single-select, same source as Members (cachedUserRoster)
+  // just one value instead of an array — see renderCustomFieldsGrid()'s
+  // 'user-select' branch. Existing free-text values (from before this
+  // change) won't match any option here and will just show blank until
+  // re-picked from the real list.
+  { key: 'pm', label: 'Project Manager', type: 'user-select' },
+  { key: 'foreman', label: 'Project Lead/Foreman', type: 'user-select' },
+  { key: 'customer', label: 'Customer', type: 'select' },
+  { key: 'poNumber', label: 'Job / P.O. Number', type: 'text' },
+  { key: 'location', label: 'Location', type: 'text' },
+  { key: 'jobType', label: 'Job Type', type: 'select' },
+  { key: 'timeframe', label: 'Timeframe', type: 'select' },
+  { key: 'incentivePeriod', label: 'Incentive Period', type: 'select' },
+  // Unlike every field above (one value each), a job can have any number of
+  // Members — rendered as a checkbox list instead of a dropdown, and stored
+  // as an array (see renderCustomFieldsGrid()/collectCustomFieldValues()).
+  // Its option pool (the roster of people who CAN be added) is still
+  // managed the same way as a 'select' field's dropdown choices — see
+  // renderManageFieldsBody()'s type filter.
+  { key: 'members', label: 'Members', type: 'multiselect' },
+];
+// pm/foreman/members render in their own "Team" section instead of
+// Custom Fields (see renderTeamFieldsGrid()/renderJobTeamFieldsGrid()) —
+// still defined in CUSTOM_FIELD_DEFS above and stored under the same
+// card.customFields keys, just filtered into a different grid at render
+// time. Nothing about storage/collection/visibility logic changes. Read
+// by src/views/job-form.ts too — see its own ambient declaration of this
+// in src/shared-globals.d.ts.
+export const TEAM_FIELD_KEYS = ['pm', 'foreman', 'members'];
 
 // ===== BOARD: COLUMN DRAG & DROP =====
 

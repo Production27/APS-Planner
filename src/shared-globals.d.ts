@@ -15,7 +15,7 @@
 // This file needs no import/export to take effect — every other file
 // under src/ (picked up via tsconfig's "include": ["src/**/*.ts"]) sees
 // these as real globals automatically.
-import type { Job, BoardCard, BoardColumn, WorkflowItem } from './core/types';
+import type { Job, BoardCard, BoardColumn, WorkflowItem, CustomFieldDef } from './core/types';
 import type { PresenceUser } from './sync/presence';
 
 declare global {
@@ -28,6 +28,13 @@ declare global {
   var DEFAULT_BOARD_COLUMNS: { id: string; label: string }[];
   var DEFAULT_STALLED_AFTER_DAYS: number;
   var COLOR_PRESETS: string[];
+  // Real exports of src/views/board.ts now — src/views/job-form.ts reads
+  // these three as bare ambient globals rather than importing them (same
+  // idiom board.ts's own doc comment describes for its other
+  // job-form.ts-shared functions).
+  var DEFAULT_TASK_DURATION_DAYS: number;
+  var CUSTOM_FIELD_DEFS: CustomFieldDef[];
+  var TEAM_FIELD_KEYS: string[];
   var activeProjectId: string | null;
   var currentUserRole: string | null;
   var roleConfirmed: boolean;

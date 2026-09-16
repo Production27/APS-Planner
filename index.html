@@ -3936,182 +3936,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-16.1';
+const APP_VERSION = '2026-09-16.2';
 
-// `var`, not `const` — src/app/project.ts's bundled migrateFromLegacy()/
-// enforceFixedProjectSet() read this from a separate <script> tag, which
-// needs a real `window` property (only `var` gives you that at the top
-// level of a classic script), not just a script-scoped binding.
-var DEFAULT_JOBS = [
-  {
-    id: 'job-1',
-    name: 'Project Summary 1',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-1-1', name: 'Project Summary 1', start: '2026-08-03', finish: '2026-11-06', notes: '', order: 0}]
-  },
-  {
-    id: 'job-2',
-    name: 'Project Summary 2',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-2-1', name: 'Project Summary 2', start: '2026-08-03', finish: '2026-11-06', notes: '', order: 0}]
-  },
-  {
-    id: 'job-3',
-    name: 'Initial Setup',
-    color: '#9b7edc',
-    archived: false,
-    notes: 'Foundation and site prep coordination',
-    tasks: [{id: 'task-3-1', name: 'Initial Setup', start: '2026-08-03', finish: '2026-08-07', notes: 'Foundation and site prep coordination', order: 0}]
-  },
-  {
-    id: 'job-4',
-    name: 'Phase 1 Work',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-4-1', name: 'Phase 1 Work', start: '2026-08-11', finish: '2026-08-27', notes: '', order: 0}]
-  },
-  {
-    id: 'job-5',
-    name: 'Phase 1 Continuation',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-5-1', name: 'Phase 1 Continuation', start: '2026-08-03', finish: '2026-08-27', notes: '', order: 0}]
-  },
-  {
-    id: 'job-6',
-    name: 'Phase 2 Work',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-6-1', name: 'Phase 2 Work', start: '2026-08-19', finish: '2026-09-23', notes: '', order: 0}]
-  },
-  {
-    id: 'job-7',
-    name: 'Phase 2A Work',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-7-1', name: 'Phase 2A Work', start: '2026-08-31', finish: '2026-09-09', notes: '', order: 0}]
-  },
-  {
-    id: 'job-8',
-    name: 'Phase 2B Work',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-8-1', name: 'Phase 2B Work', start: '2026-09-10', finish: '2026-09-23', notes: '', order: 0}]
-  },
-  {
-    id: 'job-9',
-    name: 'Phase 3 Work',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-9-1', name: 'Phase 3 Work', start: '2026-09-23', finish: '2026-10-07', notes: '', order: 0}]
-  },
-  {
-    id: 'job-10',
-    name: 'Phase 3A Work',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-10-1', name: 'Phase 3A Work', start: '2026-10-07', finish: '2026-10-08', notes: '', order: 0}]
-  },
-  {
-    id: 'job-11',
-    name: 'Phase 4 Work',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-11-1', name: 'Phase 4 Work', start: '2026-09-14', finish: '2026-10-15', notes: '', order: 0}]
-  },
-  {
-    id: 'job-12',
-    name: 'Phase 5 Work',
-    color: '#6c757d',
-    archived: false,
-    notes: '',
-    tasks: [{id: 'task-12-1', name: 'Phase 5 Work', start: '2026-09-21', finish: '2026-10-27', notes: '', order: 0}]
-  },
-  {
-    id: 'job-13',
-    name: 'Fire Protection Setup',
-    color: '#9b7edc',
-    archived: false,
-    notes: 'Fire alarm rough-in and testing',
-    tasks: [{id: 'task-13-1', name: 'Fire Protection Setup', start: '2026-10-06', finish: '2026-10-07', notes: 'Fire alarm rough-in and testing', order: 0}]
-  },
-  {
-    id: 'job-14',
-    name: 'Mechanical Rough-in',
-    color: '#d4a5d4',
-    archived: false,
-    notes: 'HVAC ductwork and piping',
-    tasks: [{id: 'task-14-1', name: 'Mechanical Rough-in', start: '2026-09-21', finish: '2026-09-28', notes: 'HVAC ductwork and piping', order: 0}]
-  },
-  {
-    id: 'job-15',
-    name: 'Fire Pro Rough-in',
-    color: '#9b7edc',
-    archived: false,
-    notes: 'Sprinkler line installation',
-    tasks: [{id: 'task-15-1', name: 'Fire Pro Rough-in', start: '2026-09-21', finish: '2026-09-22', notes: 'Sprinkler line installation', order: 0}]
-  },
-  {
-    id: 'job-16',
-    name: 'Electrical Prep',
-    color: '#2c3e80',
-    archived: false,
-    notes: 'Conduit and wire pulls',
-    tasks: [{id: 'task-16-1', name: 'Electrical Prep', start: '2026-09-23', finish: '2026-09-25', notes: 'Conduit and wire pulls', order: 0}]
-  },
-  {
-    id: 'job-17',
-    name: 'Electrical Continuation',
-    color: '#2c3e80',
-    archived: false,
-    notes: 'Panel rough-in',
-    tasks: [{id: 'task-17-1', name: 'Electrical Continuation', start: '2026-09-30', finish: '2026-10-02', notes: 'Panel rough-in', order: 0}]
-  },
-  {
-    id: 'job-18',
-    name: 'Electrical shop area',
-    color: '#2c3e80',
-    archived: false,
-    notes: 'Shop electrical layout and rough',
-    tasks: [{id: 'task-18-1', name: 'Electrical shop area', start: '2026-10-06', finish: '2026-10-13', notes: 'Shop electrical layout and rough', order: 0}]
-  },
-  {
-    id: 'job-19',
-    name: 'Electrical shop area (cont.)',
-    color: '#2c3e80',
-    archived: false,
-    notes: 'Continued shop electrical work',
-    tasks: [{id: 'task-19-1', name: 'Electrical shop area (cont.)', start: '2026-10-14', finish: '2026-10-21', notes: 'Continued shop electrical work', order: 0}]
-  },
-  {
-    id: 'job-20',
-    name: 'Shop lighting, RTUs',
-    color: '#2c3e80',
-    archived: false,
-    notes: 'Light fixture and RTU electrical connections',
-    tasks: [{id: 'task-20-1', name: 'Shop lighting, RTUs', start: '2026-10-22', finish: '2026-10-27', notes: 'Light fixture and RTU electrical connections', order: 0}]
-  }
-];
-
-var COLOR_PRESETS = [
-  '#1a237e','#3949ab','#5b7eb5','#2c3e80','#3498db','#17a2b8',
-  '#00bcd4','#4dd0e1','#80deea','#7dd3c0','#00897b','#2e7d32',
-  '#66bb6a','#a4c639','#28a745','#fdd835','#f0ad4e','#ff9800',
-  '#c62828','#e53935','#dc3545','#f48fb1','#d4a5d4','#9b7edc',
-  '#8e7cc3','#c0c0c0','#424242','#6c757d'
-];
+// DEFAULT_JOBS moved into src/app/seed-data.ts, COLOR_PRESETS into
+// src/core/constants.ts — both real module-owned exports now (neither was
+// ever reassigned anywhere in the app or its tests).
 
 // ===== CALENDAR-ONLY EVENTS =====
 // Deliberately NOT jobs/tasks — no job.tasks entry, no linked board card,
@@ -4141,17 +3970,12 @@ let editingPhaseId = null;
 let editingSubPhaseId = null;
 // `var`, not `let` — src/views/gantt.ts's bundled drag/resize code reads this.
 var dayWidth = 34;
-// Gantt row/bar sizing — kept in one place since it's threaded through
-// renderGantt(), the drag/resize handlers, and the SVG connector lines
-// between split job-span segments. The matching CSS (.task-row,
-// .task-bar, .row-bg, .job-span-*) is hand-kept in sync with these since
-// plain CSS can't reference JS constants — search for
-// GANTT_ROW_H/GANTT_BAR_H in a comment there if these ever change again.
-// `var`, not `const`/`let` — src/views/gantt.ts's bundled renderGantt()
-// reads all four of these.
-var GANTT_ROW_H = 40;
-var GANTT_BAR_H = 26;
-var GANTT_BAR_PAD = (GANTT_ROW_H - GANTT_BAR_H) / 2;
+// GANTT_ROW_H/GANTT_BAR_H/GANTT_BAR_PAD moved into src/views/gantt.ts (real
+// module-owned exports now — nothing outside that file ever read or
+// reassigned them). The matching CSS (.task-row, .task-bar, .row-bg,
+// .job-span-*) is still hand-kept in sync with those since plain CSS can't
+// reference JS constants — search for GANTT_ROW_H/GANTT_BAR_H in a comment
+// there if these ever change again.
 var startDate, endDate;
 // deleteTargetJobId moved into src/views/job-list.ts (real module state,
 // not ambient — every reader/writer moved there together).
@@ -4179,8 +4003,9 @@ var ganttViewMode = 'tasks';
 // to other users. Keyed by phase id (globally unique) rather than job id,
 // since a job's OTHER phases stay exactly as they are regardless of one
 // phase's collapse state.
-// `var`, not `let` — src/views/gantt.ts's bundled renderGantt() reads this.
-var collapsedPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt_collapsed_phases_v1') || '[]', []));
+// collapsedPhaseIds moved into src/views/gantt.ts (real module-owned
+// export now — nothing outside that file ever reassigns it, only mutates
+// it via .add()/.delete()).
 
 // ===== TASKS VIEW: DEFAULT-COLLAPSED PHASES/SUB-PHASES =====
 // Every phase and sub-phase in Tasks view starts CONDENSED (one bar,
@@ -4215,34 +4040,14 @@ var tasksExpandedSubPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt
 // page load and whenever the active project changes (see switchProject()).
 // `var`, not `let` — src/views/gantt.ts's bundled row builder reads this.
 var ganttFocusedJobId = null;
-// Same palette as COLOR_PRESETS (job/task colors), just softened toward
-// pastel — used only for the board column color picker, so picking a
-// board color is its own distinct, intentionally-gentler palette rather
-// than a runtime transform of whatever the job picker offers. Uses a
-// stronger blend than SOFTEN_AMOUNT (used elsewhere for Gantt bars):
-// at 18%, already-light presets (yellow, cyan) barely shifted while dark
-// ones (navy, red) shifted a lot, so the palette read as an inconsistent
-// mix of "still vivid" and "clearly pastel" rather than a uniform pastel
-// set — confirmed by rendering an actual side-by-side comparison. 30%
-// reads as consistently pastel across every hue.
-const BOARD_COLOR_SOFTEN_AMOUNT = 0.30;
-var BOARD_COLOR_PRESETS = COLOR_PRESETS.map(function(c) { return softenColor(c, BOARD_COLOR_SOFTEN_AMOUNT); });
-const ARCHIVE_CUTOFF_DAYS = 90;
+// BOARD_COLOR_SOFTEN_AMOUNT/BOARD_COLOR_PRESETS moved into
+// src/views/board.ts, ARCHIVE_CUTOFF_DAYS/DEFAULT_BOARD_COLUMNS into
+// src/core/constants.ts, DEFAULT_TASK_DURATION_DAYS into src/views/board.ts
+// — all real module-owned exports now (none was ever reassigned anywhere).
 // `var`, not `let` — src/views/gantt.ts's bundled renderGantt() reads/writes this.
 var ganttFirstRender = true;
-// Fallback only — per-board default lives on col.defaultDuration, set from
-// each board's ⋮ settings menu (see setColumnDefaultDuration).
-var DEFAULT_TASK_DURATION_DAYS = 5;
 
 // ===== TRELLO-STYLE BOARD =====
-// `var` — src/sync/inbound.ts's bundled applyRoomSnapshot() reads this.
-var DEFAULT_BOARD_COLUMNS = [
-  { id: 'bid', label: 'Bid' },
-  { id: 'scheduled', label: 'Scheduled' },
-  { id: 'active', label: 'Active' },
-  { id: 'complete', label: 'Complete' },
-  { id: 'invoiced', label: 'Invoiced' }
-];
 var BOARD_COLUMNS = [];
 // Named groups a board can be assigned to (col.workflowItemId, see the
 // ⋮ menu's "Workflow Item" picker) — deliberately independent of any
@@ -4338,40 +4143,8 @@ var cachedUserRoster = null;
 var viewAsUsername = null;
 let viewAsRole = null;
 
-// `var`, not `const` — src/views/board.ts's buildCardEl() reads this.
-var CUSTOM_FIELD_DEFS = [
-  // Real-account single-select, same source as Members (cachedUserRoster)
-  // just one value instead of an array — see renderCustomFieldsGrid()'s
-  // 'user-select' branch. Existing free-text values (from before this
-  // change) won't match any option here and will just show blank until
-  // re-picked from the real list.
-  { key: 'pm', label: 'Project Manager', type: 'user-select' },
-  { key: 'foreman', label: 'Project Lead/Foreman', type: 'user-select' },
-  { key: 'customer', label: 'Customer', type: 'select' },
-  { key: 'poNumber', label: 'Job / P.O. Number', type: 'text' },
-  { key: 'location', label: 'Location', type: 'text' },
-  { key: 'jobType', label: 'Job Type', type: 'select' },
-  { key: 'timeframe', label: 'Timeframe', type: 'select' },
-  { key: 'incentivePeriod', label: 'Incentive Period', type: 'select' },
-  // Unlike every field above (one value each), a job can have any number of
-  // Members — rendered as a checkbox list instead of a dropdown, and stored
-  // as an array (see renderCustomFieldsGrid()/collectCustomFieldValues()).
-  // Its option pool (the roster of people who CAN be added) is still
-  // managed the same way as a 'select' field's dropdown choices — see
-  // renderManageFieldsBody()'s type filter.
-  { key: 'members', label: 'Members', type: 'multiselect' }
-];
-// pm/foreman/members render in their own "Team" section instead of
-// Custom Fields (see renderTeamFieldsGrid()/renderJobTeamFieldsGrid()) —
-// still defined in CUSTOM_FIELD_DEFS above and stored under the same
-// card.customFields keys, just filtered into a different grid at render
-// time. Nothing about storage/collection/visibility logic changes.
-// `var`, not `const`/`let` — src/views/board.ts's bundled
-// renderFieldDefHtml()/buildManageFieldGroup()/etc. read these as ambient
-// globals from a separate <script> tag, which needs a real `window`
-// property (only `var` gives you that at the top level of a classic
-// script), not just a script-scoped binding.
-var TEAM_FIELD_KEYS = ['pm', 'foreman', 'members'];
+// CUSTOM_FIELD_DEFS/TEAM_FIELD_KEYS moved into src/views/board.ts — real
+// module-owned exports now (neither was ever reassigned anywhere).
 var fieldOptions = {};
 
 // The whole `projects` map (every job/card/event/etc. for both fixed
@@ -4384,20 +4157,12 @@ var fieldOptions = {};
 var projects = {};
 var activeProjectId = null;
 
-// Set when this browser has never had any real data (no saved projects, no
-// legacy keys) — meaning the "default project(s)" it creates on init() are
-// just generic starter content, not anything a person actually made. Used
-// by setupLiveblocksSync to know it's safe to discard those placeholders
-// and adopt whatever the team is already sharing. This is an ARRAY, not a
-// single id: migrateFromLegacy() (src/app/project.ts) creates one fresh
-// project, but enforceFixedProjectSet() right after it (called from
-// init(), right below) always tops that up to the full two-project fixed
-// set, fabricating a SECOND local-only placeholder with its own fresh id
-// — both need to be tracked. `var`, not `let` — init() below reads
-// freshLocalSeed as a bare global; src/app/project.ts's bundled
-// migrateFromLegacy()/enforceFixedProjectSet() read and write both.
-var freshLocalSeed = false;
-var freshLocalSeedProjectIds = [];
+// freshLocalSeed/freshLocalSeedProjectIds moved into src/app/project.ts —
+// real module-owned exports now. src/app/boot.ts's init() now imports
+// freshLocalSeed directly (a real import, not an ambient global) so its
+// read of it after migrateFromLegacy() runs stays live rather than
+// snapshotting the pre-migration value the way a one-time window export
+// would have.
 
 // homeExpandedWidgetId stays here as a real `var` (src/views/board.ts's
 // own bundled code still reads it directly).
@@ -4409,14 +4174,10 @@ var homeExpandedWidgetId = null;
 var calendarViewDate = new Date();
 var calendarViewMode = 'month'; // 'month', 'week', or 'day'
 
-// `var`, not `const` — same cross-script-visibility reasoning as
-// calendarViewDate above: src/views/calendar.ts's bundled render engine
-// reads these.
-var CAL_BAR_H = 20;
+// CAL_BAR_H/CAL_BAR_GAP/CAL_DAYNUM_H moved into src/core/constants.ts —
+// real module-owned exports now (never reassigned anywhere).
 // `var`, not `let` — src/views/calendar.ts's bundled bar-drag code reads/writes this.
 var calDragState = null;
-var CAL_BAR_GAP = 3;
-var CAL_DAYNUM_H = 26;
 
 // ===== CALENDAR-ONLY EVENTS: Add/Edit modal =====
 // Deliberately simple (explicit Save, not autosave like the job form) —
@@ -4431,12 +4192,10 @@ var barResizeState = null;
 var barMoveState = null;
 var tickResizeState = null;
 
-// A column's "too long in this stage" threshold — per-column
-// (col.stalledAfterDays, see setColumnStalledThreshold()) since stages
-// genuinely take different lengths of time (Bid can reasonably sit for
-// weeks; Active sitting untouched for the same span is a problem).
-// Falls back to this when a column has never had it set.
-var DEFAULT_STALLED_AFTER_DAYS = 14;
+// DEFAULT_STALLED_AFTER_DAYS moved into src/core/constants.ts — real
+// module-owned export now (never reassigned anywhere; see
+// computeColumnStalledFloors() in src/views/home.ts for the per-column
+// floor built on top of it).
 
 // ===== ROOM SYNC (Durable Object backend) =====
 // Replaces Liveblocks — see the migration plan and worker/src/ (formerly
@@ -4458,13 +4217,13 @@ var DEFAULT_STALLED_AFTER_DAYS = 14;
 // get that automatically, so it's built here instead).
 //
 // Auth: unchanged in spirit — the browser holds no secret. It calls
-// API_BASE_URL (the Worker's base URL — also used elsewhere in this file
-// for backups/user-management, not just room sync) once with a per-user
-// username+password (see reauthenticate()) to get back a short-lived
-// signed token (not a Liveblocks token anymore, and — unlike the
-// password — cached and reused across calls, see getSessionToken()), and
-// uses it to open a WebSocket to the Worker's Durable Object.
-const API_BASE_URL = "https://aps-planner-staging.production-db3.workers.dev/";
+// API_BASE_URL (the Worker's base URL — moved into src/core/constants.ts,
+// also used elsewhere for backups/user-management, not just room sync)
+// once with a per-user username+password (see reauthenticate()) to get
+// back a short-lived signed token (not a Liveblocks token anymore, and —
+// unlike the password — cached and reused across calls, see
+// getSessionToken()), and uses it to open a WebSocket to the Worker's
+// Durable Object.
 
 // currentUserRole/currentAssignedProjectId/roleConfirmed stay real `var`s
 // here — switchProject()/enforceProjectScopeForRole()/updateProjectToggle()
@@ -4507,12 +4266,9 @@ var roomSocket = null;
 // `var`, not `let` — src/sync/connection.ts's bundled handleRoomClose()
 // and src/sync/inbound.ts's bundled handleRoomMessage() both read/write this.
 var roomEverConnected = false; // true once at least one snapshot has been received on this page load
-// msgId -> { msg, sentAt } — every outbound write sits here until acked,
-// rejected, or errored. Replayed in order on reconnect (see roomSocket's
-// 'open' handler) since a plain WebSocket has no built-in "resend what
-// didn't make it" the way Liveblocks' SDK did.
-// `var`, not `const` — src/sync/connection.ts's bundled handleRoomOpen() reads this.
-var pendingWrites = new Map();
+// pendingWrites moved into src/sync/outbound.ts — real module-owned
+// export now (only ever mutated via .set()/.delete(), never
+// wholesale-reassigned).
 // `var` — src/sync/inbound.ts's bundled applyRoomSnapshot()/the focusout
 // listener read and write this.
 var pendingRemoteRefresh = false;

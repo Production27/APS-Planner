@@ -30,6 +30,7 @@
 // next call's arguments — see each function's own signature for exactly
 // what it depends on and produces, rather than reading a shared closure.
 import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
+import { safeJsonParse } from '../utils/id';
 import { toIsoDate, getDaysDiff } from '../utils/date';
 import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
@@ -85,12 +86,6 @@ declare global {
   var ganttViewMode: string;
   // eslint-disable-next-line no-var
   var ganttFirstRender: boolean;
-  // eslint-disable-next-line no-var
-  var GANTT_ROW_H: number;
-  // eslint-disable-next-line no-var
-  var GANTT_BAR_H: number;
-  // eslint-disable-next-line no-var
-  var GANTT_BAR_PAD: number;
   // Shared with autoArchiveJobs() (src/app/project.ts) — how far back a
   // job/task can be and still show up before being treated as archived.
   const ARCHIVE_CUTOFF_DAYS: number;
@@ -98,6 +93,28 @@ declare global {
   function jumpToLinkedJobReference(job: Job): void;
   function isTaskFinished(job: Job, task: GanttTask): boolean;
 }
+
+// Gantt row/bar sizing — threaded through renderGantt(), the drag/resize
+// handlers, and the SVG connector lines between split job-span segments.
+// Real module-owned values now (used only in this file — no other src/
+// file or test ever reads or reassigns them), moved out of index.html's
+// inline script where they used to live as ambient `window` globals for
+// no reason beyond history. The matching CSS (.task-row, .task-bar,
+// .row-bg, .job-span-*) is hand-kept in sync with these since plain CSS
+// can't reference JS constants — search for GANTT_ROW_H/GANTT_BAR_H in a
+// comment there if these ever change again.
+export const GANTT_ROW_H = 40;
+export const GANTT_BAR_H = 26;
+export const GANTT_BAR_PAD = (GANTT_ROW_H - GANTT_BAR_H) / 2;
+
+// Which phase rows are folded into one condensed bar in the Jobs/Leads
+// view (see togglePhaseCollapse()). A phase's own id can be null (an
+// unphased job's synthetic default phase), so this has to accept null
+// keys too. Real module-owned value now, same reasoning as
+// GANTT_ROW_H/etc. above — only ever read/mutated (via .add()/.delete(),
+// never wholesale-reassigned) from within this file or a test exercising
+// it in place.
+export const collapsedPhaseIds = new Set<string | null>(safeJsonParse(localStorage.getItem('gantt_collapsed_phases_v1') || '[]', []));
 
 // Deliberately loose local type (mirrors src/views/calendar.ts's own
 // CalTask): `task` here can be a REAL task from a sub-unit's own

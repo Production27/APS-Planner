@@ -38,6 +38,16 @@ declare global {
 
 let stuckWriteTimer: ReturnType<typeof setTimeout> | null = null;
 let syncPushTimer: ReturnType<typeof setTimeout> | null = null;
+
+// msgId -> { msg, sentAt } — every outbound write sits here until acked,
+// rejected, or errored. Replayed in order on reconnect (see
+// src/sync/connection.ts's handleRoomOpen()) since a plain WebSocket has
+// no built-in "resend what didn't make it" the way Liveblocks' SDK did.
+// Real module-owned export now (moved out of index.html) — only ever
+// mutated via .set()/.delete(), never wholesale-reassigned, so
+// connection.ts's own read of it (via src/shared-globals.d.ts's ambient
+// declaration) stays correctly in sync with this same Map instance.
+export const pendingWrites = new Map<string, { msg: Record<string, unknown>; sentAt: number }>();
 let msgSeq = 0;
 
 function queueSharedSync(): void {

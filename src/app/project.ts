@@ -24,25 +24,29 @@ import { cancelEdit } from '../views/job-form';
 import { applyThemeColor, applyProjectBgVisual, getSavedThemeColor, normalizeThemeColor, DEFAULT_THEME_COLOR } from './theme';
 import { ensureCardIds, ensureJobTasksMatchColumns, ensureJobHasCards, migrateOrphanedCards, ensureJobAndTaskIds } from '../core/jobs';
 import { renderActivityLogSidebar } from './activity-log';
+import { DEFAULT_JOBS } from './seed-data';
 
 declare global {
   function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
-  // eslint-disable-next-line no-var
-  var DEFAULT_JOBS: any[];
-  // eslint-disable-next-line no-var
-  var freshLocalSeed: boolean;
-  // eslint-disable-next-line no-var
-  var freshLocalSeedProjectIds: string[];
 }
 
 // ===== PROJECT MANAGEMENT =====
 export const PROJECTS_KEY = 'aps-planner:projects-v2';
 export const ACTIVE_PROJECT_KEY = 'aps-planner:active-project-v2';
 
-// freshLocalSeed/freshLocalSeedProjectIds stay real `var`s in index.html
-// (not owned here) — init() there reads freshLocalSeed as a bare global
-// right after calling enforceFixedProjectSet() below. See their own
-// comment in index.html for what they track.
+// True for the remainder of this page load once migrateFromLegacy() below
+// has fabricated a brand-new local project from DEFAULT_JOBS (a genuinely
+// new install/browser, nothing synced yet) — src/app/boot.ts's init()
+// reads this right after calling enforceFixedProjectSet() to decide
+// whether to show the "setting things up" overlay. freshLocalSeedProjectIds
+// is the same idea per-project-id (both fixed projects can independently
+// be a fresh seed) — enforceFixedProjectSet() reads it. Real module-owned
+// exports now (moved out of index.html) — boot.ts's read of
+// freshLocalSeed is the only OTHER file involved, so freshLocalSeed gets
+// a src/shared-globals.d.ts entry; freshLocalSeedProjectIds has no
+// outside readers and needs none.
+export let freshLocalSeed = false;
+export const freshLocalSeedProjectIds: string[] = [];
 
 export function migrateFromLegacy(): void {
   const oldTasks = localStorage.getItem('gantt_jobs_v4');

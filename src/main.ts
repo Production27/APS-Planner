@@ -76,7 +76,12 @@ import {
   renderAttachmentPanel, handleAttachmentPanelUpload, removeAttachmentPanelItem,
   renderAttachments, handleAttachmentUpload, removeAttachment,
   openManageFields, closeManageFields, renderManageFieldsBody, buildManageFieldGroup, addFieldOption, removeFieldOption,
+  BOARD_COLOR_PRESETS, DEFAULT_TASK_DURATION_DAYS, CUSTOM_FIELD_DEFS, TEAM_FIELD_KEYS,
 } from './views/board';
+import {
+  API_BASE_URL, COLOR_PRESETS, DEFAULT_BOARD_COLUMNS, CAL_BAR_H, CAL_BAR_GAP, CAL_DAYNUM_H,
+  DEFAULT_STALLED_AFTER_DAYS, ARCHIVE_CUTOFF_DAYS,
+} from './core/constants';
 import {
   isCalendarEventTaskId, parseCalendarEventTaskId, defaultRepeatUntil, getCalendarEventOccurrences,
   isCalendarEventVisibleToMe, flattenCalendarEventsForRange, ensureCalendarEventIds,
@@ -101,7 +106,7 @@ import {
   syncGanttJobFocusBanner, buildPhaseSubTags, computeDateRange, showDatePopover, hideDatePopover, showTooltip,
   setHeaderScroll, setupScrollSync,
   DUE_MARKER_TASK_ID, getJobDueMarkerTask, forEachVisibleSubUnit, flattenJobs, getHiddenTaskOrders,
-  buildSubUnitClusters, isCalendarJobSpanTaskId, buildCalendarJobRows,
+  buildSubUnitClusters, isCalendarJobSpanTaskId, buildCalendarJobRows, collapsedPhaseIds,
 } from './views/gantt';
 import {
   sendPresenceUpdate, presenceAvatarColor, presenceInitials, presenceAnimDelay, renderPresenceAvatars,
@@ -116,6 +121,7 @@ import {
   pruneStrayEmptyProjects, deleteFromSharedMap, deleteJobFromShared, deleteCardFromShared,
   deleteCalendarEventFromShared, recordTombstone, pushFieldToShared, pushBoardColumnsToShared,
   pushFieldOptionsToShared, pushWorkflowItemsToShared, pushHeaderToShared, logActivity, pushLiveblocksState,
+  pendingWrites,
 } from './sync/outbound';
 import {
   handleRoomMessage, synthesizeJobFromOrphanCard, safeMergeInto, scheduleOrphanRecovery, healOrphanedJobCards,
@@ -453,6 +459,18 @@ declare global {
     buildManageFieldGroup: typeof buildManageFieldGroup;
     addFieldOption: typeof addFieldOption;
     removeFieldOption: typeof removeFieldOption;
+    BOARD_COLOR_PRESETS: typeof BOARD_COLOR_PRESETS;
+    DEFAULT_TASK_DURATION_DAYS: typeof DEFAULT_TASK_DURATION_DAYS;
+    CUSTOM_FIELD_DEFS: typeof CUSTOM_FIELD_DEFS;
+    TEAM_FIELD_KEYS: typeof TEAM_FIELD_KEYS;
+    API_BASE_URL: typeof API_BASE_URL;
+    COLOR_PRESETS: typeof COLOR_PRESETS;
+    DEFAULT_BOARD_COLUMNS: typeof DEFAULT_BOARD_COLUMNS;
+    CAL_BAR_H: typeof CAL_BAR_H;
+    CAL_BAR_GAP: typeof CAL_BAR_GAP;
+    CAL_DAYNUM_H: typeof CAL_DAYNUM_H;
+    DEFAULT_STALLED_AFTER_DAYS: typeof DEFAULT_STALLED_AFTER_DAYS;
+    ARCHIVE_CUTOFF_DAYS: typeof ARCHIVE_CUTOFF_DAYS;
     formatCommentWhen: typeof formatCommentWhen;
     renderJobComments: typeof renderJobComments;
     renderJobCommentItem: typeof renderJobCommentItem;
@@ -615,6 +633,7 @@ declare global {
     hideDatePopover: typeof hideDatePopover;
     showTooltip: typeof showTooltip;
     DUE_MARKER_TASK_ID: typeof DUE_MARKER_TASK_ID;
+    collapsedPhaseIds: typeof collapsedPhaseIds;
     // Declared loosely (not `typeof getJobDueMarkerTask`/`flattenJobs`/
     // `buildCalendarJobRows`) — shared-globals.d.ts and calendar.ts each
     // declare their own, differently-typed ambient versions of these names
@@ -670,6 +689,7 @@ declare global {
     pushHeaderToShared: typeof pushHeaderToShared;
     logActivity: typeof logActivity;
     pushLiveblocksState: typeof pushLiveblocksState;
+    pendingWrites: typeof pendingWrites;
     handleRoomMessage: typeof handleRoomMessage;
     synthesizeJobFromOrphanCard: typeof synthesizeJobFromOrphanCard;
     safeMergeInto: typeof safeMergeInto;
@@ -1030,6 +1050,18 @@ window.renderManageFieldsBody = renderManageFieldsBody;
 window.buildManageFieldGroup = buildManageFieldGroup;
 window.addFieldOption = addFieldOption;
 window.removeFieldOption = removeFieldOption;
+window.BOARD_COLOR_PRESETS = BOARD_COLOR_PRESETS;
+window.DEFAULT_TASK_DURATION_DAYS = DEFAULT_TASK_DURATION_DAYS;
+window.CUSTOM_FIELD_DEFS = CUSTOM_FIELD_DEFS;
+window.TEAM_FIELD_KEYS = TEAM_FIELD_KEYS;
+window.API_BASE_URL = API_BASE_URL;
+window.COLOR_PRESETS = COLOR_PRESETS;
+window.DEFAULT_BOARD_COLUMNS = DEFAULT_BOARD_COLUMNS;
+window.CAL_BAR_H = CAL_BAR_H;
+window.CAL_BAR_GAP = CAL_BAR_GAP;
+window.CAL_DAYNUM_H = CAL_DAYNUM_H;
+window.DEFAULT_STALLED_AFTER_DAYS = DEFAULT_STALLED_AFTER_DAYS;
+window.ARCHIVE_CUTOFF_DAYS = ARCHIVE_CUTOFF_DAYS;
 window.formatCommentWhen = formatCommentWhen;
 window.renderJobComments = renderJobComments;
 window.renderJobCommentItem = renderJobCommentItem;
@@ -1192,6 +1224,7 @@ window.showDatePopover = showDatePopover;
 window.hideDatePopover = hideDatePopover;
 window.showTooltip = showTooltip;
 window.DUE_MARKER_TASK_ID = DUE_MARKER_TASK_ID;
+window.collapsedPhaseIds = collapsedPhaseIds;
 window.getJobDueMarkerTask = getJobDueMarkerTask as any;
 window.forEachVisibleSubUnit = forEachVisibleSubUnit;
 window.flattenJobs = flattenJobs as any;
@@ -1239,6 +1272,7 @@ window.pushWorkflowItemsToShared = pushWorkflowItemsToShared;
 window.pushHeaderToShared = pushHeaderToShared;
 window.logActivity = logActivity;
 window.pushLiveblocksState = pushLiveblocksState;
+window.pendingWrites = pendingWrites;
 window.handleRoomMessage = handleRoomMessage;
 window.synthesizeJobFromOrphanCard = synthesizeJobFromOrphanCard;
 window.safeMergeInto = safeMergeInto;
