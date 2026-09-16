@@ -398,6 +398,13 @@ export function toggleProject(): void {
   if (ids.length < 2) return;
   const currentIdx = ids.indexOf(activeProjectId as string);
   const nextIdx = (currentIdx + 1) % ids.length;
+  const nextProject = projects[ids[nextIdx]];
+  // This is a single click sitting at the top of the settings menu — easy to
+  // land on by accident reaching for something else. A confirm here is the
+  // whole fix: it costs nothing on the deliberate path and stops the
+  // accidental one from silently dropping you into a different project's
+  // jobs/board/gantt.
+  if (!confirm('Switch to "' + (nextProject ? nextProject.name : 'the other project') + '"? You\'ll leave the project you\'re currently viewing.')) return;
   switchProject(ids[nextIdx]);
 }
 
@@ -496,6 +503,20 @@ export function applyPermissionGating(): void {
     document.querySelectorAll('.job-card .copy-btn, .job-card .delete-btn').forEach(function (el) {
       (el as HTMLElement).style.display = 'none';
     });
+  }
+  // Home Job Chat's Post button: the generic data-min-tier sweep above
+  // already re-enables it on every render for anyone with commenter+
+  // tier, which would silently undo updateHomeJobChatComposeState()'s
+  // "no job picked yet" disable the moment any render ran afterward
+  // (renderAll()'s own trailing applyPermissionGating() call included).
+  // Re-asserted here instead, since this function is the one thing
+  // guaranteed to run last after any re-render (see its own comment up
+  // top) — only ever adds the disable, never removes one the tier check
+  // above already decided.
+  const jobChatPostBtn = document.getElementById('homeJobChatPostBtn') as HTMLButtonElement | null;
+  const jobChatPicker = document.getElementById('homeJobChatJobPicker') as HTMLSelectElement | null;
+  if (jobChatPostBtn && jobChatPicker && !jobChatPostBtn.disabled && !jobChatPicker.value) {
+    jobChatPostBtn.disabled = true;
   }
 }
 

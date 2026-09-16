@@ -166,6 +166,7 @@ import {
   renderHomeCalendarExpanded, renderHomeCalendarMiniMonth, renderHomeWorkflowMiniBoard,
   renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget, buildHomeJobChatFeed,
   renderHomeJobChatComposeOptions, renderHomeJobChatItem, renderHomeJobChat, postHomeJobChatComment,
+  updateHomeJobChatComposeState,
   toggleHomeReplyBox, addHomeJobReply, handleHomeReplyKey, renderHomeDashboard,
 } from './views/home';
 
@@ -748,6 +749,7 @@ declare global {
     renderHomeJobChatItem: typeof renderHomeJobChatItem;
     renderHomeJobChat: typeof renderHomeJobChat;
     postHomeJobChatComment: typeof postHomeJobChatComment;
+    updateHomeJobChatComposeState: typeof updateHomeJobChatComposeState;
     toggleHomeReplyBox: typeof toggleHomeReplyBox;
     addHomeJobReply: typeof addHomeJobReply;
     handleHomeReplyKey: typeof handleHomeReplyKey;
@@ -1316,6 +1318,7 @@ window.renderHomeJobChatComposeOptions = renderHomeJobChatComposeOptions;
 window.renderHomeJobChatItem = renderHomeJobChatItem;
 window.renderHomeJobChat = renderHomeJobChat;
 window.postHomeJobChatComment = postHomeJobChatComment;
+window.updateHomeJobChatComposeState = updateHomeJobChatComposeState;
 window.toggleHomeReplyBox = toggleHomeReplyBox;
 window.addHomeJobReply = addHomeJobReply;
 window.handleHomeReplyKey = handleHomeReplyKey;

@@ -80,6 +80,40 @@ test('buildHomeStalledRows: uses a column\'s own stalledAfterDays, falling back 
   expect(result).toEqual(['Stalled Active', 'Stalled Bid']);
 });
 
+test('buildHomeStalledRows: with 3+ cards in a column, raises the effective threshold to the column\'s own median dwell instead of flagging every card past the flat default', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    isJobVisibleToMe = () => true;
+    isFinishedColumnId = (colId) => colId === 'complete';
+    DEFAULT_STALLED_AFTER_DAYS = 14;
+    BOARD_COLUMNS = [{ id: 'bid', label: 'Bid' }, { id: 'complete', label: 'Complete' }]; // no override — uses the 14-day default
+    jobs = [
+      { id: 'j1', name: 'Bid A', archived: false, tasks: [] },
+      { id: 'j2', name: 'Bid B', archived: false, tasks: [] },
+      { id: 'j3', name: 'Bid C', archived: false, tasks: [] },
+      { id: 'j4', name: 'Bid D', archived: false, tasks: [] },
+      { id: 'j5', name: 'Bid Outlier', archived: false, tasks: [] },
+    ];
+    const now = Date.now();
+    boardCards = [
+      // Every one of these is already past the flat 14-day default — the
+      // OLD logic flagged all five. 18-24 days is simply typical for this
+      // column right now; only the fifth (90 days) is a genuine outlier.
+      { id: 'c1', jobId: 'j1', column: 'bid', columnEnteredAt: now - 18 * 86400000 },
+      { id: 'c2', jobId: 'j2', column: 'bid', columnEnteredAt: now - 20 * 86400000 },
+      { id: 'c3', jobId: 'j3', column: 'bid', columnEnteredAt: now - 22 * 86400000 },
+      { id: 'c4', jobId: 'j4', column: 'bid', columnEnteredAt: now - 24 * 86400000 },
+      { id: 'c5', jobId: 'j5', column: 'bid', columnEnteredAt: now - 90 * 86400000 },
+    ];
+    return buildHomeStalledRows().map((r) => r.job.name);
+  });
+
+  // Median dwell in "bid" is 22 days, above the 14-day default, so the
+  // effective floor becomes 22 — only cards at/above that show up, not
+  // all five past the old flat threshold.
+  expect(result).toEqual(['Bid Outlier', 'Bid D', 'Bid C']);
+});
+
 test('buildHomeStageSummary: counts visible cards per column, including zero-count columns, in board order', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {

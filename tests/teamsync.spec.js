@@ -2092,11 +2092,19 @@ test('postHomeJobChatComment: posting via the real Home Job Chat UI adds a comme
   await page.waitForFunction(() => getActiveTab() === 'home');
   await page.evaluate(() => localStorage.setItem('gantt_display_name_v1', 'Test Admin'));
 
+  // The select now comes up on a blank "Select a job…" placeholder (see
+  // renderHomeJobChatComposeOptions()'s own comment — it used to default
+  // to whichever job sorted first, an easy way to post to the wrong job's
+  // chat without noticing), and Post stays disabled until a real job is
+  // actually chosen. Exercise that real flow rather than relying on an
+  // implicit default the way this test used to.
   const targetJobId = await page.evaluate(() => {
     renderHomeJobChat();
     const select = document.getElementById('homeJobChatJobPicker');
-    return select.value;
+    return select.options[1].value; // first real job, after the placeholder
   });
+  await page.selectOption('#homeJobChatJobPicker', targetJobId);
+  await expect(page.locator('#homeJobChatPostBtn')).toBeEnabled();
 
   await page.fill('#homeJobChatInput', 'A brand new job chat message');
   await page.click('button[onclick="postHomeJobChatComment()"]');

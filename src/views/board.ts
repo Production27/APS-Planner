@@ -66,7 +66,7 @@ import { hasMinTier } from '../auth/permissions';
 import { getStoredSessionToken } from '../auth/session';
 import { fetchWithReauth } from '../app/worker-client';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
-import { buildHomeStageSummary, buildHomeStalledRows } from './home';
+import { buildHomeStageSummary, buildHomeStalledRows, computeColumnStalledFloors } from './home';
 import { displayNameForUsername, getLeadRoster, ensureUserRosterLoaded } from '../app/user-roster';
 
 // Ambient globals this file shares verbatim with other src/ files
@@ -1065,9 +1065,10 @@ function renderBoard(): void {
     '</div>' +
   '</div>';
 
+  const stalledFloors = computeColumnStalledFloors();
   BOARD_COLUMNS.forEach((col) => {
     const body = document.getElementById('col-body-' + col.id)!;
-    boardCards.filter((c) => c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).forEach((card) => body.appendChild(buildCardEl(card)));
+    boardCards.filter((c) => c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).forEach((card) => body.appendChild(buildCardEl(card, stalledFloors)));
     body.addEventListener('dragover', handleColumnDragOver);
     body.addEventListener('dragleave', handleColumnDragLeave);
     body.addEventListener('drop', handleColumnDrop);
@@ -1150,7 +1151,7 @@ function renderBoard(): void {
   }
 }
 
-function buildCardEl(card: BoardCard): HTMLElement {
+function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): HTMLElement {
   const el = document.createElement('div');
   const hasOverride = !!(card.manualColumn && card.manualColumnUntil && Date.now() < card.manualColumnUntil);
   el.className = 'board-card' + (hasOverride ? ' manual-override' : '');
@@ -1175,10 +1176,16 @@ function buildCardEl(card: BoardCard): HTMLElement {
   // Time-in-stage, not a due date — see buildHomeStalledRows() for the
   // matching Home widget. Skipped on a finished-trigger column for the
   // same reason the overdue badge above is: a job that's already done
-  // sitting in Complete isn't "stalled," it's just parked.
+  // sitting in Complete isn't "stalled," it's just parked. thresholdDays
+  // comes from computeColumnStalledFloors() (see home.ts) when the caller
+  // passed it — the admin-configured floor raised to this column's own
+  // current median dwell time, so a column where long dwell is simply
+  // normal doesn't badge nearly every card in it. Falls back to the
+  // plain configured floor if no floors map was passed in.
   if (card.columnEnteredAt && !isFinishedColumnId(card.column)) {
     const col = BOARD_COLUMNS.find((c) => c.id === card.column);
-    const thresholdDays = (col && col.stalledAfterDays) || DEFAULT_STALLED_AFTER_DAYS;
+    const configuredThresholdDays = (col && col.stalledAfterDays) || DEFAULT_STALLED_AFTER_DAYS;
+    const thresholdDays = (stalledFloors && stalledFloors[card.column]) || configuredThresholdDays;
     const daysInStage = Math.floor((Date.now() - card.columnEnteredAt) / 86400000);
     if (daysInStage >= thresholdDays) {
       badges.push('<span class="board-card-due overdue" title="' + daysInStage + ' days in this board"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="13" r="8" fill="#fff" stroke="#e53935" stroke-width="1.5"/><path d="M12 9v4l3 2" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' + daysInStage + 'd stalled</span>');

@@ -2384,6 +2384,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .login-banner.err { background: rgba(220,53,69,0.1); color: var(--danger); border: 1px solid rgba(220,53,69,0.3); }
   .login-banner.lockout { background: rgba(240,173,78,0.15); color: #8a5a00; border: 1px solid rgba(240,173,78,0.4); }
   body.dark-mode .login-banner.lockout { color: var(--warning); }
+  .login-forgot { text-align: center; font-size: var(--t-sm); color: var(--text-light); margin-top: var(--s-4); }
 
   /* ===== SYNC INDICATOR ===== */
   /* Element itself is built in JS (initSyncIndicator/setSyncIndicator) —
@@ -3107,6 +3108,12 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         <span class="login-submit-label">Sign In</span>
       </button>
     </form>
+    <!-- There's no self-service reset flow (no email infra wired up for
+         one — see Manage Users' own "Only admin accounts can... reset
+         passwords for other users" copy) — this just tells someone stuck
+         at a blank login screen what to actually do instead of leaving
+         them with no next step at all. -->
+    <div class="login-forgot">Forgot your password? Ask your admin to reset it.</div>
   </div>
 </div>
 
@@ -3175,7 +3182,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        still bespoke JS (not data-min-tier): whether this shows
        depends on whether the ACCOUNT is project-restricted, not
        just its tier — see updateProjectToggle() itself. -->
-  <div class="settings-dropdown-item" id="projectToggleBtn" tabindex="0" role="button" onclick="closeSettingsMenu(); toggleProject();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></div>
   <!-- Was its own standalone icon button in the rail row; folded in
        here instead — data-min-tier replaces applyPermissionGating()'s
        old bespoke full-hide-by-id logic for this element (removed),
@@ -3210,6 +3216,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   </div>
   <div class="settings-dropdown-item" data-min-tier="admin" tabindex="0" role="button" onclick="closeSettingsMenu(); openManageUsersModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
   <div class="settings-dropdown-item" tabindex="0" role="button" onclick="closeSettingsMenu(); changeMyPasswordUI();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</div>
+  <div class="settings-dropdown-divider"></div>
+  <!-- Moved down here from the top of the menu, and grouped with Log Out —
+       both leave the context you're currently in. It used to be the very
+       first item under the settings icon, one careless click away from
+       anything reaching for the menu; toggleProject() itself now also
+       confirms before switching (see its own comment), so this reordering
+       is a second, independent layer against the same accidental-switch
+       risk rather than the only fix. -->
+  <div class="settings-dropdown-item" id="projectToggleBtn" tabindex="0" role="button" onclick="closeSettingsMenu(); toggleProject();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></div>
   <div class="settings-dropdown-item" tabindex="0" role="button" onclick="closeSettingsMenu(); logout();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H5a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 005 20h4" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11 12h10m0 0l-3.5-3.5M21 12l-3.5 3.5" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Log Out</div>
   <div class="settings-dropdown-item" tabindex="0" role="button" onclick="closeSettingsMenu(); openArchivedJobsModal();"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l9-4 9 4-9 4-9-4z" fill="#d7ccc8"/><path d="M3 8v9l9 4V12L3 8z" fill="#bcaaa4"/><path d="M21 8v9l-9 4V12l9-4z" fill="#a1887f"/></svg> Archived Jobs</div>
 </div>
@@ -3310,9 +3325,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             </div>
             <div class="home-widget-body">
               <div class="job-chat-compose">
-                <select id="homeJobChatJobPicker"></select>
+                <select id="homeJobChatJobPicker" onchange="updateHomeJobChatComposeState()"></select>
                 <input type="text" id="homeJobChatInput" data-min-tier="commenter" placeholder="Message the team on this job&hellip;" onkeydown="if(event.key==='Enter'){event.preventDefault();postHomeJobChatComment();}">
-                <button class="btn btn-primary" data-min-tier="commenter" onclick="postHomeJobChatComment()">Post</button>
+                <button class="btn btn-primary" id="homeJobChatPostBtn" data-min-tier="commenter" onclick="postHomeJobChatComment()" disabled>Post</button>
               </div>
               <div class="job-comments-list job-chat-feed" id="homeJobChatList"></div>
             </div>

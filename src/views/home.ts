@@ -480,6 +480,43 @@ interface HomeStalledRow {
   columnLabel: string;
 }
 
+// One pass over all cards to compute each board column's EFFECTIVE
+// "stalled" threshold in days: the admin-configured floor
+// (col.stalledAfterDays / DEFAULT_STALLED_AFTER_DAYS) raised to that
+// column's own current median dwell time when the median is higher — so
+// a column where long dwell is simply normal (jobs commonly sitting in
+// Bid for months while a client decides) flags genuine outliers instead
+// of nearly every card in it. Never goes below the configured floor, so
+// admin control over the minimum stays intact. Fewer than 3 cards in a
+// column isn't enough of a sample to call anything "typical" there, so
+// that column just falls back to the configured floor alone. Shared by
+// buildHomeStalledRows() below and board.ts's buildCardEl() so Home's
+// "N cards stalled" count and the per-card badges never disagree about
+// which cards actually count.
+function computeColumnStalledFloors(): Record<string, number> {
+  const now = Date.now();
+  const daysByColumn: Record<string, number[]> = {};
+  boardCards.forEach(function (card) {
+    if (!card.column || !card.columnEnteredAt) return;
+    if (isFinishedColumnId(card.column)) return;
+    const found = findJob(card.jobId as string);
+    if (!found || found.job.archived) return;
+    if (!isJobVisibleToMe(found.job)) return;
+    const days = Math.floor((now - (card.columnEnteredAt as number)) / 86400000);
+    (daysByColumn[card.column] = daysByColumn[card.column] || []).push(days);
+  });
+  const floors: Record<string, number> = {};
+  BOARD_COLUMNS.forEach(function (col) {
+    const configured = (col.stalledAfterDays as number) || DEFAULT_STALLED_AFTER_DAYS;
+    const list = (daysByColumn[col.id] || []).slice().sort(function (a, b) { return a - b; });
+    if (list.length < 3) { floors[col.id] = configured; return; }
+    const mid = Math.floor(list.length / 2);
+    const median = list.length % 2 ? list[mid] : (list[mid - 1] + list[mid]) / 2;
+    floors[col.id] = Math.max(configured, median);
+  });
+  return floors;
+}
+
 // A genuinely different signal from buildHomeOverdueRows() above — time
 // spent in the CURRENT stage (card.columnEnteredAt, stamped by
 // setCardColumn()) rather than a due date. A card with no
@@ -490,6 +527,7 @@ interface HomeStalledRow {
 function buildHomeStalledRows(): HomeStalledRow[] {
   const now = Date.now();
   const rows: HomeStalledRow[] = [];
+  const stalledFloors = computeColumnStalledFloors();
   boardCards.forEach(function (card) {
     if (!card.column || !card.columnEnteredAt) return;
     if (isFinishedColumnId(card.column)) return;
@@ -498,7 +536,7 @@ function buildHomeStalledRows(): HomeStalledRow[] {
     const job = found.job;
     if (!isJobVisibleToMe(job)) return;
     const col = BOARD_COLUMNS.find(function (c) { return c.id === card.column; });
-    const thresholdDays = (col && col.stalledAfterDays as number) || DEFAULT_STALLED_AFTER_DAYS;
+    const thresholdDays = stalledFloors[card.column] || (col && col.stalledAfterDays as number) || DEFAULT_STALLED_AFTER_DAYS;
     const daysInStage = Math.floor((now - (card.columnEnteredAt as number)) / 86400000);
     if (daysInStage < thresholdDays) return;
     const phases = getJobPhases(job);
@@ -1286,13 +1324,30 @@ function renderHomeJobChatComposeOptions(): void {
   const prevValue = select.value;
   const visibleJobs = jobs.filter(function (j) { return !j.archived && isJobVisibleToMe(j); })
     .slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
-  select.innerHTML = visibleJobs.map(function (j) {
+  // Leading blank placeholder — without it the <select> always comes up
+  // with some real job pre-selected (whichever sorted first), making it
+  // easy to post a message to the wrong job's chat without ever having
+  // chosen one. Left selected (falls through the "re-select prevValue"
+  // check below) until the user actually picks a job.
+  select.innerHTML = '<option value="">Select a job&hellip;</option>' + visibleJobs.map(function (j) {
     return '<option value="' + j.id + '">' + escapeHtml(j.name) + '</option>';
   }).join('');
   // Re-selects whatever was picked before this refresh (a new comment
   // arriving elsewhere shouldn't reset who you're about to message) —
-  // falls back to the list's own first option otherwise.
+  // falls back to the placeholder otherwise.
   if (visibleJobs.some(function (j) { return j.id === prevValue; })) select.value = prevValue;
+  updateHomeJobChatComposeState();
+}
+
+// Keeps the Post button disabled until a real job is chosen — see the
+// placeholder option's own comment above for why. Wired as the select's
+// onchange in index.html, and called after every options refresh above so
+// it's also correct immediately after a re-render.
+function updateHomeJobChatComposeState(): void {
+  const select = document.getElementById('homeJobChatJobPicker') as HTMLSelectElement | null;
+  const postBtn = document.getElementById('homeJobChatPostBtn') as HTMLButtonElement | null;
+  if (!select || !postBtn) return;
+  postBtn.disabled = !select.value;
 }
 
 // Same shape as renderJobCommentItem() (the drawer's own per-comment
@@ -1461,6 +1516,7 @@ export {
   applyHomeReflowTracks,
   toggleHomeWidgetExpand,
   buildHomeOverdueRows,
+  computeColumnStalledFloors,
   buildHomeStalledRows,
   buildHomeStageSummary,
   buildHomeTodayScheduleRows,
@@ -1484,6 +1540,7 @@ export {
   renderHomeJobChatItem,
   renderHomeJobChat,
   postHomeJobChatComment,
+  updateHomeJobChatComposeState,
   toggleHomeReplyBox,
   addHomeJobReply,
   handleHomeReplyKey,
