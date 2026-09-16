@@ -20,7 +20,7 @@ test('Job Manager drawer: posting a comment via the real UI renders it and updat
 
   await page.locator('#newJobCommentText').fill('Delivered the rebar today.');
   await page.locator('#newJobCommentImportant').check();
-  await page.click('button[onclick="addJobComment()"]');
+  await page.click('#addJobCommentBtn');
 
   await expect(page.locator('#jobCommentsList')).toContainText('Delivered the rebar today.');
   await expect(page.locator('#jobCommentsList .job-comment-important-badge')).toHaveCount(1);

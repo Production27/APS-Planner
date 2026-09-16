@@ -19,6 +19,7 @@ import { loadLinkEnabledPref, loadProjects, enforceFixedProjectSet, loadActivePr
 import { syncCardColumns } from '../core/jobs';
 import { closeDeleteJobModal } from '../views/job-list';
 import { cancelEdit, initJobFormAutosaveListeners, buildColorPresets } from '../views/job-form';
+import { initStaticEventListeners } from './static-event-wiring';
 
 // How long a delete tombstone (see recordTombstone()/deleteFromSharedMap()
 // in src/sync/outbound.ts) sticks around before it's pruned locally.
@@ -62,6 +63,7 @@ export function hideFreshLoadOverlay(): void {
 }
 
 export function init(): void {
+  initStaticEventListeners();
   loadProjects();
   enforceFixedProjectSet();
   // Catches a stray empty "Untitled Project" already sitting in this

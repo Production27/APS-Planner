@@ -2107,7 +2107,7 @@ test('postHomeJobChatComment: posting via the real Home Job Chat UI adds a comme
   await expect(page.locator('#homeJobChatPostBtn')).toBeEnabled();
 
   await page.fill('#homeJobChatInput', 'A brand new job chat message');
-  await page.click('button[onclick="postHomeJobChatComment()"]');
+  await page.click('#homeJobChatPostBtn');
 
   const result = await page.evaluate((jobId) => {
     const found = findJob(jobId);
