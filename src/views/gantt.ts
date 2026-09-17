@@ -36,6 +36,7 @@ import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
+import { renderFocusBannerInto } from './gantt-focus-banner';
 import { showToast, moveTooltip, hideTooltip } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 
@@ -795,18 +796,14 @@ function syncGanttJobFocusBanner(): void {
   const el = document.getElementById('ganttJobFocusBanner');
   if (!el) return;
   if (ganttViewMode !== 'tasks') {
-    el.style.display = 'none';
-    el.innerHTML = '';
+    renderFocusBannerInto(el, false, null, clearGanttJobFocus);
     return;
   }
   // The focused job could vanish out from under the filter (deleted, no
   // longer a Member, a project switch already cleared ganttFocusedJobId,
   // or it's not in the member currently being previewed).
   const job = ganttFocusedJobId ? getVisibleJobs().find(function(j) { return j.id === ganttFocusedJobId; }) : null;
-  el.style.display = 'flex';
-  el.innerHTML = job
-    ? 'Showing only <b>' + escapeHtml(job.name) + '</b> <button type="button" onclick="clearGanttJobFocus()">Show all</button>'
-    : '<span class="gantt-job-focus-hint">Click a job name to isolate it</span>';
+  renderFocusBannerInto(el, true, job ? job.name : null, clearGanttJobFocus);
 }
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
 // Gantt bar. Returns an array of ready-to-append elements (0-2 of them).
