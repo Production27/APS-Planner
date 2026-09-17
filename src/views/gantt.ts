@@ -37,6 +37,7 @@ import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
+import { renderTaskRowsInto, type TaskRowProps, type TaskRowPillProps } from './gantt-task-row';
 import { showToast, moveTooltip, hideTooltip } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 
@@ -1179,17 +1180,17 @@ function setupDateRangeAndGrid(): SetupDateRangeAndGridResult {
   grid.style.width = gridWidth + 'px';
   header.style.width = gridWidth + 'px';
   grid.innerHTML = '';
-  // header's children are Preact-rendered now (see buildDateHeader() below
-  // and src/views/gantt-date-header.tsx) — NOT cleared here on purpose.
-  // Preact keeps its own internal record of what it last rendered into
-  // this container; wiping it out from outside (the same `innerHTML = ''`
-  // still used for grid/leftBody, which stay fully imperative) leaves
-  // that record pointing at DOM nodes that no longer exist, so the next
-  // render() call diffs against a stale tree and silently produces
-  // nothing. Preact's own diffing replaces the previous render's output
-  // on every call regardless — it doesn't need this reset the way plain
-  // innerHTML-rebuilding code does.
-  leftBody.innerHTML = '';
+  // header's and leftBody's children are Preact-rendered now (see
+  // buildDateHeader()/renderLeftPanelRows() below and
+  // src/views/gantt-date-header.tsx/gantt-task-row.tsx) — NOT cleared
+  // here on purpose, for both of them. Preact keeps its own internal
+  // record of what it last rendered into a container; wiping that out
+  // from outside (grid's own `innerHTML = ''` above is fine — it stays
+  // fully imperative) leaves that record pointing at DOM nodes that no
+  // longer exist, so the next render() call diffs against a stale tree
+  // and silently produces nothing. Preact's own diffing replaces the
+  // previous render's output on every call regardless — it doesn't need
+  // this reset the way plain innerHTML-rebuilding code does.
 
   return { grid, header, leftBody, totalDays, containerH, gridWidth, savedScrollLeft, savedScrollTop };
 }
@@ -1264,153 +1265,146 @@ function buildRowModel(containerH: number, grid: HTMLElement): BuildRowModelResu
 // separately-incrementing counters) stay aligned. If either loop ever
 // gains a mid-loop skip/continue, the other must get the same one.
 function renderLeftPanelRows(visibleRows: GanttRow[], grid: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
+  const rowProps: TaskRowProps[] = [];
   let visibleRowIdx = 0;
   visibleRows.forEach(function (entry) {
     const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
-    // "Sub-Phase (Phase)" when both exist, otherwise whichever one does —
-    // same truncation-survives-because-it's-first treatment as phaseName
-    // alone got, just one level deeper.
-    const phaseLabel = subPhaseName ? (subPhaseName + (phaseName ? ' (' + phaseName + ')' : '')) : phaseName;
     const rowKey = ganttRowKey(job.id, task.id, phaseId, subPhaseId);
-    {
-      const bg = document.createElement('div');
-      bg.className = 'row-bg';
-      // Deliberately NOT given a dataset.rowKey (and so never animated by
-      // animateReorderedBars() — see allRowKeyedElements()) even though
-      // .task-row right below very much needs one. .task-row carries this
-      // row's own label — the whole reason it animates at all is so the
-      // label stays visually attached to the SAME bar as it moves (Karl's
-      // own report: "phases moving independently of the individual job
-      // bars"). .row-bg is pure zebra-stripe decoration: full page width,
-      // a full 40px row tall (vs. the bar's own shorter, inset pill), and
-      // solidly opaque. During a cascade where several rows swap places at
-      // once, two of these full-size opaque bands are, for a moment,
-      // BOTH still animating through the same stretch of screen the other
-      // one is vacating or approaching — completely fine for a narrow,
-      // often-transparent task bar, but a wide solid rectangle doing that
-      // reads as an obvious gray "ghost" bar sitting behind the real ones
-      // (reported via a screenshot showing exactly that during a
-      // multi-row reorder). Left unkeyed, this always just renders at its
-      // own correct final position immediately, same as before this
-      // animation feature existed — there's no label or identity riding
-      // on it that a viewer needs to track across the move.
-      bg.style.top = (visibleRowIdx * GANTT_ROW_H) + 'px';
-      bg.style.width = gridWidth + 'px';
-      grid.appendChild(bg);
 
-      const hasDates = !!(task.start && task.finish && !isNaN(new Date(task.start + 'T00:00:00').getTime()) && !isNaN(new Date(task.finish + 'T00:00:00').getTime()));
-      const startStr = hasDates ? new Date(task.start! + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-      const finishStr = hasDates ? new Date(task.finish! + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-      const noteDot = task.notes ? '<span class="note-dot" title="Has notes"></span>' : '';
+    // Zebra-stripe background — stays fully imperative, appended straight
+    // into #timelineGrid (shared with the bars/connector-lines/grid-lines
+    // there — not Preact's to own). Deliberately NOT given a data-row-key
+    // (and so never animated by animateReorderedBars() — see
+    // allRowKeyedElements()) even though the row below very much needs
+    // one: this is pure decoration, full page width, a full 40px row
+    // tall, and solidly opaque — during a cascade where several rows
+    // swap places at once, two of these bands animating through the same
+    // stretch of screen at once reads as an obvious gray "ghost" bar
+    // (reported via a screenshot showing exactly that). Left unkeyed, it
+    // always just renders at its own correct final position immediately.
+    const bg = document.createElement('div');
+    bg.className = 'row-bg';
+    bg.style.top = (visibleRowIdx * GANTT_ROW_H) + 'px';
+    bg.style.width = gridWidth + 'px';
+    grid.appendChild(bg);
 
-      const row = document.createElement('div');
-      row.className = 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '') + (job.isLinkedReference ? ' linked-ref' : '');
-      row.dataset.jobId = job.id;
-      row.dataset.taskId = task.id;
-      // Same flat (unpadded) alignment as `bg` just above — see its own
-      // comment on why this needs its own suffixed key rather than the
-      // plain `rowKey` the timeline side uses.
-      row.dataset.rowKey = rowKey + '::flat';
-      // Jobs view: the job-name pill already says everything there is to
-      // say for a condensed row, so it's the only label — no redundant
-      // plain-text repeat of the same name next to it. Leads view swaps
-      // that plain-text slot for the lead's name instead, with the job
-      // pill still alongside it so which job it belongs to stays visible.
-      // A phased job is the exception: this column truncates with an
-      // ellipsis (see .task-row .col CSS), and the phase name used to be
-      // appended to the END of the pill — exactly the part that gets cut
-      // off first, leaving every one of a job's phase rows showing the
-      // identical truncated text with no way to tell them apart. Showing
-      // the phase label as the plain-text mainLabel instead puts it FIRST,
-      // so it survives truncation even when the job name pill after it
-      // doesn't; the row's title attribute carries the untruncated
-      // "Job — Phase — SubPhase" text as a hover fallback either way.
-      const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
-      const isTasksMode = ganttViewMode === 'tasks';
-      // Tasks view shows the phase/sub-phase breakdown as its own separate,
-      // independently-clickable pills (see phasePillHtml/subPillHtml below)
-      // instead of this plain-text label, to avoid saying the same thing
-      // twice.
-      const mainLabel = task.isJobSpan
-        ? (linkGlyph ? linkGlyph.trim() : '')
-        : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + escapeHtml(task.name);
-      let jobPill = '', phasePillHtml = '', subPillHtml = '';
-      if (isTasksMode) {
-        const jobColor = job.color || '#999';
-        // Clicking the job pill isolates the Gantt to just this job (see
-        // ganttFocusedJobId/toggleGanttJobFocus() above) — independent of
-        // the phase/sub-phase collapse pills below, which fold THIS job's
-        // own rows rather than hiding every other job.
-        const isFocusedJob = ganttFocusedJobId === job.id;
-        const jobPillTitle = isFocusedJob ? 'Click to show every job again' : 'Click to show only this job';
-        jobPill = '<span class="task-row-jobname collapsible' + (isFocusedJob ? ' focused' : '') + '" title="' + jobPillTitle + '" style="background:' + jobColor + ';">' + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
-        // Only offered when the phase actually has 2+ real sub-phases —
-        // folds/unfolds just THIS phase (tasksExpandedPhaseIds), same
-        // condensed-bar mechanism Jobs/Leads view uses, just with its own
-        // independent (default-collapsed) state. phaseName !== null (rather
-        // than just truthy) so an unnamed-but-real phase (see
-        // splitJobIntoPhases()/renameJobPhaseUI() — a phase's name can be
-        // blank) still gets this pill; null specifically means "no real
-        // phase here at all" (the synthetic default from getJobPhases()).
-        if (entry.collapsible && phaseName !== null) {
-          const phaseFolded = !tasksExpandedPhaseIds.has(phaseId || '');
-          phasePillHtml = ' <span class="task-row-phasename collapsible" title="' + (phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') + '" style="background:' + jobColor + ';">' + (phaseFolded ? '▸ ' : '▾ ') + (phaseName ? escapeHtml(phaseName) : 'Unnamed phase') + '</span>';
-        }
-        // Not shown on a whole-phase-collapsed row (task.isJobSpan with
-        // collapsedSegments) — that row already stands for every
-        // sub-phase at once, so there's no single sub-phase context
-        // left to fold.
-        if (!(task.isJobSpan && entry.collapsedSegments)) {
-          const subKey = getSubUnitKey(job, phaseId, subPhaseId);
-          const subFolded = !tasksExpandedSubPhaseIds.has(subKey);
-          const subLabel = subPhaseName || (entry.collapsible ? '' : phaseName) || '';
-          subPillHtml = ' <span class="task-row-subphasename collapsible" title="' + (subFolded ? 'Click to expand into individual tasks' : 'Click to collapse into a single bar') + (subLabel ? ' — ' + escapeHtml(subLabel) : '') + '" style="background:' + jobColor + ';">' + (subFolded ? '▸' : '▾') + (subLabel ? ' ' + escapeHtml(subLabel) : '') + '</span>';
-        }
-      } else {
-        // Jobs/Leads view: unchanged from before this feature — the job
-        // pill itself is the per-phase fold toggle when the phase has 2+
-        // sub-phases (every job is already condensed here, so there's no
-        // separate "expand to individual tasks" state to reach).
-        const collapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? '▸ ' : '▾ ') : '';
-        const collapseTitle = entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') : '';
-        jobPill = '<span class="task-row-jobname' + (entry.collapsible ? ' collapsible' : '') + '"' + (collapseTitle ? ' title="' + collapseTitle + '"' : '') + ' style="background:' + (job.color || '#999') + ';">' + collapseGlyph + escapeHtml(job.name) + (job.isLinkedReference ? ' <span style="opacity:0.75;">(' + escapeHtml(job.linkedFromProjectName || '') + ')</span>' : '') + '</span>';
+    const hasDates = !!(task.start && task.finish && !isNaN(new Date(task.start + 'T00:00:00').getTime()) && !isNaN(new Date(task.finish + 'T00:00:00').getTime()));
+    const startStr = hasDates ? new Date(task.start! + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const finishStr = hasDates ? new Date(task.finish! + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+    // Jobs view: the job-name pill already says everything there is to
+    // say for a condensed row, so it's the only label — no redundant
+    // plain-text repeat of the same name next to it. Leads view swaps
+    // that plain-text slot for the lead's name instead, with the job
+    // pill still alongside it so which job it belongs to stays visible.
+    // A phased job is the exception: this column truncates with an
+    // ellipsis (see .task-row .col CSS), and the phase name used to be
+    // appended to the END of the pill — exactly the part that gets cut
+    // off first, leaving every one of a job's phase rows showing the
+    // identical truncated text with no way to tell them apart. Showing
+    // the phase label as the plain-text mainLabel instead puts it FIRST,
+    // so it survives truncation even when the job name pill after it
+    // doesn't; the row's title attribute carries the untruncated
+    // "Job — Phase — SubPhase" text as a hover fallback either way.
+    const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
+    const isTasksMode = ganttViewMode === 'tasks';
+    // Tasks view shows the phase/sub-phase breakdown as its own separate,
+    // independently-clickable pills below instead of this plain-text
+    // label, to avoid saying the same thing twice.
+    const mainLabel = task.isJobSpan
+      ? (linkGlyph ? linkGlyph.trim() : '')
+      : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + task.name;
+
+    let jobPill: TaskRowPillProps | null = null;
+    let phasePill: TaskRowPillProps | null = null;
+    let subPill: TaskRowPillProps | null = null;
+
+    if (isTasksMode) {
+      const jobColor = job.color || '#999';
+      // Clicking the job pill isolates the Gantt to just this job (see
+      // ganttFocusedJobId/toggleGanttJobFocus() above) — independent of
+      // the phase/sub-phase collapse pills below, which fold THIS job's
+      // own rows rather than hiding every other job.
+      const isFocusedJob = ganttFocusedJobId === job.id;
+      jobPill = {
+        label: job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : ''),
+        title: isFocusedJob ? 'Click to show every job again' : 'Click to show only this job',
+        background: jobColor,
+        focused: isFocusedJob,
+        onClick: (e) => { e.stopPropagation(); toggleGanttJobFocus(job.id); },
+      };
+      // Only offered when the phase actually has 2+ real sub-phases —
+      // folds/unfolds just THIS phase (tasksExpandedPhaseIds), same
+      // condensed-bar mechanism Jobs/Leads view uses, just with its own
+      // independent (default-collapsed) state. phaseName !== null (rather
+      // than just truthy) so an unnamed-but-real phase (see
+      // splitJobIntoPhases()/renameJobPhaseUI() — a phase's name can be
+      // blank) still gets this pill; null specifically means "no real
+      // phase here at all" (the synthetic default from getJobPhases()).
+      if (entry.collapsible && phaseName !== null) {
+        const phaseFolded = !tasksExpandedPhaseIds.has(phaseId || '');
+        phasePill = {
+          label: (phaseFolded ? '▸ ' : '▾ ') + (phaseName ? phaseName : 'Unnamed phase'),
+          title: phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar',
+          background: jobColor,
+          onClick: (e) => { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); },
+        };
       }
-      row.title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
-      // Bolded so the task/phase name itself reads as the row's primary
-      // content — the job/phase pills next to it are already full-
-      // saturation color, which otherwise out-competes plain-weight text
-      // for attention despite being the smaller of the two.
-      const mainLabelHtml = mainLabel ? '<span class="task-row-name">' + mainLabel + '</span> ' : '';
-      row.innerHTML = '<div class="col col-start">' + startStr + '</div><div class="col col-finish">' + finishStr + '</div><div class="col col-jobs">' + mainLabelHtml + jobPill + phasePillHtml + subPillHtml + noteDot + '</div>';
-      const openRow = () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); };
-      row.addEventListener('click', openRow);
-      // Opening a row is the primary keyboard-reachable action here — the
-      // nested pills' own click-to-toggle handlers below stay mouse-only,
-      // same scoping as the timeline bars further down (dragging/resizing
-      // a bar also stays mouse/touch-only).
-      row.tabIndex = 0;
-      row.setAttribute('role', 'button');
-      row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(); }
-      });
-      if (isTasksMode) {
-        const jobPillEl = row.querySelector('.task-row-jobname');
-        if (jobPillEl) jobPillEl.addEventListener('click', function (e) { e.stopPropagation(); toggleGanttJobFocus(job.id); });
-        if (phasePillHtml) {
-          const phaseEl = row.querySelector('.task-row-phasename');
-          if (phaseEl) phaseEl.addEventListener('click', function (e) { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); });
-        }
-        if (subPillHtml) {
-          const subEl = row.querySelector('.task-row-subphasename');
-          if (subEl) subEl.addEventListener('click', function (e) { e.stopPropagation(); toggleTasksSubPhaseExpanded(getSubUnitKey(job, phaseId, subPhaseId)); });
-        }
-      } else if (entry.collapsible) {
-        const pillEl = row.querySelector('.task-row-jobname');
-        if (pillEl) pillEl.addEventListener('click', function (e) { e.stopPropagation(); togglePhaseCollapse(phaseId); });
+      // Not shown on a whole-phase-collapsed row (task.isJobSpan with
+      // collapsedSegments) — that row already stands for every
+      // sub-phase at once, so there's no single sub-phase context
+      // left to fold.
+      if (!(task.isJobSpan && entry.collapsedSegments)) {
+        const subKey = getSubUnitKey(job, phaseId, subPhaseId);
+        const subFolded = !tasksExpandedSubPhaseIds.has(subKey);
+        const subLabel = subPhaseName || (entry.collapsible ? '' : phaseName) || '';
+        subPill = {
+          label: (subFolded ? '▸' : '▾') + (subLabel ? ' ' + subLabel : ''),
+          title: (subFolded ? 'Click to expand into individual tasks' : 'Click to collapse into a single bar') + (subLabel ? ' — ' + subLabel : ''),
+          background: jobColor,
+          onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(getSubUnitKey(job, phaseId, subPhaseId)); },
+        };
       }
-      leftBody.appendChild(row);
-      visibleRowIdx++;
+    } else {
+      // Jobs/Leads view: unchanged from before this feature — the job
+      // pill itself is the per-phase fold toggle when the phase has 2+
+      // sub-phases (every job is already condensed here, so there's no
+      // separate "expand to individual tasks" state to reach). No
+      // onClick at all when not collapsible — same as the original never
+      // attaching a listener in that case, so the click just bubbles up
+      // to the row's own onOpen.
+      const collapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? '▸ ' : '▾ ') : '';
+      jobPill = {
+        label: collapseGlyph + job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : ''),
+        title: entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') : '',
+        background: job.color || '#999',
+        onClick: entry.collapsible ? (e) => { e.stopPropagation(); togglePhaseCollapse(phaseId); } : undefined,
+      };
     }
+
+    const title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
+    const openRow = () => { if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId); };
+
+    // Same flat (unpadded) alignment as `bg` above — see its own comment
+    // on why this needs its own suffixed key rather than the plain
+    // `rowKey` the timeline side uses.
+    rowProps.push({
+      rowKey: rowKey + '::flat',
+      jobId: job.id,
+      taskId: task.id || '',
+      className: 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '') + (job.isLinkedReference ? ' linked-ref' : ''),
+      title,
+      startStr,
+      finishStr,
+      mainLabel,
+      hasNote: !!task.notes,
+      jobPill,
+      phasePill,
+      subPill,
+      onOpen: openRow,
+    });
+
+    visibleRowIdx++;
   });
 
   // leftBody's own scrollable height is just its stacked .task-row
@@ -1422,10 +1416,11 @@ function renderLeftPanelRows(visibleRows: GanttRow[], grid: HTMLElement, gridWid
   // keep going those extra rows further — the two panels desync and
   // job rows stop lining up with their Gantt bars. A trailing spacer
   // the same size as that padding keeps both panels' max scrollTop
-  // identical.
-  const leftSpacer = document.createElement('div');
-  leftSpacer.style.height = Math.max(0, gridHeightPx - visibleRows.length * GANTT_ROW_H) + 'px';
-  leftBody.appendChild(leftSpacer);
+  // identical — rendered as the last item in the Preact tree below
+  // rather than appended imperatively after it, since Preact owns every
+  // child of #leftBody now (see renderTaskRowsInto()'s own comment).
+  const spacerHeight = Math.max(0, gridHeightPx - visibleRows.length * GANTT_ROW_H);
+  renderTaskRowsInto(leftBody, rowProps, spacerHeight);
 }
 
 function drawTodayLine(grid: HTMLElement, today: Date, totalDays: number): void {
