@@ -18,7 +18,7 @@
 // renderHomeCalendarExpanded(+MiniMonth)/renderHomeWorkflowMiniBoard/
 // renderHomeWorkflowExpandedBoard/renderHomeTodayScheduleWidget), the
 // Home Job Chat widget (buildHomeJobChatFeed/
-// renderHomeJobChatComposeOptions/renderHomeJobChatItem/
+// renderHomeJobChatComposeOptions/buildHomeJobChatItemProps/
 // renderHomeJobChat/postHomeJobChatComment/toggleHomeReplyBox/
 // addHomeJobReply/handleHomeReplyKey), and renderHomeDashboard() itself,
 // the dispatcher tying every widget together.
@@ -62,7 +62,8 @@ import {
 import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor, buildWorkflowStageData } from './board';
 import { renderMyChecklist, buildMyChecklistRows } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
-import { formatCommentWhen, postJobComment, postJobReply } from './job-comments';
+import { formatCommentWhen, postJobComment, postJobReply, deleteJobComment, deleteJobReply } from './job-comments';
+import { renderHomeJobChatListInto, type JobChatItemProps, type JobChatReply } from './home-jobchat';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
@@ -79,6 +80,7 @@ declare global {
   function getVisibleJobs(): any[];
   function buildCalendarJobRows(jobsArr: any[]): any[];
   function jumpToLinkedJobReference(job: any): void;
+  function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
 }
 
 // Which Home widget represents each tab — Home widget headers (icon +
@@ -1360,41 +1362,35 @@ function updateHomeJobChatComposeState(): void {
 // hidden) — sharing ids would mean duplicate ids on the page and
 // document.getElementById() picking whichever one happened to come
 // first, not necessarily the one actually clicked.
-function renderHomeJobChatItem(job: Job, c: any): string {
+function buildHomeJobChatItemProps(job: Job, c: any): JobChatItemProps {
   const replies = (c.replies || []).slice().sort(function (a: any, b: any) { return (a.when || 0) - (b.when || 0); });
-  const repliesHtml = replies.map(function (r: any) {
-    return '<div class="job-comment-reply-item">' +
-      '<div class="job-comment-meta">' +
-        '<span class="job-comment-author" title="' + escapeHtml(r.author || 'Someone') + '">' + escapeHtml(r.author || 'Someone') + '</span>' +
-        '<span style="display:flex;align-items:center;gap:4px;">' +
-          '<span class="job-comment-when">' + formatCommentWhen(r.when) + '</span>' +
-          '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobReply(\'' + job.id + '\', \'' + c.id + '\', \'' + r.id + '\')" title="Delete reply">×</button>' +
-        '</span>' +
-      '</div>' +
-      '<div class="job-comment-text">' + escapeHtml(r.text) + '</div>' +
-    '</div>';
-  }).join('');
+  const replyProps: JobChatReply[] = replies.map(function (r: any) {
+    return {
+      replyKey: r.id,
+      author: r.author || 'Someone',
+      whenLabel: formatCommentWhen(r.when),
+      text: r.text,
+      onDelete: () => deleteJobReply(job.id, c.id, r.id),
+    };
+  });
 
-  return '<div class="job-comment-item">' +
-    '<div class="job-comment-meta">' +
-      '<span style="display:flex;align-items:center;">' +
-        '<span class="job-chat-source" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="editJob(\'' + job.id + '\')" title="Open ' + escapeHtml(job.name) + '"><span class="job-chat-source-dot" style="background:' + (job.color || '#3949ab') + ';"></span>' + escapeHtml(job.name) + '</span>' +
-        (c.important ? '<span class="job-comment-important-badge" title="Marked important">●</span>' : '') +
-        '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
-      '</span>' +
-      '<span style="display:flex;align-items:center;gap:4px;">' +
-        '<span class="job-comment-when">' + formatCommentWhen(c.when) + '</span>' +
-        '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
-      '</span>' +
-    '</div>' +
-    '<div class="job-comment-text">' + escapeHtml(c.text) + '</div>' +
-    (replies.length ? '<div class="job-comment-replies">' + repliesHtml + '</div>' : '') +
-    '<button class="job-comment-reply-btn" onclick="toggleHomeReplyBox(\'' + c.id + '\', event)">Reply' + (replies.length ? ' (' + replies.length + ')' : '') + '</button>' +
-    '<div class="job-comment-reply-input-row" id="home-reply-row-' + c.id + '">' +
-      '<textarea id="home-reply-ta-' + c.id + '" data-min-tier="commenter" placeholder="Write a reply..." onkeydown="handleHomeReplyKey(event, \'' + job.id + '\', \'' + c.id + '\')"></textarea>' +
-      '<button class="btn btn-primary" data-min-tier="commenter" style="align-self:flex-end;padding:4px 10px;font-size:12px;" onclick="addHomeJobReply(\'' + job.id + '\', \'' + c.id + '\')">Post Reply</button>' +
-    '</div>' +
-  '</div>';
+  return {
+    itemKey: c.id,
+    jobName: job.name,
+    jobColor: job.color || '#3949ab',
+    important: !!c.important,
+    author: c.author || 'Someone',
+    whenLabel: formatCommentWhen(c.when),
+    text: c.text,
+    replies: replyProps,
+    replyRowId: 'home-reply-row-' + c.id,
+    replyTextareaId: 'home-reply-ta-' + c.id,
+    onOpenJob: () => editJob(job.id),
+    onDeleteComment: () => deleteJobComment(job.id, c.id),
+    onToggleReply: (e: MouseEvent) => toggleHomeReplyBox(c.id, e),
+    onReplyKeyDown: (e: KeyboardEvent) => handleHomeReplyKey(e, job.id, c.id),
+    onPostReply: () => addHomeJobReply(job.id, c.id),
+  };
 }
 
 function renderHomeJobChat(): void {
@@ -1402,9 +1398,7 @@ function renderHomeJobChat(): void {
   if (!listEl) return;
   renderHomeJobChatComposeOptions();
   const rows = buildHomeJobChatFeed();
-  listEl.innerHTML = rows.length
-    ? rows.map(function (row) { return renderHomeJobChatItem(row.job, row.comment); }).join('')
-    : '<div class="job-comments-empty">No comments yet.</div>';
+  renderHomeJobChatListInto(listEl, rows.map(function (row) { return buildHomeJobChatItemProps(row.job, row.comment); }));
   applyPermissionGating(); // rebuilt on every feed refresh, outside renderAll()'s own sweep
 }
 
@@ -1417,7 +1411,7 @@ function postHomeJobChatComment(): void {
 }
 
 // home-reply-row-/home-reply-ta- prefixed variants of toggleReplyBox()/
-// addJobReply() above — see renderHomeJobChatItem()'s own comment for
+// addJobReply() above — see buildHomeJobChatItemProps()'s own comment for
 // why this feed can't just reuse those ids directly. The actual "post a
 // reply" logic is still the one shared postJobReply() helper.
 function toggleHomeReplyBox(commentId: string, event?: Event): void {
@@ -1537,7 +1531,6 @@ export {
   renderHomeTodayScheduleWidget,
   buildHomeJobChatFeed,
   renderHomeJobChatComposeOptions,
-  renderHomeJobChatItem,
   renderHomeJobChat,
   postHomeJobChatComment,
   updateHomeJobChatComposeState,

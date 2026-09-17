@@ -171,7 +171,7 @@ import {
   isHomeWidgetAlertDismissed, dismissHomeWidgetAlert, renderHomeWidgetAlert, renderHomeOverdueWidget,
   renderHomeCalendarExpanded, renderHomeCalendarMiniMonth, renderHomeWorkflowMiniBoard,
   renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget, buildHomeJobChatFeed,
-  renderHomeJobChatComposeOptions, renderHomeJobChatItem, renderHomeJobChat, postHomeJobChatComment,
+  renderHomeJobChatComposeOptions, renderHomeJobChat, postHomeJobChatComment,
   updateHomeJobChatComposeState,
   toggleHomeReplyBox, addHomeJobReply, handleHomeReplyKey, renderHomeDashboard,
 } from './views/home';
@@ -765,7 +765,6 @@ declare global {
     renderHomeTodayScheduleWidget: typeof renderHomeTodayScheduleWidget;
     buildHomeJobChatFeed: typeof buildHomeJobChatFeed;
     renderHomeJobChatComposeOptions: typeof renderHomeJobChatComposeOptions;
-    renderHomeJobChatItem: typeof renderHomeJobChatItem;
     renderHomeJobChat: typeof renderHomeJobChat;
     postHomeJobChatComment: typeof postHomeJobChatComment;
     updateHomeJobChatComposeState: typeof updateHomeJobChatComposeState;
@@ -1347,7 +1346,6 @@ window.renderHomeWorkflowExpandedBoard = renderHomeWorkflowExpandedBoard;
 window.renderHomeTodayScheduleWidget = renderHomeTodayScheduleWidget;
 window.buildHomeJobChatFeed = buildHomeJobChatFeed;
 window.renderHomeJobChatComposeOptions = renderHomeJobChatComposeOptions;
-window.renderHomeJobChatItem = renderHomeJobChatItem;
 window.renderHomeJobChat = renderHomeJobChat;
 window.postHomeJobChatComment = postHomeJobChatComment;
 window.updateHomeJobChatComposeState = updateHomeJobChatComposeState;
