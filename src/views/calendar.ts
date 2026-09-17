@@ -40,6 +40,7 @@ import { getEffectiveRole, hasMinTier } from '../auth/permissions';
 import { getStoredUsername } from '../auth/session';
 import { ensureUserRosterLoaded } from '../app/user-roster';
 import { renderCalBarsInto, type CalBarProps, type CalBarContent, type CalBarSegmentBlock } from './calendar-bar';
+import { renderWeekHourLabelsInto, renderWeekHourColsInto, type HourLabel, type WeekHourColumn, type WeekTimedEvent } from './calendar-hourgrid';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS-style shared state, saveJobs()-style shared functions,
@@ -1164,13 +1165,15 @@ function renderWeekHourGrid(cellDates: Date[], timedCalRows: { job: CalJob; task
   section.classList.add('show');
   colsEl.style.gridTemplateColumns = 'repeat(' + cellDates.length + ', 1fr)';
 
-  // Hour labels down the left side.
-  let labelsHtml = '';
+  // Hour labels down the left side — pure decoration, never actually
+  // varies by date/view, but rebuilt each call for simplicity (cheap for
+  // Preact to diff away to nothing once it has).
+  const hourLabels: HourLabel[] = [];
   for (let h = 0; h < 24; h++) {
     const label = h === 0 ? '12 AM' : h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM';
-    labelsHtml += '<div class="week-hour-label"><span>' + (h === 0 ? '' : label) + '</span></div>';
+    hourLabels.push({ key: String(h), text: h === 0 ? '' : label });
   }
-  labelsEl.innerHTML = labelsHtml;
+  renderWeekHourLabelsInto(labelsEl, hourLabels);
 
   // Bucket each day's timed occurrences by which calendar day they fall on,
   // then lane-pack same-day overlaps by time range (same greedy algorithm
@@ -1184,11 +1187,9 @@ function renderWeekHourGrid(cellDates: Date[], timedCalRows: { job: CalJob; task
     dayBuckets[dayIdx].push({ task: row.task, job: row.job, startMin: startMin });
   });
 
-  let colsHtml = '';
+  const cols: WeekHourColumn[] = [];
   for (let col = 0; col < cellDates.length; col++) {
     const isToday = cellDates[col].getTime() === today.getTime();
-    let rowLines = '';
-    for (let h = 0; h < 24; h++) rowLines += '<div class="week-hour-row-line"></div>';
 
     const items = dayBuckets[col].sort(function (a, b) { return a.startMin - b.startMin; });
     const laneEnds: number[] = [];
@@ -1201,52 +1202,51 @@ function renderWeekHourGrid(cellDates: Date[], timedCalRows: { job: CalJob; task
     });
     const laneCount = laneEnds.length || 1;
 
-    let eventsHtml = '';
-    items.forEach(function (it) {
+    const events: WeekTimedEvent[] = items.map(function (it, i) {
       const top = (it.startMin / 60) * WEEK_HOUR_ROW_H;
       const height = Math.max(20, (WEEK_TIMED_EVENT_MIN_HEIGHT_MINUTES / 60) * WEEK_HOUR_ROW_H - 2);
       const laneWidthPct = 100 / laneCount;
       const leftPct = (it.lane || 0) * laneWidthPct;
       const timeLabel = formatTimeLabel(it.task.time);
-      eventsHtml += '<div class="week-timed-event" style="top:' + top + 'px; height:' + height + 'px; left:calc(' + leftPct + '% + 2px); width:calc(' + laneWidthPct + '% - 4px); background:' + (it.task.color || it.job.color || '#7e57c2') + ';" tabindex="0" role="button" title="' + escapeHtml(it.task.name) + (timeLabel ? ' — ' + timeLabel : '') + '" data-cal-job-id="' + it.job.id + '" data-cal-task-id="' + it.task.id + '">' +
-        (timeLabel ? '<span class="wte-time">' + escapeHtml(timeLabel) + '</span>' : '') +
-        escapeHtml(it.task.name) + '</div>';
+      return {
+        eventKey: it.task.id + '::' + i,
+        top, height, leftPct, widthPct: laneWidthPct,
+        background: it.task.color || it.job.color || '#7e57c2',
+        title: it.task.name + (timeLabel ? ' — ' + timeLabel : ''),
+        timeLabel: timeLabel || null,
+        text: it.task.name,
+        onOpen: () => {
+          const parsed = parseCalendarEventTaskId(it.task.id);
+          openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
+        },
+      };
     });
 
-    let nowLineHtml = '';
+    let nowLineTop: number | null = null;
     if (isToday) {
       const now = new Date();
-      const nowTop = ((now.getHours() * 60 + now.getMinutes()) / 60) * WEEK_HOUR_ROW_H;
-      nowLineHtml = '<div class="week-current-time-line" style="top:' + nowTop + 'px;"></div>';
+      nowLineTop = ((now.getHours() * 60 + now.getMinutes()) / 60) * WEEK_HOUR_ROW_H;
     }
 
-    colsHtml += '<div class="week-hour-col" data-col="' + col + '" data-date="' + toIsoDate(cellDates[col]) + '">' +
-      rowLines + eventsHtml + nowLineHtml + '</div>';
+    const colDate = toIsoDate(cellDates[col]);
+    cols.push({
+      colIndex: col,
+      date: colDate,
+      nowLineTop,
+      events,
+      onColClick: (e: MouseEvent) => {
+        const colEl = e.currentTarget as HTMLElement;
+        const rect = colEl.getBoundingClientRect();
+        const offsetY = e.clientY - rect.top;
+        const totalMinutes = Math.max(0, Math.round((offsetY / WEEK_HOUR_ROW_H) * 60 / 30) * 30);
+        const h = Math.min(23, Math.floor(totalMinutes / 60));
+        const m = totalMinutes % 60;
+        const timeStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+        openAddCalendarEvent(colDate, timeStr);
+      },
+    });
   }
-  colsEl.innerHTML = colsHtml;
-
-  colsEl.querySelectorAll<HTMLElement>('.week-hour-col').forEach(function (colEl) {
-    colEl.addEventListener('click', function (e) {
-      if ((e.target as Element).closest('.week-timed-event')) return; // handled by its own listener below
-      const rect = colEl.getBoundingClientRect();
-      const offsetY = (e as MouseEvent).clientY - rect.top;
-      const totalMinutes = Math.max(0, Math.round((offsetY / WEEK_HOUR_ROW_H) * 60 / 30) * 30);
-      const h = Math.min(23, Math.floor(totalMinutes / 60));
-      const m = totalMinutes % 60;
-      const timeStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-      openAddCalendarEvent(colEl.dataset.date || '', timeStr);
-    });
-  });
-  colsEl.querySelectorAll<HTMLElement>('.week-timed-event').forEach(function (el) {
-    const openEvent = function () {
-      const parsed = parseCalendarEventTaskId(el.dataset.calTaskId || '');
-      openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
-    };
-    el.addEventListener('click', function (e) { e.stopPropagation(); openEvent(); });
-    el.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openEvent(); }
-    });
-  });
+  renderWeekHourColsInto(colsEl, cols);
 
   // Scroll to a sensible starting point: near the current time if today is
   // in view, otherwise default to business hours (~7 AM) instead of

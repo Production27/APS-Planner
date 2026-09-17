@@ -454,7 +454,11 @@ test('calendar week view: a timed calendar event renders in the hourly grid', as
 
   const evtEl = page.locator('.week-timed-event', { hasText: 'Site walkthrough' });
   await expect(evtEl).toBeVisible();
-  await expect(evtEl).toHaveAttribute('style', /top:\d/);
+  // Optional space after the colon: Preact serializes inline styles as
+  // "top: 504px" (space), not the old hand-written "top:504px" (no
+  // space) the string-built version produced — both are equally valid
+  // CSS, this just matches either.
+  await expect(evtEl).toHaveAttribute('style', /top:\s*\d/);
 
   // Day view reuses the same renderWeekHourGrid() renderer for a single
   // date — switching there should show the identical timed event without
