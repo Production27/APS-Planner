@@ -424,10 +424,13 @@ test('calendar month view: a scheduled job task renders as a positioned bar on t
   await expect(bar).toBeVisible();
   await expect(bar).toHaveAttribute('data-cal-task-start', '2026-09-10');
   // Position comes from real getCell()/offsetLeft measurements against the
-  // rendered grid, not a hardcoded value — a non-empty "left:...px" proves
+  // rendered grid, not a hardcoded value — a non-empty "left: ...px" proves
   // the lane-packing pass actually ran against real layout, not just that
-  // some bar element exists in the DOM somewhere.
-  await expect(bar).toHaveAttribute('style', /left:\d/);
+  // some bar element exists in the DOM somewhere. Optional space after the
+  // colon: Preact serializes inline styles as "left: 672px" (space), not
+  // the old hand-written "left:672px" (no space) the string-built version
+  // produced — both are equally valid CSS, this just matches either.
+  await expect(bar).toHaveAttribute('style', /left:\s*\d/);
 });
 
 test('calendar week view: a timed calendar event renders in the hourly grid', async ({ page }) => {

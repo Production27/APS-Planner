@@ -39,6 +39,7 @@ import { openModal, closeModal, showToast, moveTooltip, hideTooltip, msDropdownL
 import { getEffectiveRole, hasMinTier } from '../auth/permissions';
 import { getStoredUsername } from '../auth/session';
 import { ensureUserRosterLoaded } from '../app/user-roster';
+import { renderCalBarsInto, type CalBarProps, type CalBarContent, type CalBarSegmentBlock } from './calendar-bar';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS-style shared state, saveJobs()-style shared functions,
@@ -570,17 +571,20 @@ function renderCalendar(): void {
 
 // ===== CALENDAR: RENDER ENGINE (month/week/day grids) =====
 
+// Still imperative, unchanged — this is home.ts's own reuse of the
+// pre-Preact bar-building logic for its mini-calendar dashboard widget, a
+// totally separate concern from the real Calendar tab's .cal-bars-layer
+// (which is now Preact's — see buildCalBarProps() below). Kept as its own
+// separate function rather than unified with buildCalBarProps() to keep
+// this piece scoped to the real Calendar tab; Home's own mini-calendar
+// widget converting to Preact is its own separate, not-yet-investigated
+// piece (same call as buildCardEl()/buildCardProps() in board.ts).
 function buildCalBarHtml(seg: CalSeg, left: number, top: number, width: number): string {
   const job = seg.job;
   const task = seg.task;
   const isDue = !!task.isDueMarker;
   const isCalEvt = !!task.isCalendarEvent;
   const isTimedCalEvt = isCalEvt && !!task.time;
-  // A condensed sub-unit span from buildCalendarJobRows() — see its own
-  // comment for the collapse rationale. Not a real task.tasks[] entry, so
-  // it can't be dragged/resized (there's no single task to write a new
-  // date onto) — handleCalBarMouseDown/Move special-case it to always
-  // resolve as a plain click that opens the job, never a drag.
   const isJobSpan = !!task.isJobSpan;
   const classes = ['cal-event-bar'];
   if (isDue) classes.push('due-marker');
@@ -716,6 +720,163 @@ function buildCalBarHtml(seg: CalSeg, left: number, top: number, width: number):
     dragHandles + innerBlocksHtml + content + '</div>';
 }
 
+// Preact-rendered replacement for buildCalBarHtml(), used by the real
+// Calendar tab's .cal-bars-layer (see renderMonthCalendar()/
+// renderWeekCalendar() below) now that it's a stable, persistent
+// container Preact can diff against across renders — see
+// getOrCreateCalBarsLayer()'s own comment for why that fix was needed,
+// and calendar-bar.tsx's own header comment for why event delegation
+// means this piece needed no handler-rewiring at all.
+function buildCalBarProps(seg: CalSeg, left: number, top: number, width: number): CalBarProps {
+  const job = seg.job;
+  const task = seg.task;
+  const isDue = !!task.isDueMarker;
+  const isCalEvt = !!task.isCalendarEvent;
+  const isTimedCalEvt = isCalEvt && !!task.time;
+  const isJobSpan = !!task.isJobSpan;
+  const classes = ['cal-event-bar'];
+  if (isDue) classes.push('due-marker');
+  if (isCalEvt) classes.push('calendar-event-bar');
+  if (isTimedCalEvt) classes.push('timed-style');
+  if (job.isLinkedReference) classes.push('linked-ref');
+  classes.push(seg.isTrueStart ? 'cap-start' : 'cont-start');
+  classes.push(seg.isTrueEnd ? 'cap-end' : 'cont-end');
+  if (isTaskFinished(job, task)) classes.push('finished');
+
+  const barColor = task.color || job.color || '#3949ab';
+  const showJobBorder = !isDue && !isCalEvt;
+  function segmentFill(colors: string[], taskCount: number): string {
+    if (taskCount <= 1) return softenColor(colors[0]);
+    if (colors.length > 1) return 'repeating-linear-gradient(45deg, ' + colors.map(function (c: string, idx: number) { const sc = softenColor(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
+    const base = softenColor(colors[0]);
+    const dark = darkenColor(base, 0.28);
+    return 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
+  }
+  const clusterSegs = isJobSpan ? task.clusterSegments : null;
+  const isMultiSegmentCluster = !!(clusterSegs && clusterSegs.length > 1);
+  let fillColor: string;
+  if (clusterSegs && clusterSegs.length === 1) {
+    fillColor = segmentFill(clusterSegs[0].colors, clusterSegs[0].taskCount);
+  } else if (isMultiSegmentCluster && clusterSegs) {
+    fillColor = segmentFill(clusterSegs[0].colors, clusterSegs[0].taskCount);
+  } else {
+    fillColor = showJobBorder ? softenColor(barColor) : barColor;
+  }
+  const contrastColor = clusterSegs && clusterSegs.length ? softenColor(clusterSegs[0].colors[0]) : (showJobBorder ? softenColor(barColor) : barColor);
+  const textColor = isDarkColor(contrastColor) ? '#fff' : darkenColor(contrastColor, 0.6);
+
+  // Read-only: no drag handles for a linked reference (its real data
+  // lives in, and can only be edited from, its home project) or a
+  // collapsed span (see isJobSpan above). Clicking either still works —
+  // handleCalBarMouseDown routes a linked reference to
+  // jumpToLinkedJobReference(), and a span to calendarOpenJob() via its
+  // own isCalendarJobSpanTaskId() branch.
+  const dragHandles = !(isDue || job.isLinkedReference || isJobSpan);
+
+  const phaseLabel = seg.subPhaseName ? (seg.subPhaseName + (seg.phaseName ? ' (' + seg.phaseName + ')' : '')) : seg.phaseName;
+
+  let content: CalBarContent;
+  if (isDue) {
+    content = { kind: 'flag', timeLabel: null, linkGlyph: false, text: '', tagLabel: null, tagBackground: '' };
+  } else if (isTimedCalEvt) {
+    content = { kind: 'timed', timeLabel: formatTimeLabel(task.time) || null, linkGlyph: false, text: task.name, tagLabel: null, tagBackground: '' };
+  } else {
+    const linkGlyph = !!job.isLinkedReference;
+    // A span's task.name is already "Job — Phase — SubPhase" (see
+    // buildCalendarJobRows()) — the usual job-name tag alongside it would
+    // just repeat that.
+    const tagLabel = isCalEvt ? formatTimeLabel(task.time) : (isJobSpan ? '' : (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseLabel ? ' — ' + phaseLabel : ''));
+    content = { kind: 'plain', timeLabel: null, linkGlyph: isJobSpan && linkGlyph, text: task.name, tagLabel: tagLabel || null, tagBackground: job.color || '#3949ab' };
+  }
+
+  // A cluster with more than one internal segment (a hand-off between two
+  // tasks, or an overlap sitting inside an otherwise-solo run) still
+  // renders as ONE bordered bar (see isMultiSegmentCluster above) — but
+  // paints each of its own segments as its own colored block inside that
+  // one bar, so a hand-off between different-colored tasks still shows
+  // both colors instead of flattening to the first segment's fill.
+  // Position is in the bar's content-box coordinate space (a
+  // position:absolute child's containing block, per spec, is the padding
+  // box — padding doesn't shift it, but the 2px border does, hence only
+  // subtracting the border below). seg.spanWindowOffset (set by
+  // renderMonthCalendar/renderWeekCalendar) accounts for a cluster bar
+  // that's only a clamped slice of a multi-week range.
+  const segments: CalBarSegmentBlock[] = [];
+  if (isMultiSegmentCluster && clusterSegs) {
+    const windowOffset = seg.spanWindowOffset || 0;
+    const windowDays = Math.max(1, (seg.colEnd - seg.colStart) + 1);
+    const borderW = 2; // matches the bar's own border: 2px, see showJobBorder above
+    const perDayPx = Math.max(0, width - borderW * 2) / windowDays;
+    clusterSegs.forEach(function (s, i) {
+      const clipStart = Math.max(0, s.startOffset - windowOffset);
+      const clipEnd = Math.min(windowDays - 1, s.endOffset - windowOffset);
+      if (clipEnd < clipStart) return;
+      segments.push({
+        key: String(i),
+        left: clipStart * perDayPx,
+        width: (clipEnd - clipStart + 1) * perDayPx,
+        background: segmentFill(s.colors, s.taskCount),
+      });
+    });
+  }
+
+  return {
+    barKey: job.id + '::' + task.id + '::' + (seg.phaseId || '') + '::' + (seg.subPhaseId || '') + '::' + top + '::' + left,
+    className: classes.join(' '),
+    left, top, width, height: CAL_BAR_H,
+    dotColor: isTimedCalEvt ? barColor : null,
+    background: isTimedCalEvt ? null : fillColor,
+    color: isTimedCalEvt ? null : textColor,
+    border: (!isTimedCalEvt && showJobBorder) ? ('2px ' + (job.isLinkedReference ? 'dashed' : 'solid') + ' ' + (job.color || '#3949ab')) : null,
+    title: task.name + (isCalEvt || isJobSpan ? '' : ' — ' + job.name + (seg.phaseName ? ' — ' + seg.phaseName : '') + (seg.subPhaseName ? ' — ' + seg.subPhaseName : '')) + (job.isLinkedReference ? ' (linked, read-only — click to open in ' + (job.linkedFromProjectName || 'its project') + ')' : ''),
+    jobId: job.id,
+    taskId: task.id,
+    phaseId: seg.phaseId || '',
+    subPhaseId: seg.subPhaseId || '',
+    linked: !!job.isLinkedReference,
+    segStart: seg.isTrueStart,
+    segEnd: seg.isTrueEnd,
+    taskStart: task.start || '',
+    taskFinish: task.finish || '',
+    dragHandles,
+    segments,
+    content,
+  };
+}
+
+// #calendarDays > .cal-bars-layer is shared by both month and week view
+// (day view doesn't use it — see renderDayCalendarView()'s own comment).
+// The old code LOOKED like it cached this ("let barsLayer =
+// daysEl.querySelector('.cal-bars-layer'); if (!barsLayer) { create }")
+// but never actually did: both renderMonthCalendar() and
+// renderWeekCalendar() ran `daysEl.innerHTML = html` first — which,
+// since barsLayer is itself a CHILD of daysEl, destroyed it on every
+// single call, making that "if not exists" check always true. Exactly
+// the same "fresh container every render" trap fixed for Gantt's
+// barsLayer (see gantt.ts's getOrCreateGanttGridLayers()) — it just
+// wasn't as obvious here since the code already had the shape of a
+// cache, it just never actually hit.
+//
+// #calendarDays can't get the same "wrap everything in a dedicated
+// sub-container" treatment Gantt's #timelineGrid did, though: .cal-day
+// cells are direct CSS Grid items of #calendarDays (grid-auto-rows:1fr,
+// see index.html) — wrapping them in an intermediate div would pull them
+// out of the grid entirely. So this keeps .cal-day cells as DIRECT
+// children (rebuilt fresh every render, same as always) and only makes
+// barsLayer itself persistent, inserting fresh cell markup as its
+// siblings via insertAdjacentHTML('beforebegin', ...) instead of
+// daysEl.innerHTML — which touches every existing .cal-day but never
+// barsLayer.
+let cachedCalBarsLayer: HTMLElement | null = null;
+function getOrCreateCalBarsLayer(daysEl: HTMLElement): HTMLElement {
+  if (cachedCalBarsLayer && daysEl.contains(cachedCalBarsLayer)) return cachedCalBarsLayer;
+  const layer = document.createElement('div');
+  layer.className = 'cal-bars-layer';
+  daysEl.appendChild(layer);
+  cachedCalBarsLayer = layer;
+  return layer;
+}
+
 function renderMonthCalendar(): void {
   const weekdaysEl = document.getElementById('calendarWeekdays');
   const daysEl = document.getElementById('calendarDays');
@@ -816,8 +977,14 @@ function renderMonthCalendar(): void {
       '</div>';
     }
   }
-  daysEl.innerHTML = html;
+  // barsLayer is Preact-rendered and persistent (see getOrCreateCalBarsLayer()'s
+  // own comment) — fetched BEFORE touching the cells so inserting the new
+  // cell markup as its siblings (rather than daysEl.innerHTML, which would
+  // destroy it) is possible below.
+  const barsLayer = getOrCreateCalBarsLayer(daysEl);
+  daysEl.querySelectorAll<HTMLElement>('.cal-day').forEach((el) => el.remove());
   daysEl.className = 'calendar-grid calendar-days';
+  barsLayer.insertAdjacentHTML('beforebegin', html);
 
   const cellEls = daysEl.querySelectorAll<HTMLElement>('.cal-day');
   const getCell = (row: number, col: number) => cellEls[row * 7 + col];
@@ -833,7 +1000,7 @@ function renderMonthCalendar(): void {
     });
   });
 
-  let barsHtml = '';
+  const barProps: CalBarProps[] = [];
   for (let row = 0; row < numRows; row++) {
     rowSegments[row].forEach(seg => {
       const startCell = getCell(row, seg.colStart);
@@ -841,20 +1008,14 @@ function renderMonthCalendar(): void {
       const left = startCell.offsetLeft;
       const width = (endCell.offsetLeft + endCell.offsetWidth) - left;
       const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
-      barsHtml += buildCalBarHtml(seg, left, top, width);
+      barProps.push(buildCalBarProps(seg, left, top, width));
     });
   }
 
   document.getElementById('weekHourSection')!.classList.remove('show');
   daysEl.classList.remove('week-all-day-mode');
 
-  let barsLayer = daysEl.querySelector<HTMLElement>('.cal-bars-layer');
-  if (!barsLayer) {
-    barsLayer = document.createElement('div');
-    barsLayer.className = 'cal-bars-layer';
-    daysEl.appendChild(barsLayer);
-  }
-  barsLayer.innerHTML = barsHtml;
+  renderCalBarsInto(barsLayer, barProps);
 }
 
 function renderWeekCalendar(): void {
@@ -913,8 +1074,14 @@ function renderWeekCalendar(): void {
       '<div class="cal-day-num">' + cellDate.getDate() + '</div>' +
     '</div>';
   }
-  daysEl.innerHTML = html;
+  // barsLayer is Preact-rendered and persistent (see getOrCreateCalBarsLayer()'s
+  // own comment) — fetched BEFORE touching the cells so inserting the new
+  // cell markup as its siblings (rather than daysEl.innerHTML, which would
+  // destroy it) is possible below.
+  const barsLayer = getOrCreateCalBarsLayer(daysEl);
+  daysEl.querySelectorAll<HTMLElement>('.cal-day').forEach((el) => el.remove());
   daysEl.className = 'calendar-grid calendar-days';
+  barsLayer.insertAdjacentHTML('beforebegin', html);
 
   const cellEls = daysEl.querySelectorAll<HTMLElement>('.cal-day');
   const getCell = (col: number) => cellEls[col];
@@ -962,25 +1129,19 @@ function renderWeekCalendar(): void {
   // Set all cells to same height
   cellEls.forEach(c => c.style.minHeight = rowMinH + 'px');
 
-  let barsHtml = '';
+  const barProps: CalBarProps[] = [];
   segs.forEach(seg => {
     const startCell = getCell(seg.colStart);
     const endCell = getCell(seg.colEnd);
     const left = startCell.offsetLeft;
     const width = (endCell.offsetLeft + endCell.offsetWidth) - left;
     const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
-    barsHtml += buildCalBarHtml(seg, left, top, width);
+    barProps.push(buildCalBarProps(seg, left, top, width));
   });
 
   daysEl.classList.add('week-all-day-mode');
 
-  let barsLayer = daysEl.querySelector<HTMLElement>('.cal-bars-layer');
-  if (!barsLayer) {
-    barsLayer = document.createElement('div');
-    barsLayer.className = 'cal-bars-layer';
-    daysEl.appendChild(barsLayer);
-  }
-  barsLayer.innerHTML = barsHtml;
+  renderCalBarsInto(barsLayer, barProps);
 
   renderWeekHourGrid(cellDates, timedCalRows, today);
 }
