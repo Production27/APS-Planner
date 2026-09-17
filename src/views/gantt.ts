@@ -1153,6 +1153,13 @@ interface SetupDateRangeAndGridResult {
   grid: HTMLElement;
   header: HTMLElement;
   leftBody: HTMLElement;
+  // Five dedicated, purely structural sub-containers of `grid`, one per
+  // concern that writes into it — see their own creation below for why.
+  gridLinesLayer: HTMLElement;
+  rowBgLayer: HTMLElement;
+  todayLineLayer: HTMLElement;
+  barsLayer: HTMLElement;
+  connectorsLayer: HTMLElement;
   totalDays: number;
   containerH: number;
   gridWidth: number;
@@ -1192,17 +1199,51 @@ function setupDateRangeAndGrid(): SetupDateRangeAndGridResult {
   // previous render's output on every call regardless — it doesn't need
   // this reset the way plain innerHTML-rebuilding code does.
 
-  return { grid, header, leftBody, totalDays, containerH, gridWidth, savedScrollLeft, savedScrollTop };
+  // Five dedicated, purely structural sub-containers of `grid` — one per
+  // concern that writes into it (grid-lines/today-bg from
+  // buildDateHeader(), the zebra-stripe row backgrounds from
+  // renderLeftPanelRows(), the today-line+label from drawTodayLine(),
+  // every bar/tick/marker from renderTimelineBars(), the connector SVG
+  // from drawConnectorLines()). Previously all five were flat siblings
+  // directly under `grid`, rebuilt in whatever order renderGantt() called
+  // their owning functions — harmless so far since every visible layering
+  // decision already goes through explicit z-index values (60-86) rather
+  // than relying on DOM order, but it meant no one concern could ever
+  // become Preact's to own without risking its diffing stepping on a
+  // completely unrelated sibling's own imperative writes the next time
+  // `grid.innerHTML` gets reset. A plain, unstyled div creates no new
+  // stacking context and isn't a `position` ancestor, so absolutely-
+  // positioned children inside these still resolve their left/top against
+  // `grid` itself exactly as if these wrapper divs weren't there, and
+  // every existing z-index still competes in that same shared stacking
+  // context across group boundaries — this changes nothing visible, only
+  // which specific element each function is handed to append into.
+  const gridLinesLayer = document.createElement('div');
+  const rowBgLayer = document.createElement('div');
+  const todayLineLayer = document.createElement('div');
+  const barsLayer = document.createElement('div');
+  const connectorsLayer = document.createElement('div');
+  grid.appendChild(gridLinesLayer);
+  grid.appendChild(rowBgLayer);
+  grid.appendChild(todayLineLayer);
+  grid.appendChild(barsLayer);
+  grid.appendChild(connectorsLayer);
+
+  return {
+    grid, header, leftBody, gridLinesLayer, rowBgLayer, todayLineLayer, barsLayer, connectorsLayer,
+    totalDays, containerH, gridWidth, savedScrollLeft, savedScrollTop,
+  };
 }
 
-function buildDateHeader(totalDays: number, grid: HTMLElement, header: HTMLElement): Date {
+function buildDateHeader(totalDays: number, gridLinesLayer: HTMLElement, header: HTMLElement): Date {
   const cells = buildDateHeaderCells(startDate, totalDays, dayWidth);
 
   // The day/week header cells themselves are Preact-rendered now (see
   // src/views/gantt-date-header.tsx's own comment on why #timelineHeader
   // specifically was safe to hand over) — everything below still builds
-  // the background grid-lines imperatively into #timelineGrid, which
-  // stays shared with renderTimelineBars()/drawConnectorLines()/etc.
+  // the background grid-lines imperatively into its own dedicated
+  // sub-container of #timelineGrid (see setupDateRangeAndGrid()'s own
+  // comment on why each concern there gets one).
   renderDateHeaderInto(
     header,
     cells,
@@ -1215,7 +1256,7 @@ function buildDateHeader(totalDays: number, grid: HTMLElement, header: HTMLEleme
     const line = document.createElement('div');
     line.className = 'grid-line' + (d.isWeekend ? ' weekend-line' : '');
     line.style.left = d.left + 'px';
-    grid.appendChild(line);
+    gridLinesLayer.appendChild(line);
 
     if (d.isToday) {
       const todayBg = document.createElement('div');
@@ -1224,7 +1265,7 @@ function buildDateHeader(totalDays: number, grid: HTMLElement, header: HTMLEleme
       // No width set here — .today-line-bg's own CSS spans it from `left`
       // to the grid's real right edge via right:0 (see that rule's
       // comment).
-      grid.appendChild(todayBg);
+      gridLinesLayer.appendChild(todayBg);
     }
   });
 
@@ -1264,29 +1305,30 @@ function buildRowModel(containerH: number, grid: HTMLElement): BuildRowModelResu
 // Y-position and its timeline bar's Y-position (computed from two
 // separately-incrementing counters) stay aligned. If either loop ever
 // gains a mid-loop skip/continue, the other must get the same one.
-function renderLeftPanelRows(visibleRows: GanttRow[], grid: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
+function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
   const rowProps: TaskRowProps[] = [];
   let visibleRowIdx = 0;
   visibleRows.forEach(function (entry) {
     const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
     const rowKey = ganttRowKey(job.id, task.id, phaseId, subPhaseId);
 
-    // Zebra-stripe background — stays fully imperative, appended straight
-    // into #timelineGrid (shared with the bars/connector-lines/grid-lines
-    // there — not Preact's to own). Deliberately NOT given a data-row-key
-    // (and so never animated by animateReorderedBars() — see
-    // allRowKeyedElements()) even though the row below very much needs
-    // one: this is pure decoration, full page width, a full 40px row
-    // tall, and solidly opaque — during a cascade where several rows
-    // swap places at once, two of these bands animating through the same
-    // stretch of screen at once reads as an obvious gray "ghost" bar
-    // (reported via a screenshot showing exactly that). Left unkeyed, it
-    // always just renders at its own correct final position immediately.
+    // Zebra-stripe background — stays fully imperative, appended into its
+    // own dedicated sub-container of #timelineGrid (see
+    // setupDateRangeAndGrid()'s own comment — not Preact's to own).
+    // Deliberately NOT given a data-row-key (and so never animated by
+    // animateReorderedBars() — see allRowKeyedElements()) even though the
+    // row below very much needs one: this is pure decoration, full page
+    // width, a full 40px row tall, and solidly opaque — during a cascade
+    // where several rows swap places at once, two of these bands
+    // animating through the same stretch of screen at once reads as an
+    // obvious gray "ghost" bar (reported via a screenshot showing exactly
+    // that). Left unkeyed, it always just renders at its own correct
+    // final position immediately.
     const bg = document.createElement('div');
     bg.className = 'row-bg';
     bg.style.top = (visibleRowIdx * GANTT_ROW_H) + 'px';
     bg.style.width = gridWidth + 'px';
-    grid.appendChild(bg);
+    rowBgLayer.appendChild(bg);
 
     const hasDates = !!(task.start && task.finish && !isNaN(new Date(task.start + 'T00:00:00').getTime()) && !isNaN(new Date(task.finish + 'T00:00:00').getTime()));
     const startStr = hasDates ? new Date(task.start! + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -1423,18 +1465,18 @@ function renderLeftPanelRows(visibleRows: GanttRow[], grid: HTMLElement, gridWid
   renderTaskRowsInto(leftBody, rowProps, spacerHeight);
 }
 
-function drawTodayLine(grid: HTMLElement, today: Date, totalDays: number): void {
+function drawTodayLine(todayLineLayer: HTMLElement, today: Date, totalDays: number): void {
   const todayIdx = getDaysDiff(startDate, today);
   if (todayIdx >= 0 && todayIdx < totalDays) {
     const tl = document.createElement('div');
     tl.className = 'today-line';
     tl.style.left = (todayIdx * dayWidth + dayWidth / 2) + 'px';
-    grid.appendChild(tl);
+    todayLineLayer.appendChild(tl);
     const tlbl = document.createElement('div');
     tlbl.className = 'today-label';
     tlbl.style.left = (todayIdx * dayWidth + dayWidth / 2 + 6) + 'px';
     tlbl.textContent = 'Today — ' + today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    grid.appendChild(tlbl);
+    todayLineLayer.appendChild(tlbl);
   }
 }
 
@@ -1454,7 +1496,7 @@ function ganttRowKey(jobId: string, taskId: string | undefined, phaseId: string 
   return jobId + '::' + (taskId || '') + '::' + (phaseId || '') + '::' + (subPhaseId || '');
 }
 
-function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMap: Record<string, JobBarMapEntry[]>): void {
+function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, jobBarMap: Record<string, JobBarMapEntry[]>): void {
   let barVisibleIdx = 0;
   visibleRows.forEach(function (entry) {
     const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
@@ -1545,7 +1587,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
         if (isTasksMode) {
           buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, entry.collapsible, !!entry.collapsedSegments).forEach(function (t) { labelWrap.appendChild(t); });
         }
-        grid.appendChild(labelWrap);
+        barsLayer.appendChild(labelWrap);
 
         // Outline the whole span in the job's own color — drawn as a
         // separate overlay (rather than a border on `bar` itself) so it
@@ -1562,7 +1604,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
         borderOverlay.style.width = (duration * dayWidth) + 'px';
         borderOverlay.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
         borderOverlay.style.borderColor = job.color || '#3949ab';
-        grid.appendChild(borderOverlay);
+        barsLayer.appendChild(borderOverlay);
 
         // Due date marker: its own little flagged circle (same look as a
         // Tasks-view due-marker bar), connected back to the condensed span
@@ -1633,7 +1675,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
           dueEl.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDueEl(); }
           });
-          grid.appendChild(dueEl);
+          barsLayer.appendChild(dueEl);
 
           let lineLeft: number | null = null, lineWidth = 0;
           if (dueIdx > barEndIdx) {
@@ -1655,7 +1697,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             dueLine.style.width = lineWidth + 'px';
             dueLine.style.top = (barVisibleIdx * GANTT_ROW_H + Math.round(GANTT_ROW_H / 2) - 1) + 'px';
             dueLine.style.background = markerColor;
-            grid.appendChild(dueLine);
+            barsLayer.appendChild(dueLine);
           }
         }
       } else {
@@ -1743,7 +1785,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
         }
       }
 
-      grid.appendChild(bar);
+      barsLayer.appendChild(bar);
 
       // Jobs/Leads view: the condensed bar is one solid span, but the real
       // tasks inside it usually run back-to-back rather than as a single
@@ -1828,7 +1870,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             tick.addEventListener('mousedown', function (e) { startTickResize(e, job.id, dt.t.id!, tick); });
           }
           tick.addEventListener('click', function (e) { e.stopPropagation(); });
-          grid.appendChild(tick);
+          barsLayer.appendChild(tick);
         });
 
         // Keyed by task id (not color) so two different same-colored tasks
@@ -1864,7 +1906,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             hash.style.width = segWidth + 'px';
             hash.style.top = segTop;
             hash.title = 'No task scheduled here';
-            grid.appendChild(hash);
+            barsLayer.appendChild(hash);
           } else if (covering.length === 1) {
             // Unambiguously one task's (or, collapsed, one sub-phase's) own
             // stretch — grabbable to move just that task/sub-phase, same as
@@ -1908,7 +1950,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
             solid.addEventListener('keydown', function (e) {
               if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSolid(); }
             });
-            grid.appendChild(solid);
+            barsLayer.appendChild(solid);
           } else {
             const hatch = document.createElement('div');
             hatch.className = 'job-span-task-hatch';
@@ -1941,7 +1983,7 @@ function renderTimelineBars(visibleRows: GanttRow[], grid: HTMLElement, jobBarMa
               hatch.style.background = 'repeating-linear-gradient(45deg, ' + stops.join(', ') + ')';
               hatch.title = 'Overlapping tasks';
             }
-            grid.appendChild(hatch);
+            barsLayer.appendChild(hatch);
           }
           di = dj + 1;
         }
@@ -1993,7 +2035,7 @@ function computeConnectorPathD(a: JobBarMapEntry, b: JobBarMapEntry): string {
   return 'M ' + x1 + ' ' + y1 + ' L ' + rightX + ' ' + y1 + ' L ' + rightX + ' ' + laneY + ' L ' + leftX + ' ' + laneY + ' L ' + leftX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
 }
 
-function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarMapEntry[]>, grid: HTMLElement): void {
+function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarMapEntry[]>, connectorsLayer: HTMLElement): void {
   const existing = document.getElementById(GANTT_CONNECTOR_SVG_ID);
   if (existing) existing.remove();
   const svgNs = 'http://www.w3.org/2000/svg';
@@ -2019,7 +2061,7 @@ function drawConnectorLines(gridWidth: number, jobBarMap: Record<string, JobBarM
       svg.appendChild(path);
     }
   });
-  grid.appendChild(svg);
+  connectorsLayer.appendChild(svg);
 }
 
 // CSS's `ease-out` keyword is cubic-bezier(0, 0, 0.58, 1). An earlier
@@ -2276,7 +2318,7 @@ let ganttReorderGeneration = 0;
 // how many renders land while it's playing.
 const barAnimOrigins: Record<string, { fromTop: number; startTime: number }> = {};
 
-function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number): void {
+function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number, connectorsLayer: HTMLElement): void {
   // Bumped UNCONDITIONALLY, before either early return below — every
   // render calls drawConnectorLines() once as part of its own normal flow
   // (see renderGantt()), drawing a fresh, correct, static connector from
@@ -2428,7 +2470,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
       // One final pass from the real, static, exact-not-eased-estimate
       // final positions — removes any last-frame rounding drift from
       // easeOutCubic()'s own approximation of the real CSS curve.
-      drawConnectorLines(gridWidth, jobBarMap, grid);
+      drawConnectorLines(gridWidth, jobBarMap, connectorsLayer);
     }
   })();
 }
@@ -2438,16 +2480,19 @@ function renderGantt(): void {
 
   const oldBarTops = captureBarTopsByRowKey();
 
-  const { grid, header, leftBody, totalDays, containerH, gridWidth, savedScrollLeft, savedScrollTop } = setupDateRangeAndGrid();
-  const today = buildDateHeader(totalDays, grid, header);
+  const {
+    grid, header, leftBody, gridLinesLayer, rowBgLayer, todayLineLayer, barsLayer, connectorsLayer,
+    totalDays, containerH, gridWidth, savedScrollLeft, savedScrollTop,
+  } = setupDateRangeAndGrid();
+  const today = buildDateHeader(totalDays, gridLinesLayer, header);
   const { jobBarMap, visibleRows, gridHeightPx } = buildRowModel(containerH, grid);
-  renderLeftPanelRows(visibleRows, grid, gridWidth, leftBody, gridHeightPx);
-  drawTodayLine(grid, today, totalDays);
-  renderTimelineBars(visibleRows, grid, jobBarMap);
-  drawConnectorLines(gridWidth, jobBarMap, grid);
+  renderLeftPanelRows(visibleRows, rowBgLayer, gridWidth, leftBody, gridHeightPx);
+  drawTodayLine(todayLineLayer, today, totalDays);
+  renderTimelineBars(visibleRows, barsLayer, jobBarMap);
+  drawConnectorLines(gridWidth, jobBarMap, connectorsLayer);
   restoreScrollPosition(savedScrollTop, savedScrollLeft);
 
-  animateReorderedBars(oldBarTops, jobBarMap, gridWidth);
+  animateReorderedBars(oldBarTops, jobBarMap, gridWidth, connectorsLayer);
 }
 
 function scrollToToday(): void {
