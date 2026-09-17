@@ -69,6 +69,7 @@ import { renderHomeOverdueWidgetInto, type HomeCalMiniMonthCellProps, type HomeC
 import { type HomeAlertProps } from './home-widget-alert';
 import { renderHomeStageAlertInto, renderWsmBarsInto, renderWsmBracketInto, type HomeWsmBarProps, type HomeWsmBracketSegmentProps } from './home-board-mini';
 import { renderHomeTodayWidgetInto, type HomeMiniGanttDayProps, type HomeMiniGanttRowProps } from './home-gantt-mini';
+import { renderHomeBoardColumnsInto, type HomeBoardColumnProps } from './home-board-expanded';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
@@ -1241,44 +1242,54 @@ function renderHomeWorkflowMiniBoard(): void {
 // own undebounced resize listener, which only writes inline styles).
 
 // Expanded-in-place Board (see toggleHomeWidgetExpand()) — real kanban
-// columns built from the exact same buildCardEl() the real Board tab
-// uses, so cards here are fully real: click opens the real edit modal
-// (openEditCard()), badges/checklist-progress/due-date all match. Safe
-// to reuse directly (unlike the Checklist expansion's own reuse
-// decision, see renderHomeChecklistWidgetExpanded()'s comment) because
-// buildCardEl() keys everything off el.dataset.id, never a DOM id, so
-// two copies of the same card existing at once (one here, one on the
-// real Board tab's own possibly-still-rendered-but-hidden panel) can't
-// collide. Column order/labels come straight from BOARD_COLUMNS, same
-// as the real board and the mini bar-chart summary above.
+// columns, cards built from the exact same buildCardEl() the real Board
+// tab's own pre-Preact code used, so cards here are fully real: click
+// opens the real edit modal (openEditCard()), badges/checklist-progress/
+// due-date all match. Safe to reuse directly (unlike the Checklist
+// expansion's own reuse decision, see renderHomeChecklistWidgetExpanded()'s
+// comment) because buildCardEl() keys everything off el.dataset.id, never
+// a DOM id, so two copies of the same card existing at once (one here, one
+// on the real Board tab's own possibly-still-rendered-but-hidden panel)
+// can't collide. Column order/labels come straight from BOARD_COLUMNS,
+// same as the real board and the mini bar-chart summary above.
+//
+// Column chrome renders via Preact (home-board-expanded.tsx); cards render
+// imperatively straight after, into the `.home-board-cards` div Preact
+// left empty for exactly this — see that file's own header comment for
+// why cards themselves couldn't make the same jump buildCalBarHtml()'s
+// onclick-string bars did.
 function renderHomeWorkflowExpandedBoard(): void {
   const container = document.getElementById('homeBoardExpanded');
   if (!container) return;
-  container.innerHTML = '';
-  BOARD_COLUMNS.forEach(function (col) {
+
+  const cardsByCol: Record<string, BoardCard[]> = {};
+  const columnProps: HomeBoardColumnProps[] = BOARD_COLUMNS.map(function (col) {
     const cards = boardCards.filter(function (c) { return c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c); });
-    const colEl = document.createElement('div');
-    colEl.className = 'home-board-col';
-    colEl.innerHTML = '<div class="home-board-col-head"><span>' + escapeHtml(col.label) + '</span><span class="home-board-col-count">' + cards.length + '</span></div>';
+    cardsByCol[col.id] = cards;
     // Same treatment renderBoard() gives the real .board-column when a
     // board has its own color set (BOARD_COLOR_PRESETS, via ⋮ Settings →
     // Color) — the whole column, not just its header, so it reads the
     // same way here as it does on the real Board tab.
+    let colStyle: Record<string, string> | undefined;
+    let headStyle: Record<string, string> | undefined;
     if (col.color) {
-      colEl.style.background = col.color as string;
-      const dark = isDarkColor(col.color as string);
-      const head = colEl.querySelector('.home-board-col-head') as HTMLElement;
-      head.style.color = dark ? '#fff' : darkenColor(col.color as string, 0.6);
+      colStyle = { background: col.color as string };
+      headStyle = { color: isDarkColor(col.color as string) ? '#fff' : darkenColor(col.color as string, 0.6) };
     }
-    const cardsWrap = document.createElement('div');
-    cardsWrap.className = 'home-board-cards';
+    return { colId: col.id, label: col.label, count: cards.length, colStyle: colStyle, headStyle: headStyle };
+  });
+  renderHomeBoardColumnsInto(container, columnProps);
+
+  BOARD_COLUMNS.forEach(function (col) {
+    const cardsWrap = container.querySelector('.home-board-cards[data-column="' + col.id + '"]') as HTMLElement | null;
+    if (!cardsWrap) return;
+    cardsWrap.innerHTML = '';
+    const cards = cardsByCol[col.id];
     if (!cards.length) {
       cardsWrap.innerHTML = '<div class="home-board-col-empty">No cards</div>';
     } else {
       cards.forEach(function (card) { cardsWrap.appendChild(buildCardEl(card)); });
     }
-    colEl.appendChild(cardsWrap);
-    container.appendChild(colEl);
   });
 }
 
