@@ -1024,11 +1024,51 @@ onPanelResize('panel-board', renderBoardWorkflowStrip, 0);
 
 // ===== BOARD: RENDER =====
 
-function renderBoard(): void {
-  // Column placement is date-derived (or manually overridden) — resolve it
-  // before reading card.column anywhere below (badge counts, DOM placement).
-  syncCardColumns();
-  const wrapper = document.getElementById('boardWrapper')!;
+// renderBoard() used to rebuild the ENTIRE column structure — every
+// header, the ⋮ settings dropdown, the color grid, AND each column's own
+// card container (col-body-<id>) — via one big wrapper.innerHTML string,
+// unconditionally, on every single call. That's harmless for a manual
+// full rebuild, but it's called from ~25 places across this file (and
+// more elsewhere — calendar.ts, gantt.ts, job-form.ts, job-list.ts,
+// app/project.ts) any time ANY card or job data changes, not just when a
+// column itself changes. Two real costs: it's wasteful (rebuilding a
+// dozen columns' worth of settings-menu markup just because one card
+// moved), and it's the same "fresh container every render" trap fixed for
+// Gantt's barsLayer (see gantt.ts's getOrCreateGanttGridLayers()) —
+// col-body-<id> can't become Preact's to own (see buildCardEl()'s own
+// comment) while it's destroyed and recreated on every card move.
+//
+// The column CHROME (header/dropdown/color-grid) is fully determined by
+// BOARD_COLUMNS + WORKFLOW_ITEMS + the roster + the caller's own
+// permission tier — never by boardCards (the card data). Stringifying all
+// four catches every real change (a column added/removed/reordered/
+// renamed/recolored, a workflow item renamed, the roster loading, a
+// permission change) without having to hand-track which of the dozen
+// individual column-settings mutator functions below might have touched
+// something — missing one there would be a silent stale-chrome bug;
+// missing a field here isn't possible, since ANY change anywhere in these
+// four inputs changes the string.
+interface BoardColumnDom {
+  columnEl: HTMLElement;
+  bodyEl: HTMLElement;
+}
+let cachedBoardChromeSignature: string | null = null;
+let cachedBoardColumnDoms: Record<string, BoardColumnDom> = {};
+
+function computeBoardChromeSignature(): string {
+  return JSON.stringify([
+    BOARD_COLUMNS,
+    WORKFLOW_ITEMS,
+    cachedUserRoster,
+    hasMinTier('projectAdmin'),
+  ]);
+}
+
+// Rebuilds the column chrome from scratch (today's old unconditional
+// renderBoard() body, unchanged) and repopulates cachedBoardColumnDoms —
+// only called when computeBoardChromeSignature() says something the
+// chrome actually reads has changed, or on the very first render.
+function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
   wrapper.innerHTML = BOARD_COLUMNS.map((col) => {
     return '<div class="board-column" data-column="' + col.id + '">' +
       '<div class="board-column-header" data-col-header="' + col.id + '" draggable="' + (hasMinTier('projectAdmin') ? 'true' : 'false') + '">' +
@@ -1112,13 +1152,20 @@ function renderBoard(): void {
     '</div>' +
   '</div>';
 
-  const stalledFloors = computeColumnStalledFloors();
+  cachedBoardColumnDoms = {};
   BOARD_COLUMNS.forEach((col) => {
-    const body = document.getElementById('col-body-' + col.id)!;
-    boardCards.filter((c) => c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).forEach((card) => body.appendChild(buildCardEl(card, stalledFloors)));
-    body.addEventListener('dragover', handleColumnDragOver);
-    body.addEventListener('dragleave', handleColumnDragLeave);
-    body.addEventListener('drop', handleColumnDrop);
+    const columnEl = wrapper.querySelector<HTMLElement>('.board-column[data-column="' + col.id + '"]');
+    const bodyEl = document.getElementById('col-body-' + col.id);
+    if (!columnEl || !bodyEl) return;
+    cachedBoardColumnDoms[col.id] = { columnEl, bodyEl };
+    // Attached once here, now that bodyEl is the SAME persistent element
+    // across future renders (see this function's own header comment) —
+    // handleColumnDragOver/Leave/handleColumnDrop are stable named
+    // function references, so re-running this on the odd render that
+    // DOES rebuild chrome again never double-attaches.
+    bodyEl.addEventListener('dragover', handleColumnDragOver);
+    bodyEl.addEventListener('dragleave', handleColumnDragLeave);
+    bodyEl.addEventListener('drop', handleColumnDrop);
   });
 
   // Apply column colors and populate color grids
@@ -1171,15 +1218,50 @@ function renderBoard(): void {
     colEl.addEventListener('dragleave', handleColumnReorderLeave as EventListener);
     colEl.addEventListener('drop', handleColumnReorderDrop as EventListener);
   });
+}
+
+function renderBoard(): void {
+  // Column placement is date-derived (or manually overridden) — resolve it
+  // before reading card.column anywhere below (badge counts, DOM placement).
+  syncCardColumns();
+  const wrapper = document.getElementById('boardWrapper')!;
+
+  const chromeSignature = computeBoardChromeSignature();
+  // The `wrapper.contains()` half matches getOrCreateGanttGridLayers()'s
+  // own defensive check — `boardWrapper` is a static element from
+  // index.html, never actually reset out from under this cache today, but
+  // the check is cheap and means a stale/detached cache heals itself
+  // rather than silently rendering into nothing.
+  if (chromeSignature !== cachedBoardChromeSignature ||
+      !Object.keys(cachedBoardColumnDoms).length ||
+      !wrapper.contains(Object.values(cachedBoardColumnDoms)[0]?.bodyEl)) {
+    rebuildBoardColumnChrome(wrapper);
+    cachedBoardChromeSignature = chromeSignature;
+  }
+
+  // Card population — runs on EVERY call, independent of whether the
+  // chrome above needed rebuilding, since this is what actually changes
+  // on the vast majority of renderBoard() calls (a card moved/was
+  // edited/synced in). col-body-<id> stays fully imperative for now (see
+  // buildCardEl()'s own comment) — cleared and rebuilt fresh each time,
+  // same as it always was, just into a container that's no longer
+  // recreated out from under it every call.
+  const stalledFloors = computeColumnStalledFloors();
+  BOARD_COLUMNS.forEach((col) => {
+    const dom = cachedBoardColumnDoms[col.id];
+    if (!dom) return;
+    dom.bodyEl.innerHTML = '';
+    boardCards.filter((c) => c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).forEach((card) => dom.bodyEl.appendChild(buildCardEl(card, stalledFloors)));
+  });
 
   document.getElementById('boardCount')!.textContent = String(boardCards.filter((c) => !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).length);
 
-  // renderBoard() rebuilds the column headers (incl. the ⋮ settings menu,
-  // data-min-tier="projectAdmin") from scratch via wrapper.innerHTML on
-  // every call — and it's called directly from ~25 places across this file
-  // (card drags, column drops, job/phase edits, etc.), not just from
-  // renderAll(). Relying on renderAll()'s own trailing applyPermissionGating()
-  // left every one of those other call sites re-rendering the settings menu
+  // renderBoard() rebuilds the ⋮ settings menu's data-min-tier="projectAdmin"
+  // gating (via rebuildBoardColumnChrome(), when the chrome is actually
+  // stale) — and is called directly from ~25 places across this file (card
+  // drags, column drops, job/phase edits, etc.), not just from renderAll().
+  // Relying on renderAll()'s own trailing applyPermissionGating() left
+  // every one of those other call sites re-rendering the settings menu
   // back into its default (visible) state with nothing to re-hide it again
   // until the next full renderAll() happened to run — a real gap, not just
   // a first-paint timing issue. Calling it here too is redundant with
@@ -1193,6 +1275,9 @@ function renderBoard(): void {
   // falls back to showing the raw username. Kick off the (cached-after-
   // first-success) load here and re-render once it resolves so those
   // lines correct themselves rather than staying wrong for the session.
+  // cachedUserRoster is also part of computeBoardChromeSignature() above,
+  // so the roster resolving triggers a real chrome rebuild too (the
+  // auto-assign-checklist dropdown's own options read it).
   if (!cachedUserRoster) {
     ensureUserRosterLoaded().then(function () { renderBoard(); });
   }
