@@ -16,7 +16,10 @@ test('REGRESSION PIN: deriveColumnForTasks priority order — scheduleDisconnect
 
   const result = await page.evaluate(() => {
     const today = new Date();
-    const iso = (d) => d.toISOString().slice(0, 10);
+    // Local calendar date, not toISOString()'s UTC one — see
+    // tests/unit-home.spec.js's isoDaysFromNow() for why that silently
+    // differs from "today" for hours at a time in any timezone west of UTC.
+    const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
     const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
     // A task on the FIRST column ("bid") that's active right now.
@@ -85,7 +88,10 @@ test('deriveColumnForTasks: a card parked in a hideFromSchedule board stays ther
     const staysParked = deriveColumnForTasks(futureTasks, { column: 'bid' });
 
     const today = new Date();
-    const iso = (d) => d.toISOString().slice(0, 10);
+    // Local calendar date, not toISOString()'s UTC one — see
+    // tests/unit-home.spec.js's isoDaysFromNow() for why that silently
+    // differs from "today" for hours at a time in any timezone west of UTC.
+    const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const y = new Date(today); y.setDate(y.getDate() - 1);
     const t = new Date(today); t.setDate(t.getDate() + 1);
     // deriveColumnForTasks() resolves the target column by the task's

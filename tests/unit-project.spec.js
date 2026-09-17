@@ -148,7 +148,10 @@ test('autoArchiveJobs: archives a job whose every task finished more than the cu
   const result = await page.evaluate(() => {
     const longAgo = new Date(); longAgo.setDate(longAgo.getDate() - (ARCHIVE_CUTOFF_DAYS + 30));
     const recently = new Date(); recently.setDate(recently.getDate() - 2);
-    const iso = (d) => d.toISOString().slice(0, 10);
+    // Local calendar date, not toISOString()'s UTC one — see
+    // tests/unit-home.spec.js's isoDaysFromNow() for why that silently
+    // differs from "today" for hours at a time in any timezone west of UTC.
+    const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 
     const oldJob = { id: 'old-job', name: 'Old finished job', color: '#123', archived: false, comments: [], tasks: [{ id: 't1', start: iso(longAgo), finish: iso(longAgo), order: 0 }] };
     const recentJob = { id: 'recent-job', name: 'Recently finished job', color: '#123', archived: false, comments: [], tasks: [{ id: 't2', start: iso(recently), finish: iso(recently), order: 0 }] };

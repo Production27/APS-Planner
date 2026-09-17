@@ -20,7 +20,18 @@ const FIXTURE_URL = pathToFileURL(path.resolve(__dirname, 'unit-fixture.html')).
 function isoDaysFromNow(offset) {
   const d = new Date();
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  // LOCAL calendar date, not toISOString().slice(0, 10) — that's the UTC
+  // date, which silently differs from "today" for hours at a time in any
+  // timezone west of UTC (e.g. evenings in the US, where the UTC date has
+  // already rolled to tomorrow). The app itself parses/compares every
+  // date string as local midnight throughout (see toIsoDate() in
+  // src/utils/date.ts, which this mirrors), so the test fixture needs to
+  // agree with that or "today" here and "today" in the code under test
+  // are silently one day apart.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
 }
 
 test('buildHomeOverdueRows: separates overdue from due-soon, excludes finished columns and archived/invisible jobs, sorts overdue first then by date', async ({ page }) => {

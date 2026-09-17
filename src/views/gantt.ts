@@ -35,6 +35,7 @@ import { toIsoDate, getDaysDiff } from '../utils/date';
 import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
+import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { showToast, moveTooltip, hideTooltip } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 
@@ -1181,80 +1182,55 @@ function setupDateRangeAndGrid(): SetupDateRangeAndGridResult {
   grid.style.width = gridWidth + 'px';
   header.style.width = gridWidth + 'px';
   grid.innerHTML = '';
-  header.innerHTML = '';
+  // header's children are Preact-rendered now (see buildDateHeader() below
+  // and src/views/gantt-date-header.tsx) — NOT cleared here on purpose.
+  // Preact keeps its own internal record of what it last rendered into
+  // this container; wiping it out from outside (the same `innerHTML = ''`
+  // still used for grid/leftBody, which stay fully imperative) leaves
+  // that record pointing at DOM nodes that no longer exist, so the next
+  // render() call diffs against a stale tree and silently produces
+  // nothing. Preact's own diffing replaces the previous render's output
+  // on every call regardless — it doesn't need this reset the way plain
+  // innerHTML-rebuilding code does.
   leftBody.innerHTML = '';
 
   return { grid, header, leftBody, totalDays, containerH, gridWidth, savedScrollLeft, savedScrollTop };
 }
 
 function buildDateHeader(totalDays: number, grid: HTMLElement, header: HTMLElement): Date {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const cells = buildDateHeaderCells(startDate, totalDays, dayWidth);
 
-  let current = new Date(startDate);
-  let weekStart = new Date(current);
+  // The day/week header cells themselves are Preact-rendered now (see
+  // src/views/gantt-date-header.tsx's own comment on why #timelineHeader
+  // specifically was safe to hand over) — everything below still builds
+  // the background grid-lines imperatively into #timelineGrid, which
+  // stays shared with renderTimelineBars()/drawConnectorLines()/etc.
+  renderDateHeaderInto(
+    header,
+    cells,
+    (e, date) => showDatePopover(e, date),
+    hideDatePopover,
+    (weekLeft) => document.getElementById('timelineBody')!.scrollTo({ left: weekLeft - 20, behavior: 'smooth' })
+  );
 
-  for (let i = 0; i < totalDays; i++) {
-    const dayLeft = i * dayWidth;
-    const isWknd = current.getDay() === 0 || current.getDay() === 6;
-    const isToday = current.getTime() === today.getTime();
-
-    const dayDiv = document.createElement('div');
-    dayDiv.className = 'day-header' + (isWknd ? ' weekend' : '') + (isToday ? ' today-header' : '');
-    dayDiv.style.left = dayLeft + 'px';
-    dayDiv.style.width = dayWidth + 'px';
-    dayDiv.innerHTML = '<span class="day-num">' + current.getDate() + '</span><span class="day-name">' + dayNames[current.getDay()] + '</span>';
-    dayDiv.dataset.date = toIsoDate(current);
-    // A per-iteration snapshot, not `current` itself — `current` is one
-    // Date object mutated in place for the rest of this loop
-    // (current.setDate(...) below), so every day's closure would
-    // otherwise share that same object and see whatever date it holds
-    // by the time a user actually hovers/clicks, not the date this
-    // specific header was built for. Real bug — fixed on Karl's
-    // go-ahead.
-    const dayDate = new Date(current);
-    dayDiv.addEventListener('click', (e) => showDatePopover(e, dayDate));
-    dayDiv.addEventListener('mouseenter', (e) => showDatePopover(e, dayDate));
-    dayDiv.addEventListener('mouseleave', hideDatePopover);
-    header.appendChild(dayDiv);
-
+  cells.days.forEach(function (d) {
     const line = document.createElement('div');
-    line.className = 'grid-line' + (isWknd ? ' weekend-line' : '');
-    line.style.left = dayLeft + 'px';
+    line.className = 'grid-line' + (d.isWeekend ? ' weekend-line' : '');
+    line.style.left = d.left + 'px';
     grid.appendChild(line);
 
-    if (isToday) {
+    if (d.isToday) {
       const todayBg = document.createElement('div');
       todayBg.className = 'grid-line today-line-bg';
-      todayBg.style.left = dayLeft + 'px';
+      todayBg.style.left = d.left + 'px';
       // No width set here — .today-line-bg's own CSS spans it from `left`
       // to the grid's real right edge via right:0 (see that rule's
       // comment).
       grid.appendChild(todayBg);
     }
+  });
 
-    if (current.getDay() === 6 || i === totalDays - 1) {
-      const wDays = getDaysDiff(weekStart, current) + 1;
-      const wLeft = getDaysDiff(startDate, weekStart) * dayWidth;
-      const wDiv = document.createElement('div');
-      wDiv.className = 'week-header';
-      wDiv.style.left = wLeft + 'px';
-      wDiv.style.width = (wDays * dayWidth) + 'px';
-      wDiv.textContent = 'Week of ' + weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      wDiv.dataset.weekStart = toIsoDate(weekStart);
-      wDiv.addEventListener('click', () => {
-        document.getElementById('timelineBody')!.scrollTo({ left: wLeft - 20, behavior: 'smooth' });
-      });
-      header.appendChild(wDiv);
-      weekStart = new Date(current);
-      weekStart.setDate(weekStart.getDate() + 1);
-    }
-
-    current.setDate(current.getDate() + 1);
-  }
-
-  return today;
+  return cells.today;
 }
 
 interface BuildRowModelResult {
