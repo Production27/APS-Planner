@@ -70,6 +70,7 @@ import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBefo
 import { buildHomeStageSummary, buildHomeStalledRows, computeColumnStalledFloors } from './home';
 import { displayNameForUsername, getLeadRoster, ensureUserRosterLoaded } from '../app/user-roster';
 import { renderBoardCardsInto, type BoardCardProps, type CardMetaLine, type CardDueBadge, type CardStalledBadge, type CardChecklistBadge } from './board-card';
+import { renderBoardColumnsChromeInto, type BoardColumnChromeProps, type SelectOption, type ColorSwatch, type AddColumnFormProps } from './board-column-chrome';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, saveJobs(), hasMinTier(), etc.) are
@@ -92,6 +93,7 @@ declare global {
   function collectJobCustomFieldValues(): Record<string, unknown>;
   function deleteCardFromShared(projectId: string | null, cardId: string): void;
   function isFinishedColumn(col: BoardColumn): boolean;
+  function openManageColumnChecklist(colId: string, event?: Event): void;
 }
 
 // A stronger blend than utils/color.ts's own SOFTEN_AMOUNT (used for
@@ -1070,88 +1072,88 @@ function computeBoardChromeSignature(): string {
 // only called when computeBoardChromeSignature() says something the
 // chrome actually reads has changed, or on the very first render.
 function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
-  wrapper.innerHTML = BOARD_COLUMNS.map((col) => {
-    return '<div class="board-column" data-column="' + col.id + '">' +
-      '<div class="board-column-header" data-col-header="' + col.id + '" draggable="' + (hasMinTier('projectAdmin') ? 'true' : 'false') + '">' +
-        '<div class="board-column-header-title"><span>' + escapeHtml(col.label) + '</span>' +
-          (col.scheduleDisconnected ? '<span title="Disconnected from schedule — cards here no longer auto-move" style="display:inline-flex;flex-shrink:0;"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg></span>' : '') +
-          '</div>' +
-        '<div class="board-col-settings-wrap" data-min-tier="projectAdmin">' +
-          '<button class="board-col-settings-btn" draggable="false" onclick="toggleColSettings(\'' + col.id + '\', event)" title="Settings">⋮</button>' +
-          '<div class="board-col-settings-dropdown" id="col-settings-' + col.id + '">' +
-            '<div class="board-col-color-toggle" onclick="toggleColColorPanel(\'' + col.id + '\', event)">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Color</span>' +
-              '<span style="display:flex;align-items:center;gap:6px;">' +
-                '<span class="col-color-swatch" id="col-swatch-' + col.id + '" style="background:' + (col.color || '#eceef4') + ';"></span>' +
-                '<span class="col-color-arrow" id="col-arrow-' + col.id + '">▾</span>' +
-              '</span>' +
-            '</div>' +
-            '<div class="board-col-color-panel" id="col-panel-' + col.id + '">' +
-              '<div class="board-col-color-grid" id="col-colors-' + col.id + '" role="radiogroup" aria-label="Column color"></div>' +
-            '</div>' +
-            '<div class="board-col-gantt-toggle" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="toggleColumnScheduleVisibility(\'' + col.id + '\', event)">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg> Show in Schedule</span>' +
-              '<span class="board-col-gantt-switch' + (col.hideFromSchedule ? '' : ' on') + '"><span class="knob"></span></span>' +
-            '</div>' +
-            '<div class="board-col-gantt-toggle" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="toggleColumnScheduleSync(\'' + col.id + '\', event)" title="When off, cards sitting in this board stay put and stop auto-moving with the schedule, until dragged into a connected board.">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg> Connect to Schedule</span>' +
-              '<span class="board-col-gantt-switch' + (col.scheduleDisconnected ? '' : ' on') + '"><span class="knob"></span></span>' +
-            '</div>' +
-            '<div class="board-col-gantt-toggle" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="toggleColumnFinishedTrigger(\'' + col.id + '\', event)" title="Jobs whose card sits in this board count as finished — they stop showing as overdue/due-soon or counting toward Active Jobs on Home.">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Finished Trigger</span>' +
-              '<span class="board-col-gantt-switch' + (isFinishedColumn(col) ? ' on' : '') + '"><span class="knob"></span></span>' +
-            '</div>' +
-            '<div class="board-col-duration-row" title="Groups this board under a named item in the strip above Board, independent of this board\'s own name — see ⚙ Settings → Workflow Items to add more.">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="9" width="6" height="6" rx="1.5" fill="#3949ab"/><rect x="9.5" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.75"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.5"/></svg> Workflow Item</span>' +
-              '<select class="board-col-duration-input" style="width:auto;flex:1;" onclick="event.stopPropagation()" onchange="setColumnWorkflowItem(\'' + col.id + '\', this.value, event)">' +
-                '<option value="">None</option>' +
-                WORKFLOW_ITEMS.map((item) => {
-                  return '<option value="' + item.id + '"' + (item.id === col.workflowItemId ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
-                }).join('') +
-              '</select>' +
-            '</div>' +
-            '<div class="board-col-gantt-toggle" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="toggleColumnAutoAssignChecklist(\'' + col.id + '\', event)" title="The moment a card lands here, this board\'s Default Checklist is created on it (not just left as a template) and assigned to the picked person below, so it shows up as a real action item in their Checklist right away.">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#f0ad4e"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="6" r="4" fill="#3949ab" stroke="#fff" stroke-width="1"/></svg> Send Checklist Action Item</span>' +
-              '<span class="board-col-gantt-switch' + (col.autoAssignChecklist ? ' on' : '') + '"><span class="knob"></span></span>' +
-            '</div>' +
-            (col.autoAssignChecklist ?
-              '<div class="board-col-duration-row" title="Who the checklist items get assigned to on arrival. Left on Auto, it uses the card\'s own Foreman, then Project Manager, whichever is set.">' +
-                '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" fill="#b0bec5"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke="#b0bec5" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg> Assign To</span>' +
-                '<select class="board-col-duration-input" style="width:auto;flex:1;" onclick="event.stopPropagation()" onchange="setColumnChecklistAssignee(\'' + col.id + '\', this.value, event)">' +
-                  '<option value="">Auto (card\'s Foreman/PM)</option>' +
-                  (cachedUserRoster || []).map((u) => {
-                    return '<option value="' + escapeHtml(u.username) + '"' + (u.username === col.checklistAssigneeOverride ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
-                  }).join('') +
-                '</select>' +
-              '</div>' : '') +
-            '<div class="board-col-duration-row" title="How many days this board\'s task defaults to when only a start date is set in Job Manager">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#b0bec5"/><path d="M12 7v5l3.5 2" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Duration</span>' +
-              '<input type="number" min="1" class="board-col-duration-input" value="' + (col.defaultDuration || DEFAULT_TASK_DURATION_DAYS) + '" onclick="event.stopPropagation()" onchange="setColumnDefaultDuration(\'' + col.id + '\', this.value, event)">' +
-            '</div>' +
-            '<div class="board-col-duration-row" title="How many days a card can sit in this board before it shows up as Stalled on Home and gets a badge on the card.">' +
-              '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="13" r="8" fill="#b0bec5"/><path d="M12 9v4l3 2" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Stalled After (days)</span>' +
-              '<input type="number" min="1" class="board-col-duration-input" value="' + (col.stalledAfterDays || DEFAULT_STALLED_AFTER_DAYS) + '" onclick="event.stopPropagation()" onchange="setColumnStalledThreshold(\'' + col.id + '\', this.value, event)">' +
-            '</div>' +
-            '<div class="board-col-settings-item" onclick="openManageColumnChecklist(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Default Checklist</div>' +
-            '<div class="board-col-settings-item" onclick="renameBoardColumn(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Rename</div>' +
-            '<div class="board-col-settings-divider"></div>' +
-            '<div class="board-col-settings-item danger" onclick="deleteBoardColumn(\'' + col.id + '\', event)"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="board-column-body" id="col-body-' + col.id + '"></div>' +
-      '</div>';
-  }).join('') +
-  '<div class="board-add-column" id="addColumnContainer" data-min-tier="projectAdmin">' +
-    '<button class="board-add-column-btn" id="addColumnBtn" onclick="showAddColumnForm()">+ Add Board</button>' +
-    '<div class="board-add-column-form" id="addColumnForm">' +
-      '<input type="text" id="newColumnName" placeholder="Enter board title..." maxlength="30" onkeydown="handleAddColumnKey(event)">' +
-      '<div class="form-actions" style="margin-top:0;padding-top:0;border-top:none;">' +
-        '<button class="btn btn-primary" onclick="submitAddColumn()" style="padding:6px 14px;font-size:12px;">Add Board</button>' +
-        '<button class="btn btn-secondary" onclick="hideAddColumnForm()" style="padding:6px 14px;font-size:12px;">Cancel</button>' +
-      '</div>' +
-    '</div>' +
-  '</div>';
+  // Any real chrome rebuild closes every open settings dropdown/color
+  // panel, matching what the old innerHTML-wipe always did (nothing here
+  // tracks "which one is open" as real data — see board-column-chrome.tsx's
+  // own header comment on why that's fine to leave alone the rest of the
+  // time: Preact only touches a prop whose declared value actually
+  // changed between renders, so an unrelated column's own rebuild — or
+  // this column's own rebuild from a change that doesn't explicitly close
+  // it first, like changeColumnColor() below — would otherwise leave an
+  // open dropdown's externally-added .show/.open class untouched).
+  document.querySelectorAll('.board-col-settings-dropdown').forEach((d) => d.classList.remove('show'));
+  document.querySelectorAll('.board-col-color-panel').forEach((p) => p.classList.remove('open'));
+  document.querySelectorAll('.board-col-color-toggle').forEach((t) => t.classList.remove('open'));
+
+  const columnProps: BoardColumnChromeProps[] = BOARD_COLUMNS.map((col) => {
+    const dark = col.color ? isDarkColor(col.color) : false;
+    const colorSwatches: ColorSwatch[] = [
+      { color: null, selected: !col.color, onClick: (e: MouseEvent) => changeColumnColor(col.id, '', e) },
+      ...BOARD_COLOR_PRESETS.map((c) => ({ color: c, selected: col.color === c, onClick: (e: MouseEvent) => changeColumnColor(col.id, c, e) })),
+    ];
+    const workflowItemOptions: SelectOption[] = WORKFLOW_ITEMS.map((item) => ({ value: item.id, label: item.label, selected: item.id === col.workflowItemId }));
+    const assigneeOptions: SelectOption[] = (cachedUserRoster || []).map((u) => ({ value: u.username, label: u.displayName, selected: u.username === col.checklistAssigneeOverride }));
+    return {
+      id: col.id,
+      label: col.label,
+      scheduleDisconnectedIcon: !!col.scheduleDisconnected,
+      canManage: hasMinTier('projectAdmin'),
+      // col.color is stored pre-softened now — the board column picker
+      // (BOARD_COLOR_PRESETS) offers its own pastel palette directly,
+      // rather than this rendering a runtime-transformed version of
+      // whatever the job/task color picker offers. Rendered as-is; no
+      // further transform here.
+      headerStyle: col.color ? { background: col.color, color: dark ? '#fff' : darkenColor(col.color, 0.6) } : {},
+      // Trello-style: the title reads as a darker shade of the board's
+      // own color rather than generic black text, when the background is
+      // light enough for that to stay readable — see headerStyle above.
+      // The ⋮ button gets its own lighter tint on a dark background so it
+      // doesn't disappear.
+      settingsBtnColor: col.color ? (dark ? 'rgba(255,255,255,0.7)' : undefined) : undefined,
+      hideFromSchedule: !!col.hideFromSchedule,
+      scheduleDisconnected: !!col.scheduleDisconnected,
+      isFinishedTrigger: isFinishedColumn(col),
+      workflowItemOptions,
+      autoAssignChecklist: !!col.autoAssignChecklist,
+      assigneeOptions,
+      defaultDuration: col.defaultDuration || DEFAULT_TASK_DURATION_DAYS,
+      stalledAfterDays: col.stalledAfterDays || DEFAULT_STALLED_AFTER_DAYS,
+      colorSwatches,
+      onToggleSettings: (e) => toggleColSettings(col.id, e),
+      onToggleColorPanel: (e) => toggleColColorPanel(col.id, e),
+      onToggleScheduleVisibility: (e) => toggleColumnScheduleVisibility(col.id, e),
+      onToggleScheduleSync: (e) => toggleColumnScheduleSync(col.id, e),
+      onToggleFinishedTrigger: (e) => toggleColumnFinishedTrigger(col.id, e),
+      onSetWorkflowItem: (e) => setColumnWorkflowItem(col.id, (e.currentTarget as HTMLSelectElement).value, e),
+      onToggleAutoAssignChecklist: (e) => toggleColumnAutoAssignChecklist(col.id, e),
+      onSetChecklistAssignee: (e) => setColumnChecklistAssignee(col.id, (e.currentTarget as HTMLSelectElement).value, e),
+      onSetDefaultDuration: (e) => setColumnDefaultDuration(col.id, (e.currentTarget as HTMLInputElement).value, e),
+      onSetStalledThreshold: (e) => setColumnStalledThreshold(col.id, (e.currentTarget as HTMLInputElement).value, e),
+      onManageChecklist: (e) => openManageColumnChecklist(col.id, e),
+      onRename: (e) => renameBoardColumn(col.id, e),
+      onDelete: (e) => deleteBoardColumn(col.id, e),
+      // Stable named function references, matched by class/data-*
+      // traversal inside each one (see their own definitions above) —
+      // never DOM node identity — so passing them straight through as
+      // JSX handlers works exactly like the old addEventListener wiring
+      // did.
+      onHeaderDragStart: handleColumnDragStart,
+      onHeaderDragEnd: handleColumnDragEnd,
+      onColumnDragOver: handleColumnReorderOver,
+      onColumnDragLeave: handleColumnReorderLeave,
+      onColumnDrop: handleColumnReorderDrop,
+      onSwatchKeyDown: handleColorSwatchKeydown,
+    };
+  });
+
+  const addColumnProps: AddColumnFormProps = {
+    onShow: showAddColumnForm,
+    onKeyDown: handleAddColumnKey,
+    onSubmit: submitAddColumn,
+    onCancel: hideAddColumnForm,
+  };
+
+  renderBoardColumnsChromeInto(wrapper, columnProps, addColumnProps);
 
   cachedBoardColumnDoms = {};
   BOARD_COLUMNS.forEach((col) => {
@@ -1163,61 +1165,13 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
     // across future renders (see this function's own header comment) —
     // handleColumnDragOver/Leave/handleColumnDrop are stable named
     // function references, so re-running this on the odd render that
-    // DOES rebuild chrome again never double-attaches.
+    // DOES rebuild chrome again never double-attaches. This is the CARD
+    // drop target (a card landing in this column) — a separate concern
+    // from onColumnDragOver/Leave/Drop above, which is the COLUMN itself
+    // being reordered.
     bodyEl.addEventListener('dragover', handleColumnDragOver);
     bodyEl.addEventListener('dragleave', handleColumnDragLeave);
     bodyEl.addEventListener('drop', handleColumnDrop);
-  });
-
-  // Apply column colors and populate color grids
-  BOARD_COLUMNS.forEach((col) => {
-    const colEl = wrapper.querySelector('.board-column[data-column="' + col.id + '"]');
-    if (colEl && col.color) {
-      // col.color is stored pre-softened now — the board column picker
-      // (BOARD_COLOR_PRESETS, below) offers its own pastel palette
-      // directly, rather than this rendering a runtime-transformed
-      // version of whatever the job/task color picker offers. Render it
-      // as-is; no further transform here.
-      (colEl as HTMLElement).style.background = col.color;
-      const dark = isDarkColor(col.color);
-      const header = colEl.querySelector('.board-column-header');
-      if (header) {
-        // Trello-style: the title reads as a darker shade of the board's
-        // own color (inherited by the title span below it — see
-        // .board-column-header-title in the stylesheet, which sets no
-        // color of its own) rather than generic black text, when the
-        // background is light enough for that to stay readable. A
-        // genuinely dark board color keeps the existing white-text
-        // fallback — darkening an already-dark color further would be
-        // illegible. Doesn't touch the badge or ⋮ button, which both
-        // already carry their own explicit colors regardless.
-        (header as HTMLElement).style.color = dark ? '#fff' : darkenColor(col.color, 0.6);
-        const badge = header.querySelector('.badge');
-        if (badge) (badge as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.25)' : '';
-        const settingsBtn = header.querySelector('.board-col-settings-btn');
-        if (settingsBtn) (settingsBtn as HTMLElement).style.color = dark ? 'rgba(255,255,255,0.7)' : '';
-      }
-    }
-    const colorGrid = document.getElementById('col-colors-' + col.id);
-    if (colorGrid) {
-      colorGrid.innerHTML =
-        '<div class="board-col-color-option' + (!col.color ? ' selected' : '') + '" style="background:linear-gradient(135deg,#f5f5f5 0%,#e0e0e0 100%);position:relative;" role="radio" aria-checked="' + (!col.color) + '"' + swatchKeyboardAttrs(!col.color) + ' onclick="changeColumnColor(\'' + col.id + '\', \'' + '\', event)" title="Default (no color)">' +
-        '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#888;"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span></div>' +
-        BOARD_COLOR_PRESETS.map((c) =>
-        '<div class="board-col-color-option' + (col.color === c ? ' selected' : '') + '" style="background:' + c + ';" role="radio" aria-checked="' + (col.color === c) + '"' + swatchKeyboardAttrs(col.color === c) + ' onclick="changeColumnColor(\'' + col.id + '\', \'' + c + '\', event)"></div>'
-      ).join('');
-    }
-  });
-
-  // Column reorder drag handlers
-  wrapper.querySelectorAll('.board-column-header').forEach((headerEl) => {
-    headerEl.addEventListener('dragstart', handleColumnDragStart as EventListener);
-    headerEl.addEventListener('dragend', handleColumnDragEnd as EventListener);
-  });
-  wrapper.querySelectorAll('.board-column').forEach((colEl) => {
-    colEl.addEventListener('dragover', handleColumnReorderOver as EventListener);
-    colEl.addEventListener('dragleave', handleColumnReorderLeave as EventListener);
-    colEl.addEventListener('drop', handleColumnReorderDrop as EventListener);
   });
 }
 
