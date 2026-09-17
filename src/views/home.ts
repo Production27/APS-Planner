@@ -60,10 +60,11 @@ import {
   isCalendarEventTaskId, parseCalendarEventTaskId, openEditCalendarEvent, calendarOpenJob,
 } from './calendar';
 import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor, buildWorkflowStageData } from './board';
-import { renderMyChecklist, buildMyChecklistRows } from './checklist';
+import { renderMyChecklist, buildMyChecklistRows, toggleMyChecklistItemDone, openMyChecklistItem } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
 import { formatCommentWhen, postJobComment, postJobReply, deleteJobComment, deleteJobReply } from './job-comments';
 import { renderHomeJobChatListInto, type JobChatItemProps, type JobChatReply } from './home-jobchat';
+import { renderHomeChecklistWidgetInto, type HomeChecklistRowProps } from './home-checklist';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
@@ -743,50 +744,38 @@ function renderHomeGreeting(): string {
     '<div class="home-greeting-date">' + dateStr + '</div>';
 }
 
-function renderHomeChecklistWidget(rows: any[]): string {
-  if (!rows.length) return '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div>Nothing assigned to you right now.</div></div>';
-  const shown = rows.slice(0, 6);
-  const html = shown.map(function (row) {
-    const item = row.item;
-    return '<div class="home-row">' +
-      '<input type="checkbox" onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
-      '<span class="home-row-text" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
-      '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';">' + escapeHtml(row.job.name) + '</span>' +
-    '</div>';
-  }).join('');
-  const more = rows.length > shown.length ? '<div class="home-more-link" onclick="switchTabMorphed(\'checklist\')">+' + (rows.length - shown.length) + ' more — go to Checklist</div>' : '';
-  return html + more;
-}
-
-// Expanded-in-place version of the widget above (see
-// toggleHomeWidgetExpand()) — every row instead of 6, grouped by job like
-// the real Checklist tab's own renderMyChecklistList(groupByJob=true).
-// Deliberately NOT a call to renderMyChecklistList() itself: that
-// function's per-item assignee dropdown (myChecklistMsDropdownHtml())
-// stamps DOM ids keyed only by card+item id, and the real Checklist tab's
-// panel can still be sitting in the DOM (just display:none — .tab-panel
-// content isn't torn down on switch) with that same row already rendered
-// there from an earlier visit. Reusing it here would risk two elements
-// sharing one id. So: real data, real grouping, real primary actions
-// (check off, open), just without that one sub-widget.
-function renderHomeChecklistWidgetExpanded(rows: any[]): string {
-  if (!rows.length) return renderHomeChecklistWidget(rows);
+// Builds props for home-checklist.tsx's widget component, shared by both
+// the compact (top 6, flat) and expanded-in-place (every row, grouped by
+// job — see toggleHomeWidgetExpand()) modes; which mode renders is the
+// component's own call, driven by the `expanded` flag renderHomeDashboard()
+// passes alongside these rows. Deliberately NOT built from a call into the
+// real Checklist tab's own renderMyChecklistList(): that function's per-item
+// assignee dropdown (myChecklistMsDropdownHtml()) stamps DOM ids keyed only
+// by card+item id, and the real Checklist tab's panel can still be sitting
+// in the DOM (just display:none — .tab-panel content isn't torn down on
+// switch) with that same row already rendered there from an earlier visit.
+// Reusing it here would risk two elements sharing one id. So: real data,
+// real grouping, real primary actions (check off, open), just without that
+// one sub-widget.
+function buildHomeChecklistRowProps(rows: any[], expanded: boolean): HomeChecklistRowProps[] {
+  const shown = expanded ? rows : rows.slice(0, 6);
   let lastJobId: string | null = null;
-  return rows.map(function (row) {
-    let groupHeader = '';
-    if (row.job.id !== lastJobId) {
-      lastJobId = row.job.id;
-      groupHeader = '<div class="my-checklist-group-header"><span class="home-row-dot" style="background:' + (row.job.color || '#3949ab') + ';"></span>' + escapeHtml(row.job.name) + '</div>';
-    }
+  return shown.map(function (row) {
     const item = row.item;
-    return groupHeader + '<div class="checklist-item my-checklist-item">' +
-      '<input type="checkbox" onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
-      (item.required ? '<span class="ci-required is-required" title="Required">★</span>' : '') +
-      '<span class="ci-text" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
-      '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(row.job.name) + '</span>' +
-      '<span class="my-checklist-stage-tag">' + escapeHtml(row.columnLabel) + '</span>' +
-    '</div>';
-  }).join('');
+    const isGroupStart = expanded && row.job.id !== lastJobId;
+    if (isGroupStart) lastJobId = row.job.id;
+    return {
+      rowKey: row.card.id + '-' + item.id,
+      text: item.text,
+      required: !!item.required,
+      jobName: row.job.name,
+      jobColor: row.job.color || '#3949ab',
+      columnLabel: row.columnLabel,
+      isGroupStart: isGroupStart,
+      onToggleDone: function () { toggleMyChecklistItemDone(activeProjectId as string, row.card.id, row.columnId, item.id); },
+      onOpenItem: function () { openMyChecklistItem(activeProjectId as string, row.card.id); },
+    };
+  });
 }
 
 // ===== HOME WIDGET ALERTS =====
@@ -1463,7 +1452,15 @@ function renderHomeDashboard(): void {
   const greetingEl = document.getElementById('homeGreeting');
   if (greetingEl) greetingEl.innerHTML = renderHomeGreeting();
   const checklistBody = document.getElementById('homeChecklistBody');
-  if (checklistBody) checklistBody.innerHTML = homeExpandedWidgetId === 'checklist' ? renderHomeChecklistWidgetExpanded(checklistRows) : renderHomeChecklistWidget(checklistRows);
+  if (checklistBody) {
+    const checklistExpanded = homeExpandedWidgetId === 'checklist';
+    renderHomeChecklistWidgetInto(checklistBody, {
+      rows: buildHomeChecklistRowProps(checklistRows, checklistExpanded),
+      expanded: checklistExpanded,
+      moreCount: checklistExpanded ? 0 : Math.max(0, checklistRows.length - 6),
+      onShowMore: function () { switchTabMorphed('checklist'); },
+    });
+  }
   const overdueBody = document.getElementById('homeOverdueBody');
   if (overdueBody) {
     if (homeExpandedWidgetId === 'calendar') renderHomeCalendarExpanded(overdueRows, overdueBody);
@@ -1517,8 +1514,6 @@ export {
   buildHomeUpcomingScheduleRows,
   buildHomeGanttUnclosedRows,
   renderHomeGreeting,
-  renderHomeChecklistWidget,
-  renderHomeChecklistWidgetExpanded,
   getDismissedHomeWidgetAlerts,
   isHomeWidgetAlertDismissed,
   dismissHomeWidgetAlert,

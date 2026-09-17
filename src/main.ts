@@ -167,7 +167,7 @@ import {
   getActiveTab, switchTabMorphed, homeWidgetGoTo, clearHomeTabMorphNames, switchTab, toggleJobRail, setMobileView,
   applyHomeReflowTracks, toggleHomeWidgetExpand, buildHomeOverdueRows, buildHomeStalledRows, buildHomeStageSummary,
   buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows, renderHomeGreeting,
-  renderHomeChecklistWidget, renderHomeChecklistWidgetExpanded, getDismissedHomeWidgetAlerts,
+  getDismissedHomeWidgetAlerts,
   isHomeWidgetAlertDismissed, dismissHomeWidgetAlert, renderHomeWidgetAlert, renderHomeOverdueWidget,
   renderHomeCalendarExpanded, renderHomeCalendarMiniMonth, renderHomeWorkflowMiniBoard,
   renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget, buildHomeJobChatFeed,
@@ -751,8 +751,6 @@ declare global {
     buildHomeUpcomingScheduleRows: typeof buildHomeUpcomingScheduleRows;
     buildHomeGanttUnclosedRows: typeof buildHomeGanttUnclosedRows;
     renderHomeGreeting: typeof renderHomeGreeting;
-    renderHomeChecklistWidget: typeof renderHomeChecklistWidget;
-    renderHomeChecklistWidgetExpanded: typeof renderHomeChecklistWidgetExpanded;
     getDismissedHomeWidgetAlerts: typeof getDismissedHomeWidgetAlerts;
     isHomeWidgetAlertDismissed: typeof isHomeWidgetAlertDismissed;
     dismissHomeWidgetAlert: typeof dismissHomeWidgetAlert;
@@ -1332,8 +1330,6 @@ window.buildHomeTodayScheduleRows = buildHomeTodayScheduleRows;
 window.buildHomeUpcomingScheduleRows = buildHomeUpcomingScheduleRows;
 window.buildHomeGanttUnclosedRows = buildHomeGanttUnclosedRows;
 window.renderHomeGreeting = renderHomeGreeting;
-window.renderHomeChecklistWidget = renderHomeChecklistWidget;
-window.renderHomeChecklistWidgetExpanded = renderHomeChecklistWidgetExpanded;
 window.getDismissedHomeWidgetAlerts = getDismissedHomeWidgetAlerts;
 window.isHomeWidgetAlertDismissed = isHomeWidgetAlertDismissed;
 window.dismissHomeWidgetAlert = dismissHomeWidgetAlert;
