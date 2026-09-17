@@ -8,7 +8,6 @@
 // friends) as ambient globals rather than importing it.
 import type { Job } from '../core/types';
 import { findJob, getJobPhases, getPhaseCard, getJobCards, getPrimaryPhaseCard } from '../core/models';
-import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { openModal, closeModal, showToast } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -19,6 +18,7 @@ import { renderCalendar } from './calendar';
 import { renderBoard } from './board';
 import { getVisibleJobs, isJobFinished, ensureJobHasCards, syncCardColumns } from '../core/jobs';
 import { renderJobListInto, type JobCardProps, type JobBoardDotProps } from './job-list-card';
+import { renderArchivedJobsListInto } from './job-list-archived';
 
 // editJob()/cancelEdit() are already declared ambient (identically) by
 // gantt.ts/home.ts — not repeated here (TypeScript's ambient declaration
@@ -195,23 +195,15 @@ export function renderArchivedJobsList(): void {
   const listEl = document.getElementById('archivedJobsList');
   if (!listEl) return;
   const archivedJobs = getVisibleJobs().filter(function (j) { return j.archived; });
-  if (!archivedJobs.length) {
-    listEl.innerHTML = '<div style="padding: var(--s-3-5); color:var(--text-secondary);">No archived jobs.</div>';
-    return;
-  }
-  listEl.innerHTML = '';
-  archivedJobs.forEach(function (job) {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding: var(--s-2-5) var(--s-3); border-bottom:1px solid var(--border); gap: var(--s-2);';
-    row.innerHTML =
-      '<div style="min-width:0; font-size: var(--t-base); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(job.name) + '</div>' +
-      '<div style="display:flex; gap: var(--s-1-5); flex-shrink:0;">' +
-        '<button class="btn btn-secondary" style="padding: var(--s-1) var(--s-2-5); font-size: var(--t-sm);" data-action="restore" data-min-tier="editor"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M6 8H3V5" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8a9 9 0 1 1 2 8" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/></svg> Restore</button>' +
-        '<button class="btn btn-danger" style="padding: var(--s-1) var(--s-2-5); font-size: var(--t-sm);" data-action="delete" data-min-tier="projectAdmin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete</button>' +
-      '</div>';
-    (row.querySelector('[data-action="restore"]') as HTMLButtonElement).onclick = function () { restoreJob(job.id); };
-    (row.querySelector('[data-action="delete"]') as HTMLButtonElement).onclick = function () { promptDeleteJob(job.id); };
-    listEl.appendChild(row);
+  renderArchivedJobsListInto(listEl, {
+    jobs: archivedJobs.map(function (job) {
+      return {
+        jobKey: job.id,
+        name: job.name,
+        onRestore: function () { restoreJob(job.id); },
+        onDelete: function () { promptDeleteJob(job.id); },
+      };
+    }),
   });
   applyPermissionGating(); // this list is rebuilt outside renderAll()'s own sweep
 }
