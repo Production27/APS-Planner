@@ -1,24 +1,38 @@
 import { render } from 'preact';
 
-// Home dashboard's Job Chat feed (#homeJobChatList) — a static, empty
-// element from index.html exclusively written to by renderHomeJobChat()
-// (see home.ts) and nothing else, same "safe to hand over directly, no
-// wrapper needed" case as Calendar's hourly grid (see
-// calendar-hourgrid.tsx's own comment).
+// One comment thread (a job comment + its replies) — shared by two
+// consumers with the identical visual/interaction shape, just one field
+// apart: Home dashboard's cross-job Job Chat feed (#homeJobChatList, see
+// renderHomeJobChat() in home.ts) and the Job Manager drawer's own
+// per-job comments panel (#jobCommentsList, see renderJobComments() in
+// job-comments.ts). Both are static, empty elements from index.html
+// exclusively written to by their own render function and nothing else,
+// same "safe to hand over directly, no wrapper needed" case as Calendar's
+// hourly grid (see calendar-hourgrid.tsx's own comment).
 //
-// A reply row's open/closed state (toggleHomeReplyBox(), still in
-// home.ts, unchanged) is a classList/style.display toggle entirely
-// outside this component's own props, same as Board's settings dropdown
-// (see board-column-chrome.tsx's own comment) — Preact only ever rewrites
-// a prop whose declared value actually changed, and this component never
-// declares style.display for the reply row, so an open reply box quietly
-// survives a re-render triggered by an unrelated comment arriving
-// elsewhere. Unlike Board's dropdown, there's no evidence the original
-// code ever wanted a rebuild to force every reply box closed (no
-// "close all" call anywhere outside toggleHomeReplyBox() itself, which
-// already closes every OTHER one whenever you open a new one) — so this
-// is a plain behavioral improvement, not something needing a matching
-// "close on rebuild" fix.
+// The one difference: Home's feed spans every visible job, so each item
+// needs a "which job" bubble (jobName/jobColor/onOpenJob); the drawer is
+// already scoped to one job, so it omits all three — the bubble just
+// isn't rendered when jobName is undefined, rather than this being two
+// near-duplicate components. Genuinely the same UI two different contexts
+// happen to need, unlike Calendar/Board's own duplicate mini-widgets
+// (home-calendar.tsx/home-board-expanded.tsx), which stayed deliberately
+// separate because THEIR duplication was specialized rendering logic, not
+// just a reused visual shape.
+//
+// A reply row's open/closed state (toggleHomeReplyBox()/toggleReplyBox(),
+// still in home.ts/job-comments.ts, unchanged) is a classList/style.display
+// toggle entirely outside this component's own props, same as Board's
+// settings dropdown (see board-column-chrome.tsx's own comment) — Preact
+// only ever rewrites a prop whose declared value actually changed, and
+// this component never declares style.display for the reply row, so an
+// open reply box quietly survives a re-render triggered by an unrelated
+// comment arriving elsewhere. Unlike Board's dropdown, there's no
+// evidence the original code ever wanted a rebuild to force every reply
+// box closed (no "close all" call anywhere outside each context's own
+// toggle function, which already closes every OTHER one whenever you
+// open a new one) — so this is a plain behavioral improvement, not
+// something needing a matching "close on rebuild" fix.
 
 export interface JobChatReply {
   replyKey: string;
@@ -30,8 +44,11 @@ export interface JobChatReply {
 
 export interface JobChatItemProps {
   itemKey: string;
-  jobName: string;
-  jobColor: string;
+  // Omitted (all three) by the Job Manager drawer's own panel, which is
+  // already scoped to one job — see this file's own header comment.
+  jobName?: string;
+  jobColor?: string;
+  onOpenJob?: (e: MouseEvent | KeyboardEvent) => void;
   important: boolean;
   author: string;
   whenLabel: string;
@@ -39,7 +56,6 @@ export interface JobChatItemProps {
   replies: JobChatReply[];
   replyRowId: string;
   replyTextareaId: string;
-  onOpenJob: (e: MouseEvent | KeyboardEvent) => void;
   onDeleteComment: () => void;
   onToggleReply: (e: MouseEvent) => void;
   onReplyKeyDown: (e: KeyboardEvent) => void;
@@ -70,10 +86,12 @@ function JobChatItem(p: JobChatItemProps) {
     <div class="job-comment-item">
       <div class="job-comment-meta">
         <span style={{ display: 'flex', alignItems: 'center' }}>
-          <span class="job-chat-source" tabIndex={0} role="button" title={'Open ' + p.jobName} onClick={p.onOpenJob} onKeyDown={onEnterOrSpace(p.onOpenJob)}>
-            <span class="job-chat-source-dot" style={{ background: p.jobColor }} />
-            {p.jobName}
-          </span>
+          {p.jobName ? (
+            <span class="job-chat-source" tabIndex={0} role="button" title={'Open ' + p.jobName} onClick={p.onOpenJob} onKeyDown={onEnterOrSpace(p.onOpenJob!)}>
+              <span class="job-chat-source-dot" style={{ background: p.jobColor }} />
+              {p.jobName}
+            </span>
+          ) : null}
           {p.important ? <span class="job-comment-important-badge" title="Marked important">●</span> : null}
           <span class="job-comment-author" title={p.author}>{p.author}</span>
         </span>
@@ -102,6 +120,6 @@ function JobChatList({ items }: { items: JobChatItemProps[] }) {
   return <>{items.map((it) => <JobChatItem key={it.itemKey} {...it} />)}</>;
 }
 
-export function renderHomeJobChatListInto(container: HTMLElement, items: JobChatItemProps[]): void {
+export function renderJobCommentFeedInto(container: HTMLElement, items: JobChatItemProps[]): void {
   render(<JobChatList items={items} />, container);
 }

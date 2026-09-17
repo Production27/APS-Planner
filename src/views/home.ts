@@ -63,7 +63,7 @@ import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isD
 import { renderMyChecklist, buildMyChecklistRows, toggleMyChecklistItemDone, openMyChecklistItem } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
 import { formatCommentWhen, postJobComment, postJobReply, deleteJobComment, deleteJobReply } from './job-comments';
-import { renderHomeJobChatListInto, type JobChatItemProps, type JobChatReply } from './home-jobchat';
+import { renderJobCommentFeedInto, type JobChatItemProps, type JobChatReply } from './job-comment-item';
 import { renderHomeChecklistWidgetInto, type HomeChecklistRowProps } from './home-checklist';
 import { renderHomeOverdueWidgetInto, type HomeCalMiniMonthCellProps, type HomeCalExpandedCellProps, type HomeCalExpandedBarProps } from './home-calendar';
 import { type HomeAlertProps } from './home-widget-alert';
@@ -1427,10 +1427,12 @@ function updateHomeJobChatComposeState(): void {
   postBtn.disabled = !select.value;
 }
 
-// Same shape as renderJobCommentItem() (the drawer's own per-comment
-// markup) plus one addition — a .job-chat-source chip naming which job
-// this is, since a single job's own comment thread never needed to say
-// that before. Reply UI uses its own "home-" id prefix
+// Same shared shape the drawer's own comment panel uses
+// (job-comment-item.tsx's buildJobCommentItemProps() in job-comments.ts)
+// plus the jobName/jobColor/onOpenJob fields that component leaves
+// undefined there — this feed spans every visible job, so it's the one
+// that needs the .job-chat-source chip naming which job each item is.
+// Reply UI uses its own "home-" id prefix
 // (toggleHomeReplyBox()/addHomeJobReply(), not toggleReplyBox()/
 // addJobReply()) because the drawer's comment list and this feed can
 // both be present in the DOM at once (tab panels stay mounted, just
@@ -1473,7 +1475,7 @@ function renderHomeJobChat(): void {
   if (!listEl) return;
   renderHomeJobChatComposeOptions();
   const rows = buildHomeJobChatFeed();
-  renderHomeJobChatListInto(listEl, rows.map(function (row) { return buildHomeJobChatItemProps(row.job, row.comment); }));
+  renderJobCommentFeedInto(listEl, rows.map(function (row) { return buildHomeJobChatItemProps(row.job, row.comment); }));
   applyPermissionGating(); // rebuilt on every feed refresh, outside renderAll()'s own sweep
 }
 

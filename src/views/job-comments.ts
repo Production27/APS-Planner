@@ -6,11 +6,11 @@
 // imports formatCommentWhen/postJobComment/postJobReply from here.
 import type { Job } from '../core/types';
 import { findJob } from '../core/models';
-import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { getStoredDisplayName, DISPLAY_NAME_KEY } from '../auth/session';
 import { logActivity } from '../sync/outbound';
 import { renderHomeJobChat } from './home';
+import { renderJobCommentFeedInto, type JobChatItemProps, type JobChatReply } from './job-comment-item';
 
 export function formatCommentWhen(when: number | undefined): string {
   return when
@@ -44,49 +44,42 @@ export function renderJobComments(job: Job): void {
     (importantDotEl as HTMLElement).style.display = comments.some(function (c) { return c.important; }) ? 'block' : 'none';
   }
 
-  if (!comments.length) {
-    listEl.innerHTML = '<div class="job-comments-empty">No comments yet.</div>';
-    return;
-  }
-  listEl.innerHTML = comments.map(function (c) { return renderJobCommentItem(job, c); }).join('');
+  renderJobCommentFeedInto(listEl, comments.map(function (c) { return buildJobCommentItemProps(job, c); }));
   applyPermissionGating(); // rebuilt on every comment/reply edit, outside renderAll()'s own sweep
 }
 
-export function renderJobCommentItem(job: Job, c: any): string {
+// Same shared shape Home's own Job Chat feed uses (job-comment-item.tsx)
+// minus the jobName/jobColor/onOpenJob fields — this panel is already
+// scoped to one job, so there's no "which job" bubble to show. See that
+// file's own header comment for why this is a genuine reuse rather than
+// a second near-duplicate component.
+function buildJobCommentItemProps(job: Job, c: any): JobChatItemProps {
   // Oldest-first within a thread so a reply chain reads top-to-bottom.
   const replies = ((c.replies as any[]) || []).slice().sort(function (a, b) { return (a.when || 0) - (b.when || 0); });
-  const repliesHtml = replies.map(function (r) {
-    return '<div class="job-comment-reply-item">' +
-      '<div class="job-comment-meta">' +
-        '<span class="job-comment-author" title="' + escapeHtml(r.author || 'Someone') + '">' + escapeHtml(r.author || 'Someone') + '</span>' +
-        '<span style="display:flex;align-items:center;gap: var(--s-1);">' +
-          '<span class="job-comment-when">' + formatCommentWhen(r.when) + '</span>' +
-          '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobReply(\'' + job.id + '\', \'' + c.id + '\', \'' + r.id + '\')" title="Delete reply">×</button>' +
-        '</span>' +
-      '</div>' +
-      '<div class="job-comment-text">' + escapeHtml(r.text) + '</div>' +
-    '</div>';
-  }).join('');
+  const replyProps: JobChatReply[] = replies.map(function (r) {
+    return {
+      replyKey: r.id,
+      author: r.author || 'Someone',
+      whenLabel: formatCommentWhen(r.when),
+      text: r.text,
+      onDelete: function () { deleteJobReply(job.id, c.id, r.id); },
+    };
+  });
 
-  return '<div class="job-comment-item">' +
-    '<div class="job-comment-meta">' +
-      '<span>' +
-        (c.important ? '<span class="job-comment-important-badge" title="Marked important">●</span>' : '') +
-        '<span class="job-comment-author" title="' + escapeHtml(c.author || 'Someone') + '">' + escapeHtml(c.author || 'Someone') + '</span>' +
-      '</span>' +
-      '<span style="display:flex;align-items:center;gap: var(--s-1);">' +
-        '<span class="job-comment-when">' + formatCommentWhen(c.when) + '</span>' +
-        '<button class="job-comment-delete" data-min-tier="commenter" onclick="deleteJobComment(\'' + job.id + '\', \'' + c.id + '\')" title="Delete comment">×</button>' +
-      '</span>' +
-    '</div>' +
-    '<div class="job-comment-text">' + escapeHtml(c.text) + '</div>' +
-    (replies.length ? '<div class="job-comment-replies">' + repliesHtml + '</div>' : '') +
-    '<button class="job-comment-reply-btn" onclick="toggleReplyBox(\'' + c.id + '\', event)">Reply' + (replies.length ? ' (' + replies.length + ')' : '') + '</button>' +
-    '<div class="job-comment-reply-input-row" id="reply-row-' + c.id + '">' +
-      '<textarea id="reply-ta-' + c.id + '" data-min-tier="commenter" placeholder="Write a reply..." onkeydown="handleReplyKey(event, \'' + job.id + '\', \'' + c.id + '\')"></textarea>' +
-      '<button class="btn btn-primary" data-min-tier="commenter" style="align-self:flex-end;padding: var(--s-1) var(--s-2-5);font-size: var(--t-sm);" onclick="addJobReply(\'' + job.id + '\', \'' + c.id + '\')">Post Reply</button>' +
-    '</div>' +
-  '</div>';
+  return {
+    itemKey: c.id,
+    important: !!c.important,
+    author: c.author || 'Someone',
+    whenLabel: formatCommentWhen(c.when),
+    text: c.text,
+    replies: replyProps,
+    replyRowId: 'reply-row-' + c.id,
+    replyTextareaId: 'reply-ta-' + c.id,
+    onDeleteComment: function () { deleteJobComment(job.id, c.id); },
+    onToggleReply: function (e: MouseEvent) { toggleReplyBox(c.id, e); },
+    onReplyKeyDown: function (e: KeyboardEvent) { handleReplyKey(e, job.id, c.id); },
+    onPostReply: function () { addJobReply(job.id, c.id); },
+  };
 }
 
 export function toggleReplyBox(commentId: string, event?: Event): void {

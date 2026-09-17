@@ -141,7 +141,7 @@ import {
   setMyChecklistItemAssignee, setMyChecklistStageAssignee,
 } from './views/checklist';
 import {
-  formatCommentWhen, renderJobComments, renderJobCommentItem, toggleReplyBox, postJobReply, addJobReply,
+  formatCommentWhen, renderJobComments, toggleReplyBox, postJobReply, addJobReply,
   deleteJobReply, handleReplyKey, postJobComment, addJobComment, deleteJobComment, handleJobCommentKey,
   toggleJobCommentsPanel,
 } from './views/job-comments';
@@ -472,7 +472,6 @@ declare global {
     ARCHIVE_CUTOFF_DAYS: typeof ARCHIVE_CUTOFF_DAYS;
     formatCommentWhen: typeof formatCommentWhen;
     renderJobComments: typeof renderJobComments;
-    renderJobCommentItem: typeof renderJobCommentItem;
     toggleReplyBox: typeof toggleReplyBox;
     postJobReply: typeof postJobReply;
     addJobReply: typeof addJobReply;
@@ -1053,7 +1052,6 @@ window.DEFAULT_STALLED_AFTER_DAYS = DEFAULT_STALLED_AFTER_DAYS;
 window.ARCHIVE_CUTOFF_DAYS = ARCHIVE_CUTOFF_DAYS;
 window.formatCommentWhen = formatCommentWhen;
 window.renderJobComments = renderJobComments;
-window.renderJobCommentItem = renderJobCommentItem;
 window.toggleReplyBox = toggleReplyBox;
 window.postJobReply = postJobReply;
 window.addJobReply = addJobReply;

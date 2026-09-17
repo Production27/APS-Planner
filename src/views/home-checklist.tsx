@@ -4,7 +4,7 @@ import { render, Fragment } from 'preact';
 // empty element from index.html exclusively written to by
 // renderHomeDashboard() (see home.ts) and nothing else, same "safe to
 // hand over directly, no wrapper needed" case as Job Chat's own list
-// element (see home-jobchat.tsx's own comment).
+// element (see job-comment-item.tsx's own comment).
 //
 // Two modes share one component instead of two: the compact widget
 // (top 6 rows, flat) and the expanded-in-place version (every row,

@@ -46,7 +46,7 @@ test('Job Manager drawer: replying to a comment and then deleting the reply and 
 
   await page.click('#jobCommentsList .job-comment-reply-btn');
   await page.locator('#jobCommentsList textarea[id^="reply-ta-"]').fill('Sounds good, thanks.');
-  await page.click('#jobCommentsList button[onclick^="addJobReply"]');
+  await page.click('#jobCommentsList .job-comment-reply-input-row button');
   await expect(page.locator('#jobCommentsList')).toContainText('Sounds good, thanks.');
   await expect(page.locator('#jobCommentsList .job-comment-reply-btn')).toContainText('Reply (1)');
 
