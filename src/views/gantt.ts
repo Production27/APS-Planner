@@ -39,6 +39,7 @@ import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header'
 import { renderFocusBannerInto } from './gantt-focus-banner';
 import { renderTaskRowsInto, type TaskRowProps, type TaskRowPillProps } from './gantt-task-row';
 import { renderTimelineBarsInto, type TaskBarEntryProps, type BarTagData, type JobSpanTickData, type JobSpanSegmentData, type JobSpanDueData } from './gantt-task-bar';
+import { renderGridLinesInto, renderRowBgInto, renderTodayLineInto, type RowBgEntry, type TodayLineData } from './gantt-grid-decor';
 import { showToast, moveTooltip, hideTooltip } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 
@@ -1261,14 +1262,12 @@ function setupDateRangeAndGrid(): SetupDateRangeAndGridResult {
   // cached across renders instead.
   const gridLayers = getOrCreateGanttGridLayers(grid);
   const { gridLinesLayer, rowBgLayer, todayLineLayer, barsLayer, connectorsLayer } = gridLayers;
-  // These four stay fully imperative and rebuild themselves from scratch
-  // every render (unchanged behavior) — each now clears only ITS OWN
-  // layer, since the old blanket `grid.innerHTML = ''` that used to do
-  // this for them is gone. barsLayer is deliberately never cleared this
-  // way — see its own note above.
-  gridLinesLayer.innerHTML = '';
-  rowBgLayer.innerHTML = '';
-  todayLineLayer.innerHTML = '';
+  // gridLinesLayer/rowBgLayer/todayLineLayer are Preact-rendered now too
+  // (see gantt-grid-decor.tsx) — same rule as barsLayer/header/leftBody
+  // above: never innerHTML-cleared from outside. Only connectorsLayer
+  // stays fully imperative; drawConnectorLines() manages its own content
+  // by removing its previous SVG-by-id before creating a fresh one, which
+  // needs no help here.
 
   return {
     grid, header, leftBody, gridLinesLayer, rowBgLayer, todayLineLayer, barsLayer, connectorsLayer,
@@ -1279,12 +1278,12 @@ function setupDateRangeAndGrid(): SetupDateRangeAndGridResult {
 function buildDateHeader(totalDays: number, gridLinesLayer: HTMLElement, header: HTMLElement): Date {
   const cells = buildDateHeaderCells(startDate, totalDays, dayWidth);
 
-  // The day/week header cells themselves are Preact-rendered now (see
+  // The day/week header cells themselves are Preact-rendered (see
   // src/views/gantt-date-header.tsx's own comment on why #timelineHeader
-  // specifically was safe to hand over) — everything below still builds
-  // the background grid-lines imperatively into its own dedicated
-  // sub-container of #timelineGrid (see setupDateRangeAndGrid()'s own
-  // comment on why each concern there gets one).
+  // specifically was safe to hand over first) — the background grid-lines
+  // below are now ALSO Preact's, into their own dedicated sub-container of
+  // #timelineGrid (see gantt-grid-decor.tsx and getOrCreateGanttGridLayers()'s
+  // own comment on why each concern there gets one).
   renderDateHeaderInto(
     header,
     cells,
@@ -1293,26 +1292,7 @@ function buildDateHeader(totalDays: number, gridLinesLayer: HTMLElement, header:
     (weekLeft) => document.getElementById('timelineBody')!.scrollTo({ left: weekLeft - 20, behavior: 'smooth' })
   );
 
-  // gridLinesLayer is already cleared by setupDateRangeAndGrid() before
-  // this runs (see its own comment on why that clear moved from a blanket
-  // `grid.innerHTML = ''` to per-layer, now that barsLayer is a sibling
-  // Preact must keep across renders).
-  cells.days.forEach(function (d) {
-    const line = document.createElement('div');
-    line.className = 'grid-line' + (d.isWeekend ? ' weekend-line' : '');
-    line.style.left = d.left + 'px';
-    gridLinesLayer.appendChild(line);
-
-    if (d.isToday) {
-      const todayBg = document.createElement('div');
-      todayBg.className = 'grid-line today-line-bg';
-      todayBg.style.left = d.left + 'px';
-      // No width set here — .today-line-bg's own CSS spans it from `left`
-      // to the grid's real right edge via right:0 (see that rule's
-      // comment).
-      gridLinesLayer.appendChild(todayBg);
-    }
-  });
+  renderGridLinesInto(gridLinesLayer, cells.days);
 
   return cells.today;
 }
@@ -1352,30 +1332,22 @@ function buildRowModel(containerH: number, grid: HTMLElement): BuildRowModelResu
 // gains a mid-loop skip/continue, the other must get the same one.
 function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
   const rowProps: TaskRowProps[] = [];
+  // Zebra-stripe backgrounds — Preact-rendered too now (see
+  // gantt-grid-decor.tsx), but deliberately keyed by POSITION there, not
+  // by the row's own identity the way the row/bar above it are: this is
+  // pure decoration, full page width, a full 40px row tall, and solidly
+  // opaque, so if it were reused/animated by row identity a multi-row
+  // reorder would show two of these bands sliding across the same
+  // stretch of screen at once — an obvious gray "ghost" bar (a real,
+  // reported bug — see tests/gantt-rowbg-no-ghost.spec.js). A positional
+  // key means each slot just gets restyled in place, never moved.
+  const rowBgEntries: RowBgEntry[] = [];
   let visibleRowIdx = 0;
   visibleRows.forEach(function (entry) {
     const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
     const rowKey = ganttRowKey(job.id, task.id, phaseId, subPhaseId);
 
-    // Zebra-stripe background — stays fully imperative, appended into its
-    // own dedicated sub-container of #timelineGrid (see
-    // setupDateRangeAndGrid()'s own comment — not Preact's to own).
-    // rowBgLayer is already cleared by setupDateRangeAndGrid() before
-    // this runs.
-    // Deliberately NOT given a data-row-key (and so never animated by
-    // animateReorderedBars() — see allRowKeyedElements()) even though the
-    // row below very much needs one: this is pure decoration, full page
-    // width, a full 40px row tall, and solidly opaque — during a cascade
-    // where several rows swap places at once, two of these bands
-    // animating through the same stretch of screen at once reads as an
-    // obvious gray "ghost" bar (reported via a screenshot showing exactly
-    // that). Left unkeyed, it always just renders at its own correct
-    // final position immediately.
-    const bg = document.createElement('div');
-    bg.className = 'row-bg';
-    bg.style.top = (visibleRowIdx * GANTT_ROW_H) + 'px';
-    bg.style.width = gridWidth + 'px';
-    rowBgLayer.appendChild(bg);
+    rowBgEntries.push({ top: visibleRowIdx * GANTT_ROW_H });
 
     const hasDates = !!(task.start && task.finish && !isNaN(new Date(task.start + 'T00:00:00').getTime()) && !isNaN(new Date(task.finish + 'T00:00:00').getTime()));
     const startStr = hasDates ? new Date(task.start! + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -1510,23 +1482,16 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
   // child of #leftBody now (see renderTaskRowsInto()'s own comment).
   const spacerHeight = Math.max(0, gridHeightPx - visibleRows.length * GANTT_ROW_H);
   renderTaskRowsInto(leftBody, rowProps, spacerHeight);
+  renderRowBgInto(rowBgLayer, rowBgEntries, gridWidth);
 }
 
 function drawTodayLine(todayLineLayer: HTMLElement, today: Date, totalDays: number): void {
-  // todayLineLayer is already cleared by setupDateRangeAndGrid() before
-  // this runs (see its own comment).
   const todayIdx = getDaysDiff(startDate, today);
-  if (todayIdx >= 0 && todayIdx < totalDays) {
-    const tl = document.createElement('div');
-    tl.className = 'today-line';
-    tl.style.left = (todayIdx * dayWidth + dayWidth / 2) + 'px';
-    todayLineLayer.appendChild(tl);
-    const tlbl = document.createElement('div');
-    tlbl.className = 'today-label';
-    tlbl.style.left = (todayIdx * dayWidth + dayWidth / 2 + 6) + 'px';
-    tlbl.textContent = 'Today — ' + today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    todayLineLayer.appendChild(tlbl);
-  }
+  const data: TodayLineData | null = (todayIdx >= 0 && todayIdx < totalDays) ? {
+    left: todayIdx * dayWidth + dayWidth / 2,
+    label: 'Today — ' + today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+  } : null;
+  renderTodayLineInto(todayLineLayer, data);
 }
 
 // See renderLeftPanelRows()'s comment on visibleRowIdx — barVisibleIdx

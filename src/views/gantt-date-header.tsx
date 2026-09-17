@@ -122,15 +122,19 @@ function GanttDateHeader({ days, weeks, onDayHover, onDayLeave, onWeekClick }: G
   );
 }
 
-// header is #timelineHeader — cleared once per render by
-// setupDateRangeAndGrid() (header.innerHTML = '') and never written to by
-// any OTHER function (setHeaderScroll() only ever touches its own
-// style.transform, not its children) — the one part of the Gantt
-// rendering pipeline with no other imperative code sharing ownership of
-// its children, which is exactly what makes it safe to hand the whole
-// subtree to Preact. #timelineGrid (the background grid-lines,
-// task rows, bars, connector lines) stays fully imperative for now —
-// several other functions in gantt.ts still append directly into it.
+// header is #timelineHeader — never written to by any OTHER function
+// (setHeaderScroll() only ever touches its own style.transform, not its
+// children) — the one part of the Gantt rendering pipeline with no other
+// imperative code sharing ownership of its children, which is exactly
+// what made it safe to hand the whole subtree to Preact FIRST, before
+// anything else. Everything else Preact now owns (#leftBody's task rows,
+// #timelineGrid's grid-lines/row-bg/today-line/bars — see
+// gantt-task-row.tsx/gantt-grid-decor.tsx/gantt-task-bar.tsx) followed the
+// same rule once it got its own dedicated, exclusively-Preact-owned
+// sub-container (see getOrCreateGanttGridLayers() in gantt.ts). Only the
+// connector-line SVG stays fully imperative — it needs direct rAF
+// mutation to track the live reorder animation, which isn't a fit for
+// Preact's diff-per-render model.
 export function renderDateHeaderInto(
   container: HTMLElement,
   cells: GanttDateHeaderCells,
