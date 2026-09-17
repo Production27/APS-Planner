@@ -1,4 +1,5 @@
 import { render } from 'preact';
+import { AlertBar, type HomeAlertProps } from './home-widget-alert';
 
 // Home dashboard's Overdue widget (#homeOverdueBody) — a static, empty
 // element from index.html exclusively written to by renderHomeDashboard()
@@ -27,13 +28,6 @@ import { render } from 'preact';
 // dismissal (see AlertBar) can trigger a clean re-render instead of the
 // old code's raw `el.remove()` — see buildHomeAlertProps()'s own comment
 // in home.ts for why that mattered once this became a Preact subtree.
-
-export interface HomeAlertProps {
-  alertId: string;
-  text: string;
-  tier?: string;
-  onDismiss: (e: Event) => void;
-}
 
 export interface HomeCalMiniMonthCellProps {
   cellKey: string;
@@ -70,16 +64,6 @@ export interface HomeOverdueWidgetProps {
   compactCells?: HomeCalMiniMonthCellProps[];
   expandedCells?: HomeCalExpandedCellProps[];
   expandedBars?: HomeCalExpandedBarProps[];
-}
-
-function AlertBar(p: HomeAlertProps) {
-  const tierClass = p.tier && p.tier !== 'overdue' ? ' tier-' + p.tier : '';
-  return (
-    <div class={'home-widget-alert' + tierClass} id={'homeAlert-' + p.alertId}>
-      <span class="home-widget-alert-text">{p.text}</span>
-      <button type="button" class="home-widget-alert-dismiss" onClick={p.onDismiss} title="Dismiss">&times;</button>
-    </div>
-  );
 }
 
 function EmptyOverdue() {

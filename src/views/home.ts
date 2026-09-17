@@ -59,13 +59,16 @@ import {
   renderCalendar, initCalendarDragHandlers, buildCalBarHtml, flattenCalendarEventsForRange,
   isCalendarEventTaskId, parseCalendarEventTaskId, openEditCalendarEvent, calendarOpenJob,
 } from './calendar';
-import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor, buildWorkflowStageData } from './board';
+import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor, buildWorkflowStageData, scrollToBoardColumn } from './board';
 import { renderMyChecklist, buildMyChecklistRows, toggleMyChecklistItemDone, openMyChecklistItem } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
 import { formatCommentWhen, postJobComment, postJobReply, deleteJobComment, deleteJobReply } from './job-comments';
 import { renderHomeJobChatListInto, type JobChatItemProps, type JobChatReply } from './home-jobchat';
 import { renderHomeChecklistWidgetInto, type HomeChecklistRowProps } from './home-checklist';
-import { renderHomeOverdueWidgetInto, type HomeAlertProps, type HomeCalMiniMonthCellProps, type HomeCalExpandedCellProps, type HomeCalExpandedBarProps } from './home-calendar';
+import { renderHomeOverdueWidgetInto, type HomeCalMiniMonthCellProps, type HomeCalExpandedCellProps, type HomeCalExpandedBarProps } from './home-calendar';
+import { type HomeAlertProps } from './home-widget-alert';
+import { renderHomeStageAlertInto, renderWsmBarsInto, renderWsmBracketInto, type HomeWsmBarProps, type HomeWsmBracketSegmentProps } from './home-board-mini';
+import { renderHomeTodayWidgetInto, type HomeMiniGanttDayProps, type HomeMiniGanttRowProps } from './home-gantt-mini';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
@@ -817,28 +820,23 @@ function dismissHomeWidgetAlert(event: Event, alertId: string, signature: string
   const el = document.getElementById('homeAlert-' + alertId);
   if (el) el.remove();
 }
-// ids: the real job/card ids behind this alert, used ONLY to build its
-// dismiss signature (see the block comment above) — never rendered.
-// tier: 'overdue' (default, red), 'today' (amber), or 'soon' (blue) — see
-// the .tier-today/.tier-soon CSS. Severity color, not urgency filtering;
-// whether something qualifies at all is still entirely up to the caller.
-function renderHomeWidgetAlert(alertId: string, ids: string[], text: string, tier?: string): string {
-  if (!ids.length) return '';
-  const signature = ids.slice().sort().join(',');
-  if (isHomeWidgetAlertDismissed(alertId, signature)) return '';
-  const tierClass = tier && tier !== 'overdue' ? ' tier-' + tier : '';
-  return '<div class="home-widget-alert' + tierClass + '" id="homeAlert-' + alertId + '">' +
-    '<span class="home-widget-alert-text">' + escapeHtml(text) + '</span>' +
-    '<button type="button" class="home-widget-alert-dismiss" onclick="dismissHomeWidgetAlert(event, \'' + alertId + '\', \'' + signature.replace(/'/g, "\\'") + '\')" title="Dismiss">&times;</button>' +
-  '</div>';
-}
-
-// Three severity tiers, worst first — same split the very first "Needs
-// Attention" mockup used (overdue red / today amber / later-this-week
-// blue), just as three independently-dismissible alerts on Calendar's own
-// widget instead of one merged cross-widget panel. Shared by both the
-// compact widget and the expanded-in-place grid below — the alerts
-// themselves don't depend on which body is showing underneath them.
+// Builds one dismissible widget alert's props — shared by every Home
+// widget that has one (Overdue/Calendar's three-tier split below, the
+// Workflow mini-board's stalled-card count, the Today-schedule widget's
+// unclosed-job count). ids: the real job/card ids behind this alert, used
+// ONLY to build its dismiss signature (see persistHomeWidgetAlertDismissal()) —
+// never rendered. tier: 'overdue' (default, red), 'today' (amber), or
+// 'soon' (blue) — see the .tier-today/.tier-soon CSS. Severity color, not
+// urgency filtering; whether something qualifies at all is still entirely
+// up to the caller. Returns null (render nothing) when there's nothing to
+// alert on, or the current set is already dismissed.
+//
+// The three-tier split below (worst first: overdue red / today amber /
+// later-this-week blue) is the very first "Needs Attention" mockup's own
+// split, kept as three independently-dismissible alerts instead of one
+// merged cross-widget panel. Shared by both Overdue's compact widget and
+// its expanded-in-place grid — the alerts themselves don't depend on
+// which body is showing underneath them.
 function buildHomeAlertProps(alertId: string, ids: string[], text: string, tier?: string): HomeAlertProps | null {
   if (!ids.length) return null;
   const signature = ids.slice().sort().join(',');
@@ -1179,8 +1177,8 @@ function renderHomeWorkflowMiniBoard(): void {
   const alertEl = document.getElementById('homeStageAlert');
   if (alertEl) {
     const stalledRows = buildHomeStalledRows();
-    alertEl.innerHTML = renderHomeWidgetAlert('board', stalledRows.map(function (r) { return r.card.id; }),
-      stalledRows.length + (stalledRows.length === 1 ? ' card stalled' : ' cards stalled'));
+    renderHomeStageAlertInto(alertEl, buildHomeAlertProps('board', stalledRows.map(function (r) { return r.card.id; }),
+      stalledRows.length + (stalledRows.length === 1 ? ' card stalled' : ' cards stalled')));
   }
 
   const perColumnCounts: Record<string, number> = {};
@@ -1188,15 +1186,15 @@ function renderHomeWorkflowMiniBoard(): void {
   const total = Object.keys(perColumnCounts).reduce(function (n, id) { return n + perColumnCounts[id]; }, 0);
 
   if (!total) {
-    barsWrap.innerHTML = '<div class="home-widget-empty" style="width:100%;"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><div>No cards on the board yet.</div></div>';
-    track.innerHTML = '';
+    renderWsmBarsInto(barsWrap, [], true);
+    renderWsmBracketInto(track, []);
     return;
   }
 
   const MAX_BAR_H = 80;
   const max = Math.max.apply(null, BOARD_COLUMNS.map(function (c) { return perColumnCounts[c.id] || 0; }).concat([1]));
 
-  barsWrap.innerHTML = BOARD_COLUMNS.map(function (col) {
+  const bars: HomeWsmBarProps[] = BOARD_COLUMNS.map(function (col) {
     const count = perColumnCounts[col.id] || 0;
     // Bar color: same logic as the real bracket — the board's own
     // workflow item color if it has one, else the neutral fallback —
@@ -1205,40 +1203,28 @@ function renderHomeWorkflowMiniBoard(): void {
     const color = item ? item.color : 'var(--text-light)';
     const h = Math.max(4, Math.round((count / max) * MAX_BAR_H));
     const title = count + ' job' + (count === 1 ? '' : 's') + ' in ' + col.label;
-    return '<div class="wsm-bar-col" data-column="' + col.id + '" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="switchTabMorphed(\'board\'); scrollToBoardColumn(\'' + col.id + '\');" title="' + escapeHtml(title) + '">' +
-      '<span class="wsm-bar-label">' + escapeHtml(col.label) + '</span>' +
-      '<span class="wsm-bar-count">' + count + '</span>' +
-      '<span class="wsm-bar" style="height:' + h + 'px; background:' + color + ';"></span>' +
-    '</div>';
-  }).join('');
+    return {
+      colId: col.id, label: col.label, count: count, heightPx: h, color: color, title: title,
+      onClick: function () { switchTabMorphed('board'); scrollToBoardColumn(col.id); },
+    };
+  });
+  renderWsmBarsInto(barsWrap, bars, false);
 
   // Bracket band — same grouping (buildWorkflowStageData()) and same
   // measure-the-real-elements technique renderBoardWorkflowStrip() uses,
   // just measured against these .wsm-bar-col elements instead of real
-  // .board-column ones, and scaled down.
+  // .board-column ones, and scaled down. Bars just got their own render
+  // pass above, so their real layout exists to measure against here.
   const wrapperRect = barsWrap.getBoundingClientRect();
-  const measured = buildWorkflowStageData().map(function (g) {
+  const segments: HomeWsmBracketSegmentProps[] = buildWorkflowStageData().map(function (g) {
     const firstEl = barsWrap.querySelector('.wsm-bar-col[data-column="' + g.firstColId + '"]') as HTMLElement | null;
     const lastEl = barsWrap.querySelector('.wsm-bar-col[data-column="' + g.lastColId + '"]') as HTMLElement | null;
     if (!firstEl || !lastEl) return null;
     const left = firstEl.getBoundingClientRect().left - wrapperRect.left + barsWrap.scrollLeft;
     const right = lastEl.getBoundingClientRect().right - wrapperRect.left + barsWrap.scrollLeft;
-    return Object.assign({}, g, { left: left, right: right });
-  }).filter(Boolean) as { firstColId: string; lastColId: string; label: string; color?: string; left: number; right: number }[];
-
-  track.innerHTML = measured.map(function (g) {
-    const width = g.right - g.left;
-    const bw = Math.max(width - 10, 16);
-    const inset = 2, flare = 5;
-    const path = 'M' + inset + ',8 L' + (inset + flare) + ',2 L' + (bw - inset - flare) + ',2 L' + (bw - inset) + ',8';
-    const bracketStyle = g.color ? ('color:' + g.color + ';') : 'color:var(--text-light);opacity:0.6;';
-    return '<div class="wsm-seg" style="left:' + g.left + 'px; width:' + width + 'px;">' +
-      '<div class="wsm-seg-label">' + escapeHtml(g.label) + '</div>' +
-      '<div class="wsm-bracket-wrap" style="' + bracketStyle + '"><svg width="' + bw + '" height="8" viewBox="0 0 ' + bw + ' 8">' +
-        '<path d="' + path + '" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
-      '</svg></div>' +
-    '</div>';
-  }).join('');
+    return { segKey: g.firstColId + '-' + g.lastColId, label: g.label, color: g.color || null, left: left, width: right - left };
+  }).filter(Boolean) as HomeWsmBracketSegmentProps[];
+  renderWsmBracketInto(track, segments);
 
   barsWrap.onscroll = function () {
     track.style.transform = 'translateX(-' + barsWrap.scrollLeft + 'px)';
@@ -1311,12 +1297,15 @@ function renderHomeWorkflowExpandedBoard(): void {
 // its only other reader, lives in this same module, so nothing outside
 // home.ts needs to see this.
 const HOME_MINI_GANTT_WINDOW_DAYS = 7;
-function renderHomeTodayScheduleWidget(rows: HomeScheduleRow[], windowDays?: number, emptyLabel?: string): string {
+function renderHomeTodayScheduleWidgetInto(containerEl: HTMLElement, rows: HomeScheduleRow[], windowDays?: number, emptyLabel?: string): void {
   windowDays = windowDays || HOME_MINI_GANTT_WINDOW_DAYS;
   const unclosedRows = buildHomeGanttUnclosedRows();
-  const alertHtml = renderHomeWidgetAlert('gantt-unclosed', unclosedRows.map(function (r) { return r.card.id; }),
+  const alert = buildHomeAlertProps('gantt-unclosed', unclosedRows.map(function (r) { return r.card.id; }),
     unclosedRows.length + (unclosedRows.length === 1 ? ' job finished, not closed out' : ' jobs finished, not closed out'));
-  if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><div>' + (emptyLabel || 'Nothing scheduled today.') + '</div></div>';
+  if (!rows.length) {
+    renderHomeTodayWidgetInto(containerEl, { alert: alert, empty: true, emptyLabel: emptyLabel || 'Nothing scheduled today.', days: [], todayLeftFraction: 0, rows: [] });
+    return;
+  }
 
   // A real (tiny) week strip — today ± a few days, positioned/sized bars
   // like the actual Gantt uses, rather than each task's own isolated 0-100%
@@ -1325,18 +1314,19 @@ function renderHomeTodayScheduleWidget(rows: HomeScheduleRow[], windowDays?: num
   const halfWindow = Math.floor(windowDays / 2);
   const windowStart = new Date(todayMidnight.getTime() - halfWindow * 86400000);
   const windowEnd = new Date(windowStart.getTime() + windowDays * 86400000);
-  const todayLeftPct = (halfWindow / windowDays) * 100;
 
-  const dayCellsHtml: string[] = [];
+  const days: HomeMiniGanttDayProps[] = [];
   for (let i = 0; i < windowDays; i++) {
     const d = new Date(windowStart.getTime() + i * 86400000);
-    dayCellsHtml.push('<div class="home-mini-gantt-day' + (i === halfWindow ? ' today' : '') + '">' +
-      '<span class="home-mini-gantt-dow">' + d.toLocaleDateString('en-US', { weekday: 'short' }) + '</span>' +
-      '<span class="home-mini-gantt-num">' + d.getDate() + '</span>' +
-    '</div>');
+    days.push({
+      dayKey: toIsoDate(d),
+      dow: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      dayNum: d.getDate(),
+      isToday: i === halfWindow,
+    });
   }
 
-  const rowsHtml = rows.map(function (row) {
+  const ganttRows: HomeMiniGanttRowProps[] = rows.map(function (row) {
     // Clip each bar to the visible window, same as the real Gantt's own
     // bars do at the scrolled-off edges of its timeline — a task that
     // started before the window or finishes after it still shows, just
@@ -1346,30 +1336,27 @@ function renderHomeTodayScheduleWidget(rows: HomeScheduleRow[], windowDays?: num
     const leftPct = (getDaysDiff(windowStart, clippedStart) / (windowDays as number)) * 100;
     const widthPct = Math.max((getDaysDiff(clippedStart, clippedFinishExclusive) / (windowDays as number)) * 100, 6);
     const jobColor = row.job.color || '#3949ab';
-    // subPhaseId only ever shows up alongside a real phaseId (sub-phases
-    // can only exist on a real phase, never on the synthetic no-phases
-    // default — see getJobPhases()/getPhaseSubUnits()), so there's no
-    // "subPhaseId but no phaseId" case to special-case here.
-    const editArgs = ["'" + row.job.id + "'"];
-    if (row.phaseId) editArgs.push("'" + row.phaseId + "'");
-    if (row.subPhaseId) editArgs.push("'" + row.subPhaseId + "'");
     const titleText = row.label + (row.phaseName ? ' — ' + row.phaseName : '');
-    return '<div class="home-mini-gantt-row" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="editJob(' + editArgs.join(', ') + ')" title="' + escapeHtml(titleText) + '">' +
-      '<div class="home-mini-gantt-label">' + escapeHtml(row.taskName) + '</div>' +
-      '<div class="home-mini-gantt-track">' +
-        '<div class="home-mini-gantt-bar" style="left:' + leftPct + '%; width:' + widthPct + '%; background:' + softenColor(row.taskColor) + '; border-color:' + jobColor + ';">' +
-          '<span class="home-mini-gantt-pill" style="background:' + jobColor + ';">' + escapeHtml(row.job.name) + '</span>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
+    return {
+      rowKey: row.job.id + '::' + row.taskName + '::' + (row.phaseId || '') + '::' + (row.subPhaseId || ''),
+      taskName: row.taskName,
+      title: titleText,
+      leftPct: leftPct,
+      widthPct: widthPct,
+      barColor: softenColor(row.taskColor),
+      jobColor: jobColor,
+      jobName: row.job.name,
+      // subPhaseId only ever shows up alongside a real phaseId (sub-phases
+      // can only exist on a real phase, never on the synthetic no-phases
+      // default — see getJobPhases()/getPhaseSubUnits()), so there's no
+      // "subPhaseId but no phaseId" case to special-case here.
+      onClick: function () { editJob(row.job.id, row.phaseId || undefined, row.subPhaseId || undefined); },
+    };
+  });
 
-  return alertHtml +
-    '<div class="home-mini-gantt">' +
-      '<div class="home-mini-gantt-days">' + dayCellsHtml.join('') + '</div>' +
-      '<div class="home-mini-gantt-today-line" style="left:calc(56px + (100% - 56px) * ' + (todayLeftPct / 100) + ');"></div>' +
-      rowsHtml +
-    '</div>';
+  renderHomeTodayWidgetInto(containerEl, {
+    alert: alert, empty: false, emptyLabel: '', days: days, todayLeftFraction: halfWindow / windowDays, rows: ganttRows,
+  });
 }
 
 // ===== HOME JOB CHAT WIDGET =====
@@ -1574,7 +1561,7 @@ function renderHomeDashboard(): void {
     } else {
       rows = buildHomeTodayScheduleRows();
     }
-    todayBody.innerHTML = renderHomeTodayScheduleWidget(rows, windowDays, ganttExpanded ? 'Nothing scheduled in this window.' : undefined);
+    renderHomeTodayScheduleWidgetInto(todayBody, rows, windowDays, ganttExpanded ? 'Nothing scheduled in this window.' : undefined);
   }
   renderHomeJobChat();
   applyPermissionGating();
@@ -1605,10 +1592,8 @@ export {
   getDismissedHomeWidgetAlerts,
   isHomeWidgetAlertDismissed,
   dismissHomeWidgetAlert,
-  renderHomeWidgetAlert,
   renderHomeWorkflowMiniBoard,
   renderHomeWorkflowExpandedBoard,
-  renderHomeTodayScheduleWidget,
   buildHomeJobChatFeed,
   renderHomeJobChatComposeOptions,
   renderHomeJobChat,

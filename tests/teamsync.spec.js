@@ -2056,10 +2056,8 @@ test('renderHomeTodayScheduleWidget: flags a job whose schedule is fully done bu
     const job = jobs.find(function (j) { return !j.archived && j.tasks && j.tasks.length; });
     const yesterday = toIsoDate(new Date(Date.now() - 86400000));
     job.tasks.forEach(function (t) { t.start = yesterday; t.finish = yesterday; });
-    const html = renderHomeTodayScheduleWidget(buildHomeTodayScheduleRows());
-    const container = document.createElement('div');
-    container.innerHTML = html;
-    const alertText = container.querySelector('#homeAlert-gantt-unclosed .home-widget-alert-text');
+    renderHomeDashboard();
+    const alertText = document.querySelector('#homeTodayBody #homeAlert-gantt-unclosed .home-widget-alert-text');
     return { alertText: alertText ? alertText.textContent : null };
   });
 

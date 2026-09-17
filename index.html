@@ -1867,13 +1867,14 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      grid-row height (see .home-grid's own comment), which varies by
      viewport, not a constant. Still scrolls internally past that. */
   .home-widget-body { padding: var(--s-1-5) var(--s-3-5) var(--s-3); flex: 1; min-height: 0; overflow-y: auto; }
-  /* Sits as the first thing inside a widget's own body (see
-     renderHomeWidgetAlert()) — only for widgets where something GENUINE
-     is already tracked as urgent (Calendar's overdue count, Board's
-     stalled-card count), never a "you have open items" nag just because
-     a widget has content, which is what it always shows anyway.
-     Dismissible per its own exact signature (see dismissHomeWidgetAlert())
-     — dismissing "3 overdue" only silences that exact set of jobs; if the
+  /* Sits as the first thing inside a widget's own body (see AlertBar in
+     home-widget-alert.tsx, built via buildHomeAlertProps() in home.ts) —
+     only for widgets where something GENUINE is already tracked as urgent
+     (Calendar's overdue count, Board's stalled-card count), never a "you
+     have open items" nag just because a widget has content, which is what
+     it always shows anyway. Dismissible per its own exact signature (see
+     dismissHomeWidgetAlert()/persistHomeWidgetAlertDismissal()) —
+     dismissing "3 overdue" only silences that exact set of jobs; if the
      overdue set changes at all (even back to the same count later, from
      different jobs), it reads as a new alert and shows again. */
   .home-widget-alert {
@@ -1881,7 +1882,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     font-size: var(--t-sm); font-weight: 600; padding: var(--s-1-75) var(--s-2) var(--s-1-75) var(--s-2-5); border-radius: 6px; margin-bottom: var(--s-2);
   }
   body.dark-mode .home-widget-alert { background: rgba(220,53,69,0.22); color: #ff8a80; }
-  /* Severity tiers (see renderHomeWidgetAlert()'s own tier param) — same
+  /* Severity tiers (see AlertBar's own tier prop) — same
      red/amber/blue split the first "Needs Attention" mockup used for
      overdue/today/due-soon. Base rule above is the overdue tier's own
      color (unmodified, unclassed) since it shipped first; these two are
@@ -3936,7 +3937,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 // IMPORTANT: version.txt (repo root) must be bumped to this same value on
 // every deploy — checkForNewerVersion() compares against that file, not
 // this constant, to avoid re-fetching the whole page just to check.
-const APP_VERSION = '2026-09-17.9';
+const APP_VERSION = '2026-09-17.10';
 
 // DEFAULT_JOBS moved into src/app/seed-data.ts, COLOR_PRESETS into
 // src/core/constants.ts — both real module-owned exports now (neither was

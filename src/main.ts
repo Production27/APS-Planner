@@ -168,8 +168,8 @@ import {
   applyHomeReflowTracks, toggleHomeWidgetExpand, buildHomeOverdueRows, buildHomeStalledRows, buildHomeStageSummary,
   buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows, renderHomeGreeting,
   getDismissedHomeWidgetAlerts,
-  isHomeWidgetAlertDismissed, dismissHomeWidgetAlert, renderHomeWidgetAlert, renderHomeWorkflowMiniBoard,
-  renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget, buildHomeJobChatFeed,
+  isHomeWidgetAlertDismissed, dismissHomeWidgetAlert, renderHomeWorkflowMiniBoard,
+  renderHomeWorkflowExpandedBoard, buildHomeJobChatFeed,
   renderHomeJobChatComposeOptions, renderHomeJobChat, postHomeJobChatComment,
   updateHomeJobChatComposeState,
   toggleHomeReplyBox, addHomeJobReply, handleHomeReplyKey, renderHomeDashboard,
@@ -753,10 +753,8 @@ declare global {
     getDismissedHomeWidgetAlerts: typeof getDismissedHomeWidgetAlerts;
     isHomeWidgetAlertDismissed: typeof isHomeWidgetAlertDismissed;
     dismissHomeWidgetAlert: typeof dismissHomeWidgetAlert;
-    renderHomeWidgetAlert: typeof renderHomeWidgetAlert;
     renderHomeWorkflowMiniBoard: typeof renderHomeWorkflowMiniBoard;
     renderHomeWorkflowExpandedBoard: typeof renderHomeWorkflowExpandedBoard;
-    renderHomeTodayScheduleWidget: typeof renderHomeTodayScheduleWidget;
     buildHomeJobChatFeed: typeof buildHomeJobChatFeed;
     renderHomeJobChatComposeOptions: typeof renderHomeJobChatComposeOptions;
     renderHomeJobChat: typeof renderHomeJobChat;
@@ -1329,10 +1327,8 @@ window.renderHomeGreeting = renderHomeGreeting;
 window.getDismissedHomeWidgetAlerts = getDismissedHomeWidgetAlerts;
 window.isHomeWidgetAlertDismissed = isHomeWidgetAlertDismissed;
 window.dismissHomeWidgetAlert = dismissHomeWidgetAlert;
-window.renderHomeWidgetAlert = renderHomeWidgetAlert;
 window.renderHomeWorkflowMiniBoard = renderHomeWorkflowMiniBoard;
 window.renderHomeWorkflowExpandedBoard = renderHomeWorkflowExpandedBoard;
-window.renderHomeTodayScheduleWidget = renderHomeTodayScheduleWidget;
 window.buildHomeJobChatFeed = buildHomeJobChatFeed;
 window.renderHomeJobChatComposeOptions = renderHomeJobChatComposeOptions;
 window.renderHomeJobChat = renderHomeJobChat;
