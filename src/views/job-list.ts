@@ -18,6 +18,7 @@ import { renderGantt } from './gantt';
 import { renderCalendar } from './calendar';
 import { renderBoard } from './board';
 import { getVisibleJobs, isJobFinished, ensureJobHasCards, syncCardColumns } from '../core/jobs';
+import { renderJobListInto, type JobCardProps, type JobBoardDotProps } from './job-list-card';
 
 // editJob()/cancelEdit() are already declared ambient (identically) by
 // gantt.ts/home.ts — not repeated here (TypeScript's ambient declaration
@@ -39,12 +40,12 @@ declare global {
 export function renderJobList(): void {
   const list = document.getElementById('jobList')!;
   const search = (document.getElementById('jobSearch') as HTMLInputElement).value.toLowerCase();
-  list.innerHTML = '';
 
   // Column placement is date-derived (or manually overridden) — resolve it
   // before reading card.column below so the board tag is never stale.
   syncCardColumns();
 
+  const cards: JobCardProps[] = [];
   getVisibleJobs().forEach((job) => {
     if (job.archived) return;
     if (search && !job.name.toLowerCase().includes(search)) return;
@@ -71,61 +72,50 @@ export function renderJobList(): void {
     // has. A phased job instead shows one small dot per phase (title gives
     // the phase name + stage on hover) — a single tag can't represent N
     // independently-tracked stages without picking one arbitrarily.
-    let boardTag = '';
+    let boardDots: JobBoardDotProps[] | null = null;
+    let singleBoardTag: { color: string; label: string } | null = null;
     if (job.phases && job.phases.length) {
-      boardTag = '<span class="job-card-phase-dots">' + phases.map(function (phase) {
+      boardDots = phases.map(function (phase) {
         const card = getPhaseCard(job, phase.id);
         const col = card ? BOARD_COLUMNS.find(function (c) { return c.id === card.column; }) : null;
-        return '<span class="job-card-board-dot" style="background:' + (col ? (col.color || '#3949ab') : '#ccc') + ';" title="' + escapeHtml(phase.name) + (col ? ': ' + escapeHtml(col.label) : '') + '"></span>';
-      }).join('') + '</span>';
+        return {
+          dotKey: phase.id || phase.name,
+          color: col ? (col.color || '#3949ab') : '#ccc',
+          title: phase.name + (col ? ': ' + col.label : ''),
+        };
+      });
     } else {
       const linkedCard = getPhaseCard(job, null);
       const boardCol = linkedCard ? BOARD_COLUMNS.find(function (c) { return c.id === linkedCard.column; }) : null;
-      boardTag = boardCol
-        ? '<span class="job-card-board-tag" title="Current board"><span class="job-card-board-dot" style="background:' + (boardCol.color || '#3949ab') + ';"></span>' + escapeHtml(boardCol.label) + '</span>'
-        : '';
+      if (boardCol) singleBoardTag = { color: boardCol.color || '#3949ab', label: boardCol.label };
     }
 
-    const card = document.createElement('div');
     const comments = job.comments as any[] | undefined;
-    card.className = 'job-card' + (editingJobId === job.id ? ' active' : '') + (job.archived ? ' archived' : '') + (isJobFinished(job) ? ' finished' : '');
-    card.innerHTML = '<div class="color-strip" style="background:' + job.color + ';"></div>' +
-      '<div class="job-card-title">' + escapeHtml(job.name) + (job.archived ? ' <span style="font-size: var(--t-2xs);color:#888;">(archived)</span>' : '') + '</div>' +
-      '<div class="job-card-meta">' +
-      (s && f ? '<span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + (s as Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + (f as Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + '</span>' : '') +
-      boardTag +
-      ((comments && comments.length) ? '<span class="note-icon" title="' + comments.length + ' comment' + (comments.length === 1 ? '' : 's') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 4h16v12H8l-4 4V4z" fill="#3949ab"/></svg> ' + comments.length + '</span>' : '') + '</div>' +
-      '<button class="copy-btn" onclick="event.stopPropagation(); duplicateJob(\'' + job.id + '\', event)" title="Duplicate" aria-label="Duplicate job"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>' +
-      '<button class="delete-btn" onclick="event.stopPropagation(); promptDeleteJob(\'' + job.id + '\')" title="Delete" aria-label="Delete job">×</button>';
-    // Clicking the job that's already open closes the drawer instead of
-    // just re-loading it — a toggle, same as clicking an already-selected
-    // item elsewhere in the app typically does.
-    const activate = () => { if (editingJobId === job.id) cancelEdit(); else editJob(job.id); };
-    card.onclick = activate;
-    // tabIndex/role/keydown: this is the primary way into Job Manager's
-    // edit view, so it needs to be reachable without a mouse the same way
-    // the copy/delete buttons nested inside it already are (real
-    // <button> elements, natively focusable). event.stopPropagation() on
-    // those buttons' own onclick already keeps a click on them from also
-    // triggering this handler; Enter/Space here mirrors that same intent
-    // for the keyboard path.
-    card.tabIndex = 0;
-    card.setAttribute('role', 'button');
-    card.onkeydown = (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
-    };
-    list.appendChild(card);
+    cards.push({
+      jobKey: job.id,
+      active: editingJobId === job.id,
+      archived: !!job.archived,
+      finished: isJobFinished(job),
+      color: job.color,
+      name: job.name,
+      dateRangeLabel: (s && f) ? ((s as Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + (f as Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) : null,
+      boardDots: boardDots,
+      singleBoardTag: singleBoardTag,
+      commentCount: (comments && comments.length) || 0,
+      // Clicking the job that's already open closes the drawer instead of
+      // just re-loading it — a toggle, same as clicking an already-selected
+      // item elsewhere in the app typically does.
+      onActivate: function () { if (editingJobId === job.id) cancelEdit(); else editJob(job.id); },
+      onDuplicate: function (e: Event) { duplicateJob(job.id, e); },
+      onDelete: function (e: Event) { e.stopPropagation(); promptDeleteJob(job.id); },
+    });
   });
 
-  // Lives inside the scrolling list itself (not the fixed toolbar below
-  // it) so it moves down with the list as more jobs get added, landing
-  // right after the last one — same idea as the Board's dashed "+ Add
-  // Board" tile at the end of the column row.
-  const addBtn = document.createElement('button');
-  addBtn.className = 'job-list-add-btn';
-  addBtn.textContent = '+ Add Job';
-  addBtn.onclick = () => addNewJob();
-  list.appendChild(addBtn);
+  // The "+ Add Job" tile lives inside the scrolling list itself (not the
+  // fixed toolbar below it) so it moves down with the list as more jobs
+  // get added, landing right after the last one — same idea as the
+  // Board's dashed "+ Add Board" tile at the end of the column row.
+  renderJobListInto(list, cards, function () { addNewJob(); });
 
   updateJobCount();
   applyPermissionGating(); // rebuilt on every job list refresh, outside renderAll()'s own sweep
