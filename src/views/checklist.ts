@@ -31,6 +31,7 @@ import { openModal, closeModal, showToast, toggleMsDropdown, msSetAll, msDropdow
 import { getEffectiveRole, hasMinTier } from '../auth/permissions';
 import { getStoredUsername } from '../auth/session';
 import { ensureUserRosterLoaded } from '../app/user-roster';
+import { renderMyChecklistListInto, type MyChecklistItemRowProps, type MyChecklistAssigneeDropdownProps, type MyChecklistAssigneeOptionProps } from './checklist-mylist';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, activeProjectId, saveJobs(), etc.) are declared once
@@ -325,6 +326,38 @@ function myChecklistMsDropdownHtml(idBase: string, current: string[], onchangePr
   '</div>';
 }
 
+// Preact-rendered replacement for the old myChecklistMsDropdownHtml()
+// above, used by the per-item assignee dropdown below now that
+// #myChecklistListBody is Preact's (see checklist-mylist.tsx). The
+// toolbar's own "Visible to" dropdown (renderMyChecklistToolbar()) stays
+// on the string-based version above — that one's still a plain innerHTML
+// rebuild, no reuse concern to fix there yet.
+function buildMyChecklistAssigneeDropdownProps(
+  idBase: string, current: string[], minTier: string, emptyLabel: string, extraClass: string | undefined,
+  onChangeOption: (username: string, checked: boolean) => void
+): MyChecklistAssigneeDropdownProps {
+  const roster = cachedUserRoster || [];
+  const orphaned = current.filter(function (u) { return !roster.some(function (r) { return r.username === u; }); });
+  const options: MyChecklistAssigneeOptionProps[] = roster.map(function (u) {
+    return { optKey: u.username, username: u.username, displayName: u.displayName, checked: current.indexOf(u.username) !== -1 };
+  }).concat(orphaned.map(function (u) {
+    return { optKey: u, username: u, displayName: u, checked: true };
+  }));
+  return {
+    dropdownId: idBase,
+    optionsId: idBase + '_options',
+    loading: !cachedUserRoster,
+    options: options,
+    labelText: msDropdownLabelText(current.length, emptyLabel),
+    extraClass: extraClass,
+    minTier: minTier,
+    onToggle: function () { toggleMsDropdown(idBase); },
+    onSelectAll: function () { msSetAll(idBase + '_options', true); },
+    onUnselectAll: function () { msSetAll(idBase + '_options', false); },
+    onChangeOption: onChangeOption,
+  };
+}
+
 // Flat list — one row per item, no per-job group wrapper. Sorted by job
 // name already (see buildMyChecklistRows()), so same-job items still land
 // near each other without needing an explicit box around them. Used for
@@ -338,46 +371,48 @@ function myChecklistMsDropdownHtml(idBase: string, current: string[], onchangePr
 // sorted by job name (buildMyChecklistRows()), so same-job rows are
 // always adjacent — no separate grouping pass needed, just watch for
 // the id changing as the list is walked.
-function renderMyChecklistList(rows: MyChecklistRow[], emptyMessage: string, groupByJob?: boolean): string {
-  if (!rows.length) {
-    return '<div class="my-checklist-empty"><svg viewBox="0 0 24 24" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 12.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div>' + (emptyMessage || 'Nothing here.') + '</div></div>';
-  }
+function buildMyChecklistRowProps(rows: MyChecklistRow[], groupByJob?: boolean): MyChecklistItemRowProps[] {
   let lastJobId: string | null = null;
   return rows.map(function (row) {
-    let groupHeader = '';
-    if (groupByJob && row.job.id !== lastJobId) {
-      lastJobId = row.job.id;
-      groupHeader = '<div class="my-checklist-group-header"><span class="home-row-dot" style="background:' + (row.job.color || '#3949ab') + ';"></span>' + escapeHtml(row.job.name) + '</div>';
-    }
+    const isGroupStart = !!groupByJob && row.job.id !== lastJobId;
+    if (isGroupStart) lastJobId = row.job.id;
     const item = row.item;
     const assignDropdownId = 'myciAssign_' + row.card.id + '_' + item.id;
-    const assignPrefix = "setMyChecklistItemAssignee('" + activeProjectId + "', '" + row.card.id + "', '" + row.columnId + "', '" + item.id + "'";
     const subAddInputId = 'myciSubNew_' + row.card.id + '_' + item.id;
-    const subHtml = (row.subItems.length ? '<div class="checklist-subitems">' + row.subItems.map(function (sub) {
-      return '<div class="checklist-subitem' + (sub.done ? ' done' : '') + '">' +
-        '<input type="checkbox"' + (sub.done ? ' checked' : '') + ' onchange="toggleMyChecklistSubItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + sub.id + '\')">' +
-        '<span class="ci-text">' + escapeHtml(sub.text) + '</span>' +
-        '<button class="ci-delete" data-min-tier="editor" onclick="deleteMyChecklistSubItem(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + sub.id + '\')">×</button>' +
-        '</div>';
-    }).join('') + '</div>' : '') +
-      '<div class="checklist-subitem-add-row">' +
-        '<input type="text" id="' + subAddInputId + '" data-min-tier="editor" placeholder="Add sub-item…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addMyChecklistSubItem(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\', \'' + subAddInputId + '\');}">' +
-      '</div>';
-    return groupHeader + '<div class="checklist-item my-checklist-item' + (item.done ? ' done' : '') + (item.required ? ' required' : '') + '">' +
-      '<input type="checkbox"' + (item.done ? ' checked' : '') + ' onchange="toggleMyChecklistItemDone(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' +
-      '<button class="ci-required' + (item.required ? ' is-required' : '') + '" data-min-tier="editor" title="' + (item.required ? 'Required — click to unflag' : 'Mark as required') + '" onclick="toggleMyChecklistItemRequired(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">' + (item.required ? '★' : '☆') + '</button>' +
-      // Only ci-text gets tabindex, not the job-name bubble right after it
-      // even though its onclick does the identical thing (open the same
-      // item) — both stay independently mouse-clickable (unchanged), but
-      // giving both a tab stop would just be two ways to Tab to the same
-      // action in a row already busy with a real checkbox + two buttons.
-      '<span class="ci-text" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(item.text) + '</span>' +
-      '<span class="my-checklist-job-bubble" style="background:' + (row.job.color || '#3949ab') + ';" onclick="openMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\')">' + escapeHtml(row.job.name) + '</span>' +
-      '<span class="my-checklist-stage-tag">' + escapeHtml(row.columnLabel) + '</span>' +
-      myChecklistMsDropdownHtml(assignDropdownId, normalizeChecklistAssignees(item.assignee), assignPrefix, 'editor', 'Unassigned', 'ci-assignee') +
-      '<button class="ci-delete" data-min-tier="editor" onclick="deleteMyChecklistItem(\'' + activeProjectId + '\', \'' + row.card.id + '\', \'' + row.columnId + '\', \'' + item.id + '\')">×</button>' +
-      '</div>' + subHtml;
-  }).join('');
+    return {
+      rowKey: row.card.id + '_' + item.id,
+      isGroupStart: isGroupStart,
+      groupJobName: row.job.name,
+      groupJobColor: row.job.color || '#3949ab',
+      done: !!item.done,
+      required: !!item.required,
+      text: item.text,
+      jobName: row.job.name,
+      jobColor: row.job.color || '#3949ab',
+      columnLabel: row.columnLabel,
+      assigneeDropdown: buildMyChecklistAssigneeDropdownProps(
+        assignDropdownId, normalizeChecklistAssignees(item.assignee), 'editor', 'Unassigned', 'ci-assignee',
+        function (username: string, checked: boolean) { setMyChecklistItemAssignee(activeProjectId as string, row.card.id, row.columnId, item.id, username, checked); }
+      ),
+      subItems: row.subItems.map(function (sub) {
+        return {
+          subKey: sub.id,
+          text: sub.text,
+          done: !!sub.done,
+          onToggleDone: function () { toggleMyChecklistSubItemDone(activeProjectId as string, row.card.id, row.columnId, item.id, sub.id); },
+          onDelete: function () { deleteMyChecklistSubItem(activeProjectId as string, row.card.id, row.columnId, item.id, sub.id); },
+        };
+      }),
+      subAddInputId: subAddInputId,
+      onToggleDone: function () { toggleMyChecklistItemDone(activeProjectId as string, row.card.id, row.columnId, item.id); },
+      onToggleRequired: function () { toggleMyChecklistItemRequired(activeProjectId as string, row.card.id, row.columnId, item.id); },
+      onOpenItem: function () { openMyChecklistItem(activeProjectId as string, row.card.id); },
+      onDelete: function () { deleteMyChecklistItem(activeProjectId as string, row.card.id, row.columnId, item.id); },
+      onAddSubItemKeyDown: function (e: KeyboardEvent) {
+        if (e.key === 'Enter') { e.preventDefault(); addMyChecklistSubItem(activeProjectId as string, row.card.id, row.columnId, item.id, subAddInputId); }
+      },
+    };
+  });
 }
 
 // Which "context" the toolbar's job picker is pointed at. '__assigned__'
@@ -523,7 +558,7 @@ function renderMyChecklist(): void {
   else if (!jobRows.length) emptyMessage = 'This checklist is empty — add the first item below.';
   else if (!rows.length) emptyMessage = 'Everything on this stage is checked off.';
   const listBody = document.getElementById('myChecklistListBody');
-  if (listBody) listBody.innerHTML = renderMyChecklistList(rows, emptyMessage as string, !isJobView);
+  if (listBody) renderMyChecklistListInto(listBody, { rows: buildMyChecklistRowProps(rows, !isJobView), emptyMessage: emptyMessage as string });
   renderMyChecklistFilterBar(isJobView, doneCount);
   renderMyChecklistToolbar();
   updateMyChecklistBadge(assignedRows.length);
@@ -735,7 +770,6 @@ export {
   getChecklistForStageInProject,
   buildMyChecklistRows,
   myChecklistMsDropdownHtml,
-  renderMyChecklistList,
   toggleMyChecklistHideDone,
   myChecklistAddableCards,
   renderMyChecklistToolbar,
