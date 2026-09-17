@@ -31,7 +31,8 @@ import { openModal, closeModal, showToast, toggleMsDropdown, msSetAll, msDropdow
 import { getEffectiveRole, hasMinTier } from '../auth/permissions';
 import { getStoredUsername } from '../auth/session';
 import { ensureUserRosterLoaded } from '../app/user-roster';
-import { renderMyChecklistListInto, type MyChecklistItemRowProps, type MyChecklistAssigneeDropdownProps, type MyChecklistAssigneeOptionProps } from './checklist-mylist';
+import { renderMyChecklistListInto, renderMyChecklistAssigneeDropdownInto, type MyChecklistItemRowProps, type MyChecklistAssigneeDropdownProps, type MyChecklistAssigneeOptionProps } from './checklist-mylist';
+import { renderManageColumnChecklistBodyInto } from './checklist-manage-column';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, activeProjectId, saveJobs(), etc.) are declared once
@@ -181,16 +182,12 @@ function renderManageColumnChecklistBody(): void {
   const col = BOARD_COLUMNS.find(function (c) { return c.id === managingChecklistColumnId; });
   if (!col) return;
   const items = col.defaultChecklist || [];
-  const chips = items.map(function (item) {
-    return '<span class="manage-field-chip">' + escapeHtml(item.text) +
-      '<button onclick="removeColumnChecklistDefaultItem(\'' + item.id + '\')">×</button></span>';
-  }).join('');
-  container.innerHTML = '<div class="manage-field-group">' +
-    '<div class="manage-field-chips">' + (chips || '<span style="font-size:11px;color:#999;">No default items yet</span>') + '</div>' +
-    '<div class="manage-field-add-row">' +
-    '<input type="text" id="mcc_new_item" placeholder="Add item..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addColumnChecklistDefaultItem();}">' +
-    '<button class="btn btn-secondary" onclick="addColumnChecklistDefaultItem()">Add</button>' +
-    '</div></div>';
+  renderManageColumnChecklistBodyInto(container, {
+    items: items.map(function (item) { return { itemId: item.id, text: item.text }; }),
+    onRemove: removeColumnChecklistDefaultItem,
+    onAddKeyDown: function (e: KeyboardEvent) { if (e.key === 'Enter') { e.preventDefault(); addColumnChecklistDefaultItem(); } },
+    onAddClick: addColumnChecklistDefaultItem,
+  });
 }
 
 function addColumnChecklistDefaultItem(): void {
@@ -295,43 +292,19 @@ function buildMyChecklistRows(): MyChecklistRow[] {
   return rows;
 }
 
-// One .ms-dropdown multi-select block — shared by the per-item assignee
-// picker and the per-group "Visible to" picker below, both of which need
-// the same roster/orphaned-account handling (an assignee no longer in
-// the roster still gets a checked-but-orphaned checkbox instead of
-// silently vanishing).
-// onchangePrefix is everything up to (not including) the trailing
-// ", this.value, this.checked)" of each checkbox's onchange call — lets
-// this one builder serve calls that need extra leading arguments
-// (project/card/column/item ids) baked in ahead of the username.
-function myChecklistMsDropdownHtml(idBase: string, current: string[], onchangePrefix: string, minTier: string, emptyLabel: string, extraClass?: string): string {
-  const roster = cachedUserRoster || [];
-  const optionsId = idBase + '_options';
-  const orphaned = current.filter(function (u) { return !roster.some(function (r) { return r.username === u; }); });
-  const rosterHtml = roster.map(function (u) {
-    return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u.username) + '" data-min-tier="' + minTier + '"' + (current.indexOf(u.username) !== -1 ? ' checked' : '') + ' onchange="' + onchangePrefix + ', this.value, this.checked)"> ' + escapeHtml(u.displayName) + '</label>';
-  }).join('');
-  const orphanedHtml = orphaned.map(function (u) {
-    return '<label class="cf-multiselect-option"><input type="checkbox" value="' + escapeHtml(u) + '" data-min-tier="' + minTier + '" checked onchange="' + onchangePrefix + ', this.value, this.checked)"> ' + escapeHtml(u) + '</label>';
-  }).join('');
-  let optionsInner;
-  if (!cachedUserRoster) optionsInner = '<span class="cf-multiselect-loading">Loading teammates…</span>';
-  else optionsInner = (rosterHtml + orphanedHtml) || '<span class="cf-multiselect-empty">No team accounts yet</span>';
-  return '<div class="ms-dropdown' + (extraClass ? ' ' + extraClass : '') + '" id="' + idBase + '">' +
-    '<button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown(\'' + idBase + '\')"><span>' + msDropdownLabelText(current.length, emptyLabel) + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
-    '<div class="ms-dropdown-panel">' +
-      (roster.length ? '<div class="ms-dropdown-actions"><button type="button" data-min-tier="' + minTier + '" onclick="msSetAll(\'' + optionsId + '\', true)">Select All</button><button type="button" data-min-tier="' + minTier + '" onclick="msSetAll(\'' + optionsId + '\', false)">Unselect All</button></div>' : '') +
-      '<div class="cf-multiselect" id="' + optionsId + '">' + optionsInner + '</div>' +
-    '</div>' +
-  '</div>';
-}
-
-// Preact-rendered replacement for the old myChecklistMsDropdownHtml()
-// above, used by the per-item assignee dropdown below now that
-// #myChecklistListBody is Preact's (see checklist-mylist.tsx). The
-// toolbar's own "Visible to" dropdown (renderMyChecklistToolbar()) stays
-// on the string-based version above — that one's still a plain innerHTML
-// rebuild, no reuse concern to fix there yet.
+// One .ms-dropdown multi-select block's props — shared by the per-item
+// assignee picker (checklist-mylist.tsx) AND the toolbar's own "Visible
+// to" picker (renderMyChecklistToolbar() below), both of which need the
+// same roster/orphaned-account handling (an assignee no longer in the
+// roster still gets a checked-but-orphaned checkbox instead of silently
+// vanishing). Both now render through the same MyChecklistAssigneeDropdown
+// Preact component (see renderMyChecklistAssigneeDropdownInto() in
+// checklist-mylist.tsx) — genuinely the same UI in two contexts, not
+// specialized rendering, so this stayed one shared builder even before
+// the toolbar's own usage was converted. Replaced the old string-based
+// myChecklistMsDropdownHtml(); onChangeOption plays the role its
+// onchangePrefix string used to (extra leading args baked in via
+// closure instead of string concatenation).
 function buildMyChecklistAssigneeDropdownProps(
   idBase: string, current: string[], minTier: string, emptyLabel: string, extraClass: string | undefined,
   onChangeOption: (username: string, checked: boolean) => void
@@ -481,9 +454,12 @@ function renderMyChecklistToolbar(): void {
   if (input) { input.disabled = !canAdd; input.placeholder = canAdd ? 'Add item…' : 'Select a job to add items'; }
   if (addBtn) addBtn.disabled = !canAdd;
   if (visBody) {
-    visBody.innerHTML = current
-      ? myChecklistMsDropdownHtml('myChecklistAddVis', normalizeChecklistAssignees(current.card.checklistAssignees && current.card.checklistAssignees[current.card.column]), "setMyChecklistStageAssignee('" + activeProjectId + "', '" + current.card.id + "', '" + current.card.column + "'", 'projectAdmin', 'Everyone', 'my-checklist-visibility')
-      : '';
+    renderMyChecklistAssigneeDropdownInto(visBody, current
+      ? buildMyChecklistAssigneeDropdownProps(
+          'myChecklistAddVis', normalizeChecklistAssignees(current.card.checklistAssignees && current.card.checklistAssignees[current.card.column]), 'projectAdmin', 'Everyone', 'my-checklist-visibility',
+          function (username: string, checked: boolean) { setMyChecklistStageAssignee(activeProjectId as string, current.card.id, current.card.column, username, checked); }
+        )
+      : null);
   }
 }
 
@@ -769,7 +745,6 @@ export {
   removeColumnChecklistDefaultItem,
   getChecklistForStageInProject,
   buildMyChecklistRows,
-  myChecklistMsDropdownHtml,
   toggleMyChecklistHideDone,
   myChecklistAddableCards,
   renderMyChecklistToolbar,

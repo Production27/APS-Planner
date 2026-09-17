@@ -181,3 +181,14 @@ function MyChecklistList(p: MyChecklistListProps) {
 export function renderMyChecklistListInto(container: HTMLElement, props: MyChecklistListProps): void {
   render(<MyChecklistList {...props} />, container);
 }
+
+// Reused as-is by the toolbar's own "Visible to" dropdown
+// (renderMyChecklistToolbar() in checklist.ts) — genuinely the same
+// .ms-dropdown UI in a second context, not a specialized rendering, so
+// this shares the component directly rather than forking it (same
+// reasoning that made the comments-drawer reuse of Home's Job Chat
+// components a clean win — see SESSION_HANDOFF.md). `props: null` clears
+// the container (no job selected in the toolbar yet).
+export function renderMyChecklistAssigneeDropdownInto(container: HTMLElement, props: MyChecklistAssigneeDropdownProps | null): void {
+  render(props ? <MyChecklistAssigneeDropdown {...props} /> : null, container);
+}

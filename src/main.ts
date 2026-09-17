@@ -132,7 +132,7 @@ import {
   getOpenChecklistItemsForCard, confirmChecklistBeforeMove, canAssignChecklistStages,
   openManageColumnChecklist, closeManageColumnChecklist, renderManageColumnChecklistBody,
   addColumnChecklistDefaultItem, removeColumnChecklistDefaultItem, getChecklistForStageInProject,
-  buildMyChecklistRows, myChecklistMsDropdownHtml, toggleMyChecklistHideDone,
+  buildMyChecklistRows, toggleMyChecklistHideDone,
   myChecklistAddableCards, renderMyChecklistToolbar, renderMyChecklistFilterBar, onMyChecklistContextChange,
   addMyChecklistItemFromBar, buildMyChecklistJobRows, renderMyChecklist, updateMyChecklistBadge,
   openMyChecklistItem, resolveMyChecklistCard, persistMyChecklistChange, withMyChecklistItem,
@@ -709,7 +709,6 @@ declare global {
     removeColumnChecklistDefaultItem: typeof removeColumnChecklistDefaultItem;
     getChecklistForStageInProject: typeof getChecklistForStageInProject;
     buildMyChecklistRows: typeof buildMyChecklistRows;
-    myChecklistMsDropdownHtml: typeof myChecklistMsDropdownHtml;
     toggleMyChecklistHideDone: typeof toggleMyChecklistHideDone;
     myChecklistAddableCards: typeof myChecklistAddableCards;
     renderMyChecklistToolbar: typeof renderMyChecklistToolbar;
@@ -1281,7 +1280,6 @@ window.addColumnChecklistDefaultItem = addColumnChecklistDefaultItem;
 window.removeColumnChecklistDefaultItem = removeColumnChecklistDefaultItem;
 window.getChecklistForStageInProject = getChecklistForStageInProject;
 window.buildMyChecklistRows = buildMyChecklistRows;
-window.myChecklistMsDropdownHtml = myChecklistMsDropdownHtml;
 window.toggleMyChecklistHideDone = toggleMyChecklistHideDone;
 window.myChecklistAddableCards = myChecklistAddableCards;
 window.renderMyChecklistToolbar = renderMyChecklistToolbar;
