@@ -69,6 +69,7 @@ import { fetchWithReauth } from '../app/worker-client';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 import { buildHomeStageSummary, buildHomeStalledRows, computeColumnStalledFloors } from './home';
 import { displayNameForUsername, getLeadRoster, ensureUserRosterLoaded } from '../app/user-roster';
+import { renderBoardCardsInto, type BoardCardProps, type CardMetaLine, type CardDueBadge, type CardStalledBadge, type CardChecklistBadge } from './board-card';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, saveJobs(), hasMinTier(), etc.) are
@@ -1239,19 +1240,22 @@ function renderBoard(): void {
     cachedBoardChromeSignature = chromeSignature;
   }
 
-  // Card population — runs on EVERY call, independent of whether the
-  // chrome above needed rebuilding, since this is what actually changes
-  // on the vast majority of renderBoard() calls (a card moved/was
-  // edited/synced in). col-body-<id> stays fully imperative for now (see
-  // buildCardEl()'s own comment) — cleared and rebuilt fresh each time,
-  // same as it always was, just into a container that's no longer
-  // recreated out from under it every call.
+  // Card population — Preact-rendered (see board-card.tsx), runs on EVERY
+  // call independent of whether the chrome above needed rebuilding, since
+  // this is what actually changes on the vast majority of renderBoard()
+  // calls (a card moved/was edited/synced in). bodyEl is NEVER cleared
+  // here (same rule as every other Preact-owned container) — it's now a
+  // stable, persistent element across calls (see rebuildBoardColumnChrome()),
+  // which is what lets Preact reuse a card's own DOM node across renders
+  // instead of tearing down and recreating every card on every call.
   const stalledFloors = computeColumnStalledFloors();
   BOARD_COLUMNS.forEach((col) => {
     const dom = cachedBoardColumnDoms[col.id];
     if (!dom) return;
-    dom.bodyEl.innerHTML = '';
-    boardCards.filter((c) => c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).forEach((card) => dom.bodyEl.appendChild(buildCardEl(card, stalledFloors)));
+    const cardProps = boardCards
+      .filter((c) => c.column === col.id && !isCardFromArchivedJob(c) && isCardVisibleToMe(c))
+      .map((card) => buildCardProps(card, stalledFloors));
+    renderBoardCardsInto(dom.bodyEl, cardProps);
   });
 
   document.getElementById('boardCount')!.textContent = String(boardCards.filter((c) => !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).length);
@@ -1283,6 +1287,15 @@ function renderBoard(): void {
   }
 }
 
+// Still imperative, unchanged — this is home.ts's own
+// renderHomeWorkflowExpandedBoard() reusing the pre-Preact card-building
+// logic to append real card elements into ITS OWN plain innerHTML-rebuilt
+// container (a totally separate concern from the real Board tab's
+// col-body-<id>, which is now Preact's — see buildCardProps() below).
+// Kept as its own separate function rather than unified with
+// buildCardProps() (e.g. via a throwaway Preact root per call) to keep
+// this piece scoped to the real Board tab; Home's own mini-board widget
+// converting to Preact is its own separate, not-yet-investigated piece.
 function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): HTMLElement {
   const el = document.createElement('div');
   const hasOverride = !!(card.manualColumn && card.manualColumnUntil && Date.now() < card.manualColumnUntil);
@@ -1408,6 +1421,118 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditCard(card.id); }
   });
   return el;
+}
+
+// Preact-rendered replacement for buildCardEl(), used by the real Board
+// tab's col-body-<id> (see renderBoard() above) now that it's a stable,
+// persistent container Preact can diff against across renders — see
+// board-card.tsx's own header comment for why that's safe even with
+// native HTML5 drag-and-drop.
+function buildCardProps(card: BoardCard, stalledFloors?: Record<string, number>): BoardCardProps {
+  const hasOverride = !!(card.manualColumn && card.manualColumnUntil && Date.now() < card.manualColumnUntil);
+  const overrideTitle = hasOverride
+    ? 'Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil!).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : '';
+
+  let dueBadge: CardDueBadge | null = null;
+  if (card.due) {
+    const isOverdue = !isFinishedColumnId(card.column) && new Date(card.due + 'T00:00:00') < new Date(new Date().toDateString());
+    const dueLabel = new Date(card.due + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    dueBadge = { overdue: isOverdue, label: dueLabel };
+  }
+
+  // Time-in-stage, not a due date — see buildHomeStalledRows() for the
+  // matching Home widget. Skipped on a finished-trigger column for the
+  // same reason the overdue badge above is: a job that's already done
+  // sitting in Complete isn't "stalled," it's just parked. thresholdDays
+  // comes from computeColumnStalledFloors() (see home.ts) when the caller
+  // passed it — the admin-configured floor raised to this column's own
+  // current median dwell time, so a column where long dwell is simply
+  // normal doesn't badge nearly every card in it. Falls back to the
+  // plain configured floor if no floors map was passed in.
+  let stalledBadge: CardStalledBadge | null = null;
+  if (card.columnEnteredAt && !isFinishedColumnId(card.column)) {
+    const col = BOARD_COLUMNS.find((c) => c.id === card.column);
+    const configuredThresholdDays = (col && col.stalledAfterDays) || DEFAULT_STALLED_AFTER_DAYS;
+    const thresholdDays = (stalledFloors && stalledFloors[card.column]) || configuredThresholdDays;
+    const daysInStage = Math.floor((Date.now() - card.columnEnteredAt) / 86400000);
+    if (daysInStage >= thresholdDays) {
+      stalledBadge = { title: daysInStage + ' days in this board', label: daysInStage + 'd stalled' };
+    }
+  }
+
+  // Plain "Label: value" text rows (Trello-style) instead of icon
+  // pills/badges — driven straight off CUSTOM_FIELD_DEFS so a field's
+  // label here always matches its label in the Team/Custom Fields forms.
+  // 'members' is skipped (would be a long name list, not a fit for a
+  // single line on the card face).
+  const cf = card.customFields || {};
+  const metaLines: CardMetaLine[] = [];
+  CUSTOM_FIELD_DEFS.forEach((def) => {
+    if (def.key === 'members') return;
+    let val = cf[def.key] as string;
+    if (!val) return;
+    if (def.type === 'user-select') val = displayNameForUsername(val);
+    metaLines.push({ label: def.label, value: val });
+  });
+
+  // Current stage's checklist only — a pure read (no lazy-seed/write here,
+  // this renders on every board paint and could race a remote sync if it
+  // wrote to card.checklists). Previews exactly what
+  // getChecklistForStageInProject() (the My Checklist tab) would
+  // materialize if this stage were opened right now: stored items
+  // (minus any soft-deleted ones — see deleteMyChecklistItem()) plus any
+  // template item this stage hasn't seen yet (matched by id, so a
+  // deliberately-removed template item never gets counted back in just
+  // because the template gained an unrelated new item).
+  ensureCardChecklists(card);
+  const stageCol = BOARD_COLUMNS.find((c) => c.id === card.column);
+  const templ = (stageCol && stageCol.defaultChecklist) || [];
+  const stored = (card.checklists && card.checklists[card.column]) || [];
+  const storedIds = stored.map((i: any) => i.id);
+  let checklist: any[] = stored.filter((i: any) => !i.removed).concat(
+    (templ as any[]).filter((d: any) => storedIds.indexOf(d.id) === -1).map((d: any) => ({ id: d.id, text: d.text, done: false, assignee: '' }))
+  );
+  // A stage assigned to someone else (see setMyChecklistStageAssignee()) is
+  // private — no badge leaking its progress to viewers who can't open it.
+  if (!isChecklistStageVisibleToMe(card.checklistAssignees, card.column)) checklist = [];
+  // Sub-items count toward this badge too — see My Checklist's own
+  // matching per-item rendering.
+  const allDoneFlags: boolean[] = checklist.reduce((acc: boolean[], i: any) => acc.concat([i.done], (i.subItems || []).map((s: any) => s.done)), []);
+  let checklistBadge: CardChecklistBadge | null = null;
+  if (allDoneFlags.length) {
+    const doneCount = allDoneFlags.filter(Boolean).length;
+    checklistBadge = { complete: doneCount === allDoneFlags.length, label: doneCount + '/' + allDoneFlags.length };
+  }
+
+  const attachments = card.attachments || [];
+
+  return {
+    id: String(card.id),
+    manualOverride: hasOverride,
+    draggable: hasMinTier('editor'),
+    borderLeftColor: card.color || 'var(--primary-light)',
+    title: hasOverride ? overrideTitle : undefined,
+    overrideBadge: hasOverride ? { title: overrideTitle + '. Click to reconnect now.', onClick: () => reconnectCard(card.id) } : null,
+    cardTitle: card.title || '',
+    metaLines,
+    dueBadge,
+    stalledBadge,
+    checklistBadge,
+    attachmentsLabel: attachments.length ? String(attachments.length) : null,
+    moveSelectOptions: BOARD_COLUMNS.map((col) => ({ id: col.id, label: col.label })),
+    moveSelectValue: card.column,
+    onMoveChange: (newColumnId: string) => moveCardToColumn(card.id, newColumnId),
+    onOpen: () => openEditCard(card.id),
+    // Opening the edit modal is the primary interaction and has its own
+    // keyboard path independent of the drag gesture (dragging itself
+    // stays mouse/touch-only — the mobile "Move to" <select> is the
+    // existing keyboard-reachable way to change a card's column) — see
+    // BoardCard's own onKeyDown in board-card.tsx.
+    onDragStart: handleCardDragStart,
+    onDragEnd: handleCardDragEnd,
+    ariaLabel: 'Open ' + (card.title || 'card'),
+  };
 }
 
 // ===== BOARD: COLUMN SETTINGS DROPDOWN (⋮ menu) =====
