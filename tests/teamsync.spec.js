@@ -1953,9 +1953,8 @@ test('renderHomeOverdueWidget: overdue/today/soon cards produce three separately
     const today = new Date(new Date().toDateString());
     cards[0].due = toIsoDate(new Date(today.getTime() - 2 * 86400000)); // overdue
     cards[1].due = toIsoDate(today); // due today, nothing due "soon"
-    const html = renderHomeOverdueWidget(buildHomeOverdueRows());
-    const container = document.createElement('div');
-    container.innerHTML = html;
+    renderHomeDashboard();
+    const container = document.getElementById('homeOverdueBody');
     const todayEl = container.querySelector('#homeAlert-calendar-today');
     return {
       overdueText: container.querySelector('#homeAlert-calendar-overdue .home-widget-alert-text').textContent,
@@ -1975,9 +1974,8 @@ test('renderHomeOverdueWidget: overdue/today/soon cards produce three separately
     const today = new Date(new Date().toDateString());
     cards.forEach(function (c) { c.due = ''; }); // clear the previous test's dates
     cards[0].due = toIsoDate(new Date(today.getTime() + 2 * 86400000)); // due soon, nothing overdue/today
-    const html = renderHomeOverdueWidget(buildHomeOverdueRows());
-    const container = document.createElement('div');
-    container.innerHTML = html;
+    renderHomeDashboard();
+    const container = document.getElementById('homeOverdueBody');
     const soonEl = container.querySelector('#homeAlert-calendar-soon');
     return {
       todayAbsent: !container.querySelector('#homeAlert-calendar-today'),
@@ -2001,7 +1999,8 @@ test('dismissHomeWidgetAlert: dismissing an alert hides it and persists across r
     const card = boardCards.find(function (c) { return !isFinishedColumnId(c.column); });
     const today = new Date(new Date().toDateString());
     card.due = toIsoDate(new Date(today.getTime() - 2 * 86400000));
-    const beforeDismiss = renderHomeOverdueWidget(buildHomeOverdueRows()).includes('homeAlert-calendar-overdue');
+    renderHomeDashboard();
+    const beforeDismiss = !!document.querySelector('#homeOverdueBody #homeAlert-calendar-overdue');
 
     // dismissHomeWidgetAlert() itself only removes a live DOM element and
     // writes localStorage — it doesn't re-render, so simulate the render
@@ -2009,13 +2008,15 @@ test('dismissHomeWidgetAlert: dismissing an alert hides it and persists across r
     const rows1 = buildHomeOverdueRows();
     const signature1 = rows1.filter(function (r) { return r.isOverdue; }).map(function (r) { return r.card.id; }).slice().sort().join(',');
     dismissHomeWidgetAlert({ stopPropagation: function () {} }, 'calendar-overdue', signature1);
-    const afterDismissSameData = renderHomeOverdueWidget(buildHomeOverdueRows()).includes('homeAlert-calendar-overdue');
+    renderHomeDashboard();
+    const afterDismissSameData = !!document.querySelector('#homeOverdueBody #homeAlert-calendar-overdue');
 
     // Now a second card also becomes overdue — the alert's ids (and so its
     // signature) changed, so the old dismissal shouldn't suppress it.
     const secondCard = boardCards.find(function (c) { return !isFinishedColumnId(c.column) && c.id !== card.id; });
     secondCard.due = toIsoDate(new Date(today.getTime() - 1 * 86400000));
-    const afterSetChanged = renderHomeOverdueWidget(buildHomeOverdueRows()).includes('homeAlert-calendar-overdue');
+    renderHomeDashboard();
+    const afterSetChanged = !!document.querySelector('#homeOverdueBody #homeAlert-calendar-overdue');
 
     return { beforeDismiss, afterDismissSameData, afterSetChanged };
   });

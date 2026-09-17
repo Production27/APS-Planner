@@ -168,8 +168,7 @@ import {
   applyHomeReflowTracks, toggleHomeWidgetExpand, buildHomeOverdueRows, buildHomeStalledRows, buildHomeStageSummary,
   buildHomeTodayScheduleRows, buildHomeUpcomingScheduleRows, buildHomeGanttUnclosedRows, renderHomeGreeting,
   getDismissedHomeWidgetAlerts,
-  isHomeWidgetAlertDismissed, dismissHomeWidgetAlert, renderHomeWidgetAlert, renderHomeOverdueWidget,
-  renderHomeCalendarExpanded, renderHomeCalendarMiniMonth, renderHomeWorkflowMiniBoard,
+  isHomeWidgetAlertDismissed, dismissHomeWidgetAlert, renderHomeWidgetAlert, renderHomeWorkflowMiniBoard,
   renderHomeWorkflowExpandedBoard, renderHomeTodayScheduleWidget, buildHomeJobChatFeed,
   renderHomeJobChatComposeOptions, renderHomeJobChat, postHomeJobChatComment,
   updateHomeJobChatComposeState,
@@ -755,9 +754,6 @@ declare global {
     isHomeWidgetAlertDismissed: typeof isHomeWidgetAlertDismissed;
     dismissHomeWidgetAlert: typeof dismissHomeWidgetAlert;
     renderHomeWidgetAlert: typeof renderHomeWidgetAlert;
-    renderHomeOverdueWidget: typeof renderHomeOverdueWidget;
-    renderHomeCalendarExpanded: typeof renderHomeCalendarExpanded;
-    renderHomeCalendarMiniMonth: typeof renderHomeCalendarMiniMonth;
     renderHomeWorkflowMiniBoard: typeof renderHomeWorkflowMiniBoard;
     renderHomeWorkflowExpandedBoard: typeof renderHomeWorkflowExpandedBoard;
     renderHomeTodayScheduleWidget: typeof renderHomeTodayScheduleWidget;
@@ -1334,9 +1330,6 @@ window.getDismissedHomeWidgetAlerts = getDismissedHomeWidgetAlerts;
 window.isHomeWidgetAlertDismissed = isHomeWidgetAlertDismissed;
 window.dismissHomeWidgetAlert = dismissHomeWidgetAlert;
 window.renderHomeWidgetAlert = renderHomeWidgetAlert;
-window.renderHomeOverdueWidget = renderHomeOverdueWidget;
-window.renderHomeCalendarExpanded = renderHomeCalendarExpanded;
-window.renderHomeCalendarMiniMonth = renderHomeCalendarMiniMonth;
 window.renderHomeWorkflowMiniBoard = renderHomeWorkflowMiniBoard;
 window.renderHomeWorkflowExpandedBoard = renderHomeWorkflowExpandedBoard;
 window.renderHomeTodayScheduleWidget = renderHomeTodayScheduleWidget;

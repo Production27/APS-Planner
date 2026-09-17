@@ -65,6 +65,7 @@ import { sendPresenceUpdate } from '../sync/presence';
 import { formatCommentWhen, postJobComment, postJobReply, deleteJobComment, deleteJobReply } from './job-comments';
 import { renderHomeJobChatListInto, type JobChatItemProps, type JobChatReply } from './home-jobchat';
 import { renderHomeChecklistWidgetInto, type HomeChecklistRowProps } from './home-checklist';
+import { renderHomeOverdueWidgetInto, type HomeAlertProps, type HomeCalMiniMonthCellProps, type HomeCalExpandedCellProps, type HomeCalExpandedBarProps } from './home-calendar';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
@@ -799,11 +800,20 @@ function getDismissedHomeWidgetAlerts(): Record<string, string> {
 function isHomeWidgetAlertDismissed(alertId: string, signature: string): boolean {
   return getDismissedHomeWidgetAlerts()[alertId] === signature;
 }
-function dismissHomeWidgetAlert(event: Event, alertId: string, signature: string): void {
-  event.stopPropagation();
+// Factored out of dismissHomeWidgetAlert() below so the Preact-rendered
+// Overdue widget's own dismiss handler (buildHomeAlertProps()) can reuse
+// just the persistence half — it re-renders instead of doing dismissHome
+// WidgetAlert()'s own raw `el.remove()`, which would desync Preact's vdom
+// from the live DOM now that this alert can sit inside a Preact subtree
+// (see home-calendar.tsx's own header comment).
+function persistHomeWidgetAlertDismissal(alertId: string, signature: string): void {
   const dismissed = getDismissedHomeWidgetAlerts();
   dismissed[alertId] = signature;
   localStorage.setItem(HOME_ALERT_DISMISS_KEY, JSON.stringify(dismissed));
+}
+function dismissHomeWidgetAlert(event: Event, alertId: string, signature: string): void {
+  event.stopPropagation();
+  persistHomeWidgetAlertDismissal(alertId, signature);
   const el = document.getElementById('homeAlert-' + alertId);
   if (el) el.remove();
 }
@@ -823,60 +833,65 @@ function renderHomeWidgetAlert(alertId: string, ids: string[], text: string, tie
   '</div>';
 }
 
+// Three severity tiers, worst first — same split the very first "Needs
+// Attention" mockup used (overdue red / today amber / later-this-week
+// blue), just as three independently-dismissible alerts on Calendar's own
+// widget instead of one merged cross-widget panel. Shared by both the
+// compact widget and the expanded-in-place grid below — the alerts
+// themselves don't depend on which body is showing underneath them.
+function buildHomeAlertProps(alertId: string, ids: string[], text: string, tier?: string): HomeAlertProps | null {
+  if (!ids.length) return null;
+  const signature = ids.slice().sort().join(',');
+  if (isHomeWidgetAlertDismissed(alertId, signature)) return null;
+  return {
+    alertId: alertId,
+    text: text,
+    tier: tier,
+    // Persists the dismissal, same as dismissHomeWidgetAlert(), but then
+    // re-renders instead of reaching for the DOM directly — see
+    // persistHomeWidgetAlertDismissal()'s own comment for why, now that
+    // this alert lives inside a Preact-owned subtree.
+    onDismiss: function (e: Event) {
+      e.stopPropagation();
+      persistHomeWidgetAlertDismissal(alertId, signature);
+      renderHomeDashboard();
+    },
+  };
+}
+function buildHomeOverdueAlertProps(rows: HomeOverdueRow[]): HomeAlertProps[] {
+  const overdueRows = rows.filter(function (r) { return r.isOverdue; });
+  const todayRows = rows.filter(function (r) { return !r.isOverdue && r.isToday; });
+  const soonRows = rows.filter(function (r) { return !r.isOverdue && !r.isToday; });
+  const alerts: HomeAlertProps[] = [];
+  const overdueAlert = buildHomeAlertProps('calendar-overdue', overdueRows.map(function (r) { return r.card.id; }),
+    overdueRows.length + (overdueRows.length === 1 ? ' job overdue' : ' jobs overdue'));
+  if (overdueAlert) alerts.push(overdueAlert);
+  const todayAlert = buildHomeAlertProps('calendar-today', todayRows.map(function (r) { return r.card.id; }),
+    todayRows.length + (todayRows.length === 1 ? ' job due today' : ' jobs due today'), 'today');
+  if (todayAlert) alerts.push(todayAlert);
+  const soonAlert = buildHomeAlertProps('calendar-soon', soonRows.map(function (r) { return r.card.id; }),
+    soonRows.length + (soonRows.length === 1 ? ' job due soon' : ' jobs due soon'), 'soon');
+  if (soonAlert) alerts.push(soonAlert);
+  return alerts;
+}
+
 // Row click reuses openMyChecklistItem() directly — despite the name,
 // that function is already generic (cross-project switch +
 // openEditCard()), nothing checklist-item-specific about it.
-function renderHomeOverdueWidget(rows: HomeOverdueRow[]): string {
-  // Three severity tiers, worst first — same split the very first "Needs
-  // Attention" mockup used (overdue red / today amber / later-this-week
-  // blue), just as three independently-dismissible alerts on Calendar's
-  // own widget instead of one merged cross-widget panel.
-  const overdueRows = rows.filter(function (r) { return r.isOverdue; });
-  const todayRows = rows.filter(function (r) { return !r.isOverdue && r.isToday; });
-  const soonRows = rows.filter(function (r) { return !r.isOverdue && !r.isToday; });
-  const alertHtml =
-    renderHomeWidgetAlert('calendar-overdue', overdueRows.map(function (r) { return r.card.id; }),
-      overdueRows.length + (overdueRows.length === 1 ? ' job overdue' : ' jobs overdue')) +
-    renderHomeWidgetAlert('calendar-today', todayRows.map(function (r) { return r.card.id; }),
-      todayRows.length + (todayRows.length === 1 ? ' job due today' : ' jobs due today'), 'today') +
-    renderHomeWidgetAlert('calendar-soon', soonRows.map(function (r) { return r.card.id; }),
-      soonRows.length + (soonRows.length === 1 ? ' job due soon' : ' jobs due soon'), 'soon');
-  if (!rows.length) return alertHtml + '<div class="home-widget-empty"><svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><div>No overdue or upcoming jobs.</div></div>';
-  return alertHtml + renderHomeCalendarMiniMonth(rows);
+function renderHomeOverdueWidgetCompactInto(containerEl: HTMLElement, rows: HomeOverdueRow[]): void {
+  const alerts = buildHomeOverdueAlertProps(rows);
+  if (!rows.length) {
+    renderHomeOverdueWidgetInto(containerEl, { alerts: alerts, expanded: false, empty: true });
+    return;
+  }
+  const mini = buildHomeCalendarMiniMonthProps(rows);
+  renderHomeOverdueWidgetInto(containerEl, { alerts: alerts, expanded: false, empty: false, compactHeadLabel: mini.headLabel, compactCells: mini.cells });
 }
 
-// Expanded-in-place Calendar (see toggleHomeWidgetExpand()) — a real
-// month grid with real job bars, NOT the compact widget above at a
-// bigger size: renderHomeCalendarMiniMonth() only marks due dates (a
-// thin strip per day), it has no bar layout to just give more room to.
-// This instead ports renderMonthCalendar()'s own data/lane-packing (the
-// real Calendar tab, month view) — buildCalendarJobRows(getVisibleJobs())
-// for job task spans plus flattenCalendarEventsForRange() for standalone
-// events, laid out with the identical per-week lane-packing pass — so a
-// job's actual scheduled date range shows as a real multi-day bar, same
-// as the real page. Reuses buildCalBarHtml() itself for the bar markup
-// (identical visual fidelity: softened fill, job-color border, cluster
-// hatching), but NOT the real Calendar tab's #calendarDays element or
-// its delegated mousedown/drag listener (attached only to that specific
-// element — see renderCalendar()'s own "daysEl.addEventListener"), so
-// reusing the bar HTML alone would leave every bar inert here. Click-to-
-// open is wired directly per bar below instead, and drag handles (which
-// come along in buildCalBarHtml()'s markup for free but have nothing
-// listening for them in this context) are stripped so they don't sit
-// there as dead affordances.
-function renderHomeCalendarExpanded(rows: HomeOverdueRow[], containerEl: HTMLElement): void {
-  const overdueRows = rows.filter(function (r) { return r.isOverdue; });
-  const todayRows = rows.filter(function (r) { return !r.isOverdue && r.isToday; });
-  const soonRows = rows.filter(function (r) { return !r.isOverdue && !r.isToday; });
-  const alertHtml =
-    renderHomeWidgetAlert('calendar-overdue', overdueRows.map(function (r) { return r.card.id; }),
-      overdueRows.length + (overdueRows.length === 1 ? ' job overdue' : ' jobs overdue')) +
-    renderHomeWidgetAlert('calendar-today', todayRows.map(function (r) { return r.card.id; }),
-      todayRows.length + (todayRows.length === 1 ? ' job due today' : ' jobs due today'), 'today') +
-    renderHomeWidgetAlert('calendar-soon', soonRows.map(function (r) { return r.card.id; }),
-      soonRows.length + (soonRows.length === 1 ? ' job due soon' : ' jobs due soon'), 'soon');
-
-  const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Shared by the compact mini-month and the expanded grid below — a
+// month's worth of calendar-grid dates (this week-grid math, not the
+// job/bar data, is identical either way).
+function buildHomeMonthGridDates(): { cellDates: Date[]; month: number; today: Date } {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const year = today.getFullYear(), month = today.getMonth();
@@ -890,7 +905,19 @@ function renderHomeCalendarExpanded(rows: HomeOverdueRow[], containerEl: HTMLEle
     d.setHours(0, 0, 0, 0);
     cellDates.push(d);
   }
+  return { cellDates: cellDates, month: month, today: today };
+}
 
+// Pure data/lane-packing pass behind the expanded grid's real job bars —
+// ports renderMonthCalendar()'s own data/lane-packing (the real Calendar
+// tab, month view): buildCalendarJobRows(getVisibleJobs()) for job task
+// spans plus flattenCalendarEventsForRange() for standalone events, laid
+// out with the identical per-week lane-packing pass — so a job's actual
+// scheduled date range shows as a real multi-day bar, same as the real
+// page. No DOM/rendering here — see renderHomeCalendarExpandedInto()
+// below for why that has to happen in a second pass, after real layout
+// exists to measure against.
+function buildHomeCalendarExpandedLayout(cellDates: Date[]): { numRows: number; rowLanes: number[]; rowSegments: any[][] } {
   const flatRows = buildCalendarJobRows(getVisibleJobs());
   const allJobs: any[] = flatRows.map(function (row: any, flatIdx: number) {
     return {
@@ -932,30 +959,72 @@ function renderHomeCalendarExpanded(rows: HomeOverdueRow[], containerEl: HTMLEle
     rowLanes.push(laneEndCols.length);
     rowSegments.push(segs);
   }
+  return { numRows: numRows, rowLanes: rowLanes, rowSegments: rowSegments };
+}
 
-  let daysHtml = '';
-  for (let row = 0; row < numRows; row++) {
-    const minH = CAL_DAYNUM_H + Math.max(rowLanes[row], 1) * (CAL_BAR_H + CAL_BAR_GAP) + 10;
+// Expanded-in-place Calendar (see toggleHomeWidgetExpand()) — a real
+// month grid with real job bars, NOT the compact widget below at a
+// bigger size: the compact widget only marks due dates (a thin strip per
+// day), it has no bar layout to just give more room to.
+//
+// Two Preact render passes, not one: bar top/left/width need the day
+// cells' own real layout (offsetTop, row width) to compute against, which
+// only exists once those cells are actually in the DOM — same reason the
+// real Calendar tab's own month view measures real .cal-day elements
+// before laying out its bars (see renderMonthCalendar() in calendar.ts).
+// The first pass renders the grid with no bars; the second pass renders
+// the SAME cell tree (so Preact reuses those nodes, no DOM churn) plus
+// the now-measured bars.
+//
+// Bar markup still comes from buildCalBarHtml() (kept in calendar.ts
+// specifically for this reuse) — see home-calendar.tsx's own header
+// comment for why it's rendered via dangerouslySetInnerHTML on the bar's
+// own element rather than reimplemented as JSX or wrapped in an extra
+// element. Click-to-open is wired directly per bar below instead of
+// reusing the real Calendar's delegated mousedown/drag listener (that's
+// attached only to #calendarDays), and drag handles (which come along in
+// buildCalBarHtml()'s markup for free but have nothing listening for them
+// in this context) are stripped so they don't sit there as dead
+// affordances.
+// Bars from this widget's last successful render, reused as pass 1's
+// filler below instead of an empty array — see renderHomeCalendarExpandedInto()'s
+// own comment for why. Fine to leave stale when the widget isn't showing
+// (compact mode, or a different tab) — it's overwritten on the very next
+// expanded render and never read anywhere else.
+let lastHomeCalendarExpandedBars: HomeCalExpandedBarProps[] = [];
+function renderHomeCalendarExpandedInto(containerEl: HTMLElement, rows: HomeOverdueRow[]): void {
+  const alerts = buildHomeOverdueAlertProps(rows);
+  const grid = buildHomeMonthGridDates();
+  const layout = buildHomeCalendarExpandedLayout(grid.cellDates);
+
+  const cells: HomeCalExpandedCellProps[] = [];
+  for (let row = 0; row < layout.numRows; row++) {
+    const minH = CAL_DAYNUM_H + Math.max(layout.rowLanes[row], 1) * (CAL_BAR_H + CAL_BAR_GAP) + 10;
     for (let col = 0; col < 7; col++) {
-      const cellDate = cellDates[row * 7 + col];
-      const isOutside = cellDate.getMonth() !== month;
-      const isToday = cellDate.getTime() === today.getTime();
-      daysHtml += '<div class="cal-day' + (isOutside ? ' cal-outside' : '') + (isToday ? ' cal-today' : '') +
-        '" style="min-height:' + minH + 'px;"><div class="cal-day-num">' + cellDate.getDate() + '</div></div>';
+      const cellDate = grid.cellDates[row * 7 + col];
+      cells.push({
+        cellKey: toIsoDate(cellDate),
+        dayNum: cellDate.getDate(),
+        isOutside: cellDate.getMonth() !== grid.month,
+        isToday: cellDate.getTime() === grid.today.getTime(),
+        minHeight: minH,
+      });
     }
   }
 
-  containerEl.innerHTML = alertHtml +
-    '<div class="calendar-grid home-cal-weekday-row">' + WEEKDAY_NAMES.map(function (d) { return '<div class="home-cal-weekday">' + d + '</div>'; }).join('') + '</div>' +
-    '<div class="calendar-grid calendar-days" id="homeCalDaysGrid">' + daysHtml + '</div>';
+  // Pass 1: cells (freshly computed) plus whatever bars were on screen a
+  // moment ago (stale positions, momentarily) rather than none at all —
+  // bars are position:absolute, so they contribute nothing to the cells'
+  // own layout either way, and this lets Preact match pass 2's
+  // same-barKey bars against these SAME nodes instead of tearing every
+  // bar down and rebuilding it on every single dashboard render (this
+  // widget's underlying schedule data rarely changes between renders,
+  // even though renderHomeDashboard() itself runs often).
+  renderHomeOverdueWidgetInto(containerEl, { alerts: alerts, expanded: true, expandedCells: cells, expandedBars: lastHomeCalendarExpandedBars });
 
   const daysGrid = containerEl.querySelector('#homeCalDaysGrid') as HTMLElement;
   const cellEls = daysGrid.querySelectorAll('.cal-day');
   const getCell = function (row: number, col: number) { return cellEls[row * 7 + col] as HTMLElement; };
-
-  const barsLayer = document.createElement('div');
-  barsLayer.className = 'cal-bars-layer';
-  daysGrid.appendChild(barsLayer);
   // Just a scratch value to feed buildCalBarHtml()'s own internal pixel
   // math (a multi-segment cluster bar divides this width to place its
   // inner stripe blocks) — never used as the bar's actual on-screen
@@ -964,8 +1033,9 @@ function renderHomeCalendarExpanded(rows: HomeOverdueRow[], containerEl: HTMLEle
   // percentage of this SAME number, which cancels out.
   const dayColPxEstimate = Math.max(1, daysGrid.getBoundingClientRect().width / 7);
 
-  for (let row = 0; row < numRows; row++) {
-    rowSegments[row].forEach(function (seg) {
+  const bars: HomeCalExpandedBarProps[] = [];
+  for (let row = 0; row < layout.numRows; row++) {
+    layout.rowSegments[row].forEach(function (seg: any, segIdx: number) {
       const startCell = getCell(row, seg.colStart);
       // Percent-of-row, not startCell.offsetLeft/offsetWidth — this
       // widget's own column is what .home-grid's expand transition is
@@ -984,6 +1054,11 @@ function renderHomeCalendarExpanded(rows: HomeOverdueRow[], containerEl: HTMLEle
       // offsetTop is already stable and safe to read synchronously.
       const top = startCell.offsetTop + CAL_DAYNUM_H + seg.lane * (CAL_BAR_H + CAL_BAR_GAP);
       const widthPxEstimate = dayColPxEstimate * (seg.colEnd - seg.colStart + 1);
+      // A detached scratch element, never inserted into the live
+      // document — used only to compute the bar's final class/style/
+      // innerHTML via the same DOM APIs buildCalBarHtml()'s old caller
+      // used, then read back off as plain values for Preact (see
+      // home-calendar.tsx's ExpandedBar).
       const wrap = document.createElement('div');
       wrap.innerHTML = buildCalBarHtml(seg, 0, top, widthPxEstimate);
       const barEl = wrap.firstElementChild as HTMLElement;
@@ -1004,19 +1079,32 @@ function renderHomeCalendarExpanded(rows: HomeOverdueRow[], containerEl: HTMLEle
         (segEl as HTMLElement).style.width = (segWidthPx / widthPxEstimate * 100) + '%';
       });
       barEl.querySelectorAll('[data-drag]').forEach(function (h) { h.remove(); });
-      barEl.addEventListener('click', function () {
-        if (isCalendarEventTaskId(seg.task.id)) {
-          const parsed = parseCalendarEventTaskId(seg.task.id);
-          openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
-        } else if (seg.job.isLinkedReference) {
-          jumpToLinkedJobReference(seg.job);
-        } else {
-          calendarOpenJob(seg.job.id, seg.task.id, seg.phaseId);
-        }
+      bars.push({
+        barKey: seg.job.id + '::' + seg.task.id + '::' + (seg.phaseId || '') + '::' + (seg.subPhaseId || '') + '::' + row,
+        className: barEl.className,
+        styleCssText: barEl.getAttribute('style') || '',
+        title: barEl.title,
+        innerHtml: barEl.innerHTML,
+        onClick: function () {
+          if (isCalendarEventTaskId(seg.task.id)) {
+            const parsed = parseCalendarEventTaskId(seg.task.id);
+            openEditCalendarEvent(parsed.eventId, parsed.sourceDate);
+          } else if (seg.job.isLinkedReference) {
+            jumpToLinkedJobReference(seg.job);
+          } else {
+            calendarOpenJob(seg.job.id, seg.task.id, seg.phaseId);
+          }
+        },
       });
-      barsLayer.appendChild(barEl);
     });
   }
+
+  // Pass 2: same cell tree (Preact reuses those nodes, no DOM churn) plus
+  // the now-measured bars — reusing THEIR previous nodes too wherever a
+  // bar's barKey matches one from pass 1 (see lastHomeCalendarExpandedBars
+  // above).
+  lastHomeCalendarExpandedBars = bars;
+  renderHomeOverdueWidgetInto(containerEl, { alerts: alerts, expanded: true, expandedCells: cells, expandedBars: bars });
 }
 
 // A real (tiny) month grid — today's month, leading/trailing days from
@@ -1029,12 +1117,12 @@ function renderHomeCalendarExpanded(rows: HomeOverdueRow[], containerEl: HTMLEle
 // and job identity stay two separate signals instead of the bar color
 // having to carry both. Every cell is clickable — jumps the real
 // Calendar to that day's month, not just switching tabs blind.
-function renderHomeCalendarMiniMonth(rows: HomeOverdueRow[]): string {
-  const today = new Date(new Date().toDateString());
-  const year = today.getFullYear(), month = today.getMonth();
-  const firstOfMonth = new Date(year, month, 1);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const gridStart = new Date(year, month, 1 - firstOfMonth.getDay());
+function buildHomeCalendarMiniMonthProps(rows: HomeOverdueRow[]): { headLabel: string; cells: HomeCalMiniMonthCellProps[] } {
+  const grid = buildHomeMonthGridDates();
+  const today = grid.today, month = grid.month;
+  const firstOfMonth = new Date(today.getFullYear(), month, 1);
+  const daysInMonth = new Date(today.getFullYear(), month + 1, 0).getDate();
+  const gridStart = new Date(today.getFullYear(), month, 1 - firstOfMonth.getDay());
   const totalCells = Math.ceil((firstOfMonth.getDay() + daysInMonth) / 7) * 7;
 
   const byDate: Record<string, HomeOverdueRow[]> = {};
@@ -1043,9 +1131,7 @@ function renderHomeCalendarMiniMonth(rows: HomeOverdueRow[]): string {
     (byDate[key] || (byDate[key] = [])).push(row);
   });
 
-  let html = '<div class="home-mini-cal-head">' + firstOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</div>';
-  html += '<div class="home-mini-cal-grid">';
-  ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(function (d) { html += '<div class="home-mini-cal-dow">' + d + '</div>'; });
+  const cells: HomeCalMiniMonthCellProps[] = [];
   for (let i = 0; i < totalCells; i++) {
     const cellDate = new Date(gridStart.getTime() + i * 86400000);
     const dayRows = byDate[toIsoDate(cellDate)] || [];
@@ -1057,21 +1143,23 @@ function renderHomeCalendarMiniMonth(rows: HomeOverdueRow[]): string {
       seenJobIds[r.job.id] = true;
       barColors.push(r.job.color || '#3949ab');
     });
-    const barsHtml = barColors.slice(0, 3).map(function (c) {
-      return '<span class="home-mini-cal-bar" style="background:' + c + ';"></span>';
-    }).join('');
-    const onclick = 'calendarViewDate=new Date(' + cellDate.getFullYear() + ',' + cellDate.getMonth() + ',' + cellDate.getDate() + ');calendarViewMode=\'month\';switchTabMorphed(\'calendar\')';
-    html += '<div class="home-mini-cal-day' +
-      (cellDate.getMonth() !== month ? ' other-month' : '') +
-      (cellDate.getTime() === today.getTime() ? ' today' : '') +
-      (hasOverdue ? ' has-overdue' : '') +
-      '" onclick="' + onclick + '">' +
-      '<span class="home-mini-cal-num">' + cellDate.getDate() + '</span>' +
-      (barsHtml ? '<span class="home-mini-cal-bars">' + barsHtml + '</span>' : '') +
-    '</div>';
+    cells.push({
+      cellKey: toIsoDate(cellDate),
+      dayNum: cellDate.getDate(),
+      otherMonth: cellDate.getMonth() !== month,
+      isToday: cellDate.getTime() === today.getTime(),
+      hasOverdue: hasOverdue,
+      barColors: barColors.slice(0, 3),
+      onClick: (function (d) {
+        return function () {
+          calendarViewDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          calendarViewMode = 'month';
+          switchTabMorphed('calendar');
+        };
+      })(cellDate),
+    });
   }
-  html += '</div>';
-  return html;
+  return { headLabel: firstOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), cells: cells };
 }
 
 // A mini version of the real Board Workflow Strip: one vertical bar per
@@ -1463,8 +1551,8 @@ function renderHomeDashboard(): void {
   }
   const overdueBody = document.getElementById('homeOverdueBody');
   if (overdueBody) {
-    if (homeExpandedWidgetId === 'calendar') renderHomeCalendarExpanded(overdueRows, overdueBody);
-    else overdueBody.innerHTML = renderHomeOverdueWidget(overdueRows);
+    if (homeExpandedWidgetId === 'calendar') renderHomeCalendarExpandedInto(overdueBody, overdueRows);
+    else renderHomeOverdueWidgetCompactInto(overdueBody, overdueRows);
   }
   if (document.getElementById('homeStageBody')) {
     renderHomeWorkflowMiniBoard();
@@ -1518,9 +1606,6 @@ export {
   isHomeWidgetAlertDismissed,
   dismissHomeWidgetAlert,
   renderHomeWidgetAlert,
-  renderHomeOverdueWidget,
-  renderHomeCalendarExpanded,
-  renderHomeCalendarMiniMonth,
   renderHomeWorkflowMiniBoard,
   renderHomeWorkflowExpandedBoard,
   renderHomeTodayScheduleWidget,
