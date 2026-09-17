@@ -7,7 +7,7 @@
 // togglePhaseCollapse/getSubUnitKey/toggleTasksPhaseExpanded/
 // toggleTasksSubPhaseExpanded/expandAllGantt/collapseAllGantt/
 // toggleGanttJobFocus/clearGanttJobFocus/syncGanttJobFocusBanner/
-// buildPhaseSubTags/computeDateRange/showDatePopover/hideDatePopover/
+// computeDateRange/showDatePopover/hideDatePopover/
 // showTooltip), the visible-row builder (byStartDate/getPhaseSegments/
 // buildSegment/buildPhaseCollapsedRow/buildSubPhaseRow/
 // buildVisibleTaskRows — a pure data transformation, jobs/phases/tasks in
@@ -38,6 +38,7 @@ import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from 
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
 import { renderTaskRowsInto, type TaskRowProps, type TaskRowPillProps } from './gantt-task-row';
+import { renderTimelineBarsInto, type TaskBarEntryProps, type BarTagData, type JobSpanTickData, type JobSpanSegmentData, type JobSpanDueData } from './gantt-task-bar';
 import { showToast, moveTooltip, hideTooltip } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 
@@ -807,21 +808,20 @@ function syncGanttJobFocusBanner(): void {
   renderFocusBannerInto(el, true, job ? job.name : null, clearGanttJobFocus);
 }
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
-// Gantt bar. Returns an array of ready-to-append elements (0-2 of them).
-// `excludeSubTag` is set for a row that already represents a WHOLE folded
-// phase (no single sub-unit context to toggle).
-function buildPhaseSubTags(job: Job, phaseId: string | null, phaseName: string | null, subPhaseId: string | null, subPhaseName: string | null, phaseFoldable: boolean, excludeSubTag: boolean): HTMLElement[] {
-  const tags: HTMLElement[] = [];
+// Gantt bar, as plain data for BarTag (see gantt-task-bar.tsx) to render.
+// Returns 0-2 of them. `excludeSubTag` is set for a row that already
+// represents a WHOLE folded phase (no single sub-unit context to toggle).
+function buildPhaseSubTagsData(job: Job, phaseId: string | null, phaseName: string | null, subPhaseId: string | null, subPhaseName: string | null, phaseFoldable: boolean, excludeSubTag: boolean): BarTagData[] {
+  const tags: BarTagData[] = [];
   const bg = job.color || '#999';
-  function makeTag(folded: boolean, label: string, foldedTitle: string, unfoldedTitle: string, onClick: () => void): HTMLElement {
-    const t = document.createElement('span');
-    t.className = 'task-bar-job-tag collapsible';
-    t.style.background = bg;
-    t.textContent = (folded ? '▸' : '▾') + (label ? ' ' + label : '');
-    t.title = (folded ? foldedTitle : unfoldedTitle) + (label ? ' — ' + label : '');
-    t.addEventListener('mousedown', function(e) { e.stopPropagation(); });
-    t.addEventListener('click', function(e) { e.stopPropagation(); onClick(); });
-    return t;
+  function makeTag(folded: boolean, label: string, foldedTitle: string, unfoldedTitle: string, onClick: () => void): BarTagData {
+    return {
+      label: (folded ? '▸' : '▾') + (label ? ' ' + label : ''),
+      title: (folded ? foldedTitle : unfoldedTitle) + (label ? ' — ' + label : ''),
+      background: bg,
+      focused: false,
+      onClick: onClick,
+    };
   }
   if (phaseFoldable && phaseName !== null) {
     tags.push(makeTag(!tasksExpandedPhaseIds.has(phaseId as string), phaseName,
@@ -1167,6 +1167,58 @@ interface SetupDateRangeAndGridResult {
   savedScrollTop: number;
 }
 
+interface GanttGridLayers {
+  gridLinesLayer: HTMLElement;
+  rowBgLayer: HTMLElement;
+  todayLineLayer: HTMLElement;
+  barsLayer: HTMLElement;
+  connectorsLayer: HTMLElement;
+}
+let cachedGanttGridLayers: GanttGridLayers | null = null;
+
+// Five dedicated, purely structural sub-containers of `grid`, one per
+// concern that writes into it (grid-lines/today-bg from
+// buildDateHeader(), the zebra-stripe row backgrounds from
+// renderLeftPanelRows(), the today-line+label from drawTodayLine(), every
+// bar/tick/marker from renderTimelineBars(), the connector SVG from
+// drawConnectorLines()). A plain, unstyled div creates no new stacking
+// context and isn't a `position` ancestor, so absolutely-positioned
+// children inside these still resolve their left/top against `grid`
+// itself exactly as if these wrapper divs weren't there, and every
+// existing z-index still competes in that same shared stacking context
+// across group boundaries — this changes nothing visible, only which
+// specific element each function is handed to append into.
+//
+// Created ONCE and cached rather than fresh on every render — barsLayer
+// is Preact-rendered (see renderTimelineBars()), and Preact needs the
+// SAME container object across calls to diff against; a fresh
+// document.createElement('div') every render would look like a brand-new,
+// never-before-seen container each time, defeating node reuse entirely
+// (this is exactly how #timelineHeader/#leftBody already behave, being
+// static elements from index.html rather than dynamically created ones —
+// see buildDateHeader()'s/renderLeftPanelRows()'s own comments). The
+// `grid.contains()` guard re-creates them if `grid` itself was ever reset
+// out from under this cache (defensive; `grid` is a static element from
+// index.html today and never actually is).
+function getOrCreateGanttGridLayers(grid: HTMLElement): GanttGridLayers {
+  if (cachedGanttGridLayers && grid.contains(cachedGanttGridLayers.barsLayer)) {
+    return cachedGanttGridLayers;
+  }
+  grid.innerHTML = '';
+  const gridLinesLayer = document.createElement('div');
+  const rowBgLayer = document.createElement('div');
+  const todayLineLayer = document.createElement('div');
+  const barsLayer = document.createElement('div');
+  const connectorsLayer = document.createElement('div');
+  grid.appendChild(gridLinesLayer);
+  grid.appendChild(rowBgLayer);
+  grid.appendChild(todayLineLayer);
+  grid.appendChild(barsLayer);
+  grid.appendChild(connectorsLayer);
+  cachedGanttGridLayers = { gridLinesLayer, rowBgLayer, todayLineLayer, barsLayer, connectorsLayer };
+  return cachedGanttGridLayers;
+}
+
 function setupDateRangeAndGrid(): SetupDateRangeAndGridResult {
   computeDateRange();
   const totalDays = getDaysDiff(startDate, endDate) + 1;
@@ -1186,48 +1238,37 @@ function setupDateRangeAndGrid(): SetupDateRangeAndGridResult {
 
   grid.style.width = gridWidth + 'px';
   header.style.width = gridWidth + 'px';
-  grid.innerHTML = '';
   // header's and leftBody's children are Preact-rendered now (see
   // buildDateHeader()/renderLeftPanelRows() below and
   // src/views/gantt-date-header.tsx/gantt-task-row.tsx) — NOT cleared
   // here on purpose, for both of them. Preact keeps its own internal
   // record of what it last rendered into a container; wiping that out
-  // from outside (grid's own `innerHTML = ''` above is fine — it stays
-  // fully imperative) leaves that record pointing at DOM nodes that no
-  // longer exist, so the next render() call diffs against a stale tree
-  // and silently produces nothing. Preact's own diffing replaces the
-  // previous render's output on every call regardless — it doesn't need
-  // this reset the way plain innerHTML-rebuilding code does.
-
-  // Five dedicated, purely structural sub-containers of `grid` — one per
-  // concern that writes into it (grid-lines/today-bg from
-  // buildDateHeader(), the zebra-stripe row backgrounds from
-  // renderLeftPanelRows(), the today-line+label from drawTodayLine(),
-  // every bar/tick/marker from renderTimelineBars(), the connector SVG
-  // from drawConnectorLines()). Previously all five were flat siblings
-  // directly under `grid`, rebuilt in whatever order renderGantt() called
-  // their owning functions — harmless so far since every visible layering
-  // decision already goes through explicit z-index values (60-86) rather
-  // than relying on DOM order, but it meant no one concern could ever
-  // become Preact's to own without risking its diffing stepping on a
-  // completely unrelated sibling's own imperative writes the next time
-  // `grid.innerHTML` gets reset. A plain, unstyled div creates no new
-  // stacking context and isn't a `position` ancestor, so absolutely-
-  // positioned children inside these still resolve their left/top against
-  // `grid` itself exactly as if these wrapper divs weren't there, and
-  // every existing z-index still competes in that same shared stacking
-  // context across group boundaries — this changes nothing visible, only
-  // which specific element each function is handed to append into.
-  const gridLinesLayer = document.createElement('div');
-  const rowBgLayer = document.createElement('div');
-  const todayLineLayer = document.createElement('div');
-  const barsLayer = document.createElement('div');
-  const connectorsLayer = document.createElement('div');
-  grid.appendChild(gridLinesLayer);
-  grid.appendChild(rowBgLayer);
-  grid.appendChild(todayLineLayer);
-  grid.appendChild(barsLayer);
-  grid.appendChild(connectorsLayer);
+  // from outside leaves that record pointing at DOM nodes that no longer
+  // exist, so the next render() call diffs against a stale tree and
+  // silently produces nothing. Preact's own diffing replaces the previous
+  // render's output on every call regardless — it doesn't need this reset
+  // the way plain innerHTML-rebuilding code does.
+  //
+  // The same is now true of `grid` itself: barsLayer below is ALSO
+  // Preact-rendered (see renderTimelineBars()/gantt-task-bar.tsx), so
+  // `grid.innerHTML = ''` can no longer run unconditionally on every call
+  // the way it used to — that would destroy and recreate barsLayer itself
+  // every render, handing Preact a brand-new, never-before-seen container
+  // each time with no prior tree to diff against, silently defeating node
+  // reuse entirely (caught live: a bar's own DOM identity check came back
+  // false after this refactor, wired up before Preact ever owned any of
+  // `grid`'s content). All five sub-containers are now created ONCE and
+  // cached across renders instead.
+  const gridLayers = getOrCreateGanttGridLayers(grid);
+  const { gridLinesLayer, rowBgLayer, todayLineLayer, barsLayer, connectorsLayer } = gridLayers;
+  // These four stay fully imperative and rebuild themselves from scratch
+  // every render (unchanged behavior) — each now clears only ITS OWN
+  // layer, since the old blanket `grid.innerHTML = ''` that used to do
+  // this for them is gone. barsLayer is deliberately never cleared this
+  // way — see its own note above.
+  gridLinesLayer.innerHTML = '';
+  rowBgLayer.innerHTML = '';
+  todayLineLayer.innerHTML = '';
 
   return {
     grid, header, leftBody, gridLinesLayer, rowBgLayer, todayLineLayer, barsLayer, connectorsLayer,
@@ -1252,6 +1293,10 @@ function buildDateHeader(totalDays: number, gridLinesLayer: HTMLElement, header:
     (weekLeft) => document.getElementById('timelineBody')!.scrollTo({ left: weekLeft - 20, behavior: 'smooth' })
   );
 
+  // gridLinesLayer is already cleared by setupDateRangeAndGrid() before
+  // this runs (see its own comment on why that clear moved from a blanket
+  // `grid.innerHTML = ''` to per-layer, now that barsLayer is a sibling
+  // Preact must keep across renders).
   cells.days.forEach(function (d) {
     const line = document.createElement('div');
     line.className = 'grid-line' + (d.isWeekend ? ' weekend-line' : '');
@@ -1315,6 +1360,8 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     // Zebra-stripe background — stays fully imperative, appended into its
     // own dedicated sub-container of #timelineGrid (see
     // setupDateRangeAndGrid()'s own comment — not Preact's to own).
+    // rowBgLayer is already cleared by setupDateRangeAndGrid() before
+    // this runs.
     // Deliberately NOT given a data-row-key (and so never animated by
     // animateReorderedBars() — see allRowKeyedElements()) even though the
     // row below very much needs one: this is pure decoration, full page
@@ -1466,6 +1513,8 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
 }
 
 function drawTodayLine(todayLineLayer: HTMLElement, today: Date, totalDays: number): void {
+  // todayLineLayer is already cleared by setupDateRangeAndGrid() before
+  // this runs (see its own comment).
   const todayIdx = getDaysDiff(startDate, today);
   if (todayIdx >= 0 && todayIdx < totalDays) {
     const tl = document.createElement('div');
@@ -1497,6 +1546,17 @@ function ganttRowKey(jobId: string, taskId: string | undefined, phaseId: string 
 }
 
 function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, jobBarMap: Record<string, JobBarMapEntry[]>): void {
+  // Builds one big props array (mirroring the original imperative build
+  // exactly — same variable names/math/comments where they still apply)
+  // and hands it to Preact in a single renderTimelineBarsInto() call. See
+  // gantt-task-bar.tsx's own header comment for why this container (and
+  // ALL its live-drag/reorder-animation interactions) is safe to convert
+  // wholesale: both existing systems match elements by CSS class + data-*
+  // attributes (never DOM node identity), and no render — Preact or
+  // otherwise — ever runs while a drag/resize gesture is in progress
+  // (isBusyEditing() in src/sync/connection.ts), so Preact's diff never
+  // has a chance to fight a gesture's direct style.left/width mutations.
+  const entries: TaskBarEntryProps[] = [];
   let barVisibleIdx = 0;
   visibleRows.forEach(function (entry) {
     const job = entry.job, task = entry.task, phaseId = entry.phaseId, phaseName = entry.phaseName, subPhaseId = entry.subPhaseId, subPhaseName = entry.subPhaseName;
@@ -1511,100 +1571,69 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
     if (validDates && s && f) {
       const startIdx = getDaysDiff(startDate, s);
       const duration = getDaysDiff(s, f) + 1;
-      // Stable identity across a full rebuild (every render tears down and
-      // recreates every element here — see setupDateRangeAndGrid()'s
-      // grid.innerHTML reset) so animateReorderedBars() can tell "this is
-      // the same row, just moved" from "this is a different row that
-      // happens to land at the same top" — see its own comment for why
-      // that distinction matters. Applied to EVERY element this row draws,
-      // not just `bar` itself — a job-span row's actual VISIBLE content
-      // (the border outline, the job-name label, the due marker, the
-      // day-by-day segments below) are all separate elements layered over
-      // `bar`, which is left transparent and only exists as a fallback
-      // drag/click target (see its own comment) — AND renderLeftPanelRows()
-      // builds its own separate .task-row for this exact same row in the
-      // sidebar, which needs the identical key (see ganttRowKey()) so it
-      // animates in step too, instead of snapping while the timeline side
-      // glides (Karl's own report: "phases moving independently of the
-      // individual job bars").
+      // Stable identity across a re-render (Preact reuses a node whose
+      // `key` matches — see gantt-task-row.tsx's own note on why that's
+      // safe here too) so animateReorderedBars() can tell "this is the
+      // same row, just moved" from "this is a different row that happens
+      // to land at the same top" — see its own comment for why that
+      // distinction matters. Applied to EVERY element this row draws, not
+      // just `bar` itself — a job-span row's actual VISIBLE content (the
+      // border outline, the job-name label, the due marker, the day-by-day
+      // segments below) are all separate elements layered over `bar`,
+      // which is left transparent and only exists as a fallback drag/click
+      // target (see its own comment) — AND renderLeftPanelRows() builds
+      // its own separate .task-row for this exact same row in the sidebar,
+      // which needs the identical key (see ganttRowKey()) so it animates
+      // in step too, instead of snapping while the timeline side glides
+      // (Karl's own report: "phases moving independently of the individual
+      // job bars").
       const rowKey = ganttRowKey(job.id, task.id, phaseId, subPhaseId);
-      const bar = document.createElement('div');
-      bar.className = 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '') + (task.isDueMarker ? ' due-marker-bar' : '');
-      bar.dataset.dragged = 'false';
-      bar.dataset.rowKey = rowKey;
-      if (duration === 1) bar.classList.add('milestone');
-      bar.style.left = (startIdx * dayWidth) + 'px';
-      bar.style.width = (duration * dayWidth) + 'px';
-      bar.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
+      const left = startIdx * dayWidth;
+      const width = duration * dayWidth;
+      const top = barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD;
+
+      // Captured at mount/update time (fires synchronously during
+      // Preact's own render() call, always before any later user
+      // interaction) so the plain-bar branch's resize handles — which
+      // listen on their OWN element, a child of `bar` — can still target
+      // `bar` itself via startBarResizeLeft/Right, exactly like the old
+      // `bar` closure variable did. jobBarMap needs the same node for
+      // drawConnectorLines()/redrawConnectorLinesLive() to measure at any
+      // time, not just mid-gesture, so it's populated here too.
+      let barNode: HTMLDivElement | null = null;
+      const barRef = (el: HTMLDivElement | null) => {
+        barNode = el;
+        if (!el) return;
+        if (!jobBarMap[job.id]) jobBarMap[job.id] = [];
+        jobBarMap[job.id].push({ left, width, top, bar: el, jobColor: job.color });
+      };
+
       if (task.isJobSpan) {
-        // Condensed 'jobs'/'leads' bar: left transparent — a solid fill
-        // here would otherwise show through in gap stretches, which are
-        // meant to look empty. `bar` itself stays in the DOM purely so a
-        // grab anywhere that isn't one of the individually-colored task
-        // segments (i.e. a gap, or an overlap hatch) still moves the whole
-        // job — all the color now comes from the outline and the
-        // individual day-segments built below.
-        bar.classList.add('job-span-bar');
-        const labelWrap = document.createElement('div');
-        labelWrap.className = 'job-span-name-wrap' + (job.isLinkedReference ? ' linked-ref' : '');
-        labelWrap.dataset.jobId = job.id;
-        labelWrap.dataset.phaseId = phaseId || '';
-        labelWrap.dataset.subPhaseId = subPhaseId || '';
-        labelWrap.dataset.rowKey = rowKey;
-        labelWrap.dataset.origLeft = String(startIdx * dayWidth);
-        labelWrap.style.left = (startIdx * dayWidth) + 'px';
-        labelWrap.style.width = (duration * dayWidth) + 'px';
-        labelWrap.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
         // Tasks view shows the phase/sub-phase fold toggles as their own
-        // separate tags (see buildPhaseSubTags() below) instead of folding
-        // them into this job tag, so the job tag itself is a pure label
-        // there — matches the left-panel pill split (see renderGantt()'s
-        // sidebar loop above).
+        // separate tags (see buildPhaseSubTagsData() below) instead of
+        // folding them into this job tag, so the job tag itself is a pure
+        // label there — matches the left-panel pill split (see
+        // renderGantt()'s sidebar loop above).
         const isTasksMode = ganttViewMode === 'tasks';
         const isFocusedJob = isTasksMode && ganttFocusedJobId === job.id;
-        const jobTag = document.createElement('span');
-        jobTag.className = 'task-bar-job-tag' + (isTasksMode || entry.collapsible ? ' collapsible' : '') + (isFocusedJob ? ' focused' : '');
-        // Not softened — see the comment on the other task-bar-job-tag
-        // background assignment above for why (hardcoded white text).
-        jobTag.style.background = job.color || '#999';
         const barCollapseGlyph = !isTasksMode && entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? '▸ ' : '▾ ') : '';
-        jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + barCollapseGlyph + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : '');
-        jobTag.title = (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : (entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases — ' : 'Click to collapse sub-phases into one bar — ') : '')) +
-          job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
         // The on-bar name tag gets the same click-to-focus (Tasks view) or
-        // collapse toggle (Jobs/Leads view) as the left-panel pill (see the
-        // .collapsible CSS above for the pointer-events opt-in) —
-        // stopPropagation so it toggles instead of also starting a
-        // whole-bar drag or falling through to editJob.
-        if (isTasksMode) {
-          jobTag.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-          jobTag.addEventListener('click', function (e) { e.stopPropagation(); toggleGanttJobFocus(job.id); });
-        } else if (entry.collapsible) {
-          jobTag.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-          jobTag.addEventListener('click', function (e) { e.stopPropagation(); togglePhaseCollapse(phaseId); });
-        }
-        labelWrap.appendChild(jobTag);
-        if (isTasksMode) {
-          buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, entry.collapsible, !!entry.collapsedSegments).forEach(function (t) { labelWrap.appendChild(t); });
-        }
-        barsLayer.appendChild(labelWrap);
-
-        // Outline the whole span in the job's own color — drawn as a
-        // separate overlay (rather than a border on `bar` itself) so it
-        // stays visible on top of the day-segments instead of being
-        // painted over by them.
-        const borderOverlay = document.createElement('div');
-        borderOverlay.className = 'job-span-border' + (job.isLinkedReference ? ' linked-ref' : '');
-        borderOverlay.dataset.jobId = job.id;
-        borderOverlay.dataset.phaseId = phaseId || '';
-        borderOverlay.dataset.subPhaseId = subPhaseId || '';
-        borderOverlay.dataset.rowKey = rowKey;
-        borderOverlay.dataset.origLeft = String(startIdx * dayWidth);
-        borderOverlay.style.left = (startIdx * dayWidth) + 'px';
-        borderOverlay.style.width = (duration * dayWidth) + 'px';
-        borderOverlay.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
-        borderOverlay.style.borderColor = job.color || '#3949ab';
-        barsLayer.appendChild(borderOverlay);
+        // collapse toggle (Jobs/Leads view) as the left-panel pill — its
+        // onClick (see BarTag in gantt-task-bar.tsx) wires the
+        // stopPropagation + 'collapsible' class together so it toggles
+        // instead of also starting a whole-bar drag or falling through to
+        // editJob.
+        const jobTag: BarTagData = {
+          label: (job.isLinkedReference ? '🔗 ' : '') + barCollapseGlyph + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : ''),
+          title: (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : (entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases — ' : 'Click to collapse sub-phases into one bar — ') : '')) +
+            job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : ''),
+          background: job.color || '#999',
+          focused: isFocusedJob,
+          onClick: isTasksMode ? (() => toggleGanttJobFocus(job.id)) : (entry.collapsible ? (() => togglePhaseCollapse(phaseId)) : undefined),
+        };
+        const subTags: BarTagData[] = isTasksMode
+          ? buildPhaseSubTagsData(job, phaseId, phaseName, subPhaseId, subPhaseName, entry.collapsible, !!entry.collapsedSegments)
+          : [];
 
         // Due date marker: its own little flagged circle (same look as a
         // Tasks-view due-marker bar), connected back to the condensed span
@@ -1612,10 +1641,10 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
         // already reaches the due date, in which case there's nothing to
         // bridge and the circle just sits on top of the bar instead (see
         // the z-index on .job-span-due-marker). Deliberately left out of
-        // the whole-job-move drag-along list below (unlike the ticks/
-        // segments) — moving the scheduled tasks doesn't move the deadline
-        // itself, only re-render() catching up on drop should change how
-        // far apart they are. It's independently draggable on its own via
+        // the whole-job-move drag-along list (unlike the ticks/segments) —
+        // moving the scheduled tasks doesn't move the deadline itself,
+        // only re-render() catching up on drop should change how far apart
+        // they are. It's independently draggable on its own via
         // startBarMove()'s existing DUE_MARKER_TASK_ID handling, same as
         // the Tasks-view due marker. Only drawn on the FIRST sub-unit's bar
         // (there's no per-sub-phase card to carry a second due date) — same
@@ -1629,53 +1658,13 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
         const parentPhaseForDue = getJobPhases(job).find(function (p) { return (p.id || null) === (phaseId || null); });
         const isFirstSubUnit = entry.collapsedSegments ? true : (!parentPhaseForDue || (getPhaseSubUnits(parentPhaseForDue)[0].id || null) === (subPhaseId || null));
         const dueTask = isFirstSubUnit ? getJobDueMarkerTask(job, phaseId) : null;
+        let due: JobSpanDueData | undefined;
         if (dueTask && dueTask.start) {
           const dueDate = new Date(dueTask.start + 'T00:00:00');
           const dueIdx = getDaysDiff(startDate, dueDate);
           const barEndIdx = startIdx + duration - 1;
           const dueLeft = dueIdx * dayWidth;
           const markerColor = (task.color as string | undefined) || '#e53935';
-
-          const dueEl = document.createElement('div');
-          dueEl.className = 'job-span-due-marker';
-          dueEl.dataset.jobId = job.id;
-          dueEl.dataset.dragged = 'false';
-          dueEl.dataset.rowKey = rowKey;
-          dueEl.style.left = dueLeft + 'px';
-          dueEl.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
-          dueEl.style.background = markerColor;
-          dueEl.textContent = '🚩';
-          dueEl.title = dueTask.name + ': ' + dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          dueEl.addEventListener('mouseenter', function (e) { showTooltip(e, job, dueTask); });
-          dueEl.addEventListener('mouseleave', hideTooltip);
-          dueEl.addEventListener('mousemove', moveTooltip);
-          // Read-only, same as the span's own bar/border just above — a
-          // linked reference job's real data lives in its home project, so
-          // this must jump there (like the bar) instead of calling editJob()
-          // straight against job.id, which belongs to the OTHER project's
-          // jobs array and would just silently no-op here. No mousedown/
-          // startBarMove wiring either — dragging isn't offered for a
-          // linked reference's bar, so its due marker shouldn't be
-          // draggable on its own either.
-          let openDueEl: () => void;
-          if (job.isLinkedReference) {
-            dueEl.classList.add('linked-ref');
-            openDueEl = () => jumpToLinkedJobReference(job);
-            dueEl.addEventListener('click', openDueEl);
-          } else {
-            dueEl.addEventListener('mousedown', function (e) { startBarMove(e, job.id, DUE_MARKER_TASK_ID, dueEl, false, phaseId); });
-            openDueEl = () => {
-              if (dueEl.dataset.dragged === 'true') { dueEl.dataset.dragged = 'false'; return; }
-              editJob(job.id, phaseId);
-            };
-            dueEl.addEventListener('click', openDueEl);
-          }
-          dueEl.tabIndex = 0;
-          dueEl.setAttribute('role', 'button');
-          dueEl.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDueEl(); }
-          });
-          barsLayer.appendChild(dueEl);
 
           let lineLeft: number | null = null, lineWidth = 0;
           if (dueIdx > barEndIdx) {
@@ -1685,322 +1674,299 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
             lineLeft = dueLeft + 18;
             lineWidth = (startIdx * dayWidth) - lineLeft;
           }
-          if (lineLeft !== null && lineWidth > 0) {
-            const dueLine = document.createElement('div');
-            dueLine.className = 'job-span-due-line';
-            dueLine.dataset.jobId = job.id;
-            // Its own vertically-CENTERED offset (row-half, not
-            // GANTT_BAR_PAD) — needs its own suffixed key for the same
-            // reason `bg`/`row` do (see their own comment).
-            dueLine.dataset.rowKey = rowKey + '::centerline';
-            dueLine.style.left = lineLeft + 'px';
-            dueLine.style.width = lineWidth + 'px';
-            dueLine.style.top = (barVisibleIdx * GANTT_ROW_H + Math.round(GANTT_ROW_H / 2) - 1) + 'px';
-            dueLine.style.background = markerColor;
-            barsLayer.appendChild(dueLine);
+
+          // Read-only, same as the span's own bar/border above — a linked
+          // reference job's real data lives in its home project, so this
+          // must jump there (like the bar) instead of calling editJob()
+          // straight against job.id, which belongs to the OTHER project's
+          // jobs array and would just silently no-op here. No mousedown/
+          // startBarMove wiring either — dragging isn't offered for a
+          // linked reference's bar, so its due marker shouldn't be
+          // draggable on its own either.
+          due = {
+            left: dueLeft, top,
+            background: markerColor,
+            title: dueTask.name + ': ' + dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            onMouseEnter: (e: MouseEvent) => showTooltip(e, job, dueTask),
+            onMouseLeave: hideTooltip,
+            onMouseMove: moveTooltip,
+            onMouseDown: job.isLinkedReference ? undefined : ((e: MouseEvent) => startBarMove(e, job.id, DUE_MARKER_TASK_ID, e.currentTarget as HTMLElement, false, phaseId)),
+            onClick: job.isLinkedReference
+              ? (() => jumpToLinkedJobReference(job))
+              : ((e: MouseEvent | KeyboardEvent) => {
+                  const el = e.currentTarget as HTMLElement;
+                  if (el.dataset.dragged === 'true') { el.dataset.dragged = 'false'; return; }
+                  editJob(job.id, phaseId);
+                }),
+            line: (lineLeft !== null && lineWidth > 0)
+              ? { left: lineLeft, width: lineWidth, top: (barVisibleIdx * GANTT_ROW_H + Math.round(GANTT_ROW_H / 2) - 1), background: markerColor }
+              : undefined,
+          };
+        }
+
+        // Jobs/Leads view: the condensed bar is one solid span, but the
+        // real tasks inside it usually run back-to-back rather than as a
+        // single block. Walk it day by day and group consecutive days that
+        // have the exact same set of covering tasks into one segment: a
+        // day covered by one task is drawn solid in that task's own color
+        // and is individually grabbable to move just that task (leaving
+        // the rest of the job alone), a day covered by two or more
+        // overlapping tasks gets a hard hatch alternating between their
+        // colors (click-through to the whole-job drag, since there's no
+        // single task to target), and a day covered by none is left blank.
+        // Ticks still mark each task's finish date (except the last, which
+        // already coincides with the bar's own right edge) so phase
+        // boundaries stay visible even between two same-colored/adjacent
+        // tasks.
+        // Skipped entirely for a linked reference — there's no single task
+        // to individually grab/resize on a read-only bar, so the day-by-day
+        // breakdown below (only useful for picking out one draggable task
+        // segment from another) has nothing to offer; the plain outline+
+        // label built above is enough.
+        const ticks: JobSpanTickData[] = [];
+        const segments: JobSpanSegmentData[] = [];
+        if (!job.isLinkedReference) {
+          // A collapsed row (see collapsedPhaseIds/buildPhaseCollapsedRow)
+          // still belongs to one specific phase — phaseId stays the row's
+          // real phase either way — it just has no single sub-unit to read
+          // tasks from (it spans every sub-phase of that phase). Build one
+          // synthetic "task" per sub-phase segment instead, each covering
+          // that sub-phase's own date range in the job's own color
+          // (per-task coloring doesn't generalize once the same task types
+          // repeat across sub-phases). Everything below (ticks, solid/hash/
+          // hatch grouping) is identical either way; only which list feeds
+          // it, and how a solid segment's drag/click is wired, differs.
+          const isCollapsedRow = !!entry.collapsedSegments;
+          const jobEndIdx = startIdx + duration - 1;
+          let datedTasks: { t: GanttTask; sIdx: number; eIdx: number }[];
+          if (isCollapsedRow && entry.collapsedSegments) {
+            datedTasks = entry.collapsedSegments.map(function (seg) {
+              return {
+                t: {
+                  id: 'subphaseseg|' + (seg.subPhaseId || ''),
+                  name: seg.subPhaseName || '', color: job.color, notes: '',
+                  start: toIsoDate(seg.start), finish: toIsoDate(seg.finish),
+                  subPhaseId: seg.subPhaseId,
+                },
+                sIdx: getDaysDiff(startDate, seg.start), eIdx: getDaysDiff(startDate, seg.finish),
+              };
+            });
+          } else {
+            const spanPhase = getJobPhases(job).find(function (p) { return (p.id || null) === (phaseId || null); });
+            const spanUnit = spanPhase && getPhaseSubUnits(spanPhase).find(function (s) { return (s.id || null) === (subPhaseId || null); });
+            datedTasks = ((spanUnit && spanUnit.tasks) || []).map(function (t) {
+              if (!t.start || !t.finish) return null;
+              const ts = new Date(t.start + 'T00:00:00'), tf = new Date(t.finish + 'T00:00:00');
+              if (isNaN(ts.getTime()) || isNaN(tf.getTime())) return null;
+              return { t: t, sIdx: getDaysDiff(startDate, ts), eIdx: getDaysDiff(startDate, tf) };
+            }).filter((x): x is { t: Task; sIdx: number; eIdx: number } => x !== null);
+          }
+
+          const seenIdx: Record<number, boolean> = {};
+          datedTasks.forEach(function (dt) {
+            if (dt.eIdx >= jobEndIdx || seenIdx[dt.eIdx]) return;
+            seenIdx[dt.eIdx] = true;
+            const tickLeft = (dt.eIdx + 1) * dayWidth;
+            // A sub-phase boundary (collapsed row) has no single task to
+            // resize — moving it would mean shifting every task in that
+            // sub-phase, which is what dragging the solid segment itself
+            // already does. Static divider only; a real task's tick still
+            // resizes as before.
+            ticks.push({
+              domKey: rowKey + '::tick::' + dt.t.id,
+              jobId: job.id, phaseId: phaseId || '',
+              subPhaseId: isCollapsedRow ? ((dt.t.subPhaseId as string | undefined) || '') : (subPhaseId || ''),
+              taskId: dt.t.id!, rowKey, origLeft: tickLeft, left: tickLeft, top,
+              title: isCollapsedRow ? (dt.t.name + ' ends') : (dt.t.name + ' — drag to change finish date'),
+              cursorDefault: isCollapsedRow,
+              onMouseDown: isCollapsedRow ? undefined : ((e: MouseEvent) => startTickResize(e, job.id, dt.t.id!, e.currentTarget as HTMLElement)),
+            });
+          });
+
+          // Keyed by task id (not color) so two different same-colored
+          // tasks never get merged into one segment — each solid segment
+          // needs to map to exactly one real task to be individually
+          // draggable.
+          const dayTasks: { t: GanttTask; sIdx: number; eIdx: number }[][] = [];
+          for (let i = 0; i < duration; i++) dayTasks.push([]);
+          datedTasks.forEach(function (dt) {
+            for (let d = Math.max(dt.sIdx, startIdx); d <= Math.min(dt.eIdx, jobEndIdx); d++) {
+              dayTasks[d - startIdx].push(dt);
+            }
+          });
+
+          let di = 0;
+          while (di < duration) {
+            const covering = dayTasks[di];
+            const key = covering.map(function (dt) { return dt.t.id; }).sort().join('|');
+            let dj = di;
+            while (dj + 1 < duration && dayTasks[dj + 1].map(function (dt) { return dt.t.id; }).sort().join('|') === key) dj++;
+            const segLeft = (startIdx + di) * dayWidth;
+            const segWidth = (dj - di + 1) * dayWidth;
+
+            if (covering.length === 0) {
+              segments.push({
+                domKey: rowKey + '::hash::' + segLeft, kind: 'hash',
+                jobId: job.id, phaseId: phaseId || '', subPhaseId: isCollapsedRow ? '' : (subPhaseId || ''),
+                rowKey, origLeft: segLeft, left: segLeft, width: segWidth, top,
+                title: 'No task scheduled here',
+              });
+            } else if (covering.length === 1) {
+              // Unambiguously one task's (or, collapsed, one sub-phase's)
+              // own stretch — grabbable to move just that task/sub-phase,
+              // same as an individual bar in Tasks view. Overlap (below)
+              // stays click-through since there's no single one to target
+              // there; it falls through to the whole-job drag on `bar`.
+              const dt = covering[0];
+              segments.push({
+                domKey: rowKey + '::solid::' + segLeft, kind: 'solid',
+                jobId: job.id, phaseId: phaseId || '',
+                subPhaseId: isCollapsedRow ? ((dt.t.subPhaseId as string | undefined) || '') : (subPhaseId || ''),
+                rowKey, origLeft: segLeft, left: segLeft, width: segWidth, top,
+                title: dt.t.name,
+                background: softenColor((dt.t.color as string | undefined) || job.color || '#3949ab'),
+                onMouseEnter: (e: MouseEvent) => showTooltip(e, job, dt.t),
+                onMouseLeave: hideTooltip,
+                onMouseMove: moveTooltip,
+                onMouseDown: isCollapsedRow
+                  ? ((e: MouseEvent) => startBarMove(e, job.id, dt.t.id!, e.currentTarget as HTMLElement, true, phaseId, dt.t.subPhaseId as string | null))
+                  : ((e: MouseEvent) => startBarMove(e, job.id, dt.t.id!, e.currentTarget as HTMLElement)),
+                onOpen: (e: MouseEvent | KeyboardEvent) => {
+                  const el = e.currentTarget as HTMLElement;
+                  if (el.dataset.dragged === 'true') { el.dataset.dragged = 'false'; return; }
+                  if (isCollapsedRow) editJob(job.id, phaseId, dt.t.subPhaseId as string | null);
+                  else editJob(job.id, phaseId, subPhaseId);
+                },
+              });
+            } else {
+              let background: string, title: string;
+              if (isCollapsedRow) {
+                // Every sub-phase segment already shares the same job
+                // color, so a normal same-color-dedup hatch would render
+                // as a flat fill indistinguishable from a solid segment.
+                // Alternate the job color with a darker shade of itself
+                // instead, so an overlap still reads as a hatch.
+                const base = softenColor(job.color || '#3949ab');
+                const dark = darkenColor(base, 0.28);
+                background = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
+                title = 'Overlapping sub-phases: ' + covering.map(function (dt) { return dt.t.name; }).join(', ');
+              } else {
+                const uniqColors = Array.from(new Set(covering.map(function (dt) { return softenColor((dt.t.color as string | undefined) || job.color || '#3949ab'); })));
+                const stripe = 6;
+                const stops: string[] = [];
+                uniqColors.forEach(function (c, idx) {
+                  stops.push(c + ' ' + (idx * stripe) + 'px');
+                  stops.push(c + ' ' + ((idx + 1) * stripe) + 'px');
+                });
+                background = 'repeating-linear-gradient(45deg, ' + stops.join(', ') + ')';
+                title = 'Overlapping tasks';
+              }
+              segments.push({
+                domKey: rowKey + '::hatch::' + segLeft, kind: 'hatch',
+                jobId: job.id, phaseId: phaseId || '', subPhaseId: isCollapsedRow ? '' : (subPhaseId || ''),
+                rowKey, origLeft: segLeft, left: segLeft, width: segWidth, top,
+                title, background,
+              });
+            }
+            di = dj + 1;
           }
         }
+
+        entries.push({
+          kind: 'jobspan',
+          rowKey, jobId: job.id, phaseId: phaseId || '', subPhaseId: subPhaseId || '',
+          linkedRef: !!job.isLinkedReference,
+          finished: isTaskFinished(job, task),
+          milestone: duration === 1,
+          left, width, top,
+          labelWrap: { jobTag, subTags },
+          borderColor: job.color || '#3949ab',
+          due,
+          // Condensed 'jobs'/'leads' bar: left transparent — a solid fill
+          // here would otherwise show through in gap stretches, which are
+          // meant to look empty. `bar` itself stays in the DOM purely so a
+          // grab anywhere that isn't one of the individually-colored task
+          // segments (i.e. a gap, or an overlap hatch) still moves the
+          // whole job — all the color comes from the outline and the
+          // individual day-segments above. Dragging it moves every one of
+          // the sub-unit's real tasks by the same number of days (see the
+          // isJobSpan branch in onBarMoveEnd), keeping the whole schedule
+          // connected. No resize handles — there's no single task to
+          // stretch.
+          onOpen: (e: MouseEvent | KeyboardEvent) => {
+            const el = e.currentTarget as HTMLElement;
+            if (el.dataset.dragged === 'true') { el.dataset.dragged = 'false'; return; }
+            if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId);
+          },
+          onMouseEnter: (e: MouseEvent) => showTooltip(e, job, task),
+          onMouseLeave: hideTooltip,
+          onMouseMove: moveTooltip,
+          onMouseDown: job.isLinkedReference ? undefined : ((e: MouseEvent) => startBarMove(e, job.id, task.id!, e.currentTarget as HTMLElement, true, phaseId, subPhaseId)),
+          barRef,
+          ticks, segments,
+        });
       } else {
-        bar.style.background = softenColor((task.color as string | undefined) || job.color);
         // Same job-color outline as a condensed Jobs/Leads bar, so which
         // job a task belongs to is visible at a glance without needing the
         // job-name tag below. Due markers keep their own white/red ring
         // instead — that's a distinct "this is a due date" signal, not a
         // job identity one. Left at full saturation (unsoftened) so it
         // still reads as a crisp edge against the softened fill.
-        if (!task.isDueMarker) bar.style.border = '2px solid ' + (job.color || '#3949ab');
-        bar.textContent = task.isDueMarker ? '🚩' : '';
+        const isTasksMode = ganttViewMode === 'tasks';
+        const isFocusedJob = isTasksMode && ganttFocusedJobId === job.id;
+        let jobTag: BarTagData | undefined;
+        let subTags: BarTagData[] | undefined;
         if (duration !== 1) {
-          const jobTag = document.createElement('span');
-          const isTasksMode = ganttViewMode === 'tasks';
-          const isFocusedJob = isTasksMode && ganttFocusedJobId === job.id;
           // Tasks view: clicking it isolates the Gantt to just this job
           // (see ganttFocusedJobId/toggleGanttJobFocus()) — Jobs/Leads
           // view's phase/sub-phase fold toggles are separate tags appended
           // below instead, matching the left-panel pill split.
-          jobTag.className = 'task-bar-job-tag' + (isTasksMode ? ' collapsible' : '') + (isFocusedJob ? ' focused' : '');
-          // Not softened — see the comment on the other task-bar-job-tag
-          // background assignments above for why (hardcoded white text).
-          jobTag.style.background = job.color;
-          jobTag.textContent = (job.isLinkedReference ? '🔗 ' : '') + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : '');
-          jobTag.title = (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
-          if (isTasksMode) {
-            jobTag.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-            jobTag.addEventListener('click', function (e) { e.stopPropagation(); toggleGanttJobFocus(job.id); });
-          }
-          bar.appendChild(jobTag);
-          if (isTasksMode) {
-            buildPhaseSubTags(job, phaseId, phaseName, subPhaseId, subPhaseName, entry.collapsible, false).forEach(function (t) { bar.appendChild(t); });
-          }
-        }
-      }
-      if (job.isLinkedReference) bar.classList.add('linked-ref');
-      bar.addEventListener('mouseenter', e => showTooltip(e, job, task));
-      bar.addEventListener('mouseleave', hideTooltip);
-      bar.addEventListener('mousemove', moveTooltip);
-      const openBar = () => {
-        if (bar.dataset.dragged === 'true') { bar.dataset.dragged = 'false'; return; }
-        if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId);
-      };
-      bar.addEventListener('click', openBar);
-      // Same open-via-keyboard treatment as the sidebar row above — the
-      // drag-to-reschedule/resize handles (mousedown-based, below) stay
-      // mouse/touch-only.
-      bar.tabIndex = 0;
-      bar.setAttribute('role', 'button');
-      bar.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBar(); }
-      });
-
-      // Read-only: a linked reference job's bar is never draggable/
-      // resizable — its real data lives in, and can only be edited from,
-      // its home project (see the "Interactivity" decision in the plan).
-      if (!job.isLinkedReference) {
-        if (task.isJobSpan) {
-          // Condensed 'jobs'/'leads' bar: dragging it moves every one of the
-          // sub-unit's real tasks by the same number of days (see the
-          // isJobSpan branch in onBarMoveEnd), keeping the whole schedule
-          // connected. No resize handles — there's no single task to stretch.
-          bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id!, bar, true, phaseId, subPhaseId));
-        } else {
-          bar.addEventListener('mousedown', e => startBarMove(e, job.id, task.id!, bar));
-
-          // A due date is a single point in time, not a range — only "move"
-          // makes sense, so it gets no resize handles.
-          if (!task.isDueMarker) {
-            const handleLeft = document.createElement('div');
-            handleLeft.className = 'task-bar-resize-handle task-bar-resize-handle-left';
-            handleLeft.title = 'Drag to change start date';
-            handleLeft.addEventListener('mousedown', e => startBarResizeLeft(e, job.id, task.id!, bar));
-            handleLeft.addEventListener('click', e => e.stopPropagation());
-            bar.appendChild(handleLeft);
-
-            const handleRight = document.createElement('div');
-            handleRight.className = 'task-bar-resize-handle task-bar-resize-handle-right';
-            handleRight.title = 'Drag to change finish date';
-            handleRight.addEventListener('mousedown', e => startBarResizeRight(e, job.id, task.id!, bar));
-            handleRight.addEventListener('click', e => e.stopPropagation());
-            bar.appendChild(handleRight);
-          }
-        }
-      }
-
-      barsLayer.appendChild(bar);
-
-      // Jobs/Leads view: the condensed bar is one solid span, but the real
-      // tasks inside it usually run back-to-back rather than as a single
-      // block. Walk it day by day and group consecutive days that have the
-      // exact same set of covering tasks into one segment: a day covered
-      // by one task is drawn solid in that task's own color and is
-      // individually grabbable to move just that task (leaving the rest of
-      // the job alone), a day covered by two or more overlapping tasks
-      // gets a hard hatch alternating between their colors (click-through
-      // to the whole-job drag, since there's no single task to target), and
-      // a day covered by none is left blank. Ticks still mark each task's
-      // finish date (except the last, which already coincides with the
-      // bar's own right edge) so phase boundaries stay visible even
-      // between two same-colored/adjacent tasks.
-      // Skipped entirely for a linked reference — there's no single task
-      // to individually grab/resize on a read-only bar, so the day-by-day
-      // breakdown below (only useful for picking out one draggable task
-      // segment from another) has nothing to offer; the plain outline+
-      // label from the isJobSpan branch above is enough.
-      if (task.isJobSpan && !job.isLinkedReference) {
-        // A collapsed row (see collapsedPhaseIds/buildPhaseCollapsedRow)
-        // still belongs to one specific phase — phaseId stays the row's
-        // real phase either way — it just has no single sub-unit to read
-        // tasks from (it spans every sub-phase of that phase). Build one
-        // synthetic "task" per sub-phase segment instead, each covering
-        // that sub-phase's own date range in the job's own color
-        // (per-task coloring doesn't generalize once the same task types
-        // repeat across sub-phases). Everything below (ticks, solid/hash/
-        // hatch grouping) is identical either way; only which list feeds
-        // it, and how a solid segment's drag/click is wired, differs.
-        const isCollapsedRow = !!entry.collapsedSegments;
-        const jobEndIdx = startIdx + duration - 1;
-        let datedTasks: { t: GanttTask; sIdx: number; eIdx: number }[];
-        if (isCollapsedRow && entry.collapsedSegments) {
-          datedTasks = entry.collapsedSegments.map(function (seg) {
-            return {
-              t: {
-                id: 'subphaseseg|' + (seg.subPhaseId || ''),
-                name: seg.subPhaseName || '', color: job.color, notes: '',
-                start: toIsoDate(seg.start), finish: toIsoDate(seg.finish),
-                subPhaseId: seg.subPhaseId,
-              },
-              sIdx: getDaysDiff(startDate, seg.start), eIdx: getDaysDiff(startDate, seg.finish),
-            };
-          });
-        } else {
-          const spanPhase = getJobPhases(job).find(function (p) { return (p.id || null) === (phaseId || null); });
-          const spanUnit = spanPhase && getPhaseSubUnits(spanPhase).find(function (s) { return (s.id || null) === (subPhaseId || null); });
-          datedTasks = ((spanUnit && spanUnit.tasks) || []).map(function (t) {
-            if (!t.start || !t.finish) return null;
-            const ts = new Date(t.start + 'T00:00:00'), tf = new Date(t.finish + 'T00:00:00');
-            if (isNaN(ts.getTime()) || isNaN(tf.getTime())) return null;
-            return { t: t, sIdx: getDaysDiff(startDate, ts), eIdx: getDaysDiff(startDate, tf) };
-          }).filter((x): x is { t: Task; sIdx: number; eIdx: number } => x !== null);
+          jobTag = {
+            label: (job.isLinkedReference ? '🔗 ' : '') + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : ''),
+            title: (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : ''),
+            background: job.color,
+            focused: isFocusedJob,
+            onClick: isTasksMode ? (() => toggleGanttJobFocus(job.id)) : undefined,
+          };
+          if (isTasksMode) subTags = buildPhaseSubTagsData(job, phaseId, phaseName, subPhaseId, subPhaseName, entry.collapsible, false);
         }
 
-        const seenIdx: Record<number, boolean> = {};
-        datedTasks.forEach(function (dt) {
-          if (dt.eIdx >= jobEndIdx || seenIdx[dt.eIdx]) return;
-          seenIdx[dt.eIdx] = true;
-          const tickLeft = (dt.eIdx + 1) * dayWidth;
-          const tick = document.createElement('div');
-          tick.className = 'job-span-task-tick';
-          tick.dataset.jobId = job.id;
-          tick.dataset.phaseId = phaseId || '';
-          tick.dataset.subPhaseId = isCollapsedRow ? ((dt.t.subPhaseId as string | undefined) || '') : (subPhaseId || '');
-          tick.dataset.taskId = dt.t.id;
-          tick.dataset.rowKey = rowKey;
-          tick.dataset.origLeft = String(tickLeft);
-          tick.style.left = tickLeft + 'px';
-          tick.style.top = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
-          // A sub-phase boundary (collapsed row) has no single task to
-          // resize — moving it would mean shifting every task in that
-          // sub-phase, which is what dragging the solid segment itself
-          // already does. Static divider only; a real task's tick still
-          // resizes as before.
-          if (isCollapsedRow) {
-            tick.title = dt.t.name + ' ends';
-            tick.style.cursor = 'default';
-          } else {
-            tick.title = dt.t.name + ' — drag to change finish date';
-            tick.addEventListener('mousedown', function (e) { startTickResize(e, job.id, dt.t.id!, tick); });
-          }
-          tick.addEventListener('click', function (e) { e.stopPropagation(); });
-          barsLayer.appendChild(tick);
+        // Read-only: a linked reference job's bar is never draggable/
+        // resizable — its real data lives in, and can only be edited from,
+        // its home project (see the "Interactivity" decision in the plan).
+        // A due date is a single point in time, not a range — only "move"
+        // makes sense, so it gets no resize handles.
+        entries.push({
+          kind: 'plain',
+          rowKey,
+          className: 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '') + (task.isDueMarker ? ' due-marker-bar' : '') + (duration === 1 ? ' milestone' : '') + (job.isLinkedReference ? ' linked-ref' : ''),
+          left, width, top,
+          background: task.isDueMarker ? undefined : softenColor((task.color as string | undefined) || job.color),
+          border: task.isDueMarker ? undefined : ('2px solid ' + (job.color || '#3949ab')),
+          isFlag: !!task.isDueMarker,
+          jobTag, subTags,
+          onMouseEnter: (e: MouseEvent) => showTooltip(e, job, task),
+          onMouseLeave: hideTooltip,
+          onMouseMove: moveTooltip,
+          onOpen: (e: MouseEvent | KeyboardEvent) => {
+            const el = e.currentTarget as HTMLElement;
+            if (el.dataset.dragged === 'true') { el.dataset.dragged = 'false'; return; }
+            if (job.isLinkedReference) jumpToLinkedJobReference(job); else editJob(job.id, phaseId, subPhaseId);
+          },
+          onMouseDown: job.isLinkedReference ? undefined : ((e: MouseEvent) => startBarMove(e, job.id, task.id!, e.currentTarget as HTMLElement)),
+          resizeHandles: (!job.isLinkedReference && !task.isDueMarker) ? {
+            onLeftDown: (e: MouseEvent) => startBarResizeLeft(e, job.id, task.id!, barNode!),
+            onRightDown: (e: MouseEvent) => startBarResizeRight(e, job.id, task.id!, barNode!),
+          } : undefined,
+          barRef,
         });
-
-        // Keyed by task id (not color) so two different same-colored tasks
-        // never get merged into one segment — each solid segment needs to
-        // map to exactly one real task to be individually draggable.
-        const dayTasks: { t: GanttTask; sIdx: number; eIdx: number }[][] = [];
-        for (let i = 0; i < duration; i++) dayTasks.push([]);
-        datedTasks.forEach(function (dt) {
-          for (let d = Math.max(dt.sIdx, startIdx); d <= Math.min(dt.eIdx, jobEndIdx); d++) {
-            dayTasks[d - startIdx].push(dt);
-          }
-        });
-
-        let di = 0;
-        while (di < duration) {
-          const covering = dayTasks[di];
-          const key = covering.map(function (dt) { return dt.t.id; }).sort().join('|');
-          let dj = di;
-          while (dj + 1 < duration && dayTasks[dj + 1].map(function (dt) { return dt.t.id; }).sort().join('|') === key) dj++;
-          const segLeft = (startIdx + di) * dayWidth;
-          const segWidth = (dj - di + 1) * dayWidth;
-          const segTop = (barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD) + 'px';
-
-          if (covering.length === 0) {
-            const hash = document.createElement('div');
-            hash.className = 'job-span-gap-hash';
-            hash.dataset.jobId = job.id;
-            hash.dataset.phaseId = phaseId || '';
-            hash.dataset.subPhaseId = isCollapsedRow ? '' : (subPhaseId || '');
-            hash.dataset.rowKey = rowKey;
-            hash.dataset.origLeft = String(segLeft);
-            hash.style.left = segLeft + 'px';
-            hash.style.width = segWidth + 'px';
-            hash.style.top = segTop;
-            hash.title = 'No task scheduled here';
-            barsLayer.appendChild(hash);
-          } else if (covering.length === 1) {
-            // Unambiguously one task's (or, collapsed, one sub-phase's) own
-            // stretch — grabbable to move just that task/sub-phase, same as
-            // an individual bar in Tasks view. Overlap (below) stays
-            // click-through since there's no single one to target there;
-            // it falls through to the whole-job drag on `bar`.
-            const dt = covering[0];
-            const solid = document.createElement('div');
-            solid.className = 'job-span-task-solid';
-            solid.dataset.jobId = job.id;
-            solid.dataset.phaseId = phaseId || '';
-            solid.dataset.subPhaseId = isCollapsedRow ? ((dt.t.subPhaseId as string | undefined) || '') : (subPhaseId || '');
-            solid.dataset.dragged = 'false';
-            solid.dataset.rowKey = rowKey;
-            solid.dataset.origLeft = String(segLeft);
-            solid.style.left = segLeft + 'px';
-            solid.style.width = segWidth + 'px';
-            solid.style.top = segTop;
-            solid.style.background = softenColor((dt.t.color as string | undefined) || job.color || '#3949ab');
-            solid.title = dt.t.name;
-            solid.addEventListener('mouseenter', function (e) { showTooltip(e, job, dt.t); });
-            solid.addEventListener('mouseleave', hideTooltip);
-            solid.addEventListener('mousemove', moveTooltip);
-            let openSolid: () => void;
-            if (isCollapsedRow) {
-              solid.addEventListener('mousedown', function (e) { startBarMove(e, job.id, dt.t.id!, solid, true, phaseId, dt.t.subPhaseId as string | null); });
-              openSolid = function () {
-                if (solid.dataset.dragged === 'true') { solid.dataset.dragged = 'false'; return; }
-                editJob(job.id, phaseId, dt.t.subPhaseId as string | null);
-              };
-            } else {
-              solid.addEventListener('mousedown', function (e) { startBarMove(e, job.id, dt.t.id!, solid); });
-              openSolid = function () {
-                if (solid.dataset.dragged === 'true') { solid.dataset.dragged = 'false'; return; }
-                editJob(job.id, phaseId, subPhaseId);
-              };
-            }
-            solid.addEventListener('click', openSolid);
-            solid.tabIndex = 0;
-            solid.setAttribute('role', 'button');
-            solid.addEventListener('keydown', function (e) {
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSolid(); }
-            });
-            barsLayer.appendChild(solid);
-          } else {
-            const hatch = document.createElement('div');
-            hatch.className = 'job-span-task-hatch';
-            hatch.dataset.jobId = job.id;
-            hatch.dataset.phaseId = phaseId || '';
-            hatch.dataset.subPhaseId = isCollapsedRow ? '' : (subPhaseId || '');
-            hatch.dataset.rowKey = rowKey;
-            hatch.dataset.origLeft = String(segLeft);
-            hatch.style.left = segLeft + 'px';
-            hatch.style.width = segWidth + 'px';
-            hatch.style.top = segTop;
-            if (isCollapsedRow) {
-              // Every sub-phase segment already shares the same job color,
-              // so a normal same-color-dedup hatch would render as a flat
-              // fill indistinguishable from a solid segment. Alternate the
-              // job color with a darker shade of itself instead, so an
-              // overlap still reads as a hatch.
-              const base = softenColor(job.color || '#3949ab');
-              const dark = darkenColor(base, 0.28);
-              hatch.style.background = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
-              hatch.title = 'Overlapping sub-phases: ' + covering.map(function (dt) { return dt.t.name; }).join(', ');
-            } else {
-              const uniqColors = Array.from(new Set(covering.map(function (dt) { return softenColor((dt.t.color as string | undefined) || job.color || '#3949ab'); })));
-              const stripe = 6;
-              const stops: string[] = [];
-              uniqColors.forEach(function (c, idx) {
-                stops.push(c + ' ' + (idx * stripe) + 'px');
-                stops.push(c + ' ' + ((idx + 1) * stripe) + 'px');
-              });
-              hatch.style.background = 'repeating-linear-gradient(45deg, ' + stops.join(', ') + ')';
-              hatch.title = 'Overlapping tasks';
-            }
-            barsLayer.appendChild(hatch);
-          }
-          di = dj + 1;
-        }
       }
-
-      if (!jobBarMap[job.id]) jobBarMap[job.id] = [];
-      jobBarMap[job.id].push({
-        left: startIdx * dayWidth,
-        width: duration * dayWidth,
-        top: barVisibleIdx * GANTT_ROW_H + GANTT_BAR_PAD,
-        bar: bar,
-        jobColor: job.color,
-      });
     }
 
     barVisibleIdx++;
   });
+
+  renderTimelineBarsInto(barsLayer, entries);
 }
 
 // Given a stable id and removed-then-recreated on every call (rather than
@@ -2986,7 +2952,6 @@ export {
   toggleGanttJobFocus,
   clearGanttJobFocus,
   syncGanttJobFocusBanner,
-  buildPhaseSubTags,
   computeDateRange,
   showDatePopover,
   hideDatePopover,

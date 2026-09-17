@@ -103,7 +103,7 @@ import {
   handleGanttTouchMove, handleGanttTouchEnd, handleGanttWheelZoom, zoomGanttCentered, zoomIn, zoomOut,
   resetZoom, fitToView, togglePhaseCollapse, getSubUnitKey, toggleTasksPhaseExpanded,
   toggleTasksSubPhaseExpanded, expandAllGantt, collapseAllGantt, toggleGanttJobFocus, clearGanttJobFocus,
-  syncGanttJobFocusBanner, buildPhaseSubTags, computeDateRange, showDatePopover, hideDatePopover, showTooltip,
+  syncGanttJobFocusBanner, computeDateRange, showDatePopover, hideDatePopover, showTooltip,
   setHeaderScroll, setupScrollSync,
   DUE_MARKER_TASK_ID, getJobDueMarkerTask, forEachVisibleSubUnit, flattenJobs, getHiddenTaskOrders,
   buildSubUnitClusters, isCalendarJobSpanTaskId, buildCalendarJobRows, collapsedPhaseIds,
@@ -627,7 +627,6 @@ declare global {
     toggleGanttJobFocus: typeof toggleGanttJobFocus;
     clearGanttJobFocus: typeof clearGanttJobFocus;
     syncGanttJobFocusBanner: typeof syncGanttJobFocusBanner;
-    buildPhaseSubTags: typeof buildPhaseSubTags;
     computeDateRange: typeof computeDateRange;
     showDatePopover: typeof showDatePopover;
     hideDatePopover: typeof hideDatePopover;
@@ -1218,7 +1217,6 @@ window.collapseAllGantt = collapseAllGantt;
 window.toggleGanttJobFocus = toggleGanttJobFocus;
 window.clearGanttJobFocus = clearGanttJobFocus;
 window.syncGanttJobFocusBanner = syncGanttJobFocusBanner;
-window.buildPhaseSubTags = buildPhaseSubTags;
 window.computeDateRange = computeDateRange;
 window.showDatePopover = showDatePopover;
 window.hideDatePopover = hideDatePopover;
