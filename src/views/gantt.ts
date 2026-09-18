@@ -2247,30 +2247,72 @@ let ganttReorderGeneration = 0;
 // only ever updates WHERE the bar is headed, never WHEN its motion began,
 // so the same one deceleration curve runs start to finish regardless of
 // how many renders land while it's playing.
-const barAnimOrigins: Record<string, { fromTop: number; startTime: number; zIndex: number }> = {};
+const barAnimOrigins: Record<string, { fromTop: number; startTime: number; zIndexOffset: number }> = {};
 
-// Assigns each row's OWN z-index once, the same moment its barAnimOrigins
-// entry is created — never recomputed from DOM/paint order on a later,
-// overlapping render of the same in-flight transition (see barAnimOrigins'
-// own comment on why fromTop/startTime already work this way). Two rows
-// swapping places are each 26px tall sliding across a 40px gap, so for a
-// real stretch of the animation they're both occupying the same on-screen
-// band at once — which of them paints on top during that overlap
-// otherwise falls to plain DOM/paint order, which Preact is free to
-// rebuild differently on a second render of the identical transition (this
-// app's own sync layer echoes every change back to its sender, routinely
-// landing a confirming re-render mid-animation — see captureBarTopsByRowKey()'s
-// own comment). That let the two rows visibly swap which one was drawn in
-// front partway through a single crossing, then swap back a frame later —
-// read as "the bars are switching places, then switching back" (Karl's own
-// description, confirmed against real screenshots of the actual
-// production drag) even though neither row's own position ever reversed.
-// Starts above every other z-index this file uses on a bar's own pieces
-// (.job-span-border tops out at 80) so an animating row always paints over
-// a static one too, and increments per NEW row so two rows that start
-// animating at different moments still get distinct, order-independent
-// values rather than colliding on one shared constant.
-let ganttReorderNextZIndex = 90;
+// Every piece of a job-span row (border/name-tag/ticks/day-segments) has
+// its OWN fixed baseline z-index in CSS specifically so the row reads
+// correctly internally — the name tag (70) always over the day-segments
+// (64), the outline (80) always over the tag, etc. (see each rule's own
+// spot in index.html). ganttReorderZIndexOffset's own comment covers WHY
+// an animating row needs to out-rank another one it's crossing; giving
+// every element the exact SAME flat number to do that (this function's
+// first version) threw away that internal ordering too — with both rows'
+// elements collapsed to one shared value, whichever one's day-segments
+// happened to be later in the DOM painted over BOTH rows' name tags,
+// including its own (Karl's own screenshot: a row's tag hidden behind its
+// own segments, not just the other row's). This preserves each element's
+// own rank by reading its declared baseline here (by class, not
+// getComputedStyle — the element can be genuinely :hover-ed right when a
+// drag ends, which would read back its transient hover z-index instead of
+// its real resting one) and only ADDING the per-row offset on top, so
+// "tag over segments over nothing" still holds inside each row while the
+// two rows crossing still separate cleanly from each other.
+function ganttRowStackBaseZ(el: HTMLElement): number {
+  const cl = el.classList;
+  if (cl.contains('job-span-due-marker')) return 82;
+  if (cl.contains('job-span-border')) return 80;
+  if (cl.contains('job-span-name-wrap')) return 70;
+  if (cl.contains('job-span-task-tick')) return 65;
+  if (cl.contains('job-span-task-solid') || cl.contains('job-span-task-hatch') || cl.contains('job-span-gap-hash')) return 64;
+  if (cl.contains('job-span-due-line')) return 63;
+  return 0; // .task-bar itself, and #leftBody's .task-row — no CSS z-index of their own.
+}
+
+// Assigns each row's OWN z-index OFFSET once, the same moment its
+// barAnimOrigins entry is created — never recomputed from DOM/paint order
+// on a later, overlapping render of the same in-flight transition (see
+// barAnimOrigins' own comment on why fromTop/startTime already work this
+// way). Two rows swapping places are each 26px tall sliding across a 40px
+// gap, so for a real stretch of the animation they're both occupying the
+// same on-screen band at once — which of them paints on top during that
+// overlap otherwise falls to plain DOM/paint order, which Preact is free
+// to rebuild differently on a second render of the identical transition
+// (this app's own sync layer echoes every change back to its sender,
+// routinely landing a confirming re-render mid-animation — see
+// captureBarTopsByRowKey()'s own comment). That let the two rows visibly
+// swap which one was drawn in front partway through a single crossing,
+// then swap back a frame later — read as "the bars are switching places,
+// then switching back" (Karl's own description, confirmed against real
+// screenshots of the actual production drag) even though neither row's
+// own position ever reversed.
+// Each slot is spaced 100 apart — comfortably more than
+// ganttRowStackBaseZ()'s own 0–82 spread — so two DIFFERENT rows' offset
+// bands can never interleave with each other regardless of which pieces
+// of each row happen to be animating, while still preserving each row's
+// own internal ordering (base 0 through 82) within its own band. Cycles
+// through a small fixed number of slots rather than growing forever, so
+// even a long, busy session's worth of reorders stays well clear of the
+// unrelated fixed z-indices this app uses further up the stack (the
+// tooltip at 1000, toasts at 2000, modals at 3000): the small number of
+// rows ever crossing at the EXACT same instant only ever needs a few
+// slots' worth of separation, not one forever-unique value per row.
+const GANTT_REORDER_ZINDEX_SLOTS = 8;
+let ganttReorderZIndexSlot = 0;
+function ganttNextReorderZIndexOffset(): number {
+  const offset = 200 + (ganttReorderZIndexSlot % GANTT_REORDER_ZINDEX_SLOTS) * 100;
+  ganttReorderZIndexSlot++;
+  return offset;
+}
 
 function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number, connectorsLayer: HTMLElement): void {
   // Bumped UNCONDITIONALLY, before either early return below — every
@@ -2327,7 +2369,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   // recording it here — 'bail' (with its cleanup) or 'continue' (with its
   // origin, reused for every element under that key) — keeps the whole
   // row's pieces acting as one unit either way.
-  const keyDecisions: Record<string, { bail: boolean; origin?: { fromTop: number; startTime: number; zIndex: number } }> = {};
+  const keyDecisions: Record<string, { bail: boolean; origin?: { fromTop: number; startTime: number; zIndexOffset: number } }> = {};
   allRowKeyedElements().forEach(function (el) {
     const key = el.dataset.rowKey as string;
     const oldTop = oldTops[key];
@@ -2339,7 +2381,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
       // captureBarTopsByRowKey()'s own getBoundingClientRect()-based
       // measurement (same coordinate space, viewport-relative).
       const newTop = el.getBoundingClientRect().top;
-      const origin = barAnimOrigins[key] || { fromTop: oldTop, startTime: now, zIndex: ganttReorderNextZIndex++ };
+      const origin = barAnimOrigins[key] || { fromTop: oldTop, startTime: now, zIndexOffset: ganttNextReorderZIndexOffset() };
       const delta = origin.fromTop - newTop;
       if (Math.abs(delta) < 1) {
         delete barAnimOrigins[key];
@@ -2358,11 +2400,12 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
       // already wrote (transform/transition/the class/the pinned z-index)
       // is stuck on the element for good — nothing else ever clears it,
       // since it won't be in toAnimate again to reach that branch. Stuck
-      // z-index was the visible failure: a day-segment (elevated above its
-      // own row's job-name tag by design, see ganttReorderNextZIndex's own
-      // comment) stayed elevated permanently, hiding that row's tag behind
-      // its own opaque segments (Karl's own screenshot, worse than the
-      // original flicker this was meant to fix).
+      // z-index was the visible failure: a day-segment permanently pinned
+      // at an elevated offset (see ganttNextReorderZIndexOffset()'s own
+      // comment) outranked ANOTHER row's tag it was never meant to
+      // compete with at all, hiding it behind the segment (Karl's own
+      // screenshot, worse than the original flicker this was meant to
+      // fix).
       el.style.transform = '';
       el.style.transition = '';
       el.style.zIndex = '';
@@ -2400,11 +2443,13 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   toAnimate.forEach(function (a) {
     a.el.style.transition = 'none';
     a.el.classList.add('gantt-bar-reorder');
-    // See ganttReorderNextZIndex's own comment — pinned once per row here,
-    // not recomputed from DOM order, so two rows crossing paths can't swap
-    // which one paints on top partway through, even across an overlapping
-    // second render of the same transition.
-    a.el.style.zIndex = String(barAnimOrigins[a.key].zIndex);
+    // See ganttNextReorderZIndexOffset()'s own comment — pinned once per
+    // row here, not recomputed from DOM order, so two rows crossing paths
+    // can't swap which one paints on top partway through, even across an
+    // overlapping second render of the same transition. ganttRowStackBaseZ()
+    // keeps this element's own normal rank WITHIN its row (tag over
+    // segments, etc. — see its own comment) intact underneath that offset.
+    a.el.style.zIndex = String(ganttRowStackBaseZ(a.el) + barAnimOrigins[a.key].zIndexOffset);
   });
 
   // Only the job(s) actually reordering need their connector recomputed
@@ -2470,10 +2515,10 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
     // the cleanup below ever applied, permanently stuck with whatever
     // transform/transition/class/z-index it had from the frame before.
     // Harmless-looking on its own (a ~0px leftover transform), but
-    // deadly combined with ganttReorderNextZIndex's pinned z-index: a
-    // day-segment stuck elevated above its own row's job-name tag hid
-    // that tag completely (Karl's own screenshot) — the first time this
-    // latent gap became visible, though it's always applied to
+    // deadly combined with ganttNextReorderZIndexOffset()'s pinned
+    // z-index: a day-segment stuck elevated above its own row's job-name
+    // tag hid that tag completely (Karl's own screenshot) — the first
+    // time this latent gap became visible, though it's always applied to
     // transform/transition/the class too.
     const finishedKeys = new Set<string>();
     toAnimate.forEach(function (a) {
