@@ -3214,6 +3214,12 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
     <span class="mini-toggle" id="darkModeToggle"></span>
   </div>
+  <!-- No data-min-tier — the new-user tour (src/app/onboarding.ts) applies
+       to every tier, so this stays available to everyone, same as Dark
+       Mode above. Reopens from slide 1 regardless of the auto-popup's own
+       dismissal/login-count state, since this is an independent, explicit
+       request rather than that state's business. -->
+  <div class="settings-dropdown-item" id="replayTourBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L2 8l10 5 8-4.2V15h2V8L12 3z" fill="#3949ab"/><path d="M6 12.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-3.5l-6 3-6-3z" fill="#3949ab" opacity="0.55"/></svg> Replay Tour</div>
   <div class="settings-dropdown-item" id="themeColorBtn" data-min-tier="projectAdmin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Theme Color</div>
   <div class="settings-dropdown-item" id="workflowItemsBtn" data-min-tier="projectAdmin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="9" width="6" height="6" rx="1.5" fill="#3949ab"/><rect x="9.5" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.75"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.5"/></svg> Workflow Items</div>
   <div class="settings-dropdown-divider"></div>

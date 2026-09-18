@@ -23,6 +23,7 @@ declare global {
   function closeSettingsMenu(): void;
   function toggleActivitySidebar(): void;
   function toggleDarkMode(): void;
+  function tutorialNotifShow(): void;
   function openThemeModal(): void;
   function openWorkflowItemsModal(): void;
   function openBackupsModal(): void;
@@ -108,6 +109,7 @@ export function initStaticEventListeners(): void {
 
   on('activityToggleBtn', () => { closeSettingsMenu(); toggleActivitySidebar(); });
   on('darkModeBtn', () => toggleDarkMode());
+  on('replayTourBtn', () => { closeSettingsMenu(); tutorialNotifShow(); });
   on('themeColorBtn', () => { closeSettingsMenu(); openThemeModal(); });
   on('workflowItemsBtn', () => { closeSettingsMenu(); openWorkflowItemsModal(); });
   on('backupsBtn', () => { closeSettingsMenu(); openBackupsModal(); });

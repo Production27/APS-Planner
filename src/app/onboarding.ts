@@ -14,6 +14,7 @@
 // projects); the only state is this feature's own localStorage-backed
 // "have I seen this" flags.
 import { getStoredUsername } from '../auth/session';
+import { hasMinTier } from '../auth/permissions';
 import { safeJsonParse } from '../utils/id';
 import { switchTabMorphed } from '../views/home';
 
@@ -102,7 +103,7 @@ export function tutorialNotifNever(): void {
 }
 
 const TUTORIAL_SLIDES = [
-  { title: 'Welcome to TeamSync', desc: 'Everything for a job — schedule, checklist, board, and comments — lives in one place. This quick tour covers the six main views, then points out the buttons on Home.',
+  { title: 'Welcome to TeamSync', desc: 'A job is a single project — a remodel, a new build, whatever you\'re tracking from bid to invoiced. Everything below — schedule, checklist, board, comments — is scoped to one. This quick tour covers the six main views, then points out the buttons on Home.',
     icon: '<svg viewBox="0 0 24 24" width="42" height="42" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L2 8l10 5 8-4.2V15h2V8L12 3z" fill="#fff"/><path d="M6 12.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-3.5l-6 3-6-3z" fill="#fff" opacity="0.7"/></svg>' },
   { title: 'Home — your daily overview', desc: 'Home gathers what needs your attention today: open checklist items, overdue jobs, the board summary, and today\'s schedule, all in one glance.',
     icon: '<svg viewBox="0 0 24 24" width="42" height="42" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l9 8h-3v9h-4v-6H10v6H6v-9H3l9-8z" fill="#fff"/></svg>' },
@@ -116,6 +117,16 @@ const TUTORIAL_SLIDES = [
     icon: '<svg viewBox="0 0 24 24" width="42" height="42" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#fff"/></svg>' },
 ];
 let tutorialSlideStep = 0;
+
+// Appended to only the last slide's desc — the six slides above cover what
+// each view IS, but never what to actually do first. hasMinTier gates the
+// same way the "Add a job" coachmark step already does, so someone who
+// can't add jobs isn't told to.
+function finalSlideCta(): string {
+  return hasMinTier('projectAdmin')
+    ? ' Ready to start? Add your first job from the + at the top of the job list on the left.'
+    : ' Ready to start? Your admin will assign you to a job — it\'ll appear in the list on the left once they do.';
+}
 
 function ensureOnbTutDom(): HTMLElement {
   let el = document.getElementById('onbTutOverlay');
@@ -148,7 +159,7 @@ export function renderTutorialSlide(): void {
   const s = TUTORIAL_SLIDES[tutorialSlideStep];
   document.getElementById('onbTutStepLabel')!.textContent = 'Step ' + (tutorialSlideStep + 1) + ' of ' + TUTORIAL_SLIDES.length;
   document.getElementById('onbTutTitle')!.textContent = s.title;
-  document.getElementById('onbTutDesc')!.textContent = s.desc;
+  document.getElementById('onbTutDesc')!.textContent = s.desc + (tutorialSlideStep === TUTORIAL_SLIDES.length - 1 ? finalSlideCta() : '');
   document.getElementById('onbTutVisual')!.innerHTML = s.icon;
   document.getElementById('onbTutDots')!.innerHTML = TUTORIAL_SLIDES.map(function(_, i) {
     return '<span class="onb-tut-dot' + (i === tutorialSlideStep ? ' active' : '') + '"></span>';
@@ -193,12 +204,22 @@ const COACHMARK_STEPS = [
   { find: ['#tab-gantt'], title: 'Gantt Chart tab', desc: 'The full project timeline — every job\'s phases on one schedule.' },
   { find: ['#tab-board'], title: 'Board tab', desc: 'The full Trello-style board, all boards and every card.' },
   { find: ['#homeWidgetChecklist .home-widget-expand-btn'], title: 'Expand a widget', desc: 'Every Home widget has this — grow it in place to see more, without leaving Home. Try it on any of the five.' },
-  { find: ['#homeWidgetJobChat'], title: 'Job Chat', desc: 'Message the team about any job without leaving Home.' },
+  // requiresJobs: on a brand-new account with zero jobs yet, this widget
+  // has no job selected and nothing to demonstrate — the spotlight would
+  // land on an empty panel. Skipped (like any step whose target isn't
+  // found — see findCoachmarkTarget()) until a real job exists.
+  { find: ['#homeWidgetJobChat'], title: 'Job Chat', desc: 'Message the team about any job without leaving Home.', requiresJobs: true },
 ];
 let coachmarkStep = -1;
 let coachmarkResizeHandler: (() => void) | null = null;
 
-export function findCoachmarkTarget(step: { find: string[] }): HTMLElement | null {
+export function findCoachmarkTarget(step: { find: string[]; requiresJobs?: boolean }): HTMLElement | null {
+  // window.jobs, not the bare `jobs` global — index.html's `var jobs = []`
+  // hasn't necessarily run in every context this bundle gets loaded into
+  // (e.g. tests/unit-fixture.html loads dist/app.bundle.js standalone), and
+  // a bare undeclared identifier reference throws ReferenceError where a
+  // property lookup on window just yields undefined.
+  if (step.requiresJobs && (!window.jobs || window.jobs.length === 0)) return null;
   for (let i = 0; i < step.find.length; i++) {
     const el = document.querySelector(step.find[i]) as HTMLElement | null;
     if (el && el.offsetParent !== null) return el;
