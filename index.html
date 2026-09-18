@@ -198,7 +198,7 @@
      always have room below it for all ~15 items at full height. */
   .settings-dropdown {
     position: fixed; background: white; color: var(--text);
-    border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 170px; padding: var(--s-1-5);
+    border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 150px; padding: var(--s-1-5);
     display: none; z-index: 200; max-height: calc(100vh - 16px); overflow-y: auto;
   }
   .settings-dropdown.show { display: block; }
@@ -3303,8 +3303,19 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   <div class="board-col-color-panel" id="maintenancePanel">
     <div style="padding: var(--s-2-5) var(--s-3) var(--s-3);">
       <div style="font-size: var(--t-xs);font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:0.04em;margin-bottom: var(--s-1-5);">Message shown to the team</div>
-      <textarea id="maintenanceMessageInput" rows="3" placeholder="We're making some backend changes — back shortly." style="width:100%;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:12.5px;padding: var(--s-2) var(--s-2-5);resize:none;outline:none;color:var(--text);"></textarea>
-      <button id="maintenanceEnableBtn" style="margin-top: var(--s-2);width:100%;background:var(--accent);color:white;border:none;border-radius:6px;padding: var(--s-2) var(--s-2-5);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;">Turn On Maintenance Mode</button>
+      <!-- width:0;min-width:100% (not plain width:100%) — a collapsed
+           .board-col-color-panel (max-height:0) still contributes to its
+           OWN ancestor's shrink-to-fit width even while invisible, and a
+           bare width:100% left this textarea falling back to its
+           browser-default ~20-column intrinsic size for that
+           calculation, alone forcing the whole settings menu to ~400px
+           wide (Karl: "make it even narrower" — this was the actual
+           culprit, not the min-width below). width:0 gives it a definite
+           (zero) intrinsic size instead, then min-width:100% re-expands
+           it to fill its real parent once that parent's own width is
+           settled by everything else. -->
+      <textarea id="maintenanceMessageInput" rows="3" placeholder="We're making some backend changes — back shortly." style="width:0;min-width:100%;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:12.5px;padding: var(--s-2) var(--s-2-5);resize:none;outline:none;color:var(--text);"></textarea>
+      <button id="maintenanceEnableBtn" style="margin-top: var(--s-2);width:0;min-width:100%;background:var(--accent);color:white;border:none;border-radius:6px;padding: var(--s-2) var(--s-2-5);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;">Turn On Maintenance Mode</button>
     </div>
   </div>
   <div class="settings-dropdown-item" id="manageUsersBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
