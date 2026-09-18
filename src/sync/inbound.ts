@@ -24,6 +24,7 @@ import { ensureCardIds, ensureJobAndTaskIds } from '../core/jobs';
 import { Job } from '../core/types';
 import { enforceFixedProjectSet } from '../app/project';
 import { renderActivityLogSidebar } from '../app/activity-log';
+import { isPanelActive } from '../utils/ui';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomEverConnected, activeProjectId, projects, latestPresenceUsers,
@@ -482,8 +483,45 @@ function refreshActiveProjectFromShared(): void {
   // updating, or silently make it look like sync is broken for a teammate
   // even though the underlying data merged in fine (loadActiveProjectData
   // already succeeded above; a page refresh would show it's actually there).
-  const renders: (() => void)[] = [renderGantt, renderJobList, updateJobCount, renderBoard, renderCalendar,
-    renderHomeDashboard, refreshArchivedJobsListIfOpen];
+  //
+  // This fires on EVERY incoming snapshot broadcast — including the room's
+  // own echo of a write THIS client just made (see room-do.ts's
+  // broadcastSnapshot(), which doesn't exclude the sender), so on a real
+  // project it's essentially continuous during active use, not an
+  // occasional event. renderGantt/renderBoard/renderCalendar/
+  // renderHomeDashboard were all running unconditionally regardless of
+  // which tab was actually on screen — real full-rebuild cost for views
+  // nobody was looking at, same as the direct-edit call sites job-list.ts/
+  // job-form.ts/calendar.ts/board.ts already guard with isPanelActive()
+  // (see its own comment). Missing it here specifically fed straight into
+  // a Gantt reorder animation still mid-flight when this fires (near-
+  // guaranteed given the echo's timing): measured (68-job project, Gantt
+  // the active tab) at ~90ms of synchronous work for the full unguarded
+  // cascade, ~32ms of which was Board/Calendar/Home rebuilding for tabs
+  // nobody was looking at — cut by this guard. The remaining ~55-58ms is
+  // mostly renderGantt() itself (~45ms measured), which this guard does
+  // NOT touch — Gantt IS the active tab during a Gantt drag, so its own
+  // render still has to run here; a real project at this scale can still
+  // show a visible hitch from that alone (Karl's own report, confirmed
+  // still present after this change — see the onBarMoveEnd()-side fix's
+  // own commit for the other half of this bug). Fixing that fully means
+  // either detecting that an echo's data didn't actually change anything
+  // (skip the render outright — risky: this file's merge logic is exactly
+  // where a wrong "nothing changed" call could silently drop a real
+  // teammate edit) or making renderGantt() itself incremental instead of
+  // a full teardown/rebuild every call — neither attempted here.
+  // switchTab() already does a full, unconditional render of whichever
+  // tab it switches TO (see its own body), so a skipped tab's data is
+  // simply correct again the next time the user actually navigates there.
+  // renderJobList/updateJobCount/refreshArchivedJobsListIfOpen stay
+  // unconditional, matching isPanelActive()'s own doc comment on why: no
+  // tab-switch hook exists to refresh them lazily the way the four panel
+  // views have.
+  const renders: (() => void)[] = [renderJobList, updateJobCount, refreshArchivedJobsListIfOpen];
+  if (isPanelActive('gantt')) renders.push(renderGantt);
+  if (isPanelActive('board')) renders.push(renderBoard);
+  if (isPanelActive('calendar')) renders.push(renderCalendar);
+  if (isPanelActive('home')) renders.push(renderHomeDashboard);
   // CRITICAL: if a job is open in Job Manager, its form fields (task dates
   // in particular) are plain DOM state — they don't track the `jobs` array
   // automatically. autoSaveJobForm() reads those fields directly on every
