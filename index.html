@@ -689,6 +689,30 @@
     transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,0.25);
     z-index: 50; filter: brightness(1.1);
   }
+  /* A reorder swap (see GANTT_REORDER_MS/animateReorderedBars() in gantt.ts)
+     slides two bars past each other along the same vertical band, and the
+     user's own mouse cursor is typically still sitting right at the drop
+     point they just released — stationary while both bars glide underneath
+     it. Without this override, :hover above keeps applying (z-index and
+     filter/box-shadow aren't part of the animation's own inline
+     style.transform writes, so :hover's copies of THOSE properties still
+     take effect) to whichever bar's real, currently-animating position
+     happens to be under that fixed cursor spot at a given frame — and as
+     the two bars cross, that's ALTERNATELY each one of them, so the
+     elevated/brightened bar visibly flips back and forth mid-crossing.
+     Read as "the bars are switching places, then switching back" (Karl's
+     own description, confirmed against real screenshots of the actual
+     production drag) even though their real positions never reverse — this
+     was a stacking-order/highlight flicker riding on top of an otherwise
+     correct, monotonic slide. Matches .task-bar's own un-hovered values
+     exactly, so a bar mid-reorder now simply reads as not-hovered
+     regardless of where the cursor actually is.
+     .task-bar.gantt-bar-reorder:hover (3 selector components) already
+     outranks .task-bar:hover (2) on specificity alone, so this doesn't
+     depend on source order either. */
+  .task-bar.gantt-bar-reorder:hover {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15); z-index: auto; filter: none;
+  }
   .task-bar.resizing { transition: none; z-index: 60; filter: brightness(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: ew-resize; }
   .task-bar.moving { transition: none; z-index: 60; filter: brightness(1.08); box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: grabbing; }
   .task-bar.milestone { width: 18px !important; height: 18px; border-radius: 50%; padding: 0; top: 8px; justify-content: center; font-size: var(--t-3xs); }

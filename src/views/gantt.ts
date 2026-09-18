@@ -2247,7 +2247,30 @@ let ganttReorderGeneration = 0;
 // only ever updates WHERE the bar is headed, never WHEN its motion began,
 // so the same one deceleration curve runs start to finish regardless of
 // how many renders land while it's playing.
-const barAnimOrigins: Record<string, { fromTop: number; startTime: number }> = {};
+const barAnimOrigins: Record<string, { fromTop: number; startTime: number; zIndex: number }> = {};
+
+// Assigns each row's OWN z-index once, the same moment its barAnimOrigins
+// entry is created — never recomputed from DOM/paint order on a later,
+// overlapping render of the same in-flight transition (see barAnimOrigins'
+// own comment on why fromTop/startTime already work this way). Two rows
+// swapping places are each 26px tall sliding across a 40px gap, so for a
+// real stretch of the animation they're both occupying the same on-screen
+// band at once — which of them paints on top during that overlap
+// otherwise falls to plain DOM/paint order, which Preact is free to
+// rebuild differently on a second render of the identical transition (this
+// app's own sync layer echoes every change back to its sender, routinely
+// landing a confirming re-render mid-animation — see captureBarTopsByRowKey()'s
+// own comment). That let the two rows visibly swap which one was drawn in
+// front partway through a single crossing, then swap back a frame later —
+// read as "the bars are switching places, then switching back" (Karl's own
+// description, confirmed against real screenshots of the actual
+// production drag) even though neither row's own position ever reversed.
+// Starts above every other z-index this file uses on a bar's own pieces
+// (.job-span-border tops out at 80) so an animating row always paints over
+// a static one too, and increments per NEW row so two rows that start
+// animating at different moments still get distinct, order-independent
+// values rather than colliding on one shared constant.
+let ganttReorderNextZIndex = 90;
 
 function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record<string, JobBarMapEntry[]>, gridWidth: number, connectorsLayer: HTMLElement): void {
   // Bumped UNCONDITIONALLY, before either early return below — every
@@ -2298,7 +2321,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
     // captureBarTopsByRowKey()'s own getBoundingClientRect()-based
     // measurement (same coordinate space, viewport-relative).
     const newTop = el.getBoundingClientRect().top;
-    const origin = barAnimOrigins[key] || { fromTop: oldTop, startTime: now };
+    const origin = barAnimOrigins[key] || { fromTop: oldTop, startTime: now, zIndex: ganttReorderNextZIndex++ };
     const delta = origin.fromTop - newTop;
     if (Math.abs(delta) < 1) { delete barAnimOrigins[key]; return; }
     barAnimOrigins[key] = origin;
@@ -2326,6 +2349,11 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   toAnimate.forEach(function (a) {
     a.el.style.transition = 'none';
     a.el.classList.add('gantt-bar-reorder');
+    // See ganttReorderNextZIndex's own comment — pinned once per row here,
+    // not recomputed from DOM order, so two rows crossing paths can't swap
+    // which one paints on top partway through, even across an overlapping
+    // second render of the same transition.
+    a.el.style.zIndex = String(barAnimOrigins[a.key].zIndex);
   });
 
   // Only the job(s) actually reordering need their connector recomputed
@@ -2389,6 +2417,7 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
         a.el.classList.remove('gantt-bar-reorder');
         a.el.style.transform = '';
         a.el.style.transition = '';
+        a.el.style.zIndex = '';
         delete barAnimOrigins[a.key];
       } else {
         stillActive = true;
