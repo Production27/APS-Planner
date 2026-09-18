@@ -8,7 +8,7 @@ import { getSessionToken } from '../auth/login';
 import { decodeSessionTokenPayload } from '../auth/session';
 import { applyIdentityFromTokenPayload } from '../auth/permissions';
 import { pruneStrayEmptyProjects } from '../sync/outbound';
-import { isBusyEditing, setupLiveblocksSync } from '../sync/connection';
+import { isBusyEditing, setupRoomSync } from '../sync/connection';
 import { refreshActiveProjectFromShared } from '../sync/inbound';
 import { renderGantt, hideDatePopover, setupScrollSync } from '../views/gantt';
 import { initCalendarDragHandlers, buildCalendarEventColorPresets, closeCalendarEventModal } from '../views/calendar';
@@ -221,5 +221,5 @@ export async function boot(): Promise<void> {
   applyIdentityFromTokenPayload(decodeSessionTokenPayload(token));
   init();
   initCalendarDragHandlers();
-  setupLiveblocksSync();
+  setupRoomSync();
 }

@@ -2,7 +2,7 @@
 // indicator — initSyncIndicator/setSyncIndicator/
 // scheduleOfflineEscalation/cancelOfflineEscalation/isBusyEditing/
 // handleRoomOpen/handleRoomClose/handleRoomSocketError/
-// handleRoomSocketMessageEvent/setupLiveblocksSync.
+// handleRoomSocketMessageEvent/setupRoomSync.
 //
 // Deliberately does NOT include handleRoomMessage() itself — the
 // function handleRoomSocketMessageEvent() dispatches to — where the
@@ -10,7 +10,7 @@
 // src/sync/inbound.ts.
 //
 // pendingWrites/sendRoomMessage/armStuckWriteWatch/clearPendingWrite/
-// queueSharedSync/flushPendingRoomPush/pushLiveblocksState (the OUTBOUND
+// queueSharedSync/flushPendingRoomPush/pushRoomState (the OUTBOUND
 // half of sync — sending local changes out) live in src/sync/outbound.ts
 // instead — this file is scoped to the connection's own lifecycle and
 // status, not what flows over it once open.
@@ -184,7 +184,7 @@ function handleRoomSocketMessageEvent(event: { data: string }): void {
   }
 }
 
-async function setupLiveblocksSync(): Promise<void> {
+async function setupRoomSync(): Promise<void> {
   initSyncIndicator();
   setSyncIndicator('connecting', 'Connecting…');
 
@@ -225,5 +225,5 @@ export {
   handleRoomClose,
   handleRoomSocketError,
   handleRoomSocketMessageEvent,
-  setupLiveblocksSync,
+  setupRoomSync,
 };

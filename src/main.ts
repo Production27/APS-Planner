@@ -113,14 +113,14 @@ import {
 } from './sync/presence';
 import {
   initSyncIndicator, setSyncIndicator, scheduleOfflineEscalation, cancelOfflineEscalation, isBusyEditing,
-  handleRoomOpen, handleRoomClose, handleRoomSocketError, handleRoomSocketMessageEvent, setupLiveblocksSync,
+  handleRoomOpen, handleRoomClose, handleRoomSocketError, handleRoomSocketMessageEvent, setupRoomSync,
 } from './sync/connection';
 import {
   queueSharedSync, flushPendingRoomPush, flushPendingSync, logout, sendRoomMessage, armStuckWriteWatch,
   clearPendingWrite, hasPendingWriteForProject, pushProjectToShared, removeProjectFromShared,
   pruneStrayEmptyProjects, deleteFromSharedMap, deleteJobFromShared, deleteCardFromShared,
   deleteCalendarEventFromShared, recordTombstone, pushFieldToShared, pushBoardColumnsToShared,
-  pushFieldOptionsToShared, pushWorkflowItemsToShared, pushHeaderToShared, logActivity, pushLiveblocksState,
+  pushFieldOptionsToShared, pushWorkflowItemsToShared, pushHeaderToShared, logActivity, pushRoomState,
   pendingWrites,
 } from './sync/outbound';
 import {
@@ -662,7 +662,7 @@ declare global {
     handleRoomClose: typeof handleRoomClose;
     handleRoomSocketError: typeof handleRoomSocketError;
     handleRoomSocketMessageEvent: typeof handleRoomSocketMessageEvent;
-    setupLiveblocksSync: typeof setupLiveblocksSync;
+    setupRoomSync: typeof setupRoomSync;
     queueSharedSync: typeof queueSharedSync;
     flushPendingRoomPush: typeof flushPendingRoomPush;
     flushPendingSync: typeof flushPendingSync;
@@ -685,7 +685,7 @@ declare global {
     pushWorkflowItemsToShared: typeof pushWorkflowItemsToShared;
     pushHeaderToShared: typeof pushHeaderToShared;
     logActivity: typeof logActivity;
-    pushLiveblocksState: typeof pushLiveblocksState;
+    pushRoomState: typeof pushRoomState;
     pendingWrites: typeof pendingWrites;
     handleRoomMessage: typeof handleRoomMessage;
     synthesizeJobFromOrphanCard: typeof synthesizeJobFromOrphanCard;
@@ -1233,7 +1233,7 @@ window.handleRoomOpen = handleRoomOpen;
 window.handleRoomClose = handleRoomClose;
 window.handleRoomSocketError = handleRoomSocketError;
 window.handleRoomSocketMessageEvent = handleRoomSocketMessageEvent;
-window.setupLiveblocksSync = setupLiveblocksSync;
+window.setupRoomSync = setupRoomSync;
 window.queueSharedSync = queueSharedSync;
 window.flushPendingRoomPush = flushPendingRoomPush;
 window.flushPendingSync = flushPendingSync;
@@ -1256,7 +1256,7 @@ window.pushFieldOptionsToShared = pushFieldOptionsToShared;
 window.pushWorkflowItemsToShared = pushWorkflowItemsToShared;
 window.pushHeaderToShared = pushHeaderToShared;
 window.logActivity = logActivity;
-window.pushLiveblocksState = pushLiveblocksState;
+window.pushRoomState = pushRoomState;
 window.pendingWrites = pendingWrites;
 window.handleRoomMessage = handleRoomMessage;
 window.synthesizeJobFromOrphanCard = synthesizeJobFromOrphanCard;

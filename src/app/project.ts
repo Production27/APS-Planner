@@ -232,7 +232,7 @@ export function enforceProjectScopeForRole(): void {
 // outright, so any leftover call site just shows a toast instead of erroring.
 // ===== FIXED PROJECT SET =====
 // This app is locked to exactly two projects. On load (and again after the
-// initial Liveblocks sync resolves — since remote data can otherwise
+// initial room sync resolves — since remote data can otherwise
 // overwrite this local rename) it renames whatever the original single
 // project was into "ADVANCED PRECUT SYSTEMS" and creates "BLUDORN BUILDERS"
 // if it doesn't exist yet, so every browser and the shared room converge on
@@ -300,7 +300,7 @@ export function enforceFixedProjectSet(): string[] {
     if (!activeProjectId) activeProjectId = id;
     // This id is just as much a locally-fabricated placeholder as the one
     // migrateFromLegacy() creates — same reasoning applies (see the
-    // freshLocalSeedProjectIds comment above), or setupLiveblocksSync's
+    // freshLocalSeedProjectIds comment above), or setupRoomSync's
     // "is this browser's whole local project set just fake starter
     // content" check silently never fires for whichever placeholder was
     // created here instead of there.

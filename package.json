@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --outfile=dist/app.bundle.js --format=iife --jsx=automatic --jsx-import-source=preact",
+    "build": "esbuild src/main.ts --bundle --minify --outfile=dist/app.bundle.js --format=iife --jsx=automatic --jsx-import-source=preact",
     "typecheck": "tsc --noEmit",
     "typecheck:worker": "cd worker && npx wrangler types && npx tsc --noEmit",
     "test": "playwright test --config=tests/playwright.config.js",

@@ -6,7 +6,7 @@
 // deleteCardFromShared/deleteCalendarEventFromShared/recordTombstone/
 // pushFieldToShared/pushBoardColumnsToShared/pushFieldOptionsToShared/
 // pushWorkflowItemsToShared/pushHeaderToShared/logActivity/
-// pushLiveblocksState. This is everything that pushes a local change TO
+// pushRoomState. This is everything that pushes a local change TO
 // the server; it deliberately excludes the INBOUND merge/
 // conflict-resolution logic (handleRoomMessage, applyRoomSnapshot,
 // safeMergeInto, synthesizeJobFromOrphanCard, scheduleOrphanRecovery,
@@ -52,7 +52,7 @@ let msgSeq = 0;
 
 function queueSharedSync(): void {
   clearTimeout(syncPushTimer as ReturnType<typeof setTimeout>);
-  syncPushTimer = setTimeout(pushLiveblocksState, 300);
+  syncPushTimer = setTimeout(pushRoomState, 300);
 }
 
 // Synchronously pushes any project edit still sitting in the debounced
@@ -60,7 +60,7 @@ function queueSharedSync(): void {
 // reassigns activeProjectId (switchProject()/enforceProjectScopeForRole())
 // so the still-armed timer can't fire AFTER the flip and misdirect a
 // pending edit at the new project instead of the one it was actually for.
-// pushLiveblocksState() resolves its target via getActiveProject() at
+// pushRoomState() resolves its target via getActiveProject() at
 // FIRE time, with no memory of which project queueSharedSync() was
 // originally armed for — left unflushed, an edit made just before a
 // switch is silently never pushed to the shared room at all (it stays
@@ -70,7 +70,7 @@ function flushPendingRoomPush(): void {
   if (syncPushTimer) {
     clearTimeout(syncPushTimer);
     syncPushTimer = null;
-    pushLiveblocksState();
+    pushRoomState();
   }
 }
 
@@ -148,7 +148,7 @@ function clearPendingWrite(msgId: string): void {
 // just made locally — applying it blindly during either window can race
 // an optimistic local add/edit and wipe it back out before it ever
 // reaches the server (caught during staging testing: a just-added job
-// vanishing). pushLiveblocksState() (what the debounce timer calls) only
+// vanishing). pushRoomState() (what the debounce timer calls) only
 // ever pushes the active project, so the timer only implicates that one.
 // Used by src/sync/inbound.ts's applyRoomSnapshot().
 function hasPendingWriteForProject(projectId: string): boolean {
@@ -301,7 +301,7 @@ function logActivity(actionText: string): void {
   }
 }
 
-function pushLiveblocksState(): void {
+function pushRoomState(): void {
   clearTimeout(syncPushTimer as ReturnType<typeof setTimeout>);
   syncPushTimer = null;
 
@@ -345,5 +345,5 @@ export {
   pushWorkflowItemsToShared,
   pushHeaderToShared,
   logActivity,
-  pushLiveblocksState,
+  pushRoomState,
 };

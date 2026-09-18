@@ -10,8 +10,9 @@ declare global {
   // eslint-disable-next-line no-var
   var viewAsRole: string | null;
   function enforceProjectScopeForRole(): void;
-  function applyPermissionGating(): void;
-  function updateProjectToggle(): void;
+  // applyPermissionGating()/updateProjectToggle() are declared once in
+  // src/shared-globals.d.ts instead (every src/ file sees them
+  // automatically) — not repeated here.
   // currentAssignedProjectId stays a real `var` in index.html (not owned
   // here) — src/app/project.ts's switchProject()/enforceProjectScopeForRole()
   // read/write it directly, so a real module-local binding here would

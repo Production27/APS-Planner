@@ -7,7 +7,8 @@ import { openModal, closeModal, showToast } from '../utils/ui';
 import { pushHeaderToShared } from '../sync/outbound';
 
 declare global {
-  function logActivity(text: string): void;
+  // logActivity() is declared once in src/shared-globals.d.ts instead
+  // (every src/ file sees it automatically) — not repeated here.
   function getActiveProject(): any;
   function saveActiveProject(): void;
 }

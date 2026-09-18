@@ -198,8 +198,9 @@ export function removeJobPhase(job: Job, phaseId: string): void {
     deleteCardFromShared(activeProjectId, card.id);
   }
   // Tombstoned like a deleted job/card/event — without this, another
-  // client's phase-orphan self-heal (see applyLiveblocksState()) could
-  // resurrect this phase from a stale copy of its card.
+  // client's phase-orphan self-heal (see healOrphanedPhaseCards() in
+  // src/sync/inbound.ts) could resurrect this phase from a stale copy
+  // of its card.
   recordTombstone(activeProjectId as string, phaseId);
 }
 

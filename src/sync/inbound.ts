@@ -14,7 +14,7 @@
 // natural single owner among the sync files.
 import { isBusyEditing } from './connection';
 import { renderPresenceAvatars, PresenceUser } from './presence';
-import { clearPendingWrite, queueSharedSync, pushProjectToShared, pushLiveblocksState, pruneStrayEmptyProjects, deleteCardFromShared, hasPendingWriteForProject } from './outbound';
+import { clearPendingWrite, queueSharedSync, pushProjectToShared, pushRoomState, pruneStrayEmptyProjects, deleteCardFromShared, hasPendingWriteForProject } from './outbound';
 import { renderGantt } from '../views/gantt';
 import { renderBoard } from '../views/board';
 import { renderCalendar, ensureCalendarEventIds } from '../views/calendar';
@@ -412,7 +412,7 @@ function applyRoomSnapshot(remoteProjects: Record<string, any>, isFirstSnapshot:
     // list, then converge onto the fixed two-project set either way.
     const hasRemoteData = Object.keys(remoteProjects).length > 0;
     if (!hasRemoteData) {
-      pushLiveblocksState();
+      pushRoomState();
     }
     const fixedChangedIds = enforceFixedProjectSet();
     if (fixedChangedIds.length) {
