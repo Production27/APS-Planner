@@ -71,6 +71,7 @@ function EmptyOverdue() {
     <div class="home-widget-empty">
       <svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5" /><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935" /><rect x="6" y="13" width="3" height="3" fill="#e53935" /><rect x="10.5" y="13" width="3" height="3" fill="#e53935" /><rect x="15" y="13" width="3" height="3" fill="#e53935" /></svg>
       <div>No overdue or upcoming jobs.</div>
+      <div class="home-widget-empty-caption">Anything overdue or due soon across every job will show up here.</div>
     </div>
   );
 }

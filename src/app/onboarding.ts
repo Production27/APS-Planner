@@ -79,7 +79,19 @@ export function tutorialNotifShow(): void {
   hideTutorialNotification();
   openTutorialSlides();
 }
+// "Not now"/"×" used to just hide the popup for this session, writing
+// nothing to storage — so a user who dismissed it was indistinguishable
+// from one who'd never seen it, and got the exact same prompt again on
+// their next 1-2 app opens. Now an explicit dismissal counts: two of them
+// and it stops, same end state as "Don't ask again", just requiring one
+// extra "no" first instead of assuming the harsher-sounding button is the
+// only way to actually say so. A user who never interacts with it at all
+// (just navigates away) still gets the original up-to-3-boots behavior.
 export function tutorialNotifLater(): void {
+  const state = getTutorialState();
+  state.dismissCount = (state.dismissCount || 0) + 1;
+  if (state.dismissCount >= 2) state.neverShow = true;
+  saveTutorialState(state);
   hideTutorialNotification();
 }
 export function tutorialNotifNever(): void {

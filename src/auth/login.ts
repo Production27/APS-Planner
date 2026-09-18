@@ -124,17 +124,19 @@ export async function reauthenticate(forceReprompt?: boolean): Promise<string> {
     if (!res.ok) {
       // A rejected login (wrong username OR wrong password — the Worker's
       // handleAuth() doesn't distinguish which) must not leave a bad
-      // username cached or displayed: every later attempt with no valid
-      // token reuses getStoredUsername() as-is, so a typo on the very
-      // first attempt would otherwise keep getting silently reused
-      // forever. Clearing both here means the next attempt starts fresh
-      // on both fields.
+      // username cached: a later boot's reauthenticate() reuses
+      // getStoredUsername() as-is, so a typo on the very first attempt
+      // would otherwise keep getting silently reused forever. That's only
+      // about what a *future* page load prefills, though — it doesn't
+      // require blanking the username field the user is looking at right
+      // now within this same loop, so only the password is cleared here;
+      // the user shouldn't have to retype a username they just typed
+      // correctly because the password was wrong.
       localStorage.removeItem(USERNAME_KEY);
-      (document.getElementById('loginUsername') as HTMLInputElement).value = '';
       (document.getElementById('loginPassword') as HTMLInputElement).value = '';
       setLoginBusy(false);
       setLoginBanner('Incorrect username or password.', 'err');
-      document.getElementById('loginUsername')!.focus();
+      document.getElementById('loginPassword')!.focus();
       continue;
     }
 

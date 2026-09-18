@@ -530,11 +530,15 @@ function renderMyChecklist(): void {
   const doneCount = jobRows.reduce(function (n, r) { return n + (r.item.done ? 1 : 0); }, 0);
   const rows = !isJobView ? assignedRows : (myChecklistHideDone ? jobRows.filter(function (r) { return !r.item.done; }) : jobRows);
   let emptyMessage;
-  if (!isJobView) emptyMessage = 'Nothing assigned to you right now.';
+  let emptyCaption: string | undefined;
+  if (!isJobView) {
+    emptyMessage = 'Nothing assigned to you right now.';
+    emptyCaption = 'Items assigned to you across any job will show up here.';
+  }
   else if (!jobRows.length) emptyMessage = 'This checklist is empty — add the first item below.';
   else if (!rows.length) emptyMessage = 'Everything on this stage is checked off.';
   const listBody = document.getElementById('myChecklistListBody');
-  if (listBody) renderMyChecklistListInto(listBody, { rows: buildMyChecklistRowProps(rows, !isJobView), emptyMessage: emptyMessage as string });
+  if (listBody) renderMyChecklistListInto(listBody, { rows: buildMyChecklistRowProps(rows, !isJobView), emptyMessage: emptyMessage as string, emptyCaption: emptyCaption });
   renderMyChecklistFilterBar(isJobView, doneCount);
   renderMyChecklistToolbar();
   updateMyChecklistBadge(assignedRows.length);

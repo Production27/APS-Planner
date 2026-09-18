@@ -43,6 +43,7 @@ function ChecklistEmpty() {
     <div class="home-widget-empty">
       <svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745" /><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
       <div>Nothing assigned to you right now.</div>
+      <div class="home-widget-empty-caption">Items assigned to you across any job will show up here.</div>
     </div>
   );
 }

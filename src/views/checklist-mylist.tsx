@@ -82,6 +82,7 @@ export interface MyChecklistItemRowProps {
 export interface MyChecklistListProps {
   rows: MyChecklistItemRowProps[];
   emptyMessage: string;
+  emptyCaption?: string;
 }
 
 function onEnterOrSpace(fn: () => void) {
@@ -164,17 +165,18 @@ function MyChecklistItemRow(p: MyChecklistItemRowProps) {
   );
 }
 
-function MyChecklistEmpty({ message }: { message: string }) {
+function MyChecklistEmpty({ message, caption }: { message: string; caption?: string }) {
   return (
     <div class="my-checklist-empty">
       <svg viewBox="0 0 24 24" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M7.5 12.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
       <div>{message}</div>
+      {caption && <div class="my-checklist-empty-caption">{caption}</div>}
     </div>
   );
 }
 
 function MyChecklistList(p: MyChecklistListProps) {
-  if (!p.rows.length) return <MyChecklistEmpty message={p.emptyMessage} />;
+  if (!p.rows.length) return <MyChecklistEmpty message={p.emptyMessage} caption={p.emptyCaption} />;
   return <>{p.rows.map((r) => <MyChecklistItemRow key={r.rowKey} {...r} />)}</>;
 }
 

@@ -46,7 +46,7 @@ test('login: the real form boots into the overlay and a correct submit logs in',
   expect(storedToken).toBeTruthy();
 });
 
-test('login: a rejected login shows an error, clears the username, and lets a retry succeed', async ({ page }) => {
+test('login: a rejected login shows an error, keeps the typed username, clears the password, and lets a retry succeed', async ({ page }) => {
   const token = fakeSessionToken({ username: 'realuser', displayName: 'Real User', role: 'admin' });
   let attempt = 0;
   await mockWorkerForLogin(page, (route) => {
@@ -59,20 +59,24 @@ test('login: a rejected login shows an error, clears the username, and lets a re
   await mockRoomWebSocket(page);
   await page.goto(APP_URL);
 
-  await page.fill('#loginUsername', 'wronguser');
+  await page.fill('#loginUsername', 'realuser');
   await page.fill('#loginPassword', 'wrong-password');
   await page.click('#loginSubmit');
 
-  // Rejected: banner shows, username field is cleared (per reauthenticate()'s
-  // own comment: a bad first attempt must not keep reusing a typo'd name).
+  // Rejected: banner shows, password is cleared, but the username the user
+  // just typed stays on screen — only the localStorage-cached username (what
+  // a *future* page load would prefill) is cleared, per reauthenticate()'s
+  // own comment, not the field they're currently looking at.
   await expect(page.locator('#loginBanner')).toHaveClass(/show/);
   await expect(page.locator('#loginBanner')).toHaveClass(/err/);
   await expect(page.locator('#loginBannerText')).toHaveText('Incorrect username or password.');
-  await expect(page.locator('#loginUsername')).toHaveValue('');
+  await expect(page.locator('#loginUsername')).toHaveValue('realuser');
+  await expect(page.locator('#loginPassword')).toHaveValue('');
   await expect(page.locator('#loginOverlay')).toHaveClass(/show/);
+  const cachedUsername = await page.evaluate(() => localStorage.getItem('gantt_username_v1'));
+  expect(cachedUsername).toBeNull();
 
-  // Retry with the (now-corrected) credentials succeeds.
-  await page.fill('#loginUsername', 'realuser');
+  // Retry with just the (now-corrected) password succeeds.
   await page.fill('#loginPassword', 'correct-password');
   await page.click('#loginSubmit');
   await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/, { timeout: 5000 });
@@ -2248,6 +2252,10 @@ test('maintenance mode admin toggle: turning it on sends the right request and u
   await page.evaluate(() => { toggleSettingsMenu(); toggleMaintenancePanel(); });
   await page.locator('#maintenanceMessageInput').fill('Back in 15 minutes for a data migration.');
   await expect(page.locator('#maintenanceEnableBtn')).toHaveText('Turn On Maintenance Mode');
+  // Turning maintenance mode ON now confirms first (it immediately blocks
+  // every non-admin user) — same window.confirm() convention as Log Out
+  // and Switch Project. Accept it to exercise the actual request below.
+  page.once('dialog', (d) => d.accept());
   await page.locator('#maintenanceEnableBtn').click();
 
   expect(capturedBody.active).toBe(true);

@@ -52,6 +52,15 @@ export function toggleMaintenancePanel(): void {
 }
 
 export async function setMaintenanceMode(active: boolean): Promise<void> {
+  // Unlike Log Out and Switch Project (both of which already confirm —
+  // see src/sync/outbound.ts and src/app/project.ts), turning this on had
+  // no confirmation at all despite being the most consequential action in
+  // the settings menu: it immediately blocks every non-admin user from
+  // using the app. Matches those two's plain confirm() convention rather
+  // than introducing a new modal just for this. Turning it back off isn't
+  // guarded — that action only ever restores normal access, nothing to
+  // confirm.
+  if (active && !confirm('Turn on maintenance mode? This will block every non-admin user from using TeamSync until you turn it back off.')) return;
   const messageInput = document.getElementById('maintenanceMessageInput') as HTMLInputElement | null;
   const message = messageInput ? messageInput.value.trim() : '';
   try {
