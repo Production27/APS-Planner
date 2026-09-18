@@ -648,10 +648,28 @@ function onBarMoveEnd(e: MouseEvent): void {
         setTimeout(function () {
           saveJobs();
           logActivity('moved job "' + jf.job.name + '"' + (phase.isDefault ? '' : ' phase "' + phase.name + '"') + (subUnit.isDefault ? '' : ' sub-phase "' + subUnit.name + '"'));
-          renderJobList();
-          refreshJobFormIfOpen(jobId);
           showToast('Job dates updated', 'success');
         }, 0);
+        // renderJobList()/refreshJobFormIfOpen() rebuild real DOM (the
+        // whole sidebar list, potentially the open job form) — on a busy
+        // real project (measured: 150+ jobs) that's tens of ms of main-
+        // thread work, landing well inside the still-playing reorder
+        // animation's ~1.1s window (see GANTT_REORDER_MS) once the
+        // setTimeout above fires. The animation's own per-frame writes
+        // are cheap and keep up fine on their own, but they still share
+        // the SAME main thread — a render that expensive blocks whichever
+        // frame it lands on, and since each frame's position is computed
+        // from real elapsed time (not a frame counter), the bar visibly
+        // freezes for that block, then snaps ahead to catch up the moment
+        // it's released (Karl's own description: "jumps past the other
+        // bar, then freezes, then resumes where it should have been").
+        // Neither of these two is time-sensitive the way saveJobs() above
+        // is, so pushing them past the animation's own end avoids the
+        // collision entirely instead of just racing it.
+        setTimeout(function () {
+          renderJobList();
+          refreshJobFormIfOpen(jobId);
+        }, GANTT_REORDER_MS);
         return;
       }
       bar.dataset.dragged = 'true';
@@ -679,6 +697,13 @@ function onBarMoveEnd(e: MouseEvent): void {
         saveJobs();
         const jf = findJob(jobId);
         logActivity('rescheduled due date for job "' + (jf ? jf.job.name : '') + '"');
+        showToast('Due date updated', 'success');
+      }, 0);
+      // See the isJobSpan branch above's own comment on why these three
+      // (each a real DOM rebuild, not free on a busy project) wait until
+      // the reorder animation is done rather than fight it for the main
+      // thread mid-flight.
+      setTimeout(function () {
         renderJobList();
         // Was missing here — the identical Calendar-side due-marker drag
         // already calls this; card.due drives the Board's own "overdue"
@@ -686,8 +711,7 @@ function onBarMoveEnd(e: MouseEvent): void {
         // due-date drag left that badge stale.
         renderBoard();
         refreshJobFormIfOpen(jobId);
-        showToast('Due date updated', 'success');
-      }, 0);
+      }, GANTT_REORDER_MS);
       return;
     }
     bar.dataset.dragged = 'true';
@@ -708,10 +732,14 @@ function onBarMoveEnd(e: MouseEvent): void {
     setTimeout(function () {
       saveJobs();
       logActivity('moved task "' + task.name + '"');
-      renderJobList();
-      refreshJobFormIfOpen(jobId);
       showToast('Task dates updated', 'success');
     }, 0);
+    // See the isJobSpan branch above's own comment on why these wait
+    // until the reorder animation is done.
+    setTimeout(function () {
+      renderJobList();
+      refreshJobFormIfOpen(jobId);
+    }, GANTT_REORDER_MS);
     return;
   } else {
     bar.dataset.dragged = 'false';
