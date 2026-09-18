@@ -3313,10 +3313,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   <!-- Moved down here from the top of the menu, and grouped with Log Out —
        both leave the context you're currently in. It used to be the very
        first item under the settings icon, one careless click away from
-       anything reaching for the menu; toggleProject() itself now also
-       confirms before switching (see its own comment), so this reordering
-       is a second, independent layer against the same accidental-switch
-       risk rather than the only fix. -->
+       anything reaching for the menu; this reordering is what guards
+       against that now (toggleProject() itself used to also confirm
+       before switching, but that popup was more annoying than useful on
+       the deliberate path, so it's gone — see toggleProject()'s own
+       comment). -->
   <div class="settings-dropdown-label">Account</div>
   <div class="settings-dropdown-item" id="projectToggleBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></div>
   <div class="settings-dropdown-item" id="logoutBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H5a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 005 20h4" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11 12h10m0 0l-3.5-3.5M21 12l-3.5 3.5" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Log Out</div>

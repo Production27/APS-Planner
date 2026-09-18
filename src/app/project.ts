@@ -399,18 +399,17 @@ export function saveActiveProject(): void {
   saveProjects();
 }
 
+// Used to confirm() first — a one-click accidental project switch was a
+// single fat-finger away from the settings menu. Removed per Karl's own
+// request (it got in the way on the deliberate path far more often than
+// it ever caught a real accident); the item's own position at the bottom
+// of the menu, grouped with Log Out (see its own comment in index.html),
+// is what guards against that now.
 export function toggleProject(): void {
   const ids = Object.keys(projects);
   if (ids.length < 2) return;
   const currentIdx = ids.indexOf(activeProjectId as string);
   const nextIdx = (currentIdx + 1) % ids.length;
-  const nextProject = projects[ids[nextIdx]];
-  // This is a single click sitting at the top of the settings menu — easy to
-  // land on by accident reaching for something else. A confirm here is the
-  // whole fix: it costs nothing on the deliberate path and stops the
-  // accidental one from silently dropping you into a different project's
-  // jobs/board/gantt.
-  if (!confirm('Switch to "' + (nextProject ? nextProject.name : 'the other project') + '"? You\'ll leave the project you\'re currently viewing.')) return;
   switchProject(ids[nextIdx]);
 }
 

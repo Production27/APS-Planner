@@ -86,25 +86,15 @@ test('switchProject: a no-op call (same project, or an unknown id) changes nothi
   expect(result.afterUnknown).toBe(result.before);
 });
 
-test('toggleProject: confirms before switching, and cycles to the other of the two fixed projects once accepted', async ({ page }) => {
+test('toggleProject: switches immediately with no confirmation, cycling to the other of the two fixed projects', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
   await page.goto(APP_URL);
   await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
 
-  // toggleProject() now confirms first (see its own comment — a one-click
-  // accidental project switch used to be a single fat-finger away from the
-  // settings menu). Dismissing that confirm must leave the project
-  // unchanged; accepting it must switch, same as before this guard existed.
   let dialogCount = 0;
   page.on('dialog', (d) => { dialogCount++; d.dismiss(); });
-  const dismissedProjectId = await page.evaluate(() => {
-    toggleProject();
-    return activeProjectId;
-  });
 
-  page.removeAllListeners('dialog');
-  page.on('dialog', (d) => d.accept());
   const result = await page.evaluate(() => {
     const before = activeProjectId;
     toggleProject();
@@ -114,8 +104,7 @@ test('toggleProject: confirms before switching, and cycles to the other of the t
     return { before, afterOnce, afterTwice };
   });
 
-  expect(dialogCount).toBe(1);
-  expect(dismissedProjectId).toBe(result.before); // dismissed confirm — no switch
+  expect(dialogCount).toBe(0); // no confirmation dialog at all
   expect(result.afterOnce).not.toBe(result.before);
   expect(result.afterTwice).toBe(result.before); // back to the start with only 2 projects
 });
