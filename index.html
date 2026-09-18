@@ -3103,11 +3103,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      uses (see .form-group select et al. above) rather than this one
      staying transparent against the toolbar's own dark background — a
      transparent select with only a faint border was very hard to spot.
-     color-scheme:dark additionally tells the browser to draw the native
-     dropdown POPUP (the open option list) in its own dark chrome instead
-     of defaulting to a stark white list no CSS here can reach. */
+     Deliberately NOT color-scheme:dark: that told the browser to draw the
+     native dropdown POPUP in its own dark chrome too, but with no
+     explicit <option> color the hovered row's system highlight came out
+     as near-unreadable gray-on-gray (Karl's own report). No other
+     <select> in the app sets it either — the popup opens with the
+     browser's ordinary light styling (same as every other one here),
+     just the closed control itself carries the dark styling below. */
   body.dark-mode .gantt-toolbar select.gantt-task-focus-select {
-    background: #20232c; color: var(--text); border-color: var(--border); color-scheme: dark;
+    background: #20232c; color: var(--text); border-color: var(--border);
   }
   body.dark-mode .gantt-toolbar select.gantt-task-focus-select:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
   .job-card.archived { opacity: 0.55; }
