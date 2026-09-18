@@ -15,7 +15,7 @@
 import { isBusyEditing } from './connection';
 import { renderPresenceAvatars, PresenceUser } from './presence';
 import { clearPendingWrite, queueSharedSync, pushProjectToShared, pushRoomState, pruneStrayEmptyProjects, deleteCardFromShared, hasPendingWriteForProject } from './outbound';
-import { renderGantt } from '../views/gantt';
+import { renderGantt, isGanttReorderAnimating, GANTT_REORDER_MS } from '../views/gantt';
 import { renderBoard } from '../views/board';
 import { renderCalendar, ensureCalendarEventIds } from '../views/calendar';
 import { genId } from '../utils/id';
@@ -471,6 +471,24 @@ function applyRoomSnapshot(remoteProjects: Record<string, any>, isFirstSnapshot:
   triggerPostSnapshotRefresh();
 }
 
+// See refreshActiveProjectFromShared()'s own comment on why the Gantt
+// render specifically needs this and the other three panel renders don't.
+// A single shared flag (not one setTimeout per call) — multiple snapshots
+// landing inside one ~1.1s animation window is the normal case here (the
+// echo, plus anyone else's concurrent writes), and without this they'd
+// otherwise queue up N redundant renders instead of coalescing into one.
+let ganttRefreshDeferred = false;
+function deferGanttRefreshUntilAnimationDone(): void {
+  if (ganttRefreshDeferred) return;
+  ganttRefreshDeferred = true;
+  setTimeout(function () {
+    ganttRefreshDeferred = false;
+    if (!isPanelActive('gantt')) return; // user switched tabs while waiting
+    if (isGanttReorderAnimating()) { deferGanttRefreshUntilAnimationDone(); return; } // a new drag started in the meantime
+    renderGantt();
+  }, GANTT_REORDER_MS);
+}
+
 // Section 6/1 schema-lock plus Section 5's card sync both already run as
 // part of this chain: loadActiveProjectData() normalizes every job's tasks
 // and its card (also adopting/migrating orphaned cards), and renderBoard()
@@ -495,21 +513,17 @@ function refreshActiveProjectFromShared(): void {
   // job-form.ts/calendar.ts/board.ts already guard with isPanelActive()
   // (see its own comment). Missing it here specifically fed straight into
   // a Gantt reorder animation still mid-flight when this fires (near-
-  // guaranteed given the echo's timing): measured (68-job project, Gantt
-  // the active tab) at ~90ms of synchronous work for the full unguarded
-  // cascade, ~32ms of which was Board/Calendar/Home rebuilding for tabs
-  // nobody was looking at — cut by this guard. The remaining ~55-58ms is
-  // mostly renderGantt() itself (~45ms measured), which this guard does
-  // NOT touch — Gantt IS the active tab during a Gantt drag, so its own
-  // render still has to run here; a real project at this scale can still
-  // show a visible hitch from that alone (Karl's own report, confirmed
-  // still present after this change — see the onBarMoveEnd()-side fix's
-  // own commit for the other half of this bug). Fixing that fully means
-  // either detecting that an echo's data didn't actually change anything
-  // (skip the render outright — risky: this file's merge logic is exactly
-  // where a wrong "nothing changed" call could silently drop a real
-  // teammate edit) or making renderGantt() itself incremental instead of
-  // a full teardown/rebuild every call — neither attempted here.
+  // guaranteed given the echo's timing) — renderGantt() itself was the
+  // dominant remaining cost even after the isPanelActive() guard below
+  // (measured ~45ms on a 68-job project), because Gantt IS the active tab
+  // during a Gantt drag, so guarding by tab visibility alone can't skip
+  // it. deferGanttRefreshUntilAnimationDone() (above) closes that specific
+  // gap: while animateReorderedBars() still has a row in flight
+  // (isGanttReorderAnimating()), this echo's own renderGantt() call is
+  // deferred until the animation is done rather than fought for the main
+  // thread mid-flight — the same "defer until safe" idiom isBusyEditing()
+  // already uses for a LIVE drag, just extended to cover the ~1.1s after
+  // one ends too, which isBusyEditing() itself doesn't watch for.
   // switchTab() already does a full, unconditional render of whichever
   // tab it switches TO (see its own body), so a skipped tab's data is
   // simply correct again the next time the user actually navigates there.
@@ -518,7 +532,10 @@ function refreshActiveProjectFromShared(): void {
   // tab-switch hook exists to refresh them lazily the way the four panel
   // views have.
   const renders: (() => void)[] = [renderJobList, updateJobCount, refreshArchivedJobsListIfOpen];
-  if (isPanelActive('gantt')) renders.push(renderGantt);
+  if (isPanelActive('gantt')) {
+    if (isGanttReorderAnimating()) deferGanttRefreshUntilAnimationDone();
+    else renders.push(renderGantt);
+  }
   if (isPanelActive('board')) renders.push(renderBoard);
   if (isPanelActive('calendar')) renders.push(renderCalendar);
   if (isPanelActive('home')) renders.push(renderHomeDashboard);

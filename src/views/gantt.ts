@@ -2277,6 +2277,23 @@ let ganttReorderGeneration = 0;
 // how many renders land while it's playing.
 const barAnimOrigins: Record<string, { fromTop: number; startTime: number; zIndexOffset: number }> = {};
 
+// Whether any row currently has a live reorder animation in flight — the
+// signal other files need to know it's unsafe (expensive + collision-
+// prone, not incorrect — see animateReorderedBars()'s own comment on why
+// an overlapping render is handled correctly, just not cheaply) to call
+// renderGantt() again right now. Age-filtered rather than a bare
+// Object.keys(barAnimOrigins).length check: an entry can outlive its own
+// animation (e.g. its row vanishes from a later render entirely — job
+// deleted, phase collapsed, focus-isolated — before Pass 1 or tick() ever
+// gets a chance to clean it up), which would otherwise report "animating"
+// forever until some unrelated render happened to sweep it.
+function isGanttReorderAnimating(): boolean {
+  const now = performance.now();
+  return Object.keys(barAnimOrigins).some(function (key) {
+    return now - barAnimOrigins[key].startTime < GANTT_REORDER_MS;
+  });
+}
+
 // Every piece of a job-span row (border/name-tag/ticks/day-segments) has
 // its OWN fixed baseline z-index in CSS specifically so the row reads
 // correctly internally — the name tag (70) always over the day-segments
@@ -3100,4 +3117,6 @@ export {
   buildSubUnitClusters,
   isCalendarJobSpanTaskId,
   buildCalendarJobRows,
+  GANTT_REORDER_MS,
+  isGanttReorderAnimating,
 };
