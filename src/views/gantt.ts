@@ -2312,19 +2312,70 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
   // to animate here (across both #timelineGrid and #leftBody — see
   // allRowKeyedElements()'s own comment), without writing anything yet.
   const toAnimate: { el: HTMLElement; key: string; delta: number }[] = [];
+  // A row's "still moving enough to animate" call must be made ONCE per
+  // key, not once per element sharing it — the elements sharing one rowKey
+  // are separately measured (their own getBoundingClientRect(), not a
+  // shared value), and sub-pixel rendering differences between e.g. a
+  // day-segment and its row's job-name tag can put one of them on either
+  // side of the < 1 threshold below even though they belong to the same
+  // logical move. Deciding per element used to let a later element for a
+  // key ALREADY pushed into toAnimate by an earlier one delete that same
+  // key's shared barAnimOrigins entry out from under it — the write pass
+  // just below then dereferences a key that's already gone, and even short
+  // of an outright crash, different pieces of one row could end up
+  // animating from inconsistent origins. Deciding once per key and
+  // recording it here — 'bail' (with its cleanup) or 'continue' (with its
+  // origin, reused for every element under that key) — keeps the whole
+  // row's pieces acting as one unit either way.
+  const keyDecisions: Record<string, { bail: boolean; origin?: { fromTop: number; startTime: number; zIndex: number } }> = {};
   allRowKeyedElements().forEach(function (el) {
     const key = el.dataset.rowKey as string;
     const oldTop = oldTops[key];
     if (oldTop === undefined) return;
-    // Freshly (re)created by the rebuild above, no transform applied yet
-    // — this is its real resting position, directly comparable to
-    // captureBarTopsByRowKey()'s own getBoundingClientRect()-based
-    // measurement (same coordinate space, viewport-relative).
+    let decision = keyDecisions[key];
+    if (!decision) {
+      // Freshly (re)created by the rebuild above, no transform applied yet
+      // — this is its real resting position, directly comparable to
+      // captureBarTopsByRowKey()'s own getBoundingClientRect()-based
+      // measurement (same coordinate space, viewport-relative).
+      const newTop = el.getBoundingClientRect().top;
+      const origin = barAnimOrigins[key] || { fromTop: oldTop, startTime: now, zIndex: ganttReorderNextZIndex++ };
+      const delta = origin.fromTop - newTop;
+      if (Math.abs(delta) < 1) {
+        delete barAnimOrigins[key];
+        decision = keyDecisions[key] = { bail: true };
+      } else {
+        barAnimOrigins[key] = origin;
+        decision = keyDecisions[key] = { bail: false, origin: origin };
+      }
+    }
+    if (decision.bail) {
+      // A row already mid-flight (existing origin) can land here instead
+      // of the tick() loop's own completion branch — e.g. a second drag
+      // right back to roughly where an still-in-flight one started nets a
+      // ~0 delta against that ORIGINAL origin.fromTop before it ever
+      // reaches progress>=1. Without this, whatever an earlier pass
+      // already wrote (transform/transition/the class/the pinned z-index)
+      // is stuck on the element for good — nothing else ever clears it,
+      // since it won't be in toAnimate again to reach that branch. Stuck
+      // z-index was the visible failure: a day-segment (elevated above its
+      // own row's job-name tag by design, see ganttReorderNextZIndex's own
+      // comment) stayed elevated permanently, hiding that row's tag behind
+      // its own opaque segments (Karl's own screenshot, worse than the
+      // original flicker this was meant to fix).
+      el.style.transform = '';
+      el.style.transition = '';
+      el.style.zIndex = '';
+      el.classList.remove('gantt-bar-reorder');
+      return;
+    }
+    // This element's OWN measured position still drives its OWN delta
+    // (see this function's own comment elsewhere on why day-segment/tag/
+    // border sub-pixel differences matter) — only the bail-vs-continue
+    // call itself, and the shared origin when continuing, are pinned once
+    // per key above.
     const newTop = el.getBoundingClientRect().top;
-    const origin = barAnimOrigins[key] || { fromTop: oldTop, startTime: now, zIndex: ganttReorderNextZIndex++ };
-    const delta = origin.fromTop - newTop;
-    if (Math.abs(delta) < 1) { delete barAnimOrigins[key]; return; }
-    barAnimOrigins[key] = origin;
+    const delta = decision.origin!.fromTop - newTop;
     toAnimate.push({ el: el, key: key, delta: delta });
   });
   if (!toAnimate.length) return;
@@ -2408,6 +2459,23 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
     // computed from the identical instant, regardless of list size.
     const frameNow = performance.now();
     let stillActive = false;
+    // A finished row's shared origin is deleted ONCE, after every element
+    // sharing its key has already been styled below — not inline inside
+    // the loop. toAnimate routinely holds several elements per key (every
+    // day-segment/tick/border/tag sharing one row — see Pass 1's own
+    // comment), and deleting barAnimOrigins[key] the moment the FIRST of
+    // them reached progress>=1 left barAnimOrigins[a.key] gone by the time
+    // the SECOND one was processed a moment later in this same forEach —
+    // its own `if (!origin) return` guard then bailed it out with NONE of
+    // the cleanup below ever applied, permanently stuck with whatever
+    // transform/transition/class/z-index it had from the frame before.
+    // Harmless-looking on its own (a ~0px leftover transform), but
+    // deadly combined with ganttReorderNextZIndex's pinned z-index: a
+    // day-segment stuck elevated above its own row's job-name tag hid
+    // that tag completely (Karl's own screenshot) — the first time this
+    // latent gap became visible, though it's always applied to
+    // transform/transition/the class too.
+    const finishedKeys = new Set<string>();
     toAnimate.forEach(function (a) {
       const origin = barAnimOrigins[a.key];
       if (!origin) return;
@@ -2418,11 +2486,12 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
         a.el.style.transform = '';
         a.el.style.transition = '';
         a.el.style.zIndex = '';
-        delete barAnimOrigins[a.key];
+        finishedKeys.add(a.key);
       } else {
         stillActive = true;
       }
     });
+    finishedKeys.forEach(function (k) { delete barAnimOrigins[k]; });
     if (grid) redrawConnectorLinesLive(jobBarMap, movedJobIds, gridTop, frameNow);
     if (stillActive) {
       requestAnimationFrame(tick);
