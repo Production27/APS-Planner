@@ -24,6 +24,7 @@ test('buildVisibleTaskRows: an unphased job with an un-expanded sub-unit collaps
     window.getLinkedReferenceJobs = () => [];
     window.getSubUnitKey = (job, phaseId, subPhaseId) => job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
     window.ganttFocusedJobId = null;
+    window.ganttFocusedTaskColumnId = null;
     tasksExpandedPhaseIds = new Set();
     tasksExpandedSubPhaseIds = new Set(); // nothing expanded — default collapsed
     // getHiddenTaskOrders()/getJobDueMarkerTask() are real, module-scoped
@@ -61,6 +62,7 @@ test('buildVisibleTaskRows: expanding the sub-unit yields one row per dated task
     window.getLinkedReferenceJobs = () => [];
     window.getSubUnitKey = (job, phaseId, subPhaseId) => job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
     window.ganttFocusedJobId = null;
+    window.ganttFocusedTaskColumnId = null;
     tasksExpandedPhaseIds = new Set();
     // Unphased job's default phase/sub-unit both carry id:null — matches
     // getSubUnitKey('job-1', null, null) above.
@@ -95,6 +97,7 @@ test('buildVisibleTaskRows: a job\'s due-date marker gets its own row on the fir
     window.getLinkedReferenceJobs = () => [];
     window.getSubUnitKey = (job, phaseId, subPhaseId) => job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
     window.ganttFocusedJobId = null;
+    window.ganttFocusedTaskColumnId = null;
     tasksExpandedPhaseIds = new Set();
     tasksExpandedSubPhaseIds = new Set(['job-1::p0::s0']);
     // getHiddenTaskOrders()/getJobDueMarkerTask() are real, module-scoped
@@ -115,4 +118,51 @@ test('buildVisibleTaskRows: a job\'s due-date marker gets its own row on the fir
     { isDueMarker: false, taskId: 't1' },
     { isDueMarker: true, taskId: '__due__' },
   ]);
+});
+
+test('buildVisibleTaskRows: task focus isolates one column across every job, ignoring collapse state', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate(() => {
+    window.getVisibleJobs = () => jobs;
+    window.getLinkedReferenceJobs = () => [];
+    window.getSubUnitKey = (job, phaseId, subPhaseId) => job.id + '::' + (phaseId || 'p0') + '::' + (subPhaseId || 's0');
+    window.ganttFocusedJobId = null;
+    window.ganttFocusedTaskColumnId = 'framing';
+    // Nothing expanded — proves task focus bypasses
+    // tasksExpandedPhaseIds/tasksExpandedSubPhaseIds entirely rather than
+    // only surfacing rows a user happened to already expand.
+    tasksExpandedPhaseIds = new Set();
+    tasksExpandedSubPhaseIds = new Set();
+    BOARD_COLUMNS = [{ id: 'design', label: 'Design' }, { id: 'framing', label: 'Framing' }];
+    boardCards = [];
+
+    jobs = [
+      {
+        id: 'job-1', name: 'Miller Residence', color: '#3949ab', archived: false,
+        tasks: [
+          { id: 't1', name: 'Design', columnId: 'design', start: '2026-09-01', finish: '2026-09-03', order: 0 },
+          { id: 't2', name: 'Framing', columnId: 'framing', start: '2026-09-10', finish: '2026-09-15', order: 1 },
+        ],
+      },
+      // Framing task exists but has no dates yet — should be excluded
+      // entirely, same as an unscheduled task always is.
+      {
+        id: 'job-2', name: 'Oakview Duplex', color: '#00897b', archived: false,
+        tasks: [
+          { id: 't3', name: 'Design', columnId: 'design', start: '2026-09-02', finish: '2026-09-04', order: 0 },
+          { id: 't4', name: 'Framing', columnId: 'framing', start: '', finish: '', order: 1 },
+        ],
+      },
+      // Archived jobs stay excluded, same as the normal per-job pass.
+      {
+        id: 'job-3', name: 'Old Job', color: '#c62828', archived: true,
+        tasks: [
+          { id: 't5', name: 'Framing', columnId: 'framing', start: '2026-09-05', finish: '2026-09-06', order: 1 },
+        ],
+      },
+    ];
+
+    return buildVisibleTaskRows().map((r) => ({ jobId: r.job.id, taskId: r.task.id, start: r.task.start }));
+  });
+  expect(result).toEqual([{ jobId: 'job-1', taskId: 't2', start: '2026-09-10' }]);
 });

@@ -6,7 +6,8 @@
 // (collapse/expand, job focus, the date popover, and the task tooltip —
 // togglePhaseCollapse/getSubUnitKey/toggleTasksPhaseExpanded/
 // toggleTasksSubPhaseExpanded/expandAllGantt/collapseAllGantt/
-// toggleGanttJobFocus/clearGanttJobFocus/syncGanttJobFocusBanner/
+// toggleGanttJobFocus/clearGanttJobFocus/toggleGanttTaskFocus/
+// clearGanttTaskFocus/syncGanttFocusBanner/syncGanttTaskFocusPicker/
 // computeDateRange/showDatePopover/hideDatePopover/
 // showTooltip), the visible-row builder (byStartDate/getPhaseSegments/
 // buildSegment/buildPhaseCollapsedRow/buildSubPhaseRow/
@@ -37,6 +38,7 @@ import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
+import { renderTaskFocusPickerInto } from './gantt-task-focus-picker';
 import { renderTaskRowsInto, type TaskRowProps, type TaskRowPillProps } from './gantt-task-row';
 import { renderTimelineBarsInto, type TaskBarEntryProps, type BarTagData, type JobSpanTickData, type JobSpanSegmentData, type JobSpanDueData } from './gantt-task-bar';
 import { renderGridLinesInto, renderRowBgInto, renderTodayLineInto, type RowBgEntry, type TodayLineData } from './gantt-grid-decor';
@@ -80,6 +82,8 @@ declare global {
   var tasksExpandedSubPhaseIds: Set<string>;
   // eslint-disable-next-line no-var
   var ganttFocusedJobId: string | null;
+  // eslint-disable-next-line no-var
+  var ganttFocusedTaskColumnId: string | null;
   // eslint-disable-next-line no-var
   var startDate: Date;
   // eslint-disable-next-line no-var
@@ -134,6 +138,7 @@ interface GanttTask {
   start?: string;
   finish?: string;
   order?: number;
+  columnId?: string;
   [key: string]: unknown;
 }
 
@@ -810,9 +815,12 @@ function collapseAllGantt(): void {
 // Clicking a job's name pill isolates the Gantt to just that job. NOT
 // persisted to localStorage — a short-lived "let me focus on this one
 // job" tool, reset on every page load and whenever the active project
-// changes (see switchProject() in src/app/project.ts).
+// changes (see switchProject() in src/app/project.ts). Activating this
+// clears ganttFocusedTaskColumnId below — see setGanttTaskFocus()'s own
+// comment on why the two stay mutually exclusive.
 function toggleGanttJobFocus(jobId: string): void {
   ganttFocusedJobId = (ganttFocusedJobId === jobId) ? null : jobId;
+  if (ganttFocusedJobId) ganttFocusedTaskColumnId = null;
   renderGantt();
 }
 function clearGanttJobFocus(): void {
@@ -820,21 +828,66 @@ function clearGanttJobFocus(): void {
   ganttFocusedJobId = null;
   renderGantt();
 }
+
+// Mirrors ganttFocusedJobId/toggleGanttJobFocus() above, flipped to the
+// other axis: instead of hiding every job but one, this hides every TASK
+// but one (by BOARD_COLUMNS entry — see columnId on Task in
+// src/core/types.ts) while keeping every job. Same lifecycle as job
+// focus — not persisted, reset on reload/project switch (see
+// switchProject() in src/app/project.ts).
+//
+// Kept mutually exclusive with job focus rather than combinable: showing
+// "just this job's Framing" and "just Framing, every job" as two
+// independently-toggleable filters would need the banner (and the
+// toolbar picker) to describe a two-axis state on day one, for a
+// combination nobody's asked for yet. Activating one clears the other, so
+// exactly one of ganttFocusedJobId/ganttFocusedTaskColumnId is ever set.
+function setGanttTaskFocus(columnId: string | null): void {
+  ganttFocusedTaskColumnId = columnId;
+  if (columnId) ganttFocusedJobId = null;
+  renderGantt();
+}
+// Toggle entry point for clicking a task's name in the left panel (see
+// renderLeftPanelRows()'s mainLabelClickable below) — same click-to-
+// toggle-off gesture as toggleGanttJobFocus().
+function toggleGanttTaskFocus(columnId: string): void {
+  setGanttTaskFocus(ganttFocusedTaskColumnId === columnId ? null : columnId);
+}
+function clearGanttTaskFocus(): void {
+  if (!ganttFocusedTaskColumnId) return;
+  setGanttTaskFocus(null);
+}
+
 // Shown in the Gantt toolbar (Tasks view only): a quiet hint when nothing's
 // focused, swapping to the active "Showing only X — Show all" banner once
-// a job is.
-function syncGanttJobFocusBanner(): void {
+// a job or task is.
+function syncGanttFocusBanner(): void {
   const el = document.getElementById('ganttJobFocusBanner');
   if (!el) return;
   if (ganttViewMode !== 'tasks') {
-    renderFocusBannerInto(el, false, null, clearGanttJobFocus);
+    renderFocusBannerInto(el, false, null, null, clearGanttJobFocus);
     return;
   }
-  // The focused job could vanish out from under the filter (deleted, no
-  // longer a Member, a project switch already cleared ganttFocusedJobId,
-  // or it's not in the member currently being previewed).
+  // The focused job/column could vanish out from under the filter
+  // (deleted, no longer a Member, a project switch already cleared
+  // ganttFocusedJobId, or it's not in the member currently being
+  // previewed; a column stops matching once BOARD_COLUMNS no longer has
+  // it, e.g. deleted from Board settings).
   const job = ganttFocusedJobId ? getVisibleJobs().find(function(j) { return j.id === ganttFocusedJobId; }) : null;
-  renderFocusBannerInto(el, true, job ? job.name : null, clearGanttJobFocus);
+  const col = ganttFocusedTaskColumnId ? BOARD_COLUMNS.find(function(c) { return c.id === ganttFocusedTaskColumnId; }) : null;
+  renderFocusBannerInto(el, true, job ? job.name : null, col ? col.label : null, job ? clearGanttJobFocus : clearGanttTaskFocus);
+}
+// Toolbar "Focus a task…" picker (Option B, alongside the click-to-focus
+// gesture above) — lets you jump straight to isolating a stage without
+// needing to find a job that already has it expanded. Lists every
+// on-schedule column (hideFromSchedule ones never get a bar to isolate in
+// the first place — see getHiddenTaskOrders()).
+function syncGanttTaskFocusPicker(): void {
+  const el = document.getElementById('ganttTaskFocusPicker');
+  if (!el) return;
+  const options = BOARD_COLUMNS.filter(function (c) { return !c.hideFromSchedule; })
+    .map(function (c) { return { id: c.id, label: c.label }; });
+  renderTaskFocusPickerInto(el, options, ganttFocusedTaskColumnId, setGanttTaskFocus);
 }
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
 // Gantt bar, as plain data for BarTag (see gantt-task-bar.tsx) to render.
@@ -1101,63 +1154,92 @@ function buildSubPhaseRow(job: Job, phase: Phase, seg: GanttSegment): GanttRow {
 function buildVisibleTaskRows(): GanttRow[] {
   const hiddenOrders = getHiddenTaskOrders();
   const rows: GanttRow[] = [];
-  getVisibleJobs().concat(getLinkedReferenceJobs()).forEach((job) => {
-    if (job.archived) return;
-    // See ganttFocusedJobId/toggleGanttJobFocus() above — isolates the
-    // chart to one job's rows when set, Tasks
-    // view only. Whichever side of a linked pair is isolated, the other
-    // side stays visible too — a job's .link.jobId only ever points at
-    // its actual linked counterpart (linkJobs() always pairs across the
-    // two fixed projects), so this can't accidentally match an unrelated
-    // job.
-    if (ganttFocusedJobId && job.id !== ganttFocusedJobId) {
-      const isLinkedCounterpart = !!(job.link && job.link.jobId === ganttFocusedJobId);
-      if (!isLinkedCounterpart) return;
-    }
-    getJobPhases(job).forEach((phase) => {
-      const phaseName = phase.isDefault ? null : phase.name;
-      const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
-      if (collapsible && !tasksExpandedPhaseIds.has(phase.id || '')) {
-        const segments = getPhaseSegments(phase, hiddenOrders);
-        if (segments.length) rows.push(buildPhaseCollapsedRow(job, phase, segments));
-        return;
-      }
-      getPhaseSubUnits(phase).forEach((subUnit, subIdx) => {
-        const subPhaseName = subUnit.isDefault ? null : subUnit.name;
-        const subKey = getSubUnitKey(job, phase.id, subUnit.id);
-        const subCollapsed = !tasksExpandedSubPhaseIds.has(subKey);
-        if (subCollapsed) {
-          const seg = buildSegment(subUnit, hiddenOrders);
-          if (seg) rows.push(buildSubPhaseRow(job, phase, seg));
-        } else {
-          (subUnit.tasks || []).forEach((task) => {
-            if (hiddenOrders.has(task.order)) return;
-            // Unscheduled tasks (no start/finish yet) don't get a Gantt row
-            // at all — they still exist on the job and in the Job Manager
-            // grid, they just don't clutter the schedule until a date is set.
-            if (!task.start || !task.finish) return;
-            if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
-            rows.push({ job, task, phaseId: phase.id, phaseName, subPhaseId: subUnit.id, subPhaseName, collapsible });
-          });
-        }
-        // A linked reference job's due marker lives on a card in ITS OWN
-        // project, not this one's boardCards — nothing to fetch here.
-        // Sub-phases never have their own card either, so the due marker
-        // only ever shows on the FIRST sub-unit's row — real or synthetic
-        // default — never duplicated across every sub-phase. A COLLAPSED
-        // first sub-unit already carries its own due marker inline (see
-        // the isJobSpan branch in renderGantt()'s own draw loop, which
-        // attaches the flag straight to the end of that sub-unit's own
-        // condensed bar) — pushing a second, separate due-marker row here
-        // on top of that would just duplicate it as an extra dropped-down
-        // line.
-        if (!job.isLinkedReference && subIdx === 0 && !subCollapsed) {
-          const dueTask = getJobDueMarkerTask(job, phase.id);
-          if (dueTask) rows.push({ job, task: dueTask, phaseId: phase.id, phaseName, subPhaseId: subUnit.id, subPhaseName, collapsible });
-        }
+
+  if (ganttFocusedTaskColumnId) {
+    // See ganttFocusedTaskColumnId/setGanttTaskFocus() above — the other
+    // axis from ganttFocusedJobId below: every job stays, but only the ONE
+    // task matching this column. A totally separate pass rather than a
+    // branch threaded through the one below — with a single task type
+    // singled out there's no phase/sub-phase fold state left to respect
+    // (tasksExpandedPhaseIds/tasksExpandedSubPhaseIds), so every phase and
+    // sub-unit that has this task dated gets its own row regardless of its
+    // own collapse state, instead of collapsing into a job-span pseudo-row.
+    getVisibleJobs().concat(getLinkedReferenceJobs()).forEach((job) => {
+      if (job.archived) return;
+      getJobPhases(job).forEach((phase) => {
+        const phaseName = phase.isDefault ? null : phase.name;
+        const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
+        getPhaseSubUnits(phase).forEach((subUnit) => {
+          const subPhaseName = subUnit.isDefault ? null : subUnit.name;
+          const task = (subUnit.tasks || []).find((t) => t.columnId === ganttFocusedTaskColumnId);
+          if (!task) return;
+          if (hiddenOrders.has(task.order)) return;
+          if (!task.start || !task.finish) return;
+          if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
+          rows.push({ job, task, phaseId: phase.id, phaseName, subPhaseId: subUnit.id, subPhaseName, collapsible });
+        });
       });
     });
-  });
+  } else {
+    getVisibleJobs().concat(getLinkedReferenceJobs()).forEach((job) => {
+      if (job.archived) return;
+      // See ganttFocusedJobId/toggleGanttJobFocus() above — isolates the
+      // chart to one job's rows when set, Tasks
+      // view only. Whichever side of a linked pair is isolated, the other
+      // side stays visible too — a job's .link.jobId only ever points at
+      // its actual linked counterpart (linkJobs() always pairs across the
+      // two fixed projects), so this can't accidentally match an unrelated
+      // job.
+      if (ganttFocusedJobId && job.id !== ganttFocusedJobId) {
+        const isLinkedCounterpart = !!(job.link && job.link.jobId === ganttFocusedJobId);
+        if (!isLinkedCounterpart) return;
+      }
+      getJobPhases(job).forEach((phase) => {
+        const phaseName = phase.isDefault ? null : phase.name;
+        const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
+        if (collapsible && !tasksExpandedPhaseIds.has(phase.id || '')) {
+          const segments = getPhaseSegments(phase, hiddenOrders);
+          if (segments.length) rows.push(buildPhaseCollapsedRow(job, phase, segments));
+          return;
+        }
+        getPhaseSubUnits(phase).forEach((subUnit, subIdx) => {
+          const subPhaseName = subUnit.isDefault ? null : subUnit.name;
+          const subKey = getSubUnitKey(job, phase.id, subUnit.id);
+          const subCollapsed = !tasksExpandedSubPhaseIds.has(subKey);
+          if (subCollapsed) {
+            const seg = buildSegment(subUnit, hiddenOrders);
+            if (seg) rows.push(buildSubPhaseRow(job, phase, seg));
+          } else {
+            (subUnit.tasks || []).forEach((task) => {
+              if (hiddenOrders.has(task.order)) return;
+              // Unscheduled tasks (no start/finish yet) don't get a Gantt row
+              // at all — they still exist on the job and in the Job Manager
+              // grid, they just don't clutter the schedule until a date is set.
+              if (!task.start || !task.finish) return;
+              if (isNaN(new Date(task.start + 'T00:00:00').getTime()) || isNaN(new Date(task.finish + 'T00:00:00').getTime())) return;
+              rows.push({ job, task, phaseId: phase.id, phaseName, subPhaseId: subUnit.id, subPhaseName, collapsible });
+            });
+          }
+          // A linked reference job's due marker lives on a card in ITS OWN
+          // project, not this one's boardCards — nothing to fetch here.
+          // Sub-phases never have their own card either, so the due marker
+          // only ever shows on the FIRST sub-unit's row — real or synthetic
+          // default — never duplicated across every sub-phase. A COLLAPSED
+          // first sub-unit already carries its own due marker inline (see
+          // the isJobSpan branch in renderGantt()'s own draw loop, which
+          // attaches the flag straight to the end of that sub-unit's own
+          // condensed bar) — pushing a second, separate due-marker row here
+          // on top of that would just duplicate it as an extra dropped-down
+          // line.
+          if (!job.isLinkedReference && subIdx === 0 && !subCollapsed) {
+            const dueTask = getJobDueMarkerTask(job, phase.id);
+            if (dueTask) rows.push({ job, task: dueTask, phaseId: phase.id, phaseName, subPhaseId: subUnit.id, subPhaseName, collapsible });
+          }
+        });
+      });
+    });
+  }
+
   rows.sort((a, b) => byStartDate(a.task, b.task) || (((a.job.order as number | undefined) || 0) - ((b.job.order as number | undefined) || 0)));
   return rows;
 }
@@ -1403,6 +1485,13 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     const mainLabel = task.isJobSpan
       ? (linkGlyph ? linkGlyph.trim() : '')
       : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + task.name;
+    // Clicking a real (non-job-span, non-due-marker) task's own name
+    // isolates the Gantt to just that BOARD_COLUMNS stage across every
+    // job — see ganttFocusedTaskColumnId/toggleGanttTaskFocus() above. A
+    // job-span/due-marker task never carries a columnId (see GanttTask's
+    // own comment), so this only ever lights up on a real leaf task row.
+    const isFocusableTask = isTasksMode && !task.isJobSpan && !task.isDueMarker && !!task.columnId;
+    const isTaskFocused = isFocusableTask && ganttFocusedTaskColumnId === task.columnId;
 
     let jobPill: TaskRowPillProps | null = null;
     let phasePill: TaskRowPillProps | null = null;
@@ -1486,6 +1575,9 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       startStr,
       finishStr,
       mainLabel,
+      mainLabelClickable: isFocusableTask,
+      mainLabelFocused: isTaskFocused,
+      onMainLabelClick: isFocusableTask ? () => toggleGanttTaskFocus(task.columnId as string) : undefined,
       hasNote: !!task.notes,
       jobPill,
       phasePill,
@@ -2595,7 +2687,8 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
 }
 
 function renderGantt(): void {
-  syncGanttJobFocusBanner();
+  syncGanttFocusBanner();
+  syncGanttTaskFocusPicker();
 
   const oldBarTops = captureBarTopsByRowKey();
 
@@ -3104,7 +3197,10 @@ export {
   collapseAllGantt,
   toggleGanttJobFocus,
   clearGanttJobFocus,
-  syncGanttJobFocusBanner,
+  toggleGanttTaskFocus,
+  clearGanttTaskFocus,
+  syncGanttFocusBanner,
+  syncGanttTaskFocusPicker,
   computeDateRange,
   showDatePopover,
   hideDatePopover,

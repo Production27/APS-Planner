@@ -54,6 +54,14 @@ export interface TaskRowProps {
   startStr: string;
   finishStr: string;
   mainLabel: string;
+  // Set only for a real leaf task (never a job-span/due-marker pseudo-row)
+  // — clicking it isolates the Gantt to just that task's BOARD_COLUMNS
+  // stage across every job, mirroring jobPill's click-to-focus below but
+  // on the other axis. See ganttFocusedTaskColumnId/toggleGanttTaskFocus()
+  // in gantt.ts.
+  mainLabelClickable?: boolean;
+  mainLabelFocused?: boolean;
+  onMainLabelClick?: () => void;
   hasNote: boolean;
   jobPill: TaskRowPillProps | null;
   phasePill: TaskRowPillProps | null;
@@ -93,7 +101,18 @@ function TaskRow(props: TaskRowProps) {
       <div class="col col-start">{props.startStr}</div>
       <div class="col col-finish">{props.finishStr}</div>
       <div class="col col-jobs">
-        {props.mainLabel ? <><span class="task-row-name">{props.mainLabel}</span>{' '}</> : null}
+        {props.mainLabel ? (
+          <>
+            <span
+              class={'task-row-name' + (props.mainLabelClickable ? ' clickable' : '') + (props.mainLabelFocused ? ' focused' : '')}
+              title={props.mainLabelClickable ? (props.mainLabelFocused ? 'Click to show every task again' : 'Click to show only ' + props.mainLabel + ' — every job') : undefined}
+              onClick={props.onMainLabelClick ? (e) => { e.stopPropagation(); props.onMainLabelClick!(); } : undefined}
+            >
+              {props.mainLabel}
+            </span>
+            {' '}
+          </>
+        ) : null}
         {props.jobPill ? <TaskRowPill pill={props.jobPill} extraClass="task-row-jobname" /> : null}
         {props.phasePill ? <TaskRowPill pill={props.phasePill} extraClass="task-row-phasename" /> : null}
         {props.subPill ? <TaskRowPill pill={props.subPill} extraClass="task-row-subphasename" /> : null}

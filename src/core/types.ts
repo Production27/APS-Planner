@@ -15,6 +15,13 @@ export interface Task {
   notes?: string;
   order: number;
   color?: string;
+  // The stable BOARD_COLUMNS entry this task represents — see
+  // normalizeTasksToColumns() in src/core/jobs.ts, which keeps this (and
+  // `name`/`order`) in sync with the live column list. The one field that
+  // means the same thing across every job's tasks, which is what makes
+  // "isolate this task everywhere" (src/views/gantt.ts's
+  // ganttFocusedTaskColumnId) well-defined.
+  columnId?: string;
   isDueMarker?: boolean;
   isJobSpan?: boolean;
   [key: string]: unknown;

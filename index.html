@@ -556,6 +556,14 @@
   .task-row .col-finish { width: 88px; color: var(--text-light); font-size: var(--t-xs); }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
   .task-row .col-jobs .task-row-name { font-weight: 700; }
+  /* See ganttFocusedTaskColumnId/toggleGanttTaskFocus() — clicking a real
+     task's own name isolates it across every job, same gesture as the
+     job-name pill below but on the other axis. */
+  .task-row .col-jobs .task-row-name.clickable { cursor: pointer; border-bottom: 1.5px dashed transparent; }
+  .task-row .col-jobs .task-row-name.clickable:hover { color: var(--primary); border-bottom-color: var(--primary-light); }
+  body.dark-mode .task-row .col-jobs .task-row-name.clickable:hover { color: var(--primary-ondark); }
+  .task-row .col-jobs .task-row-name.focused { color: var(--primary); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); border-radius: 3px; padding: 0 3px; }
+  body.dark-mode .task-row .col-jobs .task-row-name.focused { color: var(--primary-ondark); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
   .task-row .col-jobs .task-row-jobname { display: inline-block; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 10px; vertical-align: middle; line-height: 1.5; }
   .task-row .col-jobs .task-row-jobname.collapsible { cursor: pointer; }
   .task-row .col-jobs .task-row-jobname.collapsible:hover { filter: brightness(1.15); }
@@ -934,10 +942,10 @@
   }
   .gantt-toolbar button:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); box-shadow: 0 3px 6px rgba(26,35,126,0.15); transform: translateY(-1px); }
   .gantt-toolbar button:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,0.1) inset; }
-  /* See ganttFocusedJobId/syncGanttJobFocusBanner() — sits ahead of the icon
-     buttons, pushed to the toolbar's left edge via margin-right: auto so the
-     zoom/today/etc. buttons stay pinned right regardless of whether it's
-     showing. */
+  /* See ganttFocusedJobId/ganttFocusedTaskColumnId/syncGanttFocusBanner() —
+     sits ahead of the icon buttons, pushed to the toolbar's left edge via
+     margin-right: auto so the zoom/today/etc. buttons stay pinned right
+     regardless of whether it's showing. */
   .gantt-job-focus-banner { align-items: center; gap: var(--s-2); font-size: var(--t-sm); font-weight: 600; color: var(--text); margin-right: auto; }
   .gantt-job-focus-banner b { color: var(--primary); }
   .gantt-job-focus-banner button {
@@ -3081,6 +3089,18 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); }
   body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn { border-color: var(--border); color: var(--text-light); }
   body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
+  /* Toolbar "Focus a task…" picker — see syncGanttTaskFocusPicker() in
+     src/views/gantt.ts. Same height/border language as
+     .gantt-toolbar-text-btn beside it, just a <select> instead of a
+     button. */
+  .gantt-toolbar select.gantt-task-focus-select {
+    background: transparent; border: 1px solid var(--border); color: var(--text-light);
+    height: 26px; padding: 0 var(--s-2); border-radius: 6px; cursor: pointer;
+    font-size: var(--t-sm); font-weight: 600; flex-shrink: 0;
+  }
+  .gantt-toolbar select.gantt-task-focus-select:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); }
+  body.dark-mode .gantt-toolbar select.gantt-task-focus-select { border-color: var(--border); color: var(--text-light); }
+  body.dark-mode .gantt-toolbar select.gantt-task-focus-select:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
   .job-card.archived { opacity: 0.55; }
   .task-row.archived { opacity: 0.55; }
   .job-card.finished { opacity: 0.65; }
@@ -3464,6 +3484,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
           <div class="gantt-view-toggle-row"></div>
           <div class="gantt-toolbar" id="ganttToolbar">
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
+            <div id="ganttTaskFocusPicker"></div>
             <button class="gantt-toolbar-text-btn" id="ganttExpandAllBtn" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
             <button class="gantt-toolbar-text-btn" id="ganttCollapseAllBtn" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
             <!-- Desktop only — see .gantt-zoom-btn's mobile hide rule.
@@ -4094,6 +4115,17 @@ var tasksExpandedSubPhaseIds = new Set(safeJsonParse(localStorage.getItem('gantt
 // page load and whenever the active project changes (see switchProject()).
 // `var`, not `let` — src/views/gantt.ts's bundled row builder reads this.
 var ganttFocusedJobId = null;
+
+// ===== TASKS VIEW: FOCUS ON ONE TASK ACROSS EVERY JOB =====
+// The other axis of the focus above: instead of hiding every job but one,
+// clicking a task's own name (or picking one from the toolbar's "Focus a
+// task…" picker) hides every task but one — every job stays, but only its
+// bar for that one BOARD_COLUMNS stage. Kept mutually exclusive with
+// ganttFocusedJobId (see setGanttTaskFocus() in src/views/gantt.ts) and
+// the same short-lived lifecycle: not persisted, reset on reload or
+// project switch (see switchProject()).
+// `var`, not `let` — src/views/gantt.ts's bundled row builder reads this.
+var ganttFocusedTaskColumnId = null;
 // BOARD_COLOR_SOFTEN_AMOUNT/BOARD_COLOR_PRESETS moved into
 // src/views/board.ts, ARCHIVE_CUTOFF_DAYS/DEFAULT_BOARD_COLUMNS into
 // src/core/constants.ts, DEFAULT_TASK_DURATION_DAYS into src/views/board.ts

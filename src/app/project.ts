@@ -181,10 +181,12 @@ export function switchProject(projectId: string): void {
   // NEW project's data instead, silently dropping this edit from ever
   // reaching the shared room.
   flushPendingRoomPush();
-  // The old project's job id means nothing in the new one — see
-  // ganttFocusedJobId/buildVisibleTaskRows(). Same reasoning for the
-  // "view as member" preview — see viewAsUsername/isJobVisibleToMe().
+  // The old project's job id (or column id — a project's BOARD_COLUMNS
+  // are its own) means nothing in the new one — see ganttFocusedJobId/
+  // ganttFocusedTaskColumnId/buildVisibleTaskRows(). Same reasoning for
+  // the "view as member" preview — see viewAsUsername/isJobVisibleToMe().
   ganttFocusedJobId = null;
+  ganttFocusedTaskColumnId = null;
   viewAsUsername = null;
   viewAsRole = null;
   activeProjectId = projectId;

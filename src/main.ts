@@ -103,7 +103,8 @@ import {
   handleGanttTouchMove, handleGanttTouchEnd, handleGanttWheelZoom, zoomGanttCentered, zoomIn, zoomOut,
   resetZoom, fitToView, togglePhaseCollapse, getSubUnitKey, toggleTasksPhaseExpanded,
   toggleTasksSubPhaseExpanded, expandAllGantt, collapseAllGantt, toggleGanttJobFocus, clearGanttJobFocus,
-  syncGanttJobFocusBanner, computeDateRange, showDatePopover, hideDatePopover, showTooltip,
+  toggleGanttTaskFocus, clearGanttTaskFocus, syncGanttFocusBanner, syncGanttTaskFocusPicker,
+  computeDateRange, showDatePopover, hideDatePopover, showTooltip,
   setHeaderScroll, setupScrollSync,
   DUE_MARKER_TASK_ID, getJobDueMarkerTask, forEachVisibleSubUnit, flattenJobs, getHiddenTaskOrders,
   buildSubUnitClusters, isCalendarJobSpanTaskId, buildCalendarJobRows, collapsedPhaseIds,
@@ -624,7 +625,10 @@ declare global {
     collapseAllGantt: typeof collapseAllGantt;
     toggleGanttJobFocus: typeof toggleGanttJobFocus;
     clearGanttJobFocus: typeof clearGanttJobFocus;
-    syncGanttJobFocusBanner: typeof syncGanttJobFocusBanner;
+    toggleGanttTaskFocus: typeof toggleGanttTaskFocus;
+    clearGanttTaskFocus: typeof clearGanttTaskFocus;
+    syncGanttFocusBanner: typeof syncGanttFocusBanner;
+    syncGanttTaskFocusPicker: typeof syncGanttTaskFocusPicker;
     computeDateRange: typeof computeDateRange;
     showDatePopover: typeof showDatePopover;
     hideDatePopover: typeof hideDatePopover;
@@ -1203,7 +1207,10 @@ window.expandAllGantt = expandAllGantt;
 window.collapseAllGantt = collapseAllGantt;
 window.toggleGanttJobFocus = toggleGanttJobFocus;
 window.clearGanttJobFocus = clearGanttJobFocus;
-window.syncGanttJobFocusBanner = syncGanttJobFocusBanner;
+window.toggleGanttTaskFocus = toggleGanttTaskFocus;
+window.clearGanttTaskFocus = clearGanttTaskFocus;
+window.syncGanttFocusBanner = syncGanttFocusBanner;
+window.syncGanttTaskFocusPicker = syncGanttTaskFocusPicker;
 window.computeDateRange = computeDateRange;
 window.showDatePopover = showDatePopover;
 window.hideDatePopover = hideDatePopover;
