@@ -2556,12 +2556,18 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        and unclickable despite display:block above. */
     .job-list { width: 100%; min-width: 0; opacity: 1 !important; pointer-events: auto !important; }
 
-    /* Was icon-only, title="" carrying the name for an accessibility
-       tree only — see .mobile-view-btn-label below for the revisit:
-       touch has no hover to ever surface that title, so a first-time
-       user had no visible way to know what an icon meant. Reuses the
-       exact icon each view already has on the desktop rail-tab-row, so
-       it's the same visual language, not a new one just for mobile. */
+    /* Icon-only (like a phone's own bottom tab bar minus the captions) —
+       6 tabs' worth of full words ("Checklist" is the long pole) never
+       fits an even flex:1 split of a phone's width at a legible size;
+       dropping the label entirely rather than shrinking it further reads
+       cleaner than a near-illegible caption would. Reuses the exact icon
+       each view already has on the desktop rail-tab-row, so it's the
+       same visual language, not a new one just for mobile — title=""
+       carries the name for anyone using an accessibility tree.
+       (Revisited once, with visible captions added back at 10px/360px —
+       Karl tried it live and still didn't want it, so this reverts to
+       icon-only again. Leaving this noted so a future pass doesn't
+       re-litigate the same idea a third time without new information.) */
     .mobile-view-switcher { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
     /* Outline Ring (Option F — same quiet, background-free treatment as
        desktop's .rail-tab now, see that rule's own comment for the full
@@ -2572,33 +2578,17 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        target spans the whole column width and a ring that wide would
        look like an underline, not a ring. */
     .mobile-view-btn {
-      flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 3px; padding: var(--s-2) var(--s-0-5) var(--s-1-75); border: none; background: transparent;
+      flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
+      padding: var(--s-3) var(--s-0-5); border: none; background: transparent;
       cursor: pointer; position: relative;
     }
     .mobile-view-btn svg { flex-shrink: 0; position: relative; z-index: 1; }
     .mobile-view-btn::before {
-      /* Centered on the icon itself (padding-top var(--s-2) + half the
-         20px icon = 18px down), not the whole button — the button's own
-         box now also includes the label underneath, and a button-centered
-         ring would drift onto that label instead of ringing the icon. */
-      content: ''; position: absolute; top: 18px; left: 50%; transform: translate(-50%, -50%);
+      content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 34px; height: 34px; border-radius: 8px; border: 2px solid transparent;
       transition: border-color 0.18s ease;
     }
     .mobile-view-btn.active::before { border-color: var(--primary-light); }
-    /* Revisits the earlier icon-only layout — that one dropped labels
-       because 6 full-word tabs ("Checklist" is the long pole) didn't fit
-       an even flex:1 split of a phone's width at a legible size. This
-       stays legible at the same width by going small+tight (10px,
-       -0.01em, no wrap) rather than shrinking a normal-weight caption,
-       and by measuring against 360px (a common narrow-Android width),
-       not just the class of 390px+ iPhones. */
-    .mobile-view-btn-label {
-      font-size: 10px; font-weight: 600; letter-spacing: -0.01em; line-height: 1;
-      color: var(--text-light); white-space: nowrap; position: relative; z-index: 1;
-    }
-    .mobile-view-btn.active .mobile-view-btn-label { color: var(--primary-light); }
 
     /* NOT display:none — the job drawer (#formArea) lives inside
        .app-shell-main too, and display:none on an ancestor hides a
@@ -2806,11 +2796,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        direction, so it already works unmodified in this vertical layout
        too. */
     .mobile-view-btn { justify-content: center; padding: var(--s-2-5) 0; }
-    .mobile-view-btn-label { display: none; }
-    /* Icon-only here (label hidden above), so the ring goes back to
-       centering on the whole button box — there's no separate label
-       height pushing the icon off-center the way there is in portrait. */
-    .mobile-view-btn::before { top: 50%; transform: translate(-50%, -50%); }
 
     .app-shell { grid-area: shell; height: 100%; min-height: 0; }
 
@@ -3175,14 +3160,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      Gantt/Calendar keep their desktop layout, just narrowed/compacted as
      far as they reasonably can be (see the .gantt-*/.calendar-* mobile
      rules) — not going to be as good an experience as the other views,
-     but real and reachable rather than hidden entirely. Each icon now
-     carries a small visible caption too (.mobile-view-btn-label) — see
-     .mobile-view-switcher's own CSS comment for why the earlier
-     icon-only version got revisited. title="" is kept regardless, for a
-     long-press/accessibility tree. Icons are the exact same ones each
-     view already uses on the desktop rail-tab-row (Jobs has no rail-tab
-     of its own, so it gets a one-off briefcase here instead). See
-     setMobileView(). -->
+     but real and reachable rather than hidden entirely. Icon-only, no
+     caption — title="" carries the name for a long-press/accessibility
+     tree instead (see .mobile-view-switcher's own CSS comment: this was
+     tried once with visible captions and reverted — not an oversight).
+     Icons are the exact same ones each view already uses on the desktop
+     rail-tab-row (Jobs has no rail-tab of its own, so it gets a one-off
+     briefcase here instead). See setMobileView(). -->
 <div class="mobile-view-switcher" id="mobileViewSwitcher">
   <!-- Settings leads this row too, same as it leads the desktop
        rail-tab-row (see that row's own markup comment) — the actual
@@ -3193,16 +3177,16 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        except Jobs, so anything nested inside it — the dropdown included,
        when it used to live there — was unreachable from any other
        mobile view). -->
-  <button class="mobile-view-btn settings-menu-wrap" id="mobileSettingsBtn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="mobile-view-btn-label">Settings</span></button>
-  <button class="mobile-view-btn active" data-view="jobs" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg><span class="mobile-view-btn-label">Jobs</span></button>
+  <button class="mobile-view-btn settings-menu-wrap" id="mobileSettingsBtn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg></button>
+  <button class="mobile-view-btn active" data-view="jobs" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
   <!-- No Home button here either (see setMobileView()'s own comment) —
        same "turn off the tab you're in" gesture as desktop: tapping
        whichever view is already active switches to Home instead of
        re-selecting it. -->
-  <button class="mobile-view-btn" data-view="checklist" title="Checklist" aria-label="Checklist"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="mobile-view-btn-label">Checklist</span></button>
-  <button class="mobile-view-btn" data-view="calendar" title="Calendar" aria-label="Calendar"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="mobile-view-btn-label">Calendar</span></button>
-  <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" aria-label="Gantt Chart"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="mobile-view-btn-label">Gantt</span></button>
-  <button class="mobile-view-btn" data-view="board" title="Board" aria-label="Board"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="mobile-view-btn-label">Board</span></button>
+  <button class="mobile-view-btn" data-view="checklist" title="Checklist" aria-label="Checklist"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="mobile-view-btn" data-view="calendar" title="Calendar" aria-label="Calendar"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></button>
+  <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" aria-label="Gantt Chart"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></button>
+  <button class="mobile-view-btn" data-view="board" title="Board" aria-label="Board"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></button>
 </div>
 
 <!-- Shared by both the desktop rail-tab-row's settings trigger and the
