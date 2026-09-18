@@ -13,7 +13,7 @@ import { refreshActiveProjectFromShared } from '../sync/inbound';
 import { renderGantt, hideDatePopover, setupScrollSync } from '../views/gantt';
 import { initCalendarDragHandlers, buildCalendarEventColorPresets, closeCalendarEventModal } from '../views/calendar';
 import { closeAllColSettings, initCardFormAutosaveListeners, closeManageFields, closeCardModal } from '../views/board';
-import { closeAllMsDropdowns } from '../utils/ui';
+import { closeAllMsDropdowns, isPanelActive } from '../utils/ui';
 import { closeSettingsMenu } from './settings-menu';
 import { loadLinkEnabledPref, loadProjects, enforceFixedProjectSet, loadActiveProjectData, autoArchiveJobs, renderAll, freshLocalSeed } from './project';
 import { syncCardColumns } from '../core/jobs';
@@ -84,7 +84,7 @@ export function init(): void {
   initCardFormAutosaveListeners();
   maybeShowTutorialPrompt();
   setInterval(() => {
-    if (document.getElementById('panel-gantt')!.classList.contains('active') && !barMoveState) renderGantt();
+    if (isPanelActive('gantt') && !barMoveState) renderGantt();
     syncCardColumns();
     // Safety net: a remote update deferred while isBusyEditing() was true
     // is normally caught up on the next focusout, but that relies on focus

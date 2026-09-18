@@ -1,6 +1,20 @@
 // Small, generic UI helpers with no shared-app-state reads/writes of
 // their own — used across every view.
 
+// Whether a given main tab (gantt/calendar/board — anything with a
+// #panel-<tab> element) is the one currently on screen, on both desktop
+// (switchTab()'s .active class on #panel-<tab>) and mobile (setMobileView()
+// routes gantt/calendar/board through switchTab() too, so the same class
+// applies there). Lets a render call after a data edit skip a tab nobody
+// is looking at — switchTab() already does a full, unconditional render
+// of whichever tab it switches TO, so a hidden tab's data just gets
+// rendered fresh next time the user actually navigates there instead of
+// being rebuilt now for nothing.
+export function isPanelActive(tab: string): boolean {
+  const panel = document.getElementById('panel-' + tab);
+  return !!panel && panel.classList.contains('active');
+}
+
 // Shared show/hide for the app's 9 modal dialogs (deleteModal, cardModal,
 // calendarEventModal, archivedJobsModal, backupsModal, manageUsersModal,
 // manageFieldsModal, manageColumnChecklistModal, themeModal). Each keeps

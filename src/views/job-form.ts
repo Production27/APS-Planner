@@ -24,7 +24,7 @@ import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { getBusinessDaysDiff, addBusinessDays, toIsoDate } from '../utils/date';
 import { createAutosaveController } from '../utils/autosave';
-import { showToast } from '../utils/ui';
+import { showToast, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 import { queueSharedSync } from '../sync/outbound';
 import { renderGantt } from './gantt';
@@ -362,9 +362,9 @@ export function splitJobIntoPhasesUI(): void {
   logActivity('split job "' + found.job.name + '" into phases');
   renderJobFormForPhase(found.job);
   renderJobList();
-  renderGantt();
-  renderCalendar();
-  renderBoard();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
+  if (isPanelActive('board')) renderBoard();
   queueSharedSync();
   showToast('Job split into phases', 'success');
 }
@@ -387,9 +387,9 @@ export function addJobPhaseUI(): void {
   logActivity('added phase "' + phase.name + '" to job "' + found.job.name + '"');
   renderJobFormForPhase(found.job);
   renderJobList();
-  renderGantt();
-  renderCalendar();
-  renderBoard();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
+  if (isPanelActive('board')) renderBoard();
   queueSharedSync();
   showToast('Phase added', 'success');
 }
@@ -416,9 +416,9 @@ export function renameJobPhaseUI(phaseId: string): void {
   logActivity('renamed phase to "' + (phase.name || '(blank)') + '" on job "' + found.job.name + '"');
   renderJobPhaseStrip(found.job);
   renderJobList();
-  renderGantt();
-  renderCalendar();
-  renderBoard();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
+  if (isPanelActive('board')) renderBoard();
   queueSharedSync();
 }
 
@@ -448,9 +448,9 @@ export function deleteJobPhaseUI(phaseId: string): void {
     logActivity('removed phasing from job "' + found.job.name + '"');
     renderJobFormForPhase(found.job);
     renderJobList();
-    renderGantt();
-    renderCalendar();
-    renderBoard();
+    if (isPanelActive('gantt')) renderGantt();
+    if (isPanelActive('calendar')) renderCalendar();
+    if (isPanelActive('board')) renderBoard();
     queueSharedSync();
     showToast('Job un-phased', 'success');
     return;
@@ -464,9 +464,9 @@ export function deleteJobPhaseUI(phaseId: string): void {
   logActivity('deleted phase "' + phase.name + '" from job "' + found.job.name + '"');
   renderJobFormForPhase(found.job);
   renderJobList();
-  renderGantt();
-  renderCalendar();
-  renderBoard();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
+  if (isPanelActive('board')) renderBoard();
   queueSharedSync();
   showToast('Phase deleted', 'success');
 }
@@ -499,8 +499,8 @@ export function splitPhaseIntoSubPhasesUI(): void {
   saveJobs();
   logActivity('split phase "' + phase.name + '" into sub-phases');
   renderJobFormForPhase(found.job);
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   queueSharedSync();
   showToast('Phase split into sub-phases', 'success');
 }
@@ -521,8 +521,8 @@ export function addPhaseSubUnitUI(): void {
   saveJobs();
   logActivity('added sub-phase "' + sub.name + '" to phase "' + phase.name + '"');
   renderJobFormForPhase(found.job);
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   queueSharedSync();
   showToast('Sub-phase added', 'success');
 }
@@ -541,8 +541,8 @@ export function renameSubPhaseUI(subId: string): void {
   saveJobs();
   logActivity('renamed sub-phase to "' + sub.name + '" on phase "' + phase.name + '"');
   renderJobSubPhaseStrip(found.job, phase);
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   queueSharedSync();
 }
 
@@ -566,8 +566,8 @@ export function deleteSubPhaseUI(subId: string): void {
     saveJobs();
     logActivity('removed sub-phasing from phase "' + phase.name + '"');
     renderJobFormForPhase(found.job);
-    renderGantt();
-    renderCalendar();
+    if (isPanelActive('gantt')) renderGantt();
+    if (isPanelActive('calendar')) renderCalendar();
     queueSharedSync();
     showToast('Phase un-sub-phased', 'success');
     return;
@@ -580,8 +580,8 @@ export function deleteSubPhaseUI(subId: string): void {
   saveJobs();
   logActivity('deleted sub-phase "' + sub.name + '" from phase "' + phase.name + '"');
   renderJobFormForPhase(found.job);
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   queueSharedSync();
   showToast('Sub-phase deleted', 'success');
 }
@@ -673,8 +673,8 @@ export function toggleJobLinkEnabledUI(): void {
   // No logActivity() here — this is a personal display preference now,
   // not a shared change, so it doesn't belong in the shared activity log.
   renderJobLinkSection(found.job);
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   showToast(newState ? 'Link turned on (just for you)' : 'Link turned off (just for you)', 'success');
 }
 
@@ -686,8 +686,8 @@ export function unlinkJobUI(): void {
   unlinkJobById(found.job.id, activeProjectId);
   logActivity('unlinked job "' + found.job.name + '"');
   renderJobLinkSection(found.job);
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   showToast('Jobs unlinked', 'info');
 }
 
@@ -1036,10 +1036,10 @@ export function autoSaveJobForm(): void {
   saveJobs();
   logActivity((justCreated ? 'added job' : 'updated job') + ' "' + job.name + '"');
   renderJobList();
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   syncCardColumns();
-  renderBoard();
+  if (isPanelActive('board')) renderBoard();
   updateJobCurrentBoardIndicator(job, editingPhaseId);
   if (justCreated) { renderJobPhaseStrip(job); renderJobLinkSection(job); }
 

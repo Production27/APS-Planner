@@ -35,7 +35,7 @@ import { genId } from '../utils/id';
 import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor } from '../utils/color';
 import { findJob, findTask, getPhaseCard } from '../core/models';
-import { openModal, closeModal, showToast, moveTooltip, hideTooltip, msDropdownLabelText, onPanelResize } from '../utils/ui';
+import { openModal, closeModal, showToast, moveTooltip, hideTooltip, msDropdownLabelText, onPanelResize, isPanelActive } from '../utils/ui';
 import { getEffectiveRole, hasMinTier } from '../auth/permissions';
 import { getStoredUsername } from '../auth/session';
 import { ensureUserRosterLoaded } from '../app/user-roster';
@@ -1681,9 +1681,9 @@ function handleCalBarMouseUp(e: MouseEvent): void {
       card.due = toIsoDate(newStart);
       saveJobs();
       logActivity('rescheduled due date for job "' + job.name + '"');
-      renderGantt();
+      if (isPanelActive('gantt')) renderGantt();
       renderJobList();
-      renderBoard();
+      if (isPanelActive('board')) renderBoard();
       refreshJobFormIfOpen(jobId);
       showToast('Due date updated', 'success');
     }
@@ -1696,9 +1696,9 @@ function handleCalBarMouseUp(e: MouseEvent): void {
     task.finish = toIsoDate(newFinish);
     saveJobs();
     logActivity('rescheduled job "' + task.name + '"');
-    renderGantt();
+    if (isPanelActive('gantt')) renderGantt();
     renderJobList();
-    renderBoard();
+    if (isPanelActive('board')) renderBoard();
     refreshJobFormIfOpen(jobId);
     showToast('Job dates updated', 'success');
   } else if (dragType === 'right') {
@@ -1708,9 +1708,9 @@ function handleCalBarMouseUp(e: MouseEvent): void {
     task.finish = toIsoDate(newFinish);
     saveJobs();
     logActivity('rescheduled job "' + task.name + '"');
-    renderGantt();
+    if (isPanelActive('gantt')) renderGantt();
     renderJobList();
-    renderBoard();
+    if (isPanelActive('board')) renderBoard();
     refreshJobFormIfOpen(jobId);
     showToast('Finish date updated', 'success');
   } else if (dragType === 'left') {
@@ -1720,9 +1720,9 @@ function handleCalBarMouseUp(e: MouseEvent): void {
     task.start = toIsoDate(newStart);
     saveJobs();
     logActivity('rescheduled job "' + task.name + '"');
-    renderGantt();
+    if (isPanelActive('gantt')) renderGantt();
     renderJobList();
-    renderBoard();
+    if (isPanelActive('board')) renderBoard();
     refreshJobFormIfOpen(jobId);
     showToast('Start date updated', 'success');
   }

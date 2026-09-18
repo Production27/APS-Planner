@@ -9,7 +9,7 @@
 import type { Job } from '../core/types';
 import { findJob, getJobPhases, getPhaseCard, getJobCards, getPrimaryPhaseCard } from '../core/models';
 import { genId } from '../utils/id';
-import { openModal, closeModal, showToast } from '../utils/ui';
+import { openModal, closeModal, showToast, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 import { logActivity, deleteJobFromShared, deleteCardFromShared } from '../sync/outbound';
 import { ensureCardChecklists } from './checklist';
@@ -154,9 +154,9 @@ export function archiveJob(jobId: string): void {
   saveJobs();
   logActivity('archived job "' + job.name + '"');
   renderJobList();
-  renderGantt();
-  renderCalendar();
-  renderBoard();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
+  if (isPanelActive('board')) renderBoard();
   showToast('Job archived', 'success');
   if (editingJobId === jobId) editJob(jobId);
 }
@@ -171,9 +171,9 @@ export function restoreJob(jobId: string): void {
   saveJobs();
   logActivity('restored job "' + job.name + '"');
   renderJobList();
-  renderGantt();
-  renderCalendar();
-  renderBoard();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
+  if (isPanelActive('board')) renderBoard();
   showToast('Job restored', 'success');
   if (editingJobId === jobId) editJob(jobId);
   refreshArchivedJobsListIfOpen();
@@ -304,10 +304,10 @@ export function duplicateJob(jobId: string, event?: Event): void {
   saveJobs();
   logActivity('duplicated job "' + original.name + '" as "' + newJob.name + '"');
   renderJobList();
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   syncCardColumns();
-  renderBoard();
+  if (isPanelActive('board')) renderBoard();
   showToast('Job duplicated', 'success');
   editJob(newJob.id);
 }
@@ -371,9 +371,9 @@ export function executeDelete(): void {
       document.getElementById('jobCommentsPanel')!.style.display = 'none';
     }
     renderJobList();
-    renderGantt();
-    renderCalendar();
-    renderBoard();
+    if (isPanelActive('gantt')) renderGantt();
+    if (isPanelActive('calendar')) renderCalendar();
+    if (isPanelActive('board')) renderBoard();
     showToast('Job deleted', 'info');
     refreshArchivedJobsListIfOpen();
   }

@@ -62,7 +62,7 @@ import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
 import { darkenColor, softenColor } from '../utils/color';
 import { COLOR_PRESETS } from '../core/constants';
-import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText } from '../utils/ui';
+import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 import { getStoredSessionToken } from '../auth/session';
 import { fetchWithReauth } from '../app/worker-client';
@@ -550,7 +550,7 @@ function renameBoardColumn(colId: string, event?: Event): void {
   saveBoardColumns();
   logActivity('renamed board to "' + col.label + '"');
   renderBoard();
-  renderGantt();
+  if (isPanelActive('gantt')) renderGantt();
   renderJobList();
   showToast('Board renamed', 'success');
 }
@@ -845,14 +845,18 @@ function autoSaveCardForm(): void {
 
   saveBoardCards();
   logActivity('updated card "' + savedCard.title + '"');
-  renderBoard();
+  if (isPanelActive('board')) renderBoard();
   // This card's job might already be open in Job Manager — without this its
   // description/due/custom fields/checklist/attachments would keep showing
   // whatever was there when that form was first opened.
   if (savedCard.jobId) refreshJobFormIfOpen(savedCard.jobId);
   // A job/phase rename shows up in more places than just the Board — same
   // refresh set autoSaveJobForm() runs after its own name edits.
-  if (renamedJobOrPhase) { renderJobList(); renderGantt(); renderCalendar(); }
+  if (renamedJobOrPhase) {
+    renderJobList();
+    if (isPanelActive('gantt')) renderGantt();
+    if (isPanelActive('calendar')) renderCalendar();
+  }
   // renderBoard() only touches the real (possibly hidden) Board tab's own
   // DOM — a card edited via the Home widget's own expanded-in-place Board
   // (see renderHomeWorkflowExpandedBoard()) is a separate render of the
@@ -1541,7 +1545,7 @@ function changeColumnColor(colId: string, color: string, event: Event): void {
     saveJobs();
     saveBoardColumns();
     renderBoard();
-    renderGantt();
+    if (isPanelActive('gantt')) renderGantt();
     if (editingJobId) {
       const found = findJob(editingJobId);
       if (found) renderFixedTaskGrid(found.job.tasks || []);
@@ -1568,8 +1572,8 @@ function toggleColumnScheduleVisibility(colId: string, event?: Event): void {
   saveBoardColumns();
   logActivity((col.hideFromSchedule ? 'hid' : 'showed') + ' board "' + col.label + '" on the Gantt/Calendar/Job Manager');
   renderBoard();
-  renderGantt();
-  renderCalendar();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
   if (editingJobId) {
     const found = findJob(editingJobId);
     if (found) renderFixedTaskGrid(found.job.tasks || []);
