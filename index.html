@@ -3098,7 +3098,14 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     height: 26px; padding: 0 var(--s-2); border-radius: 6px; cursor: pointer;
     font-size: var(--t-sm); font-weight: 600; flex-shrink: 0;
   }
-  .gantt-toolbar select.gantt-task-focus-select:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); }
+  /* border-color only — NOT background/color. Karl's report: hovering the
+     CLOSED box while its own popup is open grayed out the open list
+     itself, meaning the browser was carrying this hover state's
+     background/color into the popup's live rendering rather than
+     confining it to the closed control. border-color can't touch text
+     legibility the same way, so it's the only property this hover state
+     changes now. */
+  .gantt-toolbar select.gantt-task-focus-select:hover { border-color: var(--primary-light); }
   /* Same solid dark fill every other dark-mode <select> in the app already
      uses (see .form-group select et al. above) rather than this one
      staying transparent against the toolbar's own dark background — a
@@ -3113,7 +3120,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .gantt-toolbar select.gantt-task-focus-select {
     background: #20232c; color: var(--text); border-color: var(--border);
   }
-  body.dark-mode .gantt-toolbar select.gantt-task-focus-select:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
+  body.dark-mode .gantt-toolbar select.gantt-task-focus-select:hover { border-color: var(--primary-light); }
   .job-card.archived { opacity: 0.55; }
   .task-row.archived { opacity: 0.55; }
   .job-card.finished { opacity: 0.65; }
