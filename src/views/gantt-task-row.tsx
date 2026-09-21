@@ -30,6 +30,7 @@
 // as before, since that technique only depends on data-row-key matching,
 // never on whether the underlying DOM node happens to be new or reused).
 import { render } from 'preact';
+import { readableTextColor } from '../utils/color';
 
 export interface TaskRowPillProps {
   // Chevron baked directly into the text (e.g. "▸ Framing") — same
@@ -81,7 +82,7 @@ function TaskRowPill({ pill }: { pill: TaskRowPillProps }) {
     <span
       class={'task-row-pill' + (pill.onClick ? ' collapsible' : '') + (pill.focused ? ' focused' : '')}
       title={pill.title}
-      style={{ background: pill.background }}
+      style={{ background: pill.background, color: readableTextColor(pill.background) }}
       onClick={pill.onClick}
     >
       {pill.label}
