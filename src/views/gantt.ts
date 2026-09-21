@@ -1488,6 +1488,20 @@ function getTasksForMergedRow(job: Job, phaseId: string | null | undefined, subP
   return subUnit ? (subUnit.tasks || []) : [];
 }
 
+// Which task a folded/merged row's job is actually in right now: the task
+// matching its board card's current column, which (unlike findCurrentTask()'s
+// date-only guess) also covers a card sitting in a hideFromSchedule board
+// (Bid/Invoiced-style — no dates, no Gantt bar, but still the job's real
+// stage). Null when there's no card here (a linked reference job's card
+// lives in its own project) or no task matches the column, so the caller
+// falls back to findCurrentTask().
+function findTaskForCardColumn(job: Job, phaseId: string | null | undefined, tasks: Task[]): Task | null {
+  if (job.isLinkedReference) return null;
+  const card = getPhaseCard(job, phaseId);
+  if (!card || !card.column) return null;
+  return tasks.find((t) => t.columnId === card.column) || null;
+}
+
 function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
   const rowProps: TaskRowProps[] = [];
   // Zebra-stripe backgrounds — Preact-rendered too now (see
@@ -1557,15 +1571,22 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
         };
       } else {
         const wholePhase = !!(task.isJobSpan && entry.collapsedSegments);
-        const current = findCurrentTask(getTasksForMergedRow(job, phaseId, subPhaseId, wholePhase));
+        const mergedTasks = getTasksForMergedRow(job, phaseId, subPhaseId, wholePhase);
+        const current = findTaskForCardColumn(job, phaseId, mergedTasks) || findCurrentTask(mergedTasks);
         if (current && current.columnId) {
           const currentFocused = isTasksMode && ganttFocusedTaskColumnId === current.columnId;
+          // A task whose board is hidden from the schedule never gets a
+          // Gantt row, so isolating by it would just empty the chart —
+          // still shown as the current task, just not clickable.
+          const currentHidden = BOARD_COLUMNS.some((c) => c.id === current.columnId && c.hideFromSchedule);
           taskPill = {
             label: current.name,
-            title: (currentFocused ? 'Click to show every task again' : 'Click to show only ' + current.name + '\'s column — every job') + ' — currently in progress',
+            title: currentHidden
+              ? current.name + ' — currently in progress (hidden from the schedule)'
+              : (currentFocused ? 'Click to show every task again' : 'Click to show only ' + current.name + '\'s column — every job') + ' — currently in progress',
             background: softenColor((current.color as string | undefined) || jobColor),
             focused: currentFocused,
-            onClick: (e) => { e.stopPropagation(); toggleGanttTaskFocus(current.columnId as string); },
+            onClick: currentHidden ? undefined : (e) => { e.stopPropagation(); toggleGanttTaskFocus(current.columnId as string); },
           };
         } else if (current) {
           // A real task, but not tied to any BOARD_COLUMNS stage — show
