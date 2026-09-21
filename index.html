@@ -541,7 +541,8 @@
     color: #495057; height: 58px; flex-shrink: 0;
   }
   .left-header .col { padding: var(--s-2) var(--s-2-5); display: flex; align-items: center; border-right: 1px solid var(--divider-strong); }
-  .left-header .col-start { width: 88px; } .left-header .col-finish { width: 88px; } .left-header .col-jobs { flex: 1; border-right: none; }
+  .left-header .col-date { width: 92px; } .left-header .col-jobs { flex: 1; border-right: none; }
+  .left-header .lane { width: 112px; flex-shrink: 0; border-left: 1px solid var(--divider-strong); padding: var(--s-2) var(--s-2-5); display: flex; align-items: center; }
   .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
@@ -552,31 +553,37 @@
   .task-row:nth-child(even) { background: var(--row-alt-bg); }
   .task-row:nth-child(even):hover { background: #e3f2fd; }
   .task-row .col { padding: 0 var(--s-2-5); border-right: 1px solid var(--divider); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
-  .task-row .col-start { width: 88px; color: var(--text-light); font-size: var(--t-xs); }
-  .task-row .col-finish { width: 88px; color: var(--text-light); font-size: var(--t-xs); }
+  .task-row .col-date { width: 92px; color: var(--text-light); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
   .task-row .col-jobs .task-row-name { font-weight: 700; }
-  /* See ganttFocusedTaskColumnId/toggleGanttTaskFocus() — clicking a real
-     task's own name isolates it across every job, same gesture as the
-     job-name pill below but on the other axis. */
+  /* See ganttFocusedJobId/toggleGanttJobFocus() — clicking the job name
+     (always shown here now, regardless of fold state) isolates the chart
+     to just this job. */
   .task-row .col-jobs .task-row-name.clickable { cursor: pointer; border-bottom: 1.5px dashed transparent; }
   .task-row .col-jobs .task-row-name.clickable:hover { color: var(--primary); border-bottom-color: var(--primary-light); }
   body.dark-mode .task-row .col-jobs .task-row-name.clickable:hover { color: var(--primary-ondark); }
   .task-row .col-jobs .task-row-name.focused { color: var(--primary); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); border-radius: 3px; padding: 0 3px; }
   body.dark-mode .task-row .col-jobs .task-row-name.focused { color: var(--primary-ondark); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
-  .task-row .col-jobs .task-row-jobname { display: inline-block; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 10px; vertical-align: middle; line-height: 1.5; }
-  .task-row .col-jobs .task-row-jobname.collapsible { cursor: pointer; }
-  .task-row .col-jobs .task-row-jobname.collapsible:hover { filter: brightness(1.15); }
-  /* See ganttFocusedJobId/toggleGanttJobFocus() — marks which job's pill,
-     if any, is the one currently isolating the chart. */
-  .task-row .col-jobs .task-row-jobname.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
-  body.dark-mode .task-row .col-jobs .task-row-jobname.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
-  body.dark-mode .task-row .col-jobs .task-row-jobname { color: #fff; }
-  .task-row .col-jobs .task-row-phasename,
-  .task-row .col-jobs .task-row-subphasename { display: inline-block; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 10px; vertical-align: middle; line-height: 1.5; cursor: pointer; }
-  .task-row .col-jobs .task-row-phasename:hover,
-  .task-row .col-jobs .task-row-subphasename:hover { filter: brightness(1.15); }
   .task-row .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); margin-left: var(--s-1-5); display: inline-block; }
+  /* Right-hand pill lane — exactly one pill per row, always (see
+     gantt-task-row.tsx). Its own left border draws the seam so .col-jobs
+     doesn't need a border-right of its own. */
+  .task-row .lane { width: 112px; flex-shrink: 0; border-left: 1px solid var(--divider); display: flex; align-items: center; padding: 0 var(--s-2); height: 100%; overflow: hidden; }
+  .task-row .lane .task-row-lane-pill {
+    display: inline-flex; align-items: center; max-width: 100%; font-size: var(--t-3xs); font-weight: 600;
+    color: #fff; padding: 1px var(--s-1-5); border-radius: 6px; line-height: 1.35;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .task-row .lane .task-row-lane-pill.collapsible { cursor: pointer; }
+  .task-row .lane .task-row-lane-pill.collapsible:hover { filter: brightness(1.15); }
+  .task-row .lane .task-row-lane-pill.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
+  body.dark-mode .task-row .lane .task-row-lane-pill.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
+  body.dark-mode .task-row .lane { border-left-color: var(--border); }
+  /* The leaf-task pill's label is a second, independent hotspot (see
+     TaskRowPillProps.onLabelClick) — isolates by board-column stage,
+     unrelated to the pill's own onClick (folds it back up). */
+  .task-row .lane .task-row-lane-pill .pill-label { overflow: hidden; text-overflow: ellipsis; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+  .task-row .lane .task-row-lane-pill .pill-label.focused { text-decoration-style: solid; }
 
   .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 
@@ -2978,7 +2985,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .task-row:hover, body.dark-mode .task-row:nth-child(even):hover { background: rgba(57,73,171,0.22); }
   body.dark-mode .task-row:nth-child(even) { background: rgba(255,255,255,0.025); }
   body.dark-mode .task-row .col { border-right-color: var(--border); }
-  body.dark-mode .task-row .col-start, body.dark-mode .task-row .col-finish { color: var(--text-light); }
+  body.dark-mode .task-row .col-date { color: var(--text-light); }
 
   body.dark-mode .grid-line { background: rgba(255,255,255,0.05); }
   body.dark-mode .grid-line.weekend-line { background: rgba(255,255,255,0.09); }
@@ -3533,9 +3540,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         <div class="gantt-panels-row">
           <div class="left-panel">
             <div class="left-header">
-              <div class="col col-start">Start</div>
-              <div class="col col-finish">Finish</div>
-              <div class="col col-jobs" id="ganttTaskColHeader">Task</div>
+              <div class="col col-date">Date</div>
+              <div class="col col-jobs" id="ganttTaskColHeader">Job</div>
+              <div class="lane">Level</div>
             </div>
             <div class="left-body" id="leftBody"></div>
           </div>

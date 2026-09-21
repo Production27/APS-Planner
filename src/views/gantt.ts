@@ -1440,6 +1440,21 @@ function buildRowModel(containerH: number, grid: HTMLElement): BuildRowModelResu
 // Y-position and its timeline bar's Y-position (computed from two
 // separately-incrementing counters) stay aligned. If either loop ever
 // gains a mid-loop skip/continue, the other must get the same one.
+// Merged Date column — one "Mar 3–7" string instead of separate Start/
+// Finish columns. Drops the year unconditionally (unlike the old per-
+// column format, which always showed it) since there's no room for it
+// twice in one narrow column; the row's own title attribute and the task
+// editor both still carry the full dates including year.
+function formatMergedDateRange(startIso: string | undefined, finishIso: string | undefined, hasDates: boolean): string {
+  if (!hasDates || !startIso || !finishIso) return '—';
+  const s = new Date(startIso + 'T00:00:00'), f = new Date(finishIso + 'T00:00:00');
+  const sMonth = s.toLocaleDateString('en-US', { month: 'short' });
+  if (startIso === finishIso) return sMonth + ' ' + s.getDate();
+  const fMonth = f.toLocaleDateString('en-US', { month: 'short' });
+  if (sMonth === fMonth && s.getFullYear() === f.getFullYear()) return sMonth + ' ' + s.getDate() + '–' + f.getDate();
+  return sMonth + ' ' + s.getDate() + ' – ' + fMonth + ' ' + f.getDate();
+}
+
 function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
   const rowProps: TaskRowProps[] = [];
   // Zebra-stripe backgrounds — Preact-rendered too now (see
@@ -1460,100 +1475,85 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     rowBgEntries.push({ top: visibleRowIdx * GANTT_ROW_H });
 
     const hasDates = !!(task.start && task.finish && !isNaN(new Date(task.start + 'T00:00:00').getTime()) && !isNaN(new Date(task.finish + 'T00:00:00').getTime()));
-    const startStr = hasDates ? new Date(task.start! + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-    const finishStr = hasDates ? new Date(task.finish! + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    const dateStr = formatMergedDateRange(task.start, task.finish, hasDates);
 
-    // Jobs view: the job-name pill already says everything there is to
-    // say for a condensed row, so it's the only label — no redundant
-    // plain-text repeat of the same name next to it. Leads view swaps
-    // that plain-text slot for the lead's name instead, with the job
-    // pill still alongside it so which job it belongs to stays visible.
-    // A phased job is the exception: this column truncates with an
-    // ellipsis (see .task-row .col CSS), and the phase name used to be
-    // appended to the END of the pill — exactly the part that gets cut
-    // off first, leaving every one of a job's phase rows showing the
-    // identical truncated text with no way to tell them apart. Showing
-    // the phase label as the plain-text mainLabel instead puts it FIRST,
-    // so it survives truncation even when the job name pill after it
-    // doesn't; the row's title attribute carries the untruncated
-    // "Job — Phase — SubPhase" text as a hover fallback either way.
-    const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
+    // The main label is always the job's own name now, on every row
+    // regardless of fold state — a stable anchor since rows from
+    // different jobs interleave by date (Tasks view sorts purely by
+    // start date, not grouped by job/phase). Clicking it isolates the
+    // Gantt to just this job (see ganttFocusedJobId/toggleGanttJobFocus()
+    // above) — same feature the old separate job pill used to carry.
     const isTasksMode = ganttViewMode === 'tasks';
-    // Tasks view shows the phase/sub-phase breakdown as its own separate,
-    // independently-clickable pills below instead of this plain-text
-    // label, to avoid saying the same thing twice.
-    const mainLabel = task.isJobSpan
-      ? (linkGlyph ? linkGlyph.trim() : '')
-      : linkGlyph + (task.isDueMarker ? '🚩 ' : '') + task.name;
+    const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
+    const mainLabel = linkGlyph + job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : '');
+    const isFocusedJob = isTasksMode && ganttFocusedJobId === job.id;
+
     // Clicking a real (non-job-span, non-due-marker) task's own name
     // isolates the Gantt to just that BOARD_COLUMNS stage across every
     // job — see ganttFocusedTaskColumnId/toggleGanttTaskFocus() above. A
     // job-span/due-marker task never carries a columnId (see GanttTask's
     // own comment), so this only ever lights up on a real leaf task row.
+    // Used to live on the row's main label back when that showed the
+    // task's own name; now it's the pill's label instead (below), since
+    // the task name moved there.
     const isFocusableTask = isTasksMode && !task.isJobSpan && !task.isDueMarker && !!task.columnId;
     const isTaskFocused = isFocusableTask && ganttFocusedTaskColumnId === task.columnId;
 
-    let jobPill: TaskRowPillProps | null = null;
-    let phasePill: TaskRowPillProps | null = null;
-    let subPill: TaskRowPillProps | null = null;
+    let pill: TaskRowPillProps | null = null;
 
     if (isTasksMode) {
       const jobColor = job.color || '#999';
-      // Clicking the job pill isolates the Gantt to just this job (see
-      // ganttFocusedJobId/toggleGanttJobFocus() above) — independent of
-      // the phase/sub-phase collapse pills below, which fold THIS job's
-      // own rows rather than hiding every other job.
-      const isFocusedJob = ganttFocusedJobId === job.id;
-      jobPill = {
-        label: job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : ''),
-        title: isFocusedJob ? 'Click to show every job again' : 'Click to show only this job',
-        background: jobColor,
-        focused: isFocusedJob,
-        onClick: (e) => { e.stopPropagation(); toggleGanttJobFocus(job.id); },
-      };
-      // Only offered when the phase actually has 2+ real sub-phases —
-      // folds/unfolds just THIS phase (tasksExpandedPhaseIds), same
-      // condensed-bar mechanism Jobs/Leads view uses, just with its own
-      // independent (default-collapsed) state. phaseName !== null (rather
-      // than just truthy) so an unnamed-but-real phase (see
-      // splitJobIntoPhases()/renameJobPhaseUI() — a phase's name can be
-      // blank) still gets this pill; null specifically means "no real
-      // phase here at all" (the synthetic default from getJobPhases()).
-      if (entry.collapsible && phaseName !== null) {
-        const phaseFolded = !tasksExpandedPhaseIds.has(phaseId || '');
-        phasePill = {
-          label: (phaseFolded ? '▸ ' : '▾ ') + (phaseName ? phaseName : 'Unnamed phase'),
-          title: phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar',
+      if (task.isJobSpan && entry.collapsedSegments) {
+        // A whole phase folded into one row — exactly one pill, standing
+        // for every sub-phase at once.
+        pill = {
+          glyph: '▸',
+          label: phaseName ? phaseName : 'Unnamed phase',
+          title: 'Click to expand sub-phases',
           background: jobColor,
           onClick: (e) => { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); },
         };
-      }
-      // Not shown on a whole-phase-collapsed row (task.isJobSpan with
-      // collapsedSegments) — that row already stands for every
-      // sub-phase at once, so there's no single sub-phase context
-      // left to fold.
-      if (!(task.isJobSpan && entry.collapsedSegments)) {
+      } else if (task.isJobSpan) {
+        // A single sub-phase (or, for an unsplit phase, the whole phase)
+        // folded into one row.
         const subKey = getSubUnitKey(job, phaseId, subPhaseId);
-        const subFolded = !tasksExpandedSubPhaseIds.has(subKey);
         const subLabel = subPhaseName || (entry.collapsible ? '' : phaseName) || '';
-        subPill = {
-          label: (subFolded ? '▸' : '▾') + (subLabel ? ' ' + subLabel : ''),
-          title: (subFolded ? 'Click to expand into individual tasks' : 'Click to collapse into a single bar') + (subLabel ? ' — ' + subLabel : ''),
+        pill = {
+          glyph: '▸',
+          label: subLabel,
+          title: 'Click to expand into individual tasks' + (subLabel ? ' — ' + subLabel : ''),
           background: jobColor,
-          onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(getSubUnitKey(job, phaseId, subPhaseId)); },
+          onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(subKey); },
+        };
+      } else {
+        // A real leaf task — nothing left to drill into, so the pill's
+        // job is to let you fold it back up into its sub-phase. Its
+        // label doubles as a second, independent hotspot (see
+        // gantt-task-row.tsx's TaskRowPillProps) for the board-column
+        // focus feature above, unrelated to this fold action.
+        const subKey = getSubUnitKey(job, phaseId, subPhaseId);
+        const subLabel = subPhaseName || (entry.collapsible ? '' : phaseName) || '';
+        pill = {
+          glyph: '▾',
+          label: (task.isDueMarker ? '🚩 ' : '') + task.name,
+          title: 'Click to collapse into a single bar' + (subLabel ? ' — ' + subLabel : ''),
+          background: jobColor,
+          onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(subKey); },
+          labelClickable: isFocusableTask,
+          labelFocused: isTaskFocused,
+          labelTitle: isTaskFocused ? 'Click to show every task again' : 'Click to show only ' + task.name + '\'s column — every job',
+          onLabelClick: isFocusableTask ? () => toggleGanttTaskFocus(task.columnId as string) : undefined,
         };
       }
     } else {
-      // Jobs/Leads view: unchanged from before this feature — the job
-      // pill itself is the per-phase fold toggle when the phase has 2+
-      // sub-phases (every job is already condensed here, so there's no
-      // separate "expand to individual tasks" state to reach). No
-      // onClick at all when not collapsible — same as the original never
-      // attaching a listener in that case, so the click just bubbles up
-      // to the row's own onOpen.
-      const collapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? '▸ ' : '▾ ') : '';
-      jobPill = {
-        label: collapseGlyph + job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : ''),
+      // Jobs/Leads view: unreachable today (ganttViewMode is a constant
+      // 'tasks' — see its own comment above) but kept working rather than
+      // deleted, same reasoning as that comment's. Mapped onto the same
+      // single `pill` slot Tasks view now uses.
+      const collapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? '▸' : '▾') : '';
+      pill = {
+        glyph: collapseGlyph,
+        label: job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : ''),
         title: entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') : '',
         background: job.color || '#999',
         onClick: entry.collapsible ? (e) => { e.stopPropagation(); togglePhaseCollapse(phaseId); } : undefined,
@@ -1572,16 +1572,13 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       taskId: task.id || '',
       className: 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '') + (job.isLinkedReference ? ' linked-ref' : ''),
       title,
-      startStr,
-      finishStr,
+      dateStr,
       mainLabel,
-      mainLabelClickable: isFocusableTask,
-      mainLabelFocused: isTaskFocused,
-      onMainLabelClick: isFocusableTask ? () => toggleGanttTaskFocus(task.columnId as string) : undefined,
+      mainLabelClickable: isTasksMode,
+      mainLabelFocused: isFocusedJob,
+      onMainLabelClick: isTasksMode ? () => toggleGanttJobFocus(job.id) : undefined,
       hasNote: !!task.notes,
-      jobPill,
-      phasePill,
-      subPill,
+      pill,
       onOpen: openRow,
     });
 

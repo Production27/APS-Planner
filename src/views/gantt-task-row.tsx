@@ -6,7 +6,7 @@
 // Deliberately a PURE presentational component with no ambient-global
 // reads of its own (no ganttViewMode/collapsedPhaseIds/ganttFocusedJobId/
 // etc.) — every per-row decision that depends on that state is resolved
-// in gantt.ts's buildTaskRowProps() into a plain props object first, kept
+// in gantt.ts's renderLeftPanelRows() into a plain props object first, kept
 // there because gantt.ts already owns all of that state. This file only
 // ever answers "given these exact props, what does the row look like" —
 // easier to reason about, and it means a future test of this component
@@ -32,17 +32,25 @@
 import { render } from 'preact';
 
 export interface TaskRowPillProps {
+  // Leading chevron character (▸ folded / ▾ expanded) — plain text, never
+  // its own click target, so the two-hotspot leaf case (below) still
+  // reads left-to-right as one pill.
+  glyph: string;
   label: string;
   title: string;
   background: string;
   focused?: boolean;
-  // Absent in Jobs/Leads view for a non-collapsible phase — the pill is
-  // inert decoration there, same as the original's own onclick attribute
-  // only ever getting attached when entry.collapsible was true. Leaving
-  // this unset (rather than a no-op stopPropagation) lets the click
-  // bubble up to the row's own onOpen, exactly like clicking anywhere
-  // else on the row.
   onClick?: (e: MouseEvent) => void;
+  // Leaf-task pill only: `label` (the task's own name) is a second,
+  // independent hotspot from onClick (which folds this row back into its
+  // sub-phase) — clicking it isolates the Gantt to this task's own
+  // BOARD_COLUMNS stage across every job, same feature the row's main
+  // label used to carry back when it showed the task name instead of the
+  // job name. See gantt.ts's ganttFocusedTaskColumnId/toggleGanttTaskFocus().
+  labelClickable?: boolean;
+  labelFocused?: boolean;
+  labelTitle?: string;
+  onLabelClick?: () => void;
 }
 
 export interface TaskRowProps {
@@ -51,33 +59,43 @@ export interface TaskRowProps {
   taskId: string;
   className: string;
   title: string;
-  startStr: string;
-  finishStr: string;
+  // Merged "Mar 3–7" range — a single column now, not separate start/finish.
+  dateStr: string;
+  // Always the job's own name now, on every row regardless of fold state —
+  // a stable anchor since rows from different jobs interleave by date
+  // (Tasks view sorts purely by start date, not grouped by job/phase). The
+  // phase/sub-phase/task specifics that used to share this label instead
+  // live in `pill` below.
   mainLabel: string;
-  // Set only for a real leaf task (never a job-span/due-marker pseudo-row)
-  // — clicking it isolates the Gantt to just that task's BOARD_COLUMNS
-  // stage across every job, mirroring jobPill's click-to-focus below but
-  // on the other axis. See ganttFocusedTaskColumnId/toggleGanttTaskFocus()
-  // in gantt.ts.
   mainLabelClickable?: boolean;
   mainLabelFocused?: boolean;
   onMainLabelClick?: () => void;
   hasNote: boolean;
-  jobPill: TaskRowPillProps | null;
-  phasePill: TaskRowPillProps | null;
-  subPill: TaskRowPillProps | null;
+  // Exactly one pill per row, always — never stacked. Whatever's specific
+  // to this row (phase name, sub-phase name, or the task's own name once
+  // fully expanded) lives here instead of stacking alongside a job pill.
+  pill: TaskRowPillProps | null;
   onOpen: () => void;
 }
 
-function TaskRowPill({ pill, extraClass }: { pill: TaskRowPillProps; extraClass: string }) {
+function TaskRowPill({ pill }: { pill: TaskRowPillProps }) {
+  const label = pill.labelClickable ? (
+    <span
+      class={'pill-label' + (pill.labelFocused ? ' focused' : '')}
+      title={pill.labelTitle}
+      onClick={(e: MouseEvent) => { e.stopPropagation(); pill.onLabelClick!(); }}
+    >
+      {pill.label}
+    </span>
+  ) : pill.label;
   return (
     <span
-      class={extraClass + ' collapsible' + (pill.focused ? ' focused' : '')}
+      class={'task-row-lane-pill' + (pill.onClick ? ' collapsible' : '') + (pill.focused ? ' focused' : '')}
       title={pill.title}
       style={{ background: pill.background }}
       onClick={pill.onClick}
     >
-      {pill.label}
+      {pill.glyph}{pill.glyph ? ' ' : ''}{label}
     </span>
   );
 }
@@ -98,25 +116,21 @@ function TaskRow(props: TaskRowProps) {
       onClick={props.onOpen}
       onKeyDown={onKeyDown}
     >
-      <div class="col col-start">{props.startStr}</div>
-      <div class="col col-finish">{props.finishStr}</div>
+      <div class="col col-date">{props.dateStr}</div>
       <div class="col col-jobs">
         {props.mainLabel ? (
-          <>
-            <span
-              class={'task-row-name' + (props.mainLabelClickable ? ' clickable' : '') + (props.mainLabelFocused ? ' focused' : '')}
-              title={props.mainLabelClickable ? (props.mainLabelFocused ? 'Click to show every task again' : 'Click to show only ' + props.mainLabel + ' — every job') : undefined}
-              onClick={props.onMainLabelClick ? (e) => { e.stopPropagation(); props.onMainLabelClick!(); } : undefined}
-            >
-              {props.mainLabel}
-            </span>
-            {' '}
-          </>
+          <span
+            class={'task-row-name' + (props.mainLabelClickable ? ' clickable' : '') + (props.mainLabelFocused ? ' focused' : '')}
+            title={props.mainLabelClickable ? (props.mainLabelFocused ? 'Click to show every job again' : 'Click to show only ' + props.mainLabel + ' — every task') : undefined}
+            onClick={props.onMainLabelClick ? (e) => { e.stopPropagation(); props.onMainLabelClick!(); } : undefined}
+          >
+            {props.mainLabel}
+          </span>
         ) : null}
-        {props.jobPill ? <TaskRowPill pill={props.jobPill} extraClass="task-row-jobname" /> : null}
-        {props.phasePill ? <TaskRowPill pill={props.phasePill} extraClass="task-row-phasename" /> : null}
-        {props.subPill ? <TaskRowPill pill={props.subPill} extraClass="task-row-subphasename" /> : null}
         {props.hasNote ? <span class="note-dot" title="Has notes"></span> : null}
+      </div>
+      <div class="lane">
+        {props.pill ? <TaskRowPill pill={props.pill} /> : null}
       </div>
     </div>
   );

@@ -1,8 +1,22 @@
 # Gantt Tasks-view row redesign — implementation plan
 
-**Status:** approved design, not yet implemented. Written as a handoff so a fresh session can pick this up without the design-exploration history.
+**Status: Phase A shipped** (index.html, src/views/gantt.ts, src/views/gantt-task-row.tsx). Phase B (job-level fold) was explicitly declined — not built, not scoped for later unless separately requested.
 
-**Mockup (source of truth for the visual/interaction spec):** https://claude.ai/artifact/AEK9eyB8uoYaS6FVcMW5Nx — specifically the **"After — Option 3, with your pills"** section near the bottom. Everything else on that page (the "text lane" variant above it, and the three earlier concepts it replaced) was explored and rejected — ignore them. The mockup is a static/synthetic HTML file with fake data; it is a spec for behavior and layout, not code to port.
+**The shipped design diverges from this doc's original spec in three ways**, worked out through a live mockup review (https://claude.ai/artifact/RtFedWUR2dTXgqmMh5W3Yy) after this doc was first written. Read the doc below with that in mind — the "approved design" section and the mockup link right after it describe the STARTING point, not what actually shipped:
+
+1. **Exactly one pill per row, never stacked.** The original spec (item 5 below) had job+phase+sub-phase pills stacking in the lane as you expand. Karl rejected that live — each row shows exactly one pill, whatever's specific to that row (phase name / sub-phase name / task name once fully expanded). Expanding drills into *more rows*, each with their own one pill, never more pills on one row.
+2. **No mini segmented bar in the pill.** Item 4 below called for a small solid/hatch/tick preview bar replacing a folded pill's label. Also rejected live — every pill, folded or not, is just a chevron + text label. The segmented bar still exists exactly where it always did: the real timeline's collapsed job-span rendering, untouched.
+3. **The job name is now always the middle column**, on every row regardless of fold state (not the task name, and not a pill at all). The specific phase/sub-phase/task label moved entirely into the one pill. This also meant relocating two click features: "isolate to this job" moved from the old job pill onto this now-always-visible job name (reusing the exact click/focus-ring mechanics the task name used to have); "isolate to this task's board-column stage" moved onto the leaf pill's label text specifically, as a second independent hotspot alongside the pill's own fold/collapse click — see TaskRowPillProps.onLabelClick in gantt-task-row.tsx.
+
+Also discovered while implementing: **Jobs/Leads view is dead code** — `ganttViewMode` is a constant always `'tasks'` (see its own comment in index.html), so the `isTasksMode`-false branch in `renderLeftPanelRows()` never runs. It was left in place (not deleted — out of scope), just updated to keep compiling against the new shared prop shape. This made "don't break Jobs/Leads" a non-issue in practice, though the code still behaves as if it could matter.
+
+Row height stayed at 40px — with only one pill per row, the plan's original risk #1 (3 stacked pills not fitting in 40px) never materialized.
+
+---
+
+The rest of this document is the ORIGINAL plan as first written, kept for the reasoning behind things that are still true (why rows aren't grouped by job, the row-key/reorder-animation mechanics, the file-by-file map) — just mentally substitute "one pill, job name in the middle" wherever it says "three pills" or "job pill."
+
+**Mockup (early exploration — superseded by the live review above):** https://claude.ai/artifact/AEK9eyB8uoYaS6FVcMW5Nx — specifically the **"After — Option 3, with your pills"** section near the bottom. Everything else on that page (the "text lane" variant above it, and the three earlier concepts it replaced) was explored and rejected — ignore them. The mockup is a static/synthetic HTML file with fake data; it is a spec for behavior and layout, not code to port.
 
 ## The problem being solved
 
@@ -29,18 +43,14 @@ Earlier rounds tried an indented tree and a section-header layout. Both were dro
 
 Don't build this as one big change. Two phases, cut at a real functionality boundary:
 
-### Phase A — restyle only (do this first)
-- Merge Start/Finish into one Date column.
-- Move pills into the right-hand lane.
-- Keep today's fold behavior exactly as-is: phase and sub-phase fold (already exist — `tasksExpandedPhaseIds`/`tasksExpandedSubPhaseIds`, `togglePhaseCollapse()`/`toggleTasksPhaseExpanded()`/`toggleTasksSubPhaseExpanded()`, gantt.ts ~762-811). **Job pill is informational only in Phase A — not clickable, not foldable.**
-- This alone gets most of the decluttering with the least risk, since it's a styling/layout change to existing data flow, not new state or new row-merging logic.
+### Phase A — restyle only (do this first) — SHIPPED
+- Merge Start/Finish into one Date column. ✅
+- Move pills into the right-hand lane — as one pill, not stacked (see the top-of-doc note). ✅
+- Kept today's fold behavior exactly as-is: phase and sub-phase fold, same underlying state (`tasksExpandedPhaseIds`/`tasksExpandedSubPhaseIds`, `toggleTasksPhaseExpanded()`/`toggleTasksSubPhaseExpanded()`) and same row-building functions (`buildVisibleTaskRows()`/`buildPhaseCollapsedRow()`/`buildSubPhaseRow()`, all UNCHANGED) — this really was restyle-only at the data layer, exactly as hoped. Only `renderLeftPanelRows()`'s per-row prop construction changed.
+- Job name ended up NOT a pill at all (see top-of-doc note) — informational-only became "always the middle column," which is a stronger version of the original intent here.
 
-### Phase B — job-level fold (separate, bigger, do after A ships and feels right)
-- **This is new functionality, not a restyle.** Tasks view has no concept of folding a whole job today (job-level collapse exists only in Jobs/Leads view, via `collapsedPhaseIds`, which is a different view/state). Building it means:
-  - A new persisted state set, e.g. `tasksExpandedJobIds` (localStorage, following the exact pattern of the two that already exist).
-  - A new row-merge function analogous to `buildPhaseCollapsedRow()`/`buildSubPhaseRow()` (gantt.ts ~1108-1147), one level up — merges *all* of a job's tasks (across every phase/sub-phase) into one pseudo-row spanning min-start→max-finish when that job is collapsed.
-  - The merged row's mini segmented-bar needs to handle more tasks/colors than a single phase's — verify the segment-color-cycling approach still reads clearly at that scale (the mockup capped at ~4 tasks per merge for this reason).
-- Flagging this explicitly so "restyle the pills" doesn't silently grow into "add a whole new fold dimension" without that being a deliberate call.
+### Phase B — job-level fold — DECLINED, not built
+Karl explicitly said not to build this. Left here only as historical context for the shape it would have taken if revisited later — the reasoning below (new `tasksExpandedJobIds` set, a new job-level row-merge function) is still accurate if this gets picked up again, minus the mini segmented-bar part (dropped, see top-of-doc note).
 
 ### Phase C — optional, not currently planned
 The mockup's earlier rejected concepts (indented tree, section headers) would become valid again **only if** Tasks view's sort were changed to actually group rows by phase (sacrificing pure date order across phases). That's a data-ordering change, not a style change, and isn't part of this plan — only revisit it if Phase A+B still don't feel like enough.
@@ -62,24 +72,24 @@ The mockup's earlier rejected concepts (indented tree, section headers) would be
 
 6. **Reorder-animation identity.** Rows are matched across renders by a stable `data-row-key` (see the big comment block at the top of `gantt-task-row.tsx`, and `captureBarTopsByRowKey()`/`animateReorderedBars()`, gantt.ts ~2291/~2454, `GANTT_REORDER_MS = 1100`). Preact reuses the same DOM node per `rowKey`. As long as the new row markup keeps using the same `rowKey`/`data-row-key` scheme for task rows and for merged/collapsed pseudo-rows (already true for the existing phase/sub-phase collapse — just confirm it stays true for the restyled row and, in Phase B, for the new job-level merged row), the existing animation system should keep working without changes.
 
-## File-by-file
+## File-by-file (as shipped)
 
-- **`index.html`** (inline `<style>`, Gantt rules start ~line 507) — new/changed CSS: merged date-column width, the right-hand lane and its pill styles, the mini segmented-bar component. Remove/retire the old three-inline-pill styles (`.task-row-jobname`/`-phasename`/`-subphasename` trailing-pill layout, ~567-578) once the new lane replaces them — check nothing else in Jobs/Leads view depends on those exact classes before deleting (Jobs/Leads view is out of scope for the redesign but may share CSS).
-- **`src/views/gantt-task-row.tsx`** — the `TaskRow`/`TaskRowPill` components change shape: merged date prop instead of separate start/finish, pill lane instead of trailing pills, plus the new mini-segment sub-component for merged rows. Keep this file's existing discipline — it's documented as a *pure presentational* component with no ambient-global reads; all per-row decisions still get resolved in `gantt.ts`'s `buildTaskRowProps()` first.
-- **`src/views/gantt.ts`** — `buildVisibleTaskRows()` / `buildPhaseCollapsedRow()` / `buildSubPhaseRow()` need their output reshaped to match the new row-prop shape (merged date range, segment data for collapsed rows). Phase B adds the new job-level collapse function and persisted state alongside the existing two.
+- **`index.html`** — merged `.col-date` (92px) + `.lane` (112px, one `.task-row-lane-pill` inside) replace the old `.col-start`/`.col-finish`/`.task-row-jobname`/`-phasename`/`-subphasename` rules, which were deleted outright (confirmed dead — see the Jobs/Leads discovery at the top of this doc). The static `#leftBody` header row (`Start`/`Finish`/`Task`) became `Date`/`Job`/`Level`.
+- **`src/views/gantt-task-row.tsx`** — `TaskRowProps.dateStr` replaces `startStr`/`finishStr`; `jobPill`/`phasePill`/`subPill` collapsed into one `pill: TaskRowPillProps | null`. `TaskRowPillProps` gained `glyph` (the chevron, kept out of the clickable label) and `labelClickable`/`labelFocused`/`onLabelClick` for the leaf-pill's second hotspot. Still a pure presentational component, still resolved from `gantt.ts`'s `renderLeftPanelRows()` (not `buildTaskRowProps` — that name in the original draft below didn't match the actual function).
+- **`src/views/gantt.ts`** — only `renderLeftPanelRows()` changed. `buildVisibleTaskRows()`/`buildPhaseCollapsedRow()`/`buildSubPhaseRow()` are byte-for-byte unchanged, exactly as the original plan hoped. New `formatMergedDateRange()` helper for the Date column.
 
 ## Testing / verification checklist
 
-- [ ] Left panel and timeline stay pixel-aligned row-for-row, at every fold state, on both a Windows/Chromium and the actual shipped font stack (not the mockup's fonts).
-- [ ] Reorder animation (drag a task bar to a new date) still plays correctly and rows still slide via the existing FLIP system, unchanged.
-- [ ] A phase/sub-phase/job with a long real name truncates gracefully in the lane (use real data, not the mockup's short example names — this was flagged as untested in the mockup itself).
-- [ ] Folding at every level (task→sub-phase merge, sub-phase→phase merge, and in Phase B phase→job merge) produces a merged row sorted at the correct position (earliest date among its merged tasks).
-- [ ] Segment mini-bar matches the real timeline's segment bar for the same collapsed group (same solid/hatch/tick logic, same colors) — spot-check a few examples side by side.
-- [ ] Dark mode.
-- [ ] Mobile width behavior (today's Gantt already drops date columns on mobile — decide how the new merged date column + lane behave at narrow widths; the mockup didn't test this).
+- [x] Left panel and timeline stay pixel-aligned row-for-row, at every fold state — verified via real browser screenshots (fully expanded, folded, Expand All, Collapse All) with a constructed multi-phase/sub-phase job; `npm run typecheck`, `npm run build`, and the full Playwright suite (197 tests, including the Gantt-specific ones) all pass unchanged.
+- [x] Reorder animation, drag/resize — unaffected (all `gantt-reorder-animation.spec.js`/`gantt-collapsed-drag-sync.spec.js` tests still pass; `buildVisibleTaskRows()`/row-key scheme untouched).
+- [x] A long real name truncates gracefully — verified with "Riverside Medical Office Build-Out" in the 340px panel; ellipsis handles it.
+- [x] Folding at every level (task→sub-phase, sub-phase→phase) produces a correctly-positioned merged row — verified interactively (fold-back, Collapse All).
+- [x] Dark mode — verified via screenshot.
+- [ ] Mobile width behavior — not specifically re-tested narrow; existing ellipsis/ truncation mechanics are unchanged in kind, just on new column widths (92px date + 112px lane leaves less for the name column at the 260px breakpoint than before, but no more cramped than today's 3-pill version was). Worth a real look if it comes up.
+- N/A: mini segmented-bar item — dropped, nothing to verify.
 
-## Open questions to confirm with Karl before/while building
+## Open questions — resolved
 
-1. Default fold state on load — expanded (recommended) or folded (mockup's demo default)?
-2. Is Phase B (job-level fold) wanted now, or ship Phase A first and decide later?
-3. Exact lane width / date-column width in the real app's actual pixel budget (mockup numbers were illustrative, not final).
+1. Default fold state on load: **folded** (matches today's actual default — see top-of-doc correction to this doc's original recommendation).
+2. Phase B: **declined**, not built.
+3. Lane/date-column width: **112px lane, 92px date column** — the values worked out live in the mockup, carried straight into the shipped CSS (`.task-row .lane`, `.task-row .col-date` in index.html).
