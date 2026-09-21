@@ -39,6 +39,9 @@ export interface TaskRowPillProps {
   label: string;
   title: string;
   background: string;
+  // Explicit text color; when omitted the pill picks white/dark by contrast
+  // against `background` (see readableTextColor()).
+  color?: string;
   focused?: boolean;
   onClick?: (e: MouseEvent) => void;
 }
@@ -82,7 +85,7 @@ function TaskRowPill({ pill }: { pill: TaskRowPillProps }) {
     <span
       class={'task-row-pill' + (pill.onClick ? ' collapsible' : '') + (pill.focused ? ' focused' : '')}
       title={pill.title}
-      style={{ background: pill.background, color: readableTextColor(pill.background) }}
+      style={{ background: pill.background, color: pill.color || readableTextColor(pill.background) }}
       onClick={pill.onClick}
     >
       {pill.label}

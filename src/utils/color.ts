@@ -11,6 +11,18 @@ export function darkenColor(hex: string | null | undefined, amount: number): str
   return 'rgb(' + r + ',' + g + ',' + b + ')';
 }
 
+// Text color for a label sitting on a board column's own color — the
+// Trello-style rule the Board's column headers use: white on a dark
+// background, otherwise a much darker shade of the same hue. Shared so a
+// Gantt task pill (which mirrors its column's color) reads identically.
+export function columnLabelTextColor(bg: string): string {
+  const h = bg.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const num = parseInt(full, 16) || 0;
+  const luminance = (0.299 * ((num >> 16) & 255) + 0.587 * ((num >> 8) & 255) + 0.114 * (num & 255)) / 255;
+  return luminance < 0.5 ? '#fff' : darkenColor(bg, 0.6);
+}
+
 // Dark slate used for text on light backgrounds — same family as the app's
 // other dark text colors rather than pure black, so it reads softer on pastels.
 export const DARK_TEXT_COLOR = '#1f2937';

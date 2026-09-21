@@ -60,7 +60,7 @@ import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../c
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
-import { darkenColor, softenColor } from '../utils/color';
+import { darkenColor, softenColor, columnLabelTextColor } from '../utils/color';
 import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -1107,7 +1107,7 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
       // rather than this rendering a runtime-transformed version of
       // whatever the job/task color picker offers. Rendered as-is; no
       // further transform here.
-      headerStyle: col.color ? { background: col.color, color: dark ? '#fff' : darkenColor(col.color, 0.6) } : {},
+      headerStyle: col.color ? { background: col.color, color: columnLabelTextColor(col.color) } : {},
       // Trello-style: the title reads as a darker shade of the board's
       // own color rather than generic black text, when the background is
       // light enough for that to stay readable — see headerStyle above.

@@ -34,7 +34,7 @@ import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { safeJsonParse } from '../utils/id';
 import { toIsoDate, getDaysDiff } from '../utils/date';
 import { escapeHtml } from '../utils/html';
-import { darkenColor, softenColor } from '../utils/color';
+import { darkenColor, softenColor, columnLabelTextColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
@@ -1502,6 +1502,16 @@ function findTaskForCardColumn(job: Job, phaseId: string | null | undefined, tas
   return tasks.find((t) => t.columnId === card.column) || null;
 }
 
+// A task pill's colors. A real task's color mirrors its board column's
+// (already-pastel) color, so it's used as-is with the Board's own label-text
+// rule — same look as the column header — instead of being softened again.
+// Due markers and colorless tasks keep the softened job-color treatment.
+function taskPillColors(task: { [key: string]: any }, jobColor: string): { background: string; color: string | undefined } {
+  const own = task.color as string | undefined;
+  if (own && !task.isDueMarker) return { background: own, color: columnLabelTextColor(own) };
+  return { background: softenColor(own || jobColor), color: undefined };
+}
+
 function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
   const rowProps: TaskRowProps[] = [];
   // Zebra-stripe backgrounds — Preact-rendered too now (see
@@ -1565,7 +1575,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
         taskPill = {
           label: (task.isDueMarker ? '🚩 ' : '') + task.name,
           title: focusTitle,
-          background: softenColor((task.color as string | undefined) || jobColor),
+          ...taskPillColors(task, jobColor),
           focused: isTaskFocused,
           onClick: isFocusableTask ? (e) => { e.stopPropagation(); toggleGanttTaskFocus(task.columnId as string); } : undefined,
         };
@@ -1584,7 +1594,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
             title: currentHidden
               ? current.name + ' — currently in progress (hidden from the schedule)'
               : (currentFocused ? 'Click to show every task again' : 'Click to show only ' + current.name + '\'s column — every job') + ' — currently in progress',
-            background: softenColor((current.color as string | undefined) || jobColor),
+            ...taskPillColors(current, jobColor),
             focused: currentFocused,
             onClick: currentHidden ? undefined : (e) => { e.stopPropagation(); toggleGanttTaskFocus(current.columnId as string); },
           };
@@ -1592,7 +1602,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
           // A real task, but not tied to any BOARD_COLUMNS stage — show
           // it, just not clickable (nothing for toggleGanttTaskFocus() to
           // isolate by).
-          taskPill = { label: current.name, title: current.name, background: softenColor((current.color as string | undefined) || jobColor) };
+          taskPill = { label: current.name, title: current.name, ...taskPillColors(current, jobColor) };
         }
       }
       // Only offered when the phase actually has 2+ real sub-phases —
