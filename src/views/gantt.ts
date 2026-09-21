@@ -1509,7 +1509,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       if (entry.collapsible && phaseName !== null) {
         const phaseFolded = !tasksExpandedPhaseIds.has(phaseId || '');
         pills.push({
-          label: (phaseFolded ? '▸ ' : '▾ ') + (phaseName ? phaseName : 'Unnamed phase'),
+          label: (phaseFolded ? '▸' : '▾') + (phaseName ? ' ' + phaseName : ''),
           title: phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar',
           background: jobColor,
           onClick: (e) => { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); },
