@@ -519,18 +519,18 @@
      themselves are bound at this level. */
   .gantt-panels-row { display: flex; flex: 1; overflow: hidden; touch-action: pan-x pan-y; }
   /* Slightly transparent (not the flat var(--card) fill) — same reasoning
-     as .timeline-body below: this 300px job/task-name column is a large
+     as .timeline-body below: this 400px job/task-name column is a large
      solid strip that would otherwise fully block a project's background
      image (applyProjectBgVisual()) on its side of the chart. */
   .left-panel {
-    width: 340px; min-width: 340px; background: rgba(255,255,255,0.8); border-right: 1px solid var(--border);
+    width: 400px; min-width: 400px; background: rgba(255,255,255,0.8); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 6px rgba(0,0,0,0.04);
   }
   /* Now just an empty alignment spacer — see the comment on it in the
      markup — the view-mode tabs and later the "View as" picker that used
      to live here are both gone. Kept in sync with .left-panel's width
      above. */
-  .gantt-view-toggle-row { width: 340px; min-width: 340px; box-sizing: border-box; }
+  .gantt-view-toggle-row { width: 400px; min-width: 400px; box-sizing: border-box; }
   /* 58px — matches .timeline-header-wrap's height exactly (its own
      content is precisely 24px .week-header + 34px .day-header, no
      slack) so the task rows below line up with the bar rows next to
