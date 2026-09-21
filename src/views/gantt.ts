@@ -1455,6 +1455,39 @@ function formatMergedDateRange(startIso: string | undefined, finishIso: string |
   return sMonth + ' ' + s.getDate() + ' – ' + fMonth + ' ' + f.getDate();
 }
 
+// The new Task column's answer for a folded/merged row, which spans many
+// real tasks at once: which one is "current" right now. Priority — a task
+// whose start..finish window covers today; else the soonest upcoming one;
+// else the most recently finished one; else just the first dated task —
+// so the column always shows *something* rather than sitting blank. ISO
+// date strings compare correctly as plain strings, no Date parsing needed.
+function findCurrentTask(tasks: Task[]): Task | null {
+  const dated = tasks.filter((t) => t.start && t.finish && !isNaN(new Date(t.start + 'T00:00:00').getTime()) && !isNaN(new Date(t.finish + 'T00:00:00').getTime()));
+  if (!dated.length) return null;
+  const todayIso = toIsoDate(new Date());
+  const covering = dated.filter((t) => t.start! <= todayIso && todayIso <= t.finish!);
+  if (covering.length) return covering.slice().sort((a, b) => (a.order || 0) - (b.order || 0))[0];
+  const upcoming = dated.filter((t) => t.start! > todayIso).sort((a, b) => (a.start! < b.start! ? -1 : a.start! > b.start! ? 1 : 0));
+  if (upcoming.length) return upcoming[0];
+  const past = dated.filter((t) => t.finish! < todayIso).sort((a, b) => (a.finish! > b.finish! ? -1 : a.finish! < b.finish! ? 1 : 0));
+  if (past.length) return past[0];
+  return dated[0];
+}
+
+// All the real tasks a folded/merged row's date-range summarizes — every
+// task in the phase (phaseMerged row) or just the one sub-phase
+// (subMerged row) — for findCurrentTask() above to pick from. Walks the
+// job's real phase/sub-phase structure via getJobPhases()/
+// getPhaseSubUnits() rather than trusting the pseudo-row's own fields,
+// since a merged row's `task` is a synthetic span, not a real task.
+function getTasksForMergedRow(job: Job, phaseId: string | null | undefined, subPhaseId: string | null | undefined, wholePhase: boolean): Task[] {
+  const phase = getJobPhases(job).find((p) => (p.id || null) === (phaseId || null));
+  if (!phase) return [];
+  if (wholePhase) return getPhaseSubUnits(phase).reduce((acc: Task[], su) => acc.concat(su.tasks || []), []);
+  const subUnit = getPhaseSubUnits(phase).find((su) => (su.id || null) === (subPhaseId || null));
+  return subUnit ? (subUnit.tasks || []) : [];
+}
+
 function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
   const rowProps: TaskRowProps[] = [];
   // Zebra-stripe backgrounds — Preact-rendered too now (see
@@ -1496,6 +1529,23 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     const isFocusableTask = isTasksMode && !task.isJobSpan && !task.isDueMarker && !!task.columnId;
     const isTaskFocused = isFocusableTask && ganttFocusedTaskColumnId === task.columnId;
 
+    // The Task column, between Date and Job: on a real leaf row, just
+    // that task's own name (doubling as the board-column-focus click
+    // above). On a folded/merged row there's no single task anymore, so
+    // it calls out whichever one is "current" right now — see
+    // findCurrentTask()'s own comment for the priority order — purely
+    // informational there, not a click target.
+    let taskLabel = '';
+    if (isTasksMode) {
+      if (!task.isJobSpan) {
+        taskLabel = (task.isDueMarker ? '🚩 ' : '') + task.name;
+      } else {
+        const wholePhase = !!(task.isJobSpan && entry.collapsedSegments);
+        const current = findCurrentTask(getTasksForMergedRow(job, phaseId, subPhaseId, wholePhase));
+        taskLabel = current ? current.name : '';
+      }
+    }
+
     const pills: TaskRowPillProps[] = [];
 
     if (isTasksMode) {
@@ -1529,18 +1579,6 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
           onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(subKey); },
         });
       }
-      // A real leaf task gets a third pill for its own name — not
-      // foldable (nothing left to fold at this level), doubles as the
-      // board-column-focus click above.
-      if (!task.isJobSpan) {
-        pills.push({
-          label: (task.isDueMarker ? '🚩 ' : '') + task.name,
-          title: isFocusableTask ? (isTaskFocused ? 'Click to show every task again' : 'Click to show only ' + task.name + '\'s column — every job') : task.name,
-          background: jobColor,
-          focused: isTaskFocused,
-          onClick: isFocusableTask ? (e) => { e.stopPropagation(); toggleGanttTaskFocus(task.columnId as string); } : undefined,
-        });
-      }
     } else {
       // Jobs/Leads view: unreachable today (ganttViewMode is a constant
       // 'tasks' — see its own comment above) but kept working rather than
@@ -1568,6 +1606,10 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       className: 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '') + (job.isLinkedReference ? ' linked-ref' : ''),
       title,
       dateStr,
+      taskLabel,
+      taskLabelClickable: isFocusableTask,
+      taskLabelFocused: isTaskFocused,
+      onTaskLabelClick: isFocusableTask ? () => toggleGanttTaskFocus(task.columnId as string) : undefined,
       mainLabel,
       mainLabelClickable: isTasksMode,
       mainLabelFocused: isFocusedJob,

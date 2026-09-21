@@ -50,6 +50,15 @@ export interface TaskRowProps {
   title: string;
   // Merged "Mar 3–7" range — a single column now, not separate start/finish.
   dateStr: string;
+  // Between Date and Job: a real leaf row's own task name (clickable —
+  // isolates by board-column stage, see gantt.ts's
+  // ganttFocusedTaskColumnId/toggleGanttTaskFocus()); a folded/merged
+  // row's best guess at "which task this job is currently in" instead
+  // (not clickable — see gantt.ts's findCurrentTask()).
+  taskLabel: string;
+  taskLabelClickable?: boolean;
+  taskLabelFocused?: boolean;
+  onTaskLabelClick?: () => void;
   // Always the job's own name now, on every row regardless of fold state —
   // a stable anchor since rows from different jobs interleave by date
   // (Tasks view sorts purely by start date, not grouped by job/phase).
@@ -58,13 +67,11 @@ export interface TaskRowProps {
   mainLabelFocused?: boolean;
   onMainLabelClick?: () => void;
   hasNote: boolean;
-  // Trailing inline after the job name, left to right, in order: a phase
-  // pill (only when the phase has 2+ real sub-phases), a sub-phase pill
-  // (unless this row is itself a whole-phase-collapsed row), and — on a
-  // real leaf task row — a third pill carrying the task's own name (not
-  // foldable; doubles as the board-column-focus click, see gantt.ts).
-  // Empty array when none apply. Same trailing-pill placement the original
-  // design used, before a detour through a separate right-hand lane.
+  // Trailing inline after the job name, left to right: a phase pill (only
+  // when the phase has 2+ real sub-phases) and a sub-phase pill (unless
+  // this row is itself a whole-phase-collapsed row). Empty array when
+  // neither applies. Same trailing-pill placement the original design
+  // used, before a detour through a separate right-hand lane.
   pills: TaskRowPillProps[];
   onOpen: () => void;
 }
@@ -99,6 +106,17 @@ function TaskRow(props: TaskRowProps) {
       onKeyDown={onKeyDown}
     >
       <div class="col col-date">{props.dateStr}</div>
+      <div class="col col-task">
+        {props.taskLabel ? (
+          <span
+            class={'task-row-task-label' + (props.taskLabelClickable ? ' clickable' : '') + (props.taskLabelFocused ? ' focused' : '')}
+            title={props.taskLabelClickable ? (props.taskLabelFocused ? 'Click to show every task again' : 'Click to show only ' + props.taskLabel + '\'s column — every job') : props.taskLabel}
+            onClick={props.onTaskLabelClick ? (e) => { e.stopPropagation(); props.onTaskLabelClick!(); } : undefined}
+          >
+            {props.taskLabel}
+          </span>
+        ) : null}
+      </div>
       <div class="col col-jobs">
         {props.mainLabel ? (
           <span
