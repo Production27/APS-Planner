@@ -1617,6 +1617,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
           label: (phaseFolded ? '▸' : '▾') + (phaseName ? ' ' + phaseName : ''),
           title: phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar',
           background: jobColor,
+          color: '#fff',
           onClick: (e) => { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); },
         });
       }
@@ -1631,6 +1632,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
           label: (subFolded ? '▸' : '▾') + (subLabel ? ' ' + subLabel : ''),
           title: (subFolded ? 'Click to expand into individual tasks' : 'Click to collapse into a single bar') + (subLabel ? ' — ' + subLabel : ''),
           background: jobColor,
+          color: '#fff',
           onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(subKey); },
         });
       }
@@ -1644,6 +1646,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
         label: collapseGlyph + job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : ''),
         title: entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') : '',
         background: job.color || '#999',
+        color: '#fff',
         onClick: entry.collapsible ? (e) => { e.stopPropagation(); togglePhaseCollapse(phaseId); } : undefined,
       });
     }
