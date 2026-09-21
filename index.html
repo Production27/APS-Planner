@@ -553,15 +553,12 @@
   .task-row:nth-child(even):hover { background: #e3f2fd; }
   .task-row .col { padding: 0 var(--s-2-5); border-right: 1px solid var(--divider); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
   .task-row .col-date { width: 104px; color: var(--text-light); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
-  /* Between Date and Job — a leaf row's own task name (clickable, isolates
-     by board-column stage), or on a folded/merged row, whichever task it's
-     "currently in" today (see gantt.ts's findCurrentTask()), plain text. */
-  .task-row .col-task { width: 90px; color: var(--text); font-size: var(--t-xs); }
-  .task-row .col-task .task-row-task-label.clickable { cursor: pointer; border-bottom: 1.5px dashed transparent; }
-  .task-row .col-task .task-row-task-label.clickable:hover { color: var(--primary); border-bottom-color: var(--primary-light); }
-  body.dark-mode .task-row .col-task .task-row-task-label.clickable:hover { color: var(--primary-ondark); }
-  .task-row .col-task .task-row-task-label.focused { color: var(--primary); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); border-radius: 3px; padding: 0 3px; }
-  body.dark-mode .task-row .col-task .task-row-task-label.focused { color: var(--primary-ondark); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
+  /* Between Date and Job — a pill (same look as the phase/sub-phase pills
+     below) for a leaf row's own task, or on a folded/merged row, whichever
+     task it's "currently in" today (see gantt.ts's findCurrentTask()).
+     Always clickable when present — isolates by board-column stage. */
+  .task-row .col-task { width: 90px; }
+  .task-row .col-task .task-row-pill { max-width: 100%; margin-left: 0; }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
   /* A fixed max-width (with its own ellipsis) rather than letting the name
      run as long as it wants — otherwise a long job name (always shown
@@ -582,18 +579,19 @@
   .task-row .col-jobs .task-row-name.focused { color: var(--primary); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); border-radius: 3px; padding: 0 3px; }
   body.dark-mode .task-row .col-jobs .task-row-name.focused { color: var(--primary-ondark); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
   .task-row .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); margin-left: var(--s-1-5); display: inline-block; }
-  /* Trailing inline pills after the job name — phase and/or sub-phase (see
-     gantt-task-row.tsx), same placement/look the original design used
-     before a detour through a separate right-hand lane. flex-shrink:0 so
-     a pill never gets squeezed down illegibly small — when everything
-     doesn't fit, .col-jobs's own overflow:hidden just clips whichever
-     trailing pill(s) run past the column edge. */
-  .task-row .col-jobs .task-row-pill { display: inline-block; flex-shrink: 0; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 10px; vertical-align: middle; line-height: 1.5; }
-  .task-row .col-jobs .task-row-pill.collapsible { cursor: pointer; }
-  .task-row .col-jobs .task-row-pill.collapsible:hover { filter: brightness(1.15); }
-  .task-row .col-jobs .task-row-pill.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
-  body.dark-mode .task-row .col-jobs .task-row-pill.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
-  body.dark-mode .task-row .col-jobs .task-row-pill { color: #fff; }
+  /* The pill look shared by the Task column and the trailing phase/
+     sub-phase pills after the job name (see gantt-task-row.tsx) — same
+     placement/look the original design used, before a detour through a
+     separate right-hand lane. flex-shrink:0 (relevant in .col-jobs, a
+     flex row) so a pill never gets squeezed down illegibly small — when
+     everything doesn't fit there, .col-jobs's own overflow:hidden just
+     clips whichever trailing pill(s) run past the column edge. */
+  .task-row .task-row-pill { display: inline-block; flex-shrink: 0; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 10px; vertical-align: middle; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; }
+  .task-row .task-row-pill.collapsible { cursor: pointer; }
+  .task-row .task-row-pill.collapsible:hover { filter: brightness(1.15); }
+  .task-row .task-row-pill.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
+  body.dark-mode .task-row .task-row-pill.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
+  body.dark-mode .task-row .task-row-pill { color: #fff; }
 
   .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 

@@ -1529,27 +1529,45 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     const isFocusableTask = isTasksMode && !task.isJobSpan && !task.isDueMarker && !!task.columnId;
     const isTaskFocused = isFocusableTask && ganttFocusedTaskColumnId === task.columnId;
 
-    // The Task column, between Date and Job: on a real leaf row, just
-    // that task's own name (doubling as the board-column-focus click
-    // above). On a folded/merged row there's no single task anymore, so
-    // it calls out whichever one is "current" right now — see
-    // findCurrentTask()'s own comment for the priority order — purely
-    // informational there, not a click target.
-    let taskLabel = '';
-    if (isTasksMode) {
-      if (!task.isJobSpan) {
-        taskLabel = (task.isDueMarker ? '🚩 ' : '') + task.name;
-      } else {
-        const wholePhase = !!(task.isJobSpan && entry.collapsedSegments);
-        const current = findCurrentTask(getTasksForMergedRow(job, phaseId, subPhaseId, wholePhase));
-        taskLabel = current ? current.name : '';
-      }
-    }
-
     const pills: TaskRowPillProps[] = [];
+    let taskPill: TaskRowPillProps | null = null;
 
     if (isTasksMode) {
       const jobColor = job.color || '#999';
+      // The Task column, between Date and Job: a pill for a real leaf
+      // row's own task (clickable — same board-column-focus feature as
+      // above). On a folded/merged row there's no single task anymore, so
+      // it points at whichever one is "current" right now instead — see
+      // findCurrentTask()'s own comment for the priority order — still
+      // clickable, isolating by THAT task's own board-column stage.
+      if (!task.isJobSpan) {
+        const focusTitle = isFocusableTask ? (isTaskFocused ? 'Click to show every task again' : 'Click to show only ' + task.name + '\'s column — every job') : task.name;
+        taskPill = {
+          label: (task.isDueMarker ? '🚩 ' : '') + task.name,
+          title: focusTitle,
+          background: jobColor,
+          focused: isTaskFocused,
+          onClick: isFocusableTask ? (e) => { e.stopPropagation(); toggleGanttTaskFocus(task.columnId as string); } : undefined,
+        };
+      } else {
+        const wholePhase = !!(task.isJobSpan && entry.collapsedSegments);
+        const current = findCurrentTask(getTasksForMergedRow(job, phaseId, subPhaseId, wholePhase));
+        if (current && current.columnId) {
+          const currentFocused = isTasksMode && ganttFocusedTaskColumnId === current.columnId;
+          taskPill = {
+            label: current.name,
+            title: (currentFocused ? 'Click to show every task again' : 'Click to show only ' + current.name + '\'s column — every job') + ' — currently in progress',
+            background: jobColor,
+            focused: currentFocused,
+            onClick: (e) => { e.stopPropagation(); toggleGanttTaskFocus(current.columnId as string); },
+          };
+        } else if (current) {
+          // A real task, but not tied to any BOARD_COLUMNS stage — show
+          // it, just not clickable (nothing for toggleGanttTaskFocus() to
+          // isolate by).
+          taskPill = { label: current.name, title: current.name, background: jobColor };
+        }
+      }
       // Only offered when the phase actually has 2+ real sub-phases —
       // folds/unfolds just THIS phase (tasksExpandedPhaseIds), independent
       // of the sub-phase pill below. phaseName !== null (rather than just
@@ -1606,10 +1624,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       className: 'task-row' + (task.isDueMarker ? ' due-marker-row' : '') + (job.archived ? ' archived' : '') + (isTaskFinished(job, task) ? ' finished' : '') + (job.isLinkedReference ? ' linked-ref' : ''),
       title,
       dateStr,
-      taskLabel,
-      taskLabelClickable: isFocusableTask,
-      taskLabelFocused: isTaskFocused,
-      onTaskLabelClick: isFocusableTask ? () => toggleGanttTaskFocus(task.columnId as string) : undefined,
+      taskPill,
       mainLabel,
       mainLabelClickable: isTasksMode,
       mainLabelFocused: isFocusedJob,

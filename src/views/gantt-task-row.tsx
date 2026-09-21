@@ -50,15 +50,15 @@ export interface TaskRowProps {
   title: string;
   // Merged "Mar 3–7" range — a single column now, not separate start/finish.
   dateStr: string;
-  // Between Date and Job: a real leaf row's own task name (clickable —
-  // isolates by board-column stage, see gantt.ts's
-  // ganttFocusedTaskColumnId/toggleGanttTaskFocus()); a folded/merged
-  // row's best guess at "which task this job is currently in" instead
-  // (not clickable — see gantt.ts's findCurrentTask()).
-  taskLabel: string;
-  taskLabelClickable?: boolean;
-  taskLabelFocused?: boolean;
-  onTaskLabelClick?: () => void;
+  // Between Date and Job: a pill (same look as the phase/sub-phase pills
+  // below) carrying a real leaf row's own task name, or — on a
+  // folded/merged row, which spans many real tasks at once — gantt.ts's
+  // best guess at "which task this job is currently in" (see
+  // findCurrentTask()). Always clickable when non-null: isolates the
+  // Gantt to that task's own board-column stage across every job (see
+  // ganttFocusedTaskColumnId/toggleGanttTaskFocus()). null when there's
+  // no dated task to point at (e.g. an empty phase).
+  taskPill: TaskRowPillProps | null;
   // Always the job's own name now, on every row regardless of fold state —
   // a stable anchor since rows from different jobs interleave by date
   // (Tasks view sorts purely by start date, not grouped by job/phase).
@@ -107,15 +107,7 @@ function TaskRow(props: TaskRowProps) {
     >
       <div class="col col-date">{props.dateStr}</div>
       <div class="col col-task">
-        {props.taskLabel ? (
-          <span
-            class={'task-row-task-label' + (props.taskLabelClickable ? ' clickable' : '') + (props.taskLabelFocused ? ' focused' : '')}
-            title={props.taskLabelClickable ? (props.taskLabelFocused ? 'Click to show every task again' : 'Click to show only ' + props.taskLabel + '\'s column — every job') : props.taskLabel}
-            onClick={props.onTaskLabelClick ? (e) => { e.stopPropagation(); props.onTaskLabelClick!(); } : undefined}
-          >
-            {props.taskLabel}
-          </span>
-        ) : null}
+        {props.taskPill ? <TaskRowPill pill={props.taskPill} /> : null}
       </div>
       <div class="col col-jobs">
         {props.mainLabel ? (
