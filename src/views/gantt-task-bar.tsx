@@ -302,4 +302,42 @@ function TaskBarsList({ entries }: { entries: TaskBarEntryProps[] }) {
 
 export function renderTimelineBarsInto(container: HTMLElement, entries: TaskBarEntryProps[]): void {
   render(<TaskBarsList entries={entries} />, container);
+  fitBarTags(container);
+}
+
+// A bar's first pill is the job name — always shown (it just ellipsizes if
+// the bar is really narrow). Any phase/sub-phase pills after it are shown
+// only if each fits WHOLE alongside the job name at its full width, left to
+// right; the first one that doesn't fit, and every one after it, is hidden
+// (data-fit-hidden — an attribute Preact never manages, so it survives
+// re-renders that reuse the node; this pass reruns after every render
+// anyway). Without this, a narrow bar squeezed all its pills down into
+// unreadable little circles. Measured in the DOM rather than estimated from
+// text length because the pill font/padding come from CSS. Reads and writes
+// are batched (reset → measure all → apply) to avoid layout thrash.
+export function fitBarTags(root: HTMLElement): void {
+  const groups: { tags: HTMLElement[]; el: HTMLElement }[] = [];
+  root.querySelectorAll<HTMLElement>('.task-bar, .job-span-name-wrap').forEach((el) => {
+    const tags = Array.from(el.children).filter((c) => c.classList.contains('task-bar-job-tag')) as HTMLElement[];
+    if (tags.length > 1) groups.push({ tags, el });
+  });
+  groups.forEach((g) => g.tags.forEach((t) => t.removeAttribute('data-fit-hidden')));
+
+  const toHide: HTMLElement[] = [];
+  groups.forEach(({ tags, el }) => {
+    // Not laid out (detached / display:none ancestor) — measuring would
+    // read zeros and wrongly hide everything, so leave the pills alone.
+    if (!el.clientWidth) return;
+    const cs = getComputedStyle(el);
+    const available = el.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    const margin = (t: HTMLElement) => parseFloat(getComputedStyle(t).marginRight) || 0;
+    let used = tags[0].scrollWidth + margin(tags[0]);
+    let fits = true;
+    for (let i = 1; i < tags.length; i++) {
+      const w = tags[i].offsetWidth + margin(tags[i]);
+      if (fits && used + w <= available) used += w; else fits = false;
+      if (!fits) toHide.push(tags[i]);
+    }
+  });
+  toHide.forEach((t) => t.setAttribute('data-fit-hidden', ''));
 }

@@ -899,6 +899,11 @@
     pointer-events: none;
   }
   .task-bar.milestone .task-bar-job-tag { display: none; }
+  /* The job-name pill (first) may ellipsize; the phase/sub-phase pills after
+     it never squeeze — fitBarTags() (gantt-task-bar.tsx) hides whichever
+     don't fit whole instead of letting them shrink into tiny circles. */
+  .task-bar-job-tag ~ .task-bar-job-tag { flex-shrink: 0; }
+  .task-bar-job-tag[data-fit-hidden] { display: none; }
   .task-bar-resize-handle {
     position: absolute; top: 0; bottom: 0; width: 14px;
     cursor: ew-resize; z-index: 5;
