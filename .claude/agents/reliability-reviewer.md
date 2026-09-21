@@ -1,6 +1,6 @@
 ---
 name: reliability-reviewer
-description: Reviews TeamSync (APS Planner) for error-handling consistency, race conditions, and offline/network-flake resilience. Use proactively when investigating "glitchy" or intermittent behavior reports, or for a full-codebase reliability pass.
+description: Reviews TeamSync for error-handling consistency, race conditions, and offline/network-flake resilience. Use proactively when investigating "glitchy" or intermittent behavior reports, or for a full-codebase reliability pass.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

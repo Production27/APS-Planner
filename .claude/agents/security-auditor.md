@@ -1,6 +1,6 @@
 ---
 name: security-auditor
-description: Reviews TeamSync (APS Planner) for authentication, authorization, and injection risks across the frontend (index.html) and the Cloudflare Durable Object worker (worker/src/, entry point worker/src/index.ts). Use proactively before shipping anything that touches auth, session tokens, roles, or Worker endpoints, and periodically for a full-codebase security pass.
+description: Reviews TeamSync for authentication, authorization, and injection risks across the frontend (index.html) and the Cloudflare Durable Object worker (worker/src/, entry point worker/src/index.ts). Use proactively before shipping anything that touches auth, session tokens, roles, or Worker endpoints, and periodically for a full-codebase security pass.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

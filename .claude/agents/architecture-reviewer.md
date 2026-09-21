@@ -1,6 +1,6 @@
 ---
 name: architecture-reviewer
-description: Reviews TeamSync (APS Planner)'s code structure, maintainability, and technical debt — module boundary coherence, global scope pollution, duplication, dead code, and onboarding/doc accuracy across the frontend and the worker. Use proactively when the codebase's structural health needs assessing, or before planning a refactor.
+description: Reviews TeamSync's code structure, maintainability, and technical debt — module boundary coherence, global scope pollution, duplication, dead code, and onboarding/doc accuracy across the frontend and the worker. Use proactively when the codebase's structural health needs assessing, or before planning a refactor.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

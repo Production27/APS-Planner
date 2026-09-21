@@ -82,7 +82,7 @@ export async function runBackup(env: Env): Promise<string> {
   const roomState = await res.json() as RoomState;
   const appData = roomStateToAppFormat(roomState);
   const timestamp = new Date().toISOString();
-  const key = `backups/aps-planner-${timestamp}.json`;
+  const key = `backups/teamsync-${timestamp}.json`;
 
   await env.BACKUP_BUCKET.put(key, JSON.stringify(appData, null, 2), {
     httpMetadata: { contentType: "application/json" }

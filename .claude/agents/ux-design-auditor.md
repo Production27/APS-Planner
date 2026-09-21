@@ -1,6 +1,6 @@
 ---
 name: ux-design-auditor
-description: Reviews TeamSync (APS Planner)'s visual design system and UX consistency — design-token adoption, spacing/typography systemization, and accessibility across its Gantt/Board/Calendar/Home/Job Chat views. Use proactively when assessing visual polish or before a design pass.
+description: Reviews TeamSync's visual design system and UX consistency — design-token adoption, spacing/typography systemization, and accessibility across its Gantt/Board/Calendar/Home/Job Chat views. Use proactively when assessing visual polish or before a design pass.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

@@ -1,5 +1,5 @@
 // ==========================================
-// APS Planner — Worker (Durable Objects backend) — entry point / router
+// TeamSync — Worker (Durable Objects backend) — entry point / router
 // ==========================================
 //
 // Routes incoming requests to the appropriate handler and re-exports the

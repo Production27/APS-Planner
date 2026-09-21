@@ -1,10 +1,12 @@
-# TeamSync (APS Planner)
+# TeamSync
 
 Construction production scheduling tool: Gantt chart, Job Manager, a
 Trello-style Board, Calendar, and a Home dashboard, built for a small
 team working on a fixed pair of projects. User-facing product name is
-**TeamSync**; the repo name and internal file/variable names are still
-"APS Planner" / `aps-*`, left that way on purpose.
+**TeamSync**. A few internal identifiers still use the old `aps-planner` / `APS-Planner`
+name on purpose, because renaming them would break deployed data or infrastructure
+(the GitHub repo and Pages URL, the staging Worker name and URL, the R2 backup
+bucket, and the `aps-planner:*` localStorage keys).
 
 ## How it's built
 
