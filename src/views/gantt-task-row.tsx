@@ -32,25 +32,14 @@
 import { render } from 'preact';
 
 export interface TaskRowPillProps {
-  // Leading chevron character (▸ folded / ▾ expanded) — plain text, never
-  // its own click target, so the two-hotspot leaf case (below) still
-  // reads left-to-right as one pill.
-  glyph: string;
+  // Chevron baked directly into the text (e.g. "▸ Framing") — same
+  // convention the original trailing-pill design used, kept for the same
+  // reason: one plain label, one click target, nothing to desync.
   label: string;
   title: string;
   background: string;
   focused?: boolean;
   onClick?: (e: MouseEvent) => void;
-  // Leaf-task pill only: `label` (the task's own name) is a second,
-  // independent hotspot from onClick (which folds this row back into its
-  // sub-phase) — clicking it isolates the Gantt to this task's own
-  // BOARD_COLUMNS stage across every job, same feature the row's main
-  // label used to carry back when it showed the task name instead of the
-  // job name. See gantt.ts's ganttFocusedTaskColumnId/toggleGanttTaskFocus().
-  labelClickable?: boolean;
-  labelFocused?: boolean;
-  labelTitle?: string;
-  onLabelClick?: () => void;
 }
 
 export interface TaskRowProps {
@@ -63,31 +52,22 @@ export interface TaskRowProps {
   dateStr: string;
   // Always the job's own name now, on every row regardless of fold state —
   // a stable anchor since rows from different jobs interleave by date
-  // (Tasks view sorts purely by start date, not grouped by job/phase). The
-  // phase/sub-phase/task specifics that used to share this label instead
-  // live in `pill` below.
+  // (Tasks view sorts purely by start date, not grouped by job/phase).
   mainLabel: string;
   mainLabelClickable?: boolean;
   mainLabelFocused?: boolean;
   onMainLabelClick?: () => void;
   hasNote: boolean;
-  // Exactly one pill per row, always — never stacked. Whatever's specific
-  // to this row (phase name, sub-phase name, or the task's own name once
-  // fully expanded) lives here instead of stacking alongside a job pill.
-  pill: TaskRowPillProps | null;
+  // Stacked in the right-hand lane, in order: a phase pill (only when the
+  // phase has 2+ real sub-phases), a sub-phase pill (unless this row is
+  // itself a whole-phase-collapsed row), and — on a real leaf task row —
+  // a third pill carrying the task's own name (not foldable; doubles as
+  // the board-column-focus click, see gantt.ts). Empty array when none apply.
+  pills: TaskRowPillProps[];
   onOpen: () => void;
 }
 
 function TaskRowPill({ pill }: { pill: TaskRowPillProps }) {
-  const label = pill.labelClickable ? (
-    <span
-      class={'pill-label' + (pill.labelFocused ? ' focused' : '')}
-      title={pill.labelTitle}
-      onClick={(e: MouseEvent) => { e.stopPropagation(); pill.onLabelClick!(); }}
-    >
-      {pill.label}
-    </span>
-  ) : pill.label;
   return (
     <span
       class={'task-row-lane-pill' + (pill.onClick ? ' collapsible' : '') + (pill.focused ? ' focused' : '')}
@@ -95,7 +75,7 @@ function TaskRowPill({ pill }: { pill: TaskRowPillProps }) {
       style={{ background: pill.background }}
       onClick={pill.onClick}
     >
-      {pill.glyph}{pill.glyph ? ' ' : ''}{label}
+      {pill.label}
     </span>
   );
 }
@@ -130,7 +110,7 @@ function TaskRow(props: TaskRowProps) {
         {props.hasNote ? <span class="note-dot" title="Has notes"></span> : null}
       </div>
       <div class="lane">
-        {props.pill ? <TaskRowPill pill={props.pill} /> : null}
+        {props.pills.map((p, i) => <TaskRowPill key={i} pill={p} />)}
       </div>
     </div>
   );

@@ -112,7 +112,13 @@ declare global {
 // .row-bg, .job-span-*) is hand-kept in sync with these since plain CSS
 // can't reference JS constants — search for GANTT_ROW_H/GANTT_BAR_H in a
 // comment there if these ever change again.
-export const GANTT_ROW_H = 40;
+// 44, not 40 — a leaf task row under a multi-sub-phase phase stacks up to
+// 3 pills (phase/sub-phase/task) in the lane; 40px was fine for the old
+// single-pill design but doesn't comfortably fit 3. Jobs/Leads view (dead
+// code — see ganttViewMode's own comment) reads this too, but since it
+// never actually renders, there's no real second view mode to keep in
+// sync here.
+export const GANTT_ROW_H = 44;
 export const GANTT_BAR_H = 26;
 export const GANTT_BAR_PAD = (GANTT_ROW_H - GANTT_BAR_H) / 2;
 
@@ -1493,71 +1499,66 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     // job — see ganttFocusedTaskColumnId/toggleGanttTaskFocus() above. A
     // job-span/due-marker task never carries a columnId (see GanttTask's
     // own comment), so this only ever lights up on a real leaf task row.
-    // Used to live on the row's main label back when that showed the
-    // task's own name; now it's the pill's label instead (below), since
-    // the task name moved there.
     const isFocusableTask = isTasksMode && !task.isJobSpan && !task.isDueMarker && !!task.columnId;
     const isTaskFocused = isFocusableTask && ganttFocusedTaskColumnId === task.columnId;
 
-    let pill: TaskRowPillProps | null = null;
+    const pills: TaskRowPillProps[] = [];
 
     if (isTasksMode) {
       const jobColor = job.color || '#999';
-      if (task.isJobSpan && entry.collapsedSegments) {
-        // A whole phase folded into one row — exactly one pill, standing
-        // for every sub-phase at once.
-        pill = {
-          glyph: '▸',
-          label: phaseName ? phaseName : 'Unnamed phase',
-          title: 'Click to expand sub-phases',
+      // Only offered when the phase actually has 2+ real sub-phases —
+      // folds/unfolds just THIS phase (tasksExpandedPhaseIds), independent
+      // of the sub-phase pill below. phaseName !== null (rather than just
+      // truthy) so an unnamed-but-real phase still gets this pill; null
+      // specifically means "no real phase here at all" (the synthetic
+      // default from getJobPhases()).
+      if (entry.collapsible && phaseName !== null) {
+        const phaseFolded = !tasksExpandedPhaseIds.has(phaseId || '');
+        pills.push({
+          label: (phaseFolded ? '▸ ' : '▾ ') + (phaseName ? phaseName : 'Unnamed phase'),
+          title: phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar',
           background: jobColor,
           onClick: (e) => { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); },
-        };
-      } else if (task.isJobSpan) {
-        // A single sub-phase (or, for an unsplit phase, the whole phase)
-        // folded into one row.
+        });
+      }
+      // Not shown on a whole-phase-collapsed row (task.isJobSpan with
+      // collapsedSegments) — that row already stands for every sub-phase
+      // at once, so there's no single sub-phase context left to fold.
+      if (!(task.isJobSpan && entry.collapsedSegments)) {
         const subKey = getSubUnitKey(job, phaseId, subPhaseId);
+        const subFolded = !tasksExpandedSubPhaseIds.has(subKey);
         const subLabel = subPhaseName || (entry.collapsible ? '' : phaseName) || '';
-        pill = {
-          glyph: '▸',
-          label: subLabel,
-          title: 'Click to expand into individual tasks' + (subLabel ? ' — ' + subLabel : ''),
+        pills.push({
+          label: (subFolded ? '▸' : '▾') + (subLabel ? ' ' + subLabel : ''),
+          title: (subFolded ? 'Click to expand into individual tasks' : 'Click to collapse into a single bar') + (subLabel ? ' — ' + subLabel : ''),
           background: jobColor,
           onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(subKey); },
-        };
-      } else {
-        // A real leaf task — nothing left to drill into, so the pill's
-        // job is to let you fold it back up into its sub-phase. Its
-        // label doubles as a second, independent hotspot (see
-        // gantt-task-row.tsx's TaskRowPillProps) for the board-column
-        // focus feature above, unrelated to this fold action.
-        const subKey = getSubUnitKey(job, phaseId, subPhaseId);
-        const subLabel = subPhaseName || (entry.collapsible ? '' : phaseName) || '';
-        pill = {
-          glyph: '▾',
+        });
+      }
+      // A real leaf task gets a third pill for its own name — not
+      // foldable (nothing left to fold at this level), doubles as the
+      // board-column-focus click above.
+      if (!task.isJobSpan) {
+        pills.push({
           label: (task.isDueMarker ? '🚩 ' : '') + task.name,
-          title: 'Click to collapse into a single bar' + (subLabel ? ' — ' + subLabel : ''),
+          title: isFocusableTask ? (isTaskFocused ? 'Click to show every task again' : 'Click to show only ' + task.name + '\'s column — every job') : task.name,
           background: jobColor,
-          onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(subKey); },
-          labelClickable: isFocusableTask,
-          labelFocused: isTaskFocused,
-          labelTitle: isTaskFocused ? 'Click to show every task again' : 'Click to show only ' + task.name + '\'s column — every job',
-          onLabelClick: isFocusableTask ? () => toggleGanttTaskFocus(task.columnId as string) : undefined,
-        };
+          focused: isTaskFocused,
+          onClick: isFocusableTask ? (e) => { e.stopPropagation(); toggleGanttTaskFocus(task.columnId as string); } : undefined,
+        });
       }
     } else {
       // Jobs/Leads view: unreachable today (ganttViewMode is a constant
       // 'tasks' — see its own comment above) but kept working rather than
       // deleted, same reasoning as that comment's. Mapped onto the same
-      // single `pill` slot Tasks view now uses.
-      const collapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? '▸' : '▾') : '';
-      pill = {
-        glyph: collapseGlyph,
-        label: job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : ''),
+      // `pills` array Tasks view now uses (still just the one pill here).
+      const collapseGlyph = entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? '▸ ' : '▾ ') : '';
+      pills.push({
+        label: collapseGlyph + job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : ''),
         title: entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar') : '',
         background: job.color || '#999',
         onClick: entry.collapsible ? (e) => { e.stopPropagation(); togglePhaseCollapse(phaseId); } : undefined,
-      };
+      });
     }
 
     const title = (job.isLinkedReference ? 'Linked from ' + job.linkedFromProjectName + ' — read-only, click to open there — ' : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
@@ -1578,7 +1579,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       mainLabelFocused: isFocusedJob,
       onMainLabelClick: isTasksMode ? () => toggleGanttJobFocus(job.id) : undefined,
       hasNote: !!task.notes,
-      pill,
+      pills,
       onOpen: openRow,
     });
 

@@ -546,9 +546,10 @@
   .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-  /* 40px — kept in sync with GANTT_ROW_H (see its declaration near
-     "let dayWidth"), which drives the matching right-panel bar rows. */
-  .task-row { display: flex; height: 40px; border-bottom: 1px solid var(--divider); font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
+  /* 44px — kept in sync with GANTT_ROW_H (see its declaration in
+     gantt.ts), which drives the matching right-panel bar rows. Taller than
+     a plain single-line row since the lane can stack up to 3 pills. */
+  .task-row { display: flex; height: 44px; border-bottom: 1px solid var(--divider); font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
   .task-row:hover { background: #e3f2fd; }
   .task-row:nth-child(even) { background: var(--row-alt-bg); }
   .task-row:nth-child(even):hover { background: #e3f2fd; }
@@ -565,13 +566,18 @@
   .task-row .col-jobs .task-row-name.focused { color: var(--primary); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); border-radius: 3px; padding: 0 3px; }
   body.dark-mode .task-row .col-jobs .task-row-name.focused { color: var(--primary-ondark); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
   .task-row .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); margin-left: var(--s-1-5); display: inline-block; }
-  /* Right-hand pill lane — exactly one pill per row, always (see
-     gantt-task-row.tsx). Its own left border draws the seam so .col-jobs
-     doesn't need a border-right of its own. */
-  .task-row .lane { width: 112px; flex-shrink: 0; border-left: 1px solid var(--divider); display: flex; align-items: center; padding: 0 var(--s-2); height: 100%; overflow: hidden; }
+  /* Right-hand pill lane — up to 3 pills stacked (phase/sub-phase/task,
+     see gantt-task-row.tsx), each independently clickable. Its own left
+     border draws the seam so .col-jobs doesn't need a border-right of
+     its own. */
+  .task-row .lane {
+    width: 112px; flex-shrink: 0; border-left: 1px solid var(--divider);
+    display: flex; flex-direction: column; justify-content: center; gap: 2px;
+    padding: var(--s-0-5) var(--s-2); height: 100%; overflow: hidden;
+  }
   .task-row .lane .task-row-lane-pill {
     display: inline-flex; align-items: center; max-width: 100%; font-size: var(--t-3xs); font-weight: 600;
-    color: #fff; padding: 1px var(--s-1-5); border-radius: 6px; line-height: 1.35;
+    color: #fff; padding: 0 var(--s-1-5); border-radius: 6px; line-height: 1.25;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .task-row .lane .task-row-lane-pill.collapsible { cursor: pointer; }
@@ -579,11 +585,6 @@
   .task-row .lane .task-row-lane-pill.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
   body.dark-mode .task-row .lane .task-row-lane-pill.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
   body.dark-mode .task-row .lane { border-left-color: var(--border); }
-  /* The leaf-task pill's label is a second, independent hotspot (see
-     TaskRowPillProps.onLabelClick) — isolates by board-column stage,
-     unrelated to the pill's own onClick (folds it back up). */
-  .task-row .lane .task-row-lane-pill .pill-label { overflow: hidden; text-overflow: ellipsis; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
-  .task-row .lane .task-row-lane-pill .pill-label.focused { text-decoration-style: solid; }
 
   .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 
