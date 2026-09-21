@@ -58,11 +58,13 @@ export interface TaskRowProps {
   mainLabelFocused?: boolean;
   onMainLabelClick?: () => void;
   hasNote: boolean;
-  // Stacked in the right-hand lane, in order: a phase pill (only when the
-  // phase has 2+ real sub-phases), a sub-phase pill (unless this row is
-  // itself a whole-phase-collapsed row), and — on a real leaf task row —
-  // a third pill carrying the task's own name (not foldable; doubles as
-  // the board-column-focus click, see gantt.ts). Empty array when none apply.
+  // Trailing inline after the job name, left to right, in order: a phase
+  // pill (only when the phase has 2+ real sub-phases), a sub-phase pill
+  // (unless this row is itself a whole-phase-collapsed row), and — on a
+  // real leaf task row — a third pill carrying the task's own name (not
+  // foldable; doubles as the board-column-focus click, see gantt.ts).
+  // Empty array when none apply. Same trailing-pill placement the original
+  // design used, before a detour through a separate right-hand lane.
   pills: TaskRowPillProps[];
   onOpen: () => void;
 }
@@ -70,7 +72,7 @@ export interface TaskRowProps {
 function TaskRowPill({ pill }: { pill: TaskRowPillProps }) {
   return (
     <span
-      class={'task-row-lane-pill' + (pill.onClick ? ' collapsible' : '') + (pill.focused ? ' focused' : '')}
+      class={'task-row-pill' + (pill.onClick ? ' collapsible' : '') + (pill.focused ? ' focused' : '')}
       title={pill.title}
       style={{ background: pill.background }}
       onClick={pill.onClick}
@@ -107,10 +109,9 @@ function TaskRow(props: TaskRowProps) {
             {props.mainLabel}
           </span>
         ) : null}
-        {props.hasNote ? <span class="note-dot" title="Has notes"></span> : null}
-      </div>
-      <div class="lane">
+        {' '}
         {props.pills.map((p, i) => <TaskRowPill key={i} pill={p} />)}
+        {props.hasNote ? <span class="note-dot" title="Has notes"></span> : null}
       </div>
     </div>
   );

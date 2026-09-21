@@ -542,21 +542,28 @@
   }
   .left-header .col { padding: var(--s-2) var(--s-2-5); display: flex; align-items: center; border-right: 1px solid var(--divider-strong); }
   .left-header .col-date { width: 92px; } .left-header .col-jobs { flex: 1; border-right: none; }
-  .left-header .lane { width: 112px; flex-shrink: 0; border-left: 1px solid var(--divider-strong); padding: var(--s-2) var(--s-2-5); display: flex; align-items: center; }
   .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-  /* 44px — kept in sync with GANTT_ROW_H (see its declaration in
-     gantt.ts), which drives the matching right-panel bar rows. Taller than
-     a plain single-line row since the lane can stack up to 3 pills. */
-  .task-row { display: flex; height: 44px; border-bottom: 1px solid var(--divider); font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
+  /* 40px — kept in sync with GANTT_ROW_H (see its declaration in
+     gantt.ts), which drives the matching right-panel bar rows. */
+  .task-row { display: flex; height: 40px; border-bottom: 1px solid var(--divider); font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
   .task-row:hover { background: #e3f2fd; }
   .task-row:nth-child(even) { background: var(--row-alt-bg); }
   .task-row:nth-child(even):hover { background: #e3f2fd; }
   .task-row .col { padding: 0 var(--s-2-5); border-right: 1px solid var(--divider); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
   .task-row .col-date { width: 92px; color: var(--text-light); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
-  .task-row .col-jobs .task-row-name { font-weight: 700; }
+  /* A fixed max-width (with its own ellipsis) rather than letting the name
+     run as long as it wants — otherwise a long job name (always shown
+     here now, regardless of fold state) can eat the whole column and
+     push the trailing pills after it clean off the edge with nothing
+     left to show them in. flex-shrink:0 matters here: .col-jobs is a flex
+     row (inherited from .col), and without it flexbox would treat this
+     max-width as just an upper bound, not a size to actually keep — since
+     the pills below have nothing telling THEM to shrink either, the name
+     was the only flexible item left and got squeezed to zero instead. */
+  .task-row .col-jobs .task-row-name { display: inline-block; flex-shrink: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; font-weight: 700; }
   /* See ganttFocusedJobId/toggleGanttJobFocus() — clicking the job name
      (always shown here now, regardless of fold state) isolates the chart
      to just this job. */
@@ -566,25 +573,18 @@
   .task-row .col-jobs .task-row-name.focused { color: var(--primary); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); border-radius: 3px; padding: 0 3px; }
   body.dark-mode .task-row .col-jobs .task-row-name.focused { color: var(--primary-ondark); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
   .task-row .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); margin-left: var(--s-1-5); display: inline-block; }
-  /* Right-hand pill lane — up to 3 pills stacked (phase/sub-phase/task,
-     see gantt-task-row.tsx), each independently clickable. Its own left
-     border draws the seam so .col-jobs doesn't need a border-right of
-     its own. */
-  .task-row .lane {
-    width: 112px; flex-shrink: 0; border-left: 1px solid var(--divider);
-    display: flex; flex-direction: column; justify-content: center; gap: 2px;
-    padding: var(--s-0-5) var(--s-2); height: 100%; overflow: hidden;
-  }
-  .task-row .lane .task-row-lane-pill {
-    display: inline-flex; align-items: center; max-width: 100%; font-size: var(--t-3xs); font-weight: 600;
-    color: #fff; padding: 0 var(--s-1-5); border-radius: 6px; line-height: 1.25;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .task-row .lane .task-row-lane-pill.collapsible { cursor: pointer; }
-  .task-row .lane .task-row-lane-pill.collapsible:hover { filter: brightness(1.15); }
-  .task-row .lane .task-row-lane-pill.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
-  body.dark-mode .task-row .lane .task-row-lane-pill.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
-  body.dark-mode .task-row .lane { border-left-color: var(--border); }
+  /* Trailing inline pills after the job name — phase/sub-phase/task, up to
+     3 per row (see gantt-task-row.tsx), same placement/look the original
+     design used before a detour through a separate right-hand lane.
+     flex-shrink:0 so a pill never gets squeezed down illegibly small —
+     when everything doesn't fit, .col-jobs's own overflow:hidden just
+     clips whichever trailing pill(s) run past the column edge. */
+  .task-row .col-jobs .task-row-pill { display: inline-block; flex-shrink: 0; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 10px; vertical-align: middle; line-height: 1.5; }
+  .task-row .col-jobs .task-row-pill.collapsible { cursor: pointer; }
+  .task-row .col-jobs .task-row-pill.collapsible:hover { filter: brightness(1.15); }
+  .task-row .col-jobs .task-row-pill.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
+  body.dark-mode .task-row .col-jobs .task-row-pill.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
+  body.dark-mode .task-row .col-jobs .task-row-pill { color: #fff; }
 
   .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 
@@ -3543,7 +3543,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <div class="left-header">
               <div class="col col-date">Date</div>
               <div class="col col-jobs" id="ganttTaskColHeader">Job</div>
-              <div class="lane">Level</div>
             </div>
             <div class="left-body" id="leftBody"></div>
           </div>

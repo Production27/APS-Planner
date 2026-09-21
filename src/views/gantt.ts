@@ -112,13 +112,7 @@ declare global {
 // .row-bg, .job-span-*) is hand-kept in sync with these since plain CSS
 // can't reference JS constants — search for GANTT_ROW_H/GANTT_BAR_H in a
 // comment there if these ever change again.
-// 44, not 40 — a leaf task row under a multi-sub-phase phase stacks up to
-// 3 pills (phase/sub-phase/task) in the lane; 40px was fine for the old
-// single-pill design but doesn't comfortably fit 3. Jobs/Leads view (dead
-// code — see ganttViewMode's own comment) reads this too, but since it
-// never actually renders, there's no real second view mode to keep in
-// sync here.
-export const GANTT_ROW_H = 44;
+export const GANTT_ROW_H = 40;
 export const GANTT_BAR_H = 26;
 export const GANTT_BAR_PAD = (GANTT_ROW_H - GANTT_BAR_H) / 2;
 
