@@ -1540,12 +1540,18 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       // it points at whichever one is "current" right now instead — see
       // findCurrentTask()'s own comment for the priority order — still
       // clickable, isolating by THAT task's own board-column stage.
+      // Colored by the task's OWN color (softened, same treatment a
+      // regular task bar's fill already gets — see the 'plain' entries
+      // push below), falling back to the job's color only when the task
+      // has none of its own — unlike every other pill here, which is
+      // always the job's color, since this one identifies a task, not a
+      // fold level.
       if (!task.isJobSpan) {
         const focusTitle = isFocusableTask ? (isTaskFocused ? 'Click to show every task again' : 'Click to show only ' + task.name + '\'s column — every job') : task.name;
         taskPill = {
           label: (task.isDueMarker ? '🚩 ' : '') + task.name,
           title: focusTitle,
-          background: jobColor,
+          background: softenColor((task.color as string | undefined) || jobColor),
           focused: isTaskFocused,
           onClick: isFocusableTask ? (e) => { e.stopPropagation(); toggleGanttTaskFocus(task.columnId as string); } : undefined,
         };
@@ -1557,7 +1563,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
           taskPill = {
             label: current.name,
             title: (currentFocused ? 'Click to show every task again' : 'Click to show only ' + current.name + '\'s column — every job') + ' — currently in progress',
-            background: jobColor,
+            background: softenColor((current.color as string | undefined) || jobColor),
             focused: currentFocused,
             onClick: (e) => { e.stopPropagation(); toggleGanttTaskFocus(current.columnId as string); },
           };
@@ -1565,7 +1571,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
           // A real task, but not tied to any BOARD_COLUMNS stage — show
           // it, just not clickable (nothing for toggleGanttTaskFocus() to
           // isolate by).
-          taskPill = { label: current.name, title: current.name, background: jobColor };
+          taskPill = { label: current.name, title: current.name, background: softenColor((current.color as string | undefined) || jobColor) };
         }
       }
       // Only offered when the phase actually has 2+ real sub-phases —
