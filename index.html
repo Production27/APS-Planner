@@ -811,11 +811,13 @@
      same affordance as the left-panel name pill — without blocking the
      bar underneath from being dragged everywhere else on the wrap. */
   .task-bar-job-tag.collapsible { pointer-events: auto; cursor: pointer; }
-  .task-bar-job-tag.collapsible:hover { text-decoration: underline; text-underline-offset: 2px; }
+  /* Hints "clickable" with a small shift instead of an underline — there's
+     no background chip left to decorate. */
+  .task-bar-job-tag.collapsible:hover { transform: translateX(2px); }
   /* See ganttFocusedJobId/toggleGanttJobFocus() — on-bar twin of the
      left-panel pill's .focused ring. No background box to ring anymore, so
-     an underline stands in for it instead. */
-  .task-bar-job-tag.focused { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; }
+     a dashed outline in the tag's own (already-legible) color stands in. */
+  .task-bar-job-tag.focused { outline: 1.5px dashed currentColor; outline-offset: 2px; border-radius: 3px; }
   /* Outline around the whole condensed span in the job's own color — the
      topmost overlay on the row (above the name pill's z-index 70) so it
      frames everything else instead of being painted over by it. */
@@ -898,19 +900,22 @@
   body.dark-mode .week-hour-section { border-color: #333c55; }
   body.dark-mode .week-hour-col { border-color: #333c55; }
   body.dark-mode .week-hour-row-line { border-color: #333c55; }
-  /* De-chromed: plain text, no colored chip behind it — the bar/segment
-     underneath already carries the job/task color (see .task-bar's own
-     background in gantt.ts), so the tag only needs to stay legible over
-     whatever that background is (solid fill or a job-span's hatch
-     pattern); the text-shadow does that instead of a background box. */
+  /* De-chromed: plain text, no colored chip behind it — `color` (set
+     inline per tag, see BarTag in gantt-task-bar.tsx) is already a
+     contrast-adjusted variant of the job/task color (tintedTextColor() in
+     src/utils/color.ts), so it stays readable against the bar's own
+     softened fill without needing a background box. */
   .task-bar-job-tag {
     display: inline-block; flex-shrink: 1; min-width: 0; max-width: 100%;
-    font-size: var(--t-3xs); font-weight: 700; color: #fff; line-height: 1.5;
+    font-size: var(--t-3xs); font-weight: 700; line-height: 1.5;
     padding: 1px var(--s-0-5); margin-right: var(--s-1-25);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.65), 0 0 4px rgba(0,0,0,0.35);
+    transition: transform 0.1s ease;
     pointer-events: none;
   }
+  /* Fold-state chevron ('▸'/'▾') — sized up relative to the label text next
+     to it, rather than living inline at the same font-size. */
+  .task-bar-job-tag-chev { font-size: 13px; font-weight: 900; margin-right: 2px; vertical-align: -1px; }
   .task-bar.milestone .task-bar-job-tag { display: none; }
   /* The job-name pill (first) may ellipsize; the phase/sub-phase pills after
      it never squeeze — fitBarTags() (gantt-task-bar.tsx) hides whichever

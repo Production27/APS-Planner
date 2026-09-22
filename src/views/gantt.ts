@@ -34,7 +34,7 @@ import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { safeJsonParse } from '../utils/id';
 import { toIsoDate, getDaysDiff } from '../utils/date';
 import { escapeHtml } from '../utils/html';
-import { darkenColor, softenColor, columnLabelTextColor } from '../utils/color';
+import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
@@ -889,16 +889,30 @@ function syncGanttTaskFocusPicker(): void {
     .map(function (c) { return { id: c.id, label: c.label }; });
   renderTaskFocusPickerInto(el, options, ganttFocusedTaskColumnId, setGanttTaskFocus);
 }
+// A .task-bar-job-tag has no background chip of its own anymore — just
+// plain text in a contrast-adjusted variant of `color` (darkened/lightened
+// as needed, never snapped to a flat white/black — see tintedTextColor())
+// sitting directly on the bar underneath it. That bar's own fill is always
+// `color` run through softenColor() (see the various `background:
+// softenColor(...)` bar/segment fills below), so approximating against
+// that same softened tone here keeps the tag readable against its real
+// background without needing to thread the exact segment color through.
+function barTagTextColor(color: string): string {
+  return tintedTextColor(color, softenColor(color));
+}
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
 // Gantt bar, as plain data for BarTag (see gantt-task-bar.tsx) to render.
 // Returns 0-2 of them. `excludeSubTag` is set for a row that already
 // represents a WHOLE folded phase (no single sub-unit context to toggle).
 function buildPhaseSubTagsData(job: Job, phaseId: string | null, phaseName: string | null, subPhaseId: string | null, subPhaseName: string | null, phaseFoldable: boolean, excludeSubTag: boolean): BarTagData[] {
   const tags: BarTagData[] = [];
+  const tagColor = barTagTextColor(job.color || '#999');
   function makeTag(folded: boolean, label: string, foldedTitle: string, unfoldedTitle: string, onClick: () => void): BarTagData {
     return {
-      label: (folded ? '▸' : '▾') + (label ? ' ' + label : ''),
+      chevron: folded ? '▸' : '▾',
+      label,
       title: (folded ? foldedTitle : unfoldedTitle) + (label ? ' — ' + label : ''),
+      color: tagColor,
       focused: false,
       onClick: onClick,
     };
@@ -1801,6 +1815,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
           label: (job.isLinkedReference ? '🔗 ' : '') + barCollapseGlyph + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : ''),
           title: (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : (entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases — ' : 'Click to collapse sub-phases into one bar — ') : '')) +
             job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : ''),
+          color: barTagTextColor(job.color || '#999'),
           focused: isFocusedJob,
           onClick: isTasksMode ? (() => toggleGanttJobFocus(job.id)) : (entry.collapsible ? (() => togglePhaseCollapse(phaseId)) : undefined),
         };
@@ -2097,6 +2112,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
           jobTag = {
             label: (job.isLinkedReference ? '🔗 ' : '') + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : ''),
             title: (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : ''),
+            color: barTagTextColor(job.color || '#999'),
             focused: isFocusedJob,
             onClick: isTasksMode ? (() => toggleGanttJobFocus(job.id)) : undefined,
           };

@@ -31,7 +31,17 @@ import { render } from 'preact';
 
 export interface BarTagData {
   label: string;
+  // A leading fold-state glyph ('▸'/'▾'), rendered larger than `label` (see
+  // .task-bar-job-tag-chev) — only the phase/sub-phase toggle tags
+  // (buildPhaseSubTagsData() in gantt.ts) carry one; the plain job-name tag
+  // doesn't fold anything itself, so it has none.
+  chevron?: string;
   title: string;
+  // No background chip anymore — just this tag's own color (a
+  // contrast-adjusted variant of the job/task color, see
+  // tintedTextColor() in src/utils/color.ts) sitting directly on whatever
+  // the bar/segment underneath it is.
+  color: string;
   focused: boolean;
   // Mirrors the original's `isTasksMode || entry.collapsible` / `entry.collapsible`
   // gate: when true, the tag is clickable (gets the 'collapsible' class,
@@ -40,21 +50,16 @@ export interface BarTagData {
   onClick?: () => void;
 }
 
-// Plain white text (no per-tag colored chip) — the identity color already
-// lives on the bar/segment underneath it (see .task-bar's own background
-// in gantt.ts), so the tag itself only needs to stay legible over whatever
-// that background happens to be (a solid softened fill, or a job-span's
-// busy repeating-gradient hatch) — a text-shadow (see CSS) does that
-// without needing its own background box.
 function BarTag({ tag }: { tag: BarTagData }) {
   const interactive = !!tag.onClick;
   return (
     <span
       class={'task-bar-job-tag' + (interactive ? ' collapsible' : '') + (tag.focused ? ' focused' : '')}
+      style={{ color: tag.color }}
       title={tag.title}
       onMouseDown={interactive ? (e: MouseEvent) => e.stopPropagation() : undefined}
       onClick={interactive ? (e: MouseEvent) => { e.stopPropagation(); tag.onClick!(); } : undefined}
-    >{tag.label}</span>
+    >{tag.chevron ? <span class="task-bar-job-tag-chev">{tag.chevron}</span> : null}{tag.label}</span>
   );
 }
 
