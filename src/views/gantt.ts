@@ -2986,6 +2986,73 @@ function fitToView(): void {
   zoomGanttCentered(fitted);
 }
 
+// ===== GANTT: CLICK-AND-DRAG PAN =====
+// "Grab the empty canvas and drag" — a second way to scroll #timelineBody
+// besides its native scrollbar/wheel/pinch, same hand-tool gesture as Miro/
+// Google Maps. Only ever starts from genuinely empty grid background: any
+// mousedown whose real target (e.target, which bubbling never changes) is
+// inside a bar/tick/segment/resize-handle/collapsible-tag is left alone so
+// it can run ITS OWN drag (move/resize/fold-toggle) instead — see
+// GANTT_PAN_BLOCK_SELECTOR. A .job-span-bar's own invisible hit-target div
+// already covers its whole condensed row for the move-drag above, so on a
+// Jobs/Leads row this naturally only engages outside that job's own date
+// range; on a Tasks-view row it's the day-gaps between individual task bars.
+interface GanttPanState {
+  startX: number;
+  startY: number;
+  startScrollLeft: number;
+  startScrollTop: number;
+  // Distinguishes a real pan from a plain click that never moved — same
+  // "was this actually dragged" gate startBarMove()'s own `moved`/
+  // `dataset.dragged` pair uses, just simpler here since nothing under a
+  // pan gesture needs to tell a click from a drag afterward (empty
+  // background has no click handler of its own to suppress).
+  moved: boolean;
+}
+let ganttPanState: GanttPanState | null = null;
+const GANTT_PAN_BLOCK_SELECTOR = '.task-bar, .job-span-task-tick, .job-span-task-solid, .task-bar-resize-handle, .task-bar-job-tag.collapsible, .job-span-due-marker';
+// Pixels of slop before a mousedown-that-moved counts as a pan — small
+// mouse jitter on what the user meant as a plain click on empty background
+// shouldn't scroll the chart out from under them.
+const GANTT_PAN_THRESHOLD_PX = 4;
+
+function startGanttPan(e: MouseEvent): void {
+  if (e.button !== 0) return;
+  if ((e.target as HTMLElement).closest(GANTT_PAN_BLOCK_SELECTOR)) return;
+  const timelineBody = document.getElementById('timelineBody');
+  if (!timelineBody) return;
+  ganttPanState = {
+    startX: e.clientX, startY: e.clientY,
+    startScrollLeft: timelineBody.scrollLeft, startScrollTop: timelineBody.scrollTop,
+    moved: false,
+  };
+  document.addEventListener('mousemove', onGanttPanMove);
+  document.addEventListener('mouseup', onGanttPanEnd);
+}
+
+function onGanttPanMove(e: MouseEvent): void {
+  if (!ganttPanState) return;
+  const dx = e.clientX - ganttPanState.startX;
+  const dy = e.clientY - ganttPanState.startY;
+  if (!ganttPanState.moved) {
+    if (Math.abs(dx) < GANTT_PAN_THRESHOLD_PX && Math.abs(dy) < GANTT_PAN_THRESHOLD_PX) return;
+    ganttPanState.moved = true;
+    document.body.classList.add('gantt-panning');
+  }
+  e.preventDefault();
+  const timelineBody = document.getElementById('timelineBody');
+  if (!timelineBody) return;
+  timelineBody.scrollLeft = ganttPanState.startScrollLeft - dx;
+  timelineBody.scrollTop = ganttPanState.startScrollTop - dy;
+}
+
+function onGanttPanEnd(): void {
+  document.body.classList.remove('gantt-panning');
+  ganttPanState = null;
+  document.removeEventListener('mousemove', onGanttPanMove);
+  document.removeEventListener('mouseup', onGanttPanEnd);
+}
+
 // ===== GANTT: HEADER/BODY SCROLL SYNC =====
 let isSyncingScroll = false;
 
@@ -3044,6 +3111,7 @@ function setupScrollSync(): void {
     panelsRow.ontouchend = handleGanttTouchEnd;
   }
   timelineBody.onwheel = handleGanttWheelZoom;
+  timelineBody.onmousedown = startGanttPan;
 }
 
 // ===== Row builders shared with Calendar (src/views/calendar.ts consumes
