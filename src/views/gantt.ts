@@ -7,7 +7,7 @@
 // togglePhaseCollapse/getSubUnitKey/toggleTasksPhaseExpanded/
 // toggleTasksSubPhaseExpanded/expandAllGantt/collapseAllGantt/
 // toggleGanttJobFocus/clearGanttJobFocus/toggleGanttTaskFocus/
-// clearGanttTaskFocus/syncGanttFocusBanner/syncGanttTaskFocusPicker/
+// clearGanttTaskFocus/syncGanttFocusBanner/
 // computeDateRange/showDatePopover/hideDatePopover/
 // showTooltip), the visible-row builder (byStartDate/getPhaseSegments/
 // buildSegment/buildPhaseCollapsedRow/buildSubPhaseRow/
@@ -38,7 +38,6 @@ import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor } from 
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
-import { renderTaskFocusPickerInto } from './gantt-task-focus-picker';
 import { renderTaskRowsInto, type TaskRowProps, type TaskRowPillProps } from './gantt-task-row';
 import { renderTimelineBarsInto, type TaskBarEntryProps, type BarTagData, type JobSpanTickData, type JobSpanSegmentData, type JobSpanDueData } from './gantt-task-bar';
 import { renderGridLinesInto, renderRowBgInto, renderTodayLineInto, type RowBgEntry, type TodayLineData } from './gantt-grid-decor';
@@ -876,18 +875,6 @@ function syncGanttFocusBanner(): void {
   const job = ganttFocusedJobId ? getVisibleJobs().find(function(j) { return j.id === ganttFocusedJobId; }) : null;
   const col = ganttFocusedTaskColumnId ? BOARD_COLUMNS.find(function(c) { return c.id === ganttFocusedTaskColumnId; }) : null;
   renderFocusBannerInto(el, true, job ? job.name : null, col ? col.label : null, job ? clearGanttJobFocus : clearGanttTaskFocus);
-}
-// Toolbar "Focus a task…" picker (Option B, alongside the click-to-focus
-// gesture above) — lets you jump straight to isolating a stage without
-// needing to find a job that already has it expanded. Lists every
-// on-schedule column (hideFromSchedule ones never get a bar to isolate in
-// the first place — see getHiddenTaskOrders()).
-function syncGanttTaskFocusPicker(): void {
-  const el = document.getElementById('ganttTaskFocusPicker');
-  if (!el) return;
-  const options = BOARD_COLUMNS.filter(function (c) { return !c.hideFromSchedule; })
-    .map(function (c) { return { id: c.id, label: c.label }; });
-  renderTaskFocusPickerInto(el, options, ganttFocusedTaskColumnId, setGanttTaskFocus);
 }
 // A .task-bar-job-tag has no background chip of its own anymore — just
 // plain text in a contrast-adjusted variant of `color` (darkened/lightened
@@ -2817,7 +2804,6 @@ function animateReorderedBars(oldTops: Record<string, number>, jobBarMap: Record
 
 function renderGantt(): void {
   syncGanttFocusBanner();
-  syncGanttTaskFocusPicker();
 
   const oldBarTops = captureBarTopsByRowKey();
 
@@ -3329,7 +3315,6 @@ export {
   toggleGanttTaskFocus,
   clearGanttTaskFocus,
   syncGanttFocusBanner,
-  syncGanttTaskFocusPicker,
   computeDateRange,
   showDatePopover,
   hideDatePopover,

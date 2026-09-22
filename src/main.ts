@@ -103,7 +103,7 @@ import {
   handleGanttTouchMove, handleGanttTouchEnd, handleGanttWheelZoom, zoomGanttCentered, zoomIn, zoomOut,
   resetZoom, fitToView, togglePhaseCollapse, getSubUnitKey, toggleTasksPhaseExpanded,
   toggleTasksSubPhaseExpanded, expandAllGantt, collapseAllGantt, toggleGanttJobFocus, clearGanttJobFocus,
-  toggleGanttTaskFocus, clearGanttTaskFocus, syncGanttFocusBanner, syncGanttTaskFocusPicker,
+  toggleGanttTaskFocus, clearGanttTaskFocus, syncGanttFocusBanner,
   computeDateRange, showDatePopover, hideDatePopover, showTooltip,
   setHeaderScroll, setupScrollSync,
   DUE_MARKER_TASK_ID, getJobDueMarkerTask, forEachVisibleSubUnit, flattenJobs, getHiddenTaskOrders,
@@ -628,7 +628,6 @@ declare global {
     toggleGanttTaskFocus: typeof toggleGanttTaskFocus;
     clearGanttTaskFocus: typeof clearGanttTaskFocus;
     syncGanttFocusBanner: typeof syncGanttFocusBanner;
-    syncGanttTaskFocusPicker: typeof syncGanttTaskFocusPicker;
     computeDateRange: typeof computeDateRange;
     showDatePopover: typeof showDatePopover;
     hideDatePopover: typeof hideDatePopover;
@@ -1210,7 +1209,6 @@ window.clearGanttJobFocus = clearGanttJobFocus;
 window.toggleGanttTaskFocus = toggleGanttTaskFocus;
 window.clearGanttTaskFocus = clearGanttTaskFocus;
 window.syncGanttFocusBanner = syncGanttFocusBanner;
-window.syncGanttTaskFocusPicker = syncGanttTaskFocusPicker;
 window.computeDateRange = computeDateRange;
 window.showDatePopover = showDatePopover;
 window.hideDatePopover = hideDatePopover;

@@ -3172,38 +3172,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); }
   body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn { border-color: var(--border); color: var(--text-light); }
   body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
-  /* Toolbar "Focus a task…" picker — see syncGanttTaskFocusPicker() in
-     src/views/gantt.ts. Same height/border language as
-     .gantt-toolbar-text-btn beside it, just a <select> instead of a
-     button. */
-  .gantt-toolbar select.gantt-task-focus-select {
-    background: transparent; border: 1px solid var(--border); color: var(--text-light);
-    height: 26px; padding: 0 var(--s-2); border-radius: 6px; cursor: pointer;
-    font-size: var(--t-sm); font-weight: 600; flex-shrink: 0;
-  }
-  /* border-color only — NOT background/color. Karl's report: hovering the
-     CLOSED box while its own popup is open grayed out the open list
-     itself, meaning the browser was carrying this hover state's
-     background/color into the popup's live rendering rather than
-     confining it to the closed control. border-color can't touch text
-     legibility the same way, so it's the only property this hover state
-     changes now. */
-  .gantt-toolbar select.gantt-task-focus-select:hover { border-color: var(--primary-light); }
-  /* Same solid dark fill every other dark-mode <select> in the app already
-     uses (see .form-group select et al. above) rather than this one
-     staying transparent against the toolbar's own dark background — a
-     transparent select with only a faint border was very hard to spot.
-     Deliberately NOT color-scheme:dark: that told the browser to draw the
-     native dropdown POPUP in its own dark chrome too, but with no
-     explicit <option> color the hovered row's system highlight came out
-     as near-unreadable gray-on-gray (Karl's own report). No other
-     <select> in the app sets it either — the popup opens with the
-     browser's ordinary light styling (same as every other one here),
-     just the closed control itself carries the dark styling below. */
-  body.dark-mode .gantt-toolbar select.gantt-task-focus-select {
-    background: #20232c; color: var(--text); border-color: var(--border);
-  }
-  body.dark-mode .gantt-toolbar select.gantt-task-focus-select:hover { border-color: var(--primary-light); }
   .job-card.archived { opacity: 0.55; }
   .task-row.archived { opacity: 0.55; }
 
@@ -3595,7 +3563,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
           <div class="gantt-view-toggle-row"></div>
           <div class="gantt-toolbar" id="ganttToolbar">
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
-            <div id="ganttTaskFocusPicker"></div>
             <button class="gantt-toolbar-text-btn" id="ganttExpandAllBtn" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
             <button class="gantt-toolbar-text-btn" id="ganttCollapseAllBtn" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
             <!-- Desktop only — see .gantt-zoom-btn's mobile hide rule.
@@ -4229,9 +4196,8 @@ var ganttFocusedJobId = null;
 
 // ===== TASKS VIEW: FOCUS ON ONE TASK ACROSS EVERY JOB =====
 // The other axis of the focus above: instead of hiding every job but one,
-// clicking a task's own name (or picking one from the toolbar's "Focus a
-// task…" picker) hides every task but one — every job stays, but only its
-// bar for that one BOARD_COLUMNS stage. Kept mutually exclusive with
+// clicking a task's own name hides every task but one — every job stays,
+// but only its bar for that one BOARD_COLUMNS stage. Kept mutually exclusive with
 // ganttFocusedJobId (see setGanttTaskFocus() in src/views/gantt.ts) and
 // the same short-lived lifecycle: not persisted, reset on reload or
 // project switch (see switchProject()).
