@@ -900,6 +900,28 @@ function syncGanttTaskFocusPicker(): void {
 function barTagTextColor(color: string): string {
   return tintedTextColor(color, softenColor(color));
 }
+
+// The left-panel Job column's job-name/phase/sub-phase labels have no
+// background chip either, same treatment as the on-bar tags above — but
+// unlike a bar (whose fill is the job's own softened color, theme-
+// independent), a row sits on the app's plain card background, which
+// genuinely differs between light and dark mode (see index.html's --card
+// under :root vs body.dark-mode). Toggling dark mode doesn't re-render an
+// already-open Gantt, so a single computed-at-render-time color can't
+// track that — instead this computes BOTH exact answers up front and
+// hands them to TaskRowPill/TaskRow (gantt-task-row.tsx) as inline
+// `--*-color-light`/`--*-color-dark` custom properties, letting a plain
+// `body.dark-mode` CSS rule pick the right one instantly on toggle, no
+// re-render needed.
+function rowLabelColors(color: string): { light: string; dark: string } {
+  // A row's real background isn't a flat color even within one theme —
+  // .left-panel is translucent (a gradient in dark mode) over whatever
+  // sits behind it, alternating rows tint slightly, and hover recolors it
+  // again — so these reference colors are deliberately conservative
+  // (already-composited estimates, not exact) and paired with a bigger
+  // contrast target (6, vs. barTagTextColor()'s 3.2) for margin.
+  return { light: tintedTextColor(color, '#f7f8fb', 6), dark: tintedTextColor(color, '#242732', 6) };
+}
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
 // Gantt bar, as plain data for BarTag (see gantt-task-bar.tsx) to render.
 // Returns 0-2 of them. `excludeSubTag` is set for a row that already
@@ -1555,7 +1577,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     const isTasksMode = ganttViewMode === 'tasks';
     const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
     const mainLabel = linkGlyph + job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : '');
-    const mainLabelBackground = job.color || '#999';
+    const mainLabelColors = rowLabelColors(job.color || '#999');
     const isFocusedJob = isTasksMode && ganttFocusedJobId === job.id;
 
     // Clicking a real (non-job-span, non-due-marker) task's own name
@@ -1570,7 +1592,8 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     let taskPill: TaskRowPillProps | null = null;
 
     if (isTasksMode) {
-      const jobColor = mainLabelBackground;
+      const jobColor = job.color || '#999';
+      const jobLabelColors = mainLabelColors;
       // The Task column, between Date and Job: a pill for a real leaf
       // row's own task (clickable — same board-column-focus feature as
       // above). On a folded/merged row there's no single task anymore, so
@@ -1627,10 +1650,11 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       if (entry.collapsible && phaseName !== null) {
         const phaseFolded = !tasksExpandedPhaseIds.has(phaseId || '');
         pills.push({
-          label: (phaseFolded ? '▸' : '▾') + (phaseName ? ' ' + phaseName : ''),
+          chevron: phaseFolded ? '▸' : '▾',
+          label: phaseName || '',
           title: phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar',
-          background: jobColor,
-          color: '#fff',
+          colorLight: jobLabelColors.light,
+          colorDark: jobLabelColors.dark,
           onClick: (e) => { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); },
         });
       }
@@ -1642,10 +1666,11 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
         const subFolded = !tasksExpandedSubPhaseIds.has(subKey);
         const subLabel = subPhaseName || (entry.collapsible ? '' : phaseName) || '';
         pills.push({
-          label: (subFolded ? '▸' : '▾') + (subLabel ? ' ' + subLabel : ''),
+          chevron: subFolded ? '▸' : '▾',
+          label: subLabel,
           title: (subFolded ? 'Click to expand into individual tasks' : 'Click to collapse into a single bar') + (subLabel ? ' — ' + subLabel : ''),
-          background: jobColor,
-          color: '#fff',
+          colorLight: jobLabelColors.light,
+          colorDark: jobLabelColors.dark,
           onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(subKey); },
         });
       }
@@ -1679,7 +1704,8 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       dateStr,
       taskPill,
       mainLabel,
-      mainLabelBackground,
+      mainLabelColorLight: mainLabelColors.light,
+      mainLabelColorDark: mainLabelColors.dark,
       mainLabelClickable: isTasksMode,
       mainLabelFocused: isFocusedJob,
       onMainLabelClick: isTasksMode ? () => toggleGanttJobFocus(job.id) : undefined,

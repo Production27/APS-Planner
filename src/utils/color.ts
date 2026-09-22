@@ -61,12 +61,12 @@ function contrastRatio(l1: number, l2: number): number {
 // Capped so a near-white or near-black job color never fully vanishes
 // into its own (similarly pale/dark) tinted background — past the cap it
 // just returns the most-shifted attempt rather than looping forever.
-export function tintedTextColor(color: string, bg: string): string {
+export function tintedTextColor(color: string, bg: string, targetContrast?: number): string {
   const base = parseHexRGB(color);
   const bgRgb = parseHexRGB(bg);
   if (!base || !bgRgb) return color;
   const bgLum = luminanceFromRGB(bgRgb[0], bgRgb[1], bgRgb[2]);
-  const TARGET_CONTRAST = 3.2;
+  const TARGET_CONTRAST = targetContrast || 3.2;
   const shift = (amt: number, towardBlack: boolean): [number, number, number] => {
     const toward = towardBlack ? 0 : 255;
     const mix = (c: number) => Math.max(0, Math.min(255, Math.round(c + (toward - c) * amt)));

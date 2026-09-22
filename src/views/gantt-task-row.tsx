@@ -33,15 +33,25 @@ import { render } from 'preact';
 import { readableTextColor } from '../utils/color';
 
 export interface TaskRowPillProps {
-  // Chevron baked directly into the text (e.g. "▸ Framing") — same
-  // convention the original trailing-pill design used, kept for the same
-  // reason: one plain label, one click target, nothing to desync.
   label: string;
+  // A leading fold-state glyph ('▸'/'▾'), rendered bigger than `label` (see
+  // .task-row-pill-chev) — only the Job column's phase/sub-phase toggle
+  // pills carry one.
+  chevron?: string;
   title: string;
-  background: string;
-  // Explicit text color; when omitted the pill picks white/dark by contrast
-  // against `background` (see readableTextColor()).
+  // Two mutually exclusive looks:
+  //  - Chip (Task column's own pill, matches its Board column color — see
+  //    taskPillColors() in gantt.ts): set `background` (+ optional
+  //    `color`, else picked for contrast against it).
+  //  - Bare (Job column's job-name/phase/sub-phase labels): leave
+  //    `background` unset, set `colorLight`/`colorDark` instead (exact
+  //    per-theme answers from rowLabelColors() in gantt.ts — a plain
+  //    `body.dark-mode` CSS rule picks the right one, since toggling dark
+  //    mode doesn't re-render an already-open row).
+  background?: string;
   color?: string;
+  colorLight?: string;
+  colorDark?: string;
   focused?: boolean;
   onClick?: (e: MouseEvent) => void;
 }
@@ -66,10 +76,13 @@ export interface TaskRowProps {
   // Always the job's own name now, on every row regardless of fold state —
   // a stable anchor since rows from different jobs interleave by date
   // (Tasks view sorts purely by start date, not grouped by job/phase).
-  // Rendered as a pill in the job's own color, same look as the job-name
-  // tag on the timeline bar itself (.task-bar-job-tag).
+  // Plain text in the job's own (contrast-adjusted) color, same treatment
+  // as the on-bar job tag (.task-bar-job-tag) — see mainLabelColorLight/
+  // Dark's own comment on TaskRowPillProps.colorLight for why there are
+  // two.
   mainLabel: string;
-  mainLabelBackground: string;
+  mainLabelColorLight: string;
+  mainLabelColorDark: string;
   mainLabelClickable?: boolean;
   mainLabelFocused?: boolean;
   onMainLabelClick?: () => void;
@@ -84,14 +97,18 @@ export interface TaskRowProps {
 }
 
 function TaskRowPill({ pill }: { pill: TaskRowPillProps }) {
+  const chip = pill.background !== undefined;
+  const style = chip
+    ? { background: pill.background, color: pill.color || readableTextColor(pill.background as string) }
+    : { '--rp-light': pill.colorLight, '--rp-dark': pill.colorDark } as Record<string, string | undefined>;
   return (
     <span
-      class={'task-row-pill' + (pill.onClick ? ' collapsible' : '') + (pill.focused ? ' focused' : '')}
+      class={'task-row-pill' + (chip ? '' : ' bare') + (pill.onClick ? ' collapsible' : '') + (pill.focused ? ' focused' : '')}
       title={pill.title}
-      style={{ background: pill.background, color: pill.color || readableTextColor(pill.background) }}
+      style={style}
       onClick={pill.onClick}
     >
-      {pill.label}
+      {pill.chevron ? <span class="task-row-pill-chev">{pill.chevron}</span> : null}{pill.label}
     </span>
   );
 }
@@ -120,7 +137,7 @@ function TaskRow(props: TaskRowProps) {
         {props.mainLabel ? (
           <span
             class={'task-row-name' + (props.mainLabelClickable ? ' clickable' : '') + (props.mainLabelFocused ? ' focused' : '')}
-            style={{ background: props.mainLabelBackground }}
+            style={{ '--jn-light': props.mainLabelColorLight, '--jn-dark': props.mainLabelColorDark } as Record<string, string>}
             title={props.mainLabelClickable ? (props.mainLabelFocused ? 'Click to show every job again' : 'Click to show only ' + props.mainLabel + ' — every task') : undefined}
             onClick={props.onMainLabelClick ? (e) => { e.stopPropagation(); props.onMainLabelClick!(); } : undefined}
           >
