@@ -811,11 +811,11 @@
      same affordance as the left-panel name pill — without blocking the
      bar underneath from being dragged everywhere else on the wrap. */
   .task-bar-job-tag.collapsible { pointer-events: auto; cursor: pointer; }
-  .task-bar-job-tag.collapsible:hover { filter: brightness(1.15); }
+  .task-bar-job-tag.collapsible:hover { text-decoration: underline; text-underline-offset: 2px; }
   /* See ganttFocusedJobId/toggleGanttJobFocus() — on-bar twin of the
-     left-panel pill's .focused ring. */
-  .task-bar-job-tag.focused { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15), 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
-  body.dark-mode .task-bar-job-tag.focused { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15), 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
+     left-panel pill's .focused ring. No background box to ring anymore, so
+     an underline stands in for it instead. */
+  .task-bar-job-tag.focused { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; }
   /* Outline around the whole condensed span in the job's own color — the
      topmost overlay on the row (above the name pill's z-index 70) so it
      frames everything else instead of being painted over by it. */
@@ -898,12 +898,17 @@
   body.dark-mode .week-hour-section { border-color: #333c55; }
   body.dark-mode .week-hour-col { border-color: #333c55; }
   body.dark-mode .week-hour-row-line { border-color: #333c55; }
+  /* De-chromed: plain text, no colored chip behind it — the bar/segment
+     underneath already carries the job/task color (see .task-bar's own
+     background in gantt.ts), so the tag only needs to stay legible over
+     whatever that background is (solid fill or a job-span's hatch
+     pattern); the text-shadow does that instead of a background box. */
   .task-bar-job-tag {
     display: inline-block; flex-shrink: 1; min-width: 0; max-width: 100%;
     font-size: var(--t-3xs); font-weight: 700; color: #fff; line-height: 1.5;
-    padding: 1px var(--s-1-75); border-radius: 9px; margin-right: var(--s-1-25);
+    padding: 1px var(--s-0-5); margin-right: var(--s-1-25);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.65), 0 0 4px rgba(0,0,0,0.35);
     pointer-events: none;
   }
   .task-bar.milestone .task-bar-job-tag { display: none; }

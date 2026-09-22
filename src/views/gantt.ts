@@ -895,12 +895,10 @@ function syncGanttTaskFocusPicker(): void {
 // represents a WHOLE folded phase (no single sub-unit context to toggle).
 function buildPhaseSubTagsData(job: Job, phaseId: string | null, phaseName: string | null, subPhaseId: string | null, subPhaseName: string | null, phaseFoldable: boolean, excludeSubTag: boolean): BarTagData[] {
   const tags: BarTagData[] = [];
-  const bg = job.color || '#999';
   function makeTag(folded: boolean, label: string, foldedTitle: string, unfoldedTitle: string, onClick: () => void): BarTagData {
     return {
       label: (folded ? '▸' : '▾') + (label ? ' ' + label : ''),
       title: (folded ? foldedTitle : unfoldedTitle) + (label ? ' — ' + label : ''),
-      background: bg,
       focused: false,
       onClick: onClick,
     };
@@ -1803,7 +1801,6 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
           label: (job.isLinkedReference ? '🔗 ' : '') + barCollapseGlyph + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : ''),
           title: (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : (entry.collapsible ? (collapsedPhaseIds.has(phaseId || '') ? 'Click to expand sub-phases — ' : 'Click to collapse sub-phases into one bar — ') : '')) +
             job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : ''),
-          background: job.color || '#999',
           focused: isFocusedJob,
           onClick: isTasksMode ? (() => toggleGanttJobFocus(job.id)) : (entry.collapsible ? (() => togglePhaseCollapse(phaseId)) : undefined),
         };
@@ -2100,7 +2097,6 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
           jobTag = {
             label: (job.isLinkedReference ? '🔗 ' : '') + job.name + (!isTasksMode && phaseLabel ? ' — ' + phaseLabel : ''),
             title: (isTasksMode ? (isFocusedJob ? 'Click to show every job again — ' : 'Click to show only this job — ') : '') + job.name + (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : ''),
-            background: job.color,
             focused: isFocusedJob,
             onClick: isTasksMode ? (() => toggleGanttJobFocus(job.id)) : undefined,
           };

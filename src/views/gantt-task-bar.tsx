@@ -32,7 +32,6 @@ import { render } from 'preact';
 export interface BarTagData {
   label: string;
   title: string;
-  background: string;
   focused: boolean;
   // Mirrors the original's `isTasksMode || entry.collapsible` / `entry.collapsible`
   // gate: when true, the tag is clickable (gets the 'collapsible' class,
@@ -41,12 +40,17 @@ export interface BarTagData {
   onClick?: () => void;
 }
 
+// Plain white text (no per-tag colored chip) — the identity color already
+// lives on the bar/segment underneath it (see .task-bar's own background
+// in gantt.ts), so the tag itself only needs to stay legible over whatever
+// that background happens to be (a solid softened fill, or a job-span's
+// busy repeating-gradient hatch) — a text-shadow (see CSS) does that
+// without needing its own background box.
 function BarTag({ tag }: { tag: BarTagData }) {
   const interactive = !!tag.onClick;
   return (
     <span
       class={'task-bar-job-tag' + (interactive ? ' collapsible' : '') + (tag.focused ? ' focused' : '')}
-      style={{ background: tag.background }}
       title={tag.title}
       onMouseDown={interactive ? (e: MouseEvent) => e.stopPropagation() : undefined}
       onClick={interactive ? (e: MouseEvent) => { e.stopPropagation(); tag.onClick!(); } : undefined}
