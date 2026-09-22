@@ -923,19 +923,18 @@
      builders in gantt.ts), which barTagTextColor() never sees since it
      only computes against job.color, or a genuine scheduling gap left
      fully transparent (.job-span-gap-hash) showing the page's own
-     background through. A soft blur halo isn't reliably strong enough at
-     this font size against an arbitrary/unpredicted color underneath, so
-     these tags get a hard 1px white outline (four offset copies) instead
-     — that keeps the text's own color legibly separated from whatever's
-     actually behind it, the way map/caption text does, regardless of
-     what that turns out to be. Plain-bar tags don't need this: their one
-     flat fill is exactly what the text color was already computed
-     against. */
+     background through. Eight tight, barely-blurred copies (rather than
+     four hard 1px squares) trace a thin, soft-edged ring around the glyphs
+     instead of a blocky sticker outline — still fully surrounds the text
+     for guaranteed separation from whatever's actually behind it, just
+     less harsh-looking. Plain-bar tags don't need this: their one flat
+     fill is exactly what the text color was already computed against. */
   .job-span-name-wrap .task-bar-job-tag {
     text-shadow:
-      -1px -1px 0 rgba(255,255,255,0.9), 1px -1px 0 rgba(255,255,255,0.9),
-      -1px 1px 0 rgba(255,255,255,0.9), 1px 1px 0 rgba(255,255,255,0.9),
-      0 1px 3px rgba(0,0,0,0.4);
+      -0.6px -0.6px 0.5px rgba(255,255,255,0.8), 0.6px -0.6px 0.5px rgba(255,255,255,0.8),
+      -0.6px 0.6px 0.5px rgba(255,255,255,0.8), 0.6px 0.6px 0.5px rgba(255,255,255,0.8),
+      -0.85px 0 0.5px rgba(255,255,255,0.8), 0.85px 0 0.5px rgba(255,255,255,0.8),
+      0 -0.85px 0.5px rgba(255,255,255,0.8), 0 0.85px 0.5px rgba(255,255,255,0.8);
   }
   /* The job-name pill (first) may ellipsize; the phase/sub-phase pills after
      it never squeeze — fitBarTags() (gantt-task-bar.tsx) hides whichever
