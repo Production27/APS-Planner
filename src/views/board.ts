@@ -60,7 +60,7 @@ import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../c
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
-import { darkenColor, softenColor, columnLabelTextColor } from '../utils/color';
+import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor } from '../utils/color';
 import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -1465,11 +1465,26 @@ function buildCardProps(card: BoardCard, stalledFloors?: Record<string, number>)
 
   const attachments = card.attachments || [];
 
+  // Same de-chromed treatment as the Gantt's own job-name labels (see
+  // rowLabelColors() in gantt.ts) — plain text in the job's own
+  // (contrast-adjusted) color instead of a flat var(--text), so a card
+  // reads as "this job" at a glance the same way its Gantt row/bar do.
+  // Reference backgrounds are this card's own actual background in each
+  // theme (--card light, and the lightened dark-mode .board-card tone —
+  // see body.dark-mode .board-card in index.html) rather than a generic
+  // approximation, since a board card (unlike the Gantt panel) is a flat,
+  // non-translucent fill.
+  const titleColor = card.color || '#3949ab';
+  const titleColorLight = tintedTextColor(titleColor, '#ffffff', 6);
+  const titleColorDark = tintedTextColor(titleColor, '#242732', 6);
+
   return {
     id: String(card.id),
     manualOverride: hasOverride,
     draggable: hasMinTier('editor'),
     borderLeftColor: card.color || 'var(--primary-light)',
+    titleColorLight,
+    titleColorDark,
     title: hasOverride ? overrideTitle : undefined,
     overrideBadge: hasOverride ? { title: overrideTitle + '. Click to reconnect now.', onClick: () => reconnectCard(card.id) } : null,
     cardTitle: card.title || '',

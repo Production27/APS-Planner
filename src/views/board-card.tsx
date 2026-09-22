@@ -62,6 +62,12 @@ export interface BoardCardProps {
   manualOverride: boolean;
   draggable: boolean;
   borderLeftColor: string;
+  // The card's job color, contrast-adjusted per theme (see buildCardProps()
+  // in board.ts) — same treatment as the Gantt's own job-name labels,
+  // picked via a body.dark-mode CSS override same as those (a plain
+  // toggle doesn't re-render an already-open board).
+  titleColorLight: string;
+  titleColorDark: string;
   title?: string;
   overrideBadge: CardOverrideBadge | null;
   cardTitle: string;
@@ -115,7 +121,10 @@ function BoardCard(p: BoardCardProps) {
           <Icon svg={OVERRIDE_ICON} /> Manual <span style={{ textDecoration: 'underline', marginLeft: '2px' }}>Reconnect</span>
         </span>
       ) : null}
-      <div class="board-card-title">{p.cardTitle}</div>
+      <div
+        class="board-card-title"
+        style={{ '--bct-light': p.titleColorLight, '--bct-dark': p.titleColorDark } as Record<string, string>}
+      >{p.cardTitle}</div>
       {hasMeta ? (
         <div class="board-card-meta">
           {p.metaLines.map((m, i) => <div key={i} class="board-card-meta-line">{m.label}: {m.value}</div>)}
