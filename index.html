@@ -917,6 +917,26 @@
      to it, rather than living inline at the same font-size. */
   .task-bar-job-tag-chev { font-size: 13px; font-weight: 900; margin-right: 2px; vertical-align: -1px; }
   .task-bar.milestone .task-bar-job-tag { display: none; }
+  /* A job-span/folded row's background isn't one reliable flat fill like a
+     plain bar's: it can be a repeating diagonal hatch of each covering
+     TASK's own color (not the job's — see the segment `background`
+     builders in gantt.ts), which barTagTextColor() never sees since it
+     only computes against job.color, or a genuine scheduling gap left
+     fully transparent (.job-span-gap-hash) showing the page's own
+     background through. A soft blur halo isn't reliably strong enough at
+     this font size against an arbitrary/unpredicted color underneath, so
+     these tags get a hard 1px white outline (four offset copies) instead
+     — that keeps the text's own color legibly separated from whatever's
+     actually behind it, the way map/caption text does, regardless of
+     what that turns out to be. Plain-bar tags don't need this: their one
+     flat fill is exactly what the text color was already computed
+     against. */
+  .job-span-name-wrap .task-bar-job-tag {
+    text-shadow:
+      -1px -1px 0 rgba(255,255,255,0.9), 1px -1px 0 rgba(255,255,255,0.9),
+      -1px 1px 0 rgba(255,255,255,0.9), 1px 1px 0 rgba(255,255,255,0.9),
+      0 1px 3px rgba(0,0,0,0.4);
+  }
   /* The job-name pill (first) may ellipsize; the phase/sub-phase pills after
      it never squeeze — fitBarTags() (gantt-task-bar.tsx) hides whichever
      don't fit whole instead of letting them shrink into tiny circles. */
