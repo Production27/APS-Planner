@@ -569,15 +569,23 @@
      max-width as just an upper bound, not a size to actually keep — since
      the pills below have nothing telling THEM to shrink either, the name
      was the only flexible item left and got squeezed to zero instead. */
-  .task-row .col-jobs .task-row-name { display: inline-block; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; font-weight: 700; }
+  /* Same pill look as the job-name tag on the timeline bar itself
+     (.task-bar-job-tag) — background set inline per row to the job's own
+     color (see gantt.ts's mainLabelBackground). */
+  .task-row .col-jobs .task-row-name {
+    display: inline-block; flex-shrink: 0; max-width: 90px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
+    font-size: var(--t-3xs); font-weight: 700; color: #fff; line-height: 1.5;
+    padding: 1px var(--s-1-75); border-radius: 9px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
+  }
   /* See ganttFocusedJobId/toggleGanttJobFocus() — clicking the job name
      (always shown here now, regardless of fold state) isolates the chart
      to just this job. */
-  .task-row .col-jobs .task-row-name.clickable { cursor: pointer; border-bottom: 1.5px dashed transparent; }
-  .task-row .col-jobs .task-row-name.clickable:hover { color: var(--primary); border-bottom-color: var(--primary-light); }
-  body.dark-mode .task-row .col-jobs .task-row-name.clickable:hover { color: var(--primary-ondark); }
-  .task-row .col-jobs .task-row-name.focused { color: var(--primary); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); border-radius: 3px; padding: 0 3px; }
-  body.dark-mode .task-row .col-jobs .task-row-name.focused { color: var(--primary-ondark); box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
+  .task-row .col-jobs .task-row-name.clickable { cursor: pointer; }
+  .task-row .col-jobs .task-row-name.clickable:hover { filter: brightness(1.15); }
+  .task-row .col-jobs .task-row-name.focused { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15), 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
+  body.dark-mode .task-row .col-jobs .task-row-name.focused { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15), 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
   .task-row .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); margin-left: var(--s-1-5); display: inline-block; }
   /* The pill look shared by the Task column and the trailing phase/
      sub-phase pills after the job name (see gantt-task-row.tsx) — same

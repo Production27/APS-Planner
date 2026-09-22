@@ -1543,6 +1543,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     const isTasksMode = ganttViewMode === 'tasks';
     const linkGlyph = job.isLinkedReference ? '🔗 ' : '';
     const mainLabel = linkGlyph + job.name + (job.isLinkedReference ? ' (' + (job.linkedFromProjectName || '') + ')' : '');
+    const mainLabelBackground = job.color || '#999';
     const isFocusedJob = isTasksMode && ganttFocusedJobId === job.id;
 
     // Clicking a real (non-job-span, non-due-marker) task's own name
@@ -1557,7 +1558,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
     let taskPill: TaskRowPillProps | null = null;
 
     if (isTasksMode) {
-      const jobColor = job.color || '#999';
+      const jobColor = mainLabelBackground;
       // The Task column, between Date and Job: a pill for a real leaf
       // row's own task (clickable — same board-column-focus feature as
       // above). On a folded/merged row there's no single task anymore, so
@@ -1666,6 +1667,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
       dateStr,
       taskPill,
       mainLabel,
+      mainLabelBackground,
       mainLabelClickable: isTasksMode,
       mainLabelFocused: isFocusedJob,
       onMainLabelClick: isTasksMode ? () => toggleGanttJobFocus(job.id) : undefined,

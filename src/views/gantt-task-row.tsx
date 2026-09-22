@@ -66,7 +66,10 @@ export interface TaskRowProps {
   // Always the job's own name now, on every row regardless of fold state —
   // a stable anchor since rows from different jobs interleave by date
   // (Tasks view sorts purely by start date, not grouped by job/phase).
+  // Rendered as a pill in the job's own color, same look as the job-name
+  // tag on the timeline bar itself (.task-bar-job-tag).
   mainLabel: string;
+  mainLabelBackground: string;
   mainLabelClickable?: boolean;
   mainLabelFocused?: boolean;
   onMainLabelClick?: () => void;
@@ -117,6 +120,7 @@ function TaskRow(props: TaskRowProps) {
         {props.mainLabel ? (
           <span
             class={'task-row-name' + (props.mainLabelClickable ? ' clickable' : '') + (props.mainLabelFocused ? ' focused' : '')}
+            style={{ background: props.mainLabelBackground }}
             title={props.mainLabelClickable ? (props.mainLabelFocused ? 'Click to show every job again' : 'Click to show only ' + props.mainLabel + ' — every task') : undefined}
             onClick={props.onMainLabelClick ? (e) => { e.stopPropagation(); props.onMainLabelClick!(); } : undefined}
           >
