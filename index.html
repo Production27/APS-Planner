@@ -1181,7 +1181,7 @@
   .job-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: var(--s-3) var(--s-3-5); margin-bottom: var(--s-2); cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
   .job-card:hover { border-color: var(--primary-light); box-shadow: var(--shadow-hover); transform: translateY(-1px); }
   .job-card.active { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.15); background: #f8f9ff; }
-  .job-card .job-card-title { font-weight: 700; font-size: var(--t-base); color: var(--text); margin-bottom: var(--s-1); display: flex; align-items: center; gap: var(--s-1-5); }
+  .job-card .job-card-title { font-weight: 700; font-size: var(--t-base); color: var(--jct-light, var(--text)); margin-bottom: var(--s-1); display: flex; align-items: center; gap: var(--s-1-5); }
   .job-card .job-card-meta { font-size: var(--t-xs); color: var(--text-light); display: flex; gap: var(--s-3); align-items: center; }
   .job-card .color-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); }
   /* #b26a00 not var(--warning): same fix as .board-card-override-badge
@@ -3056,6 +3056,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      the same --bct-light/--bct-dark custom properties. */
   body.dark-mode .board-card-title {
     color: var(--bct-dark, var(--text));
+  }
+  /* Job list titles match the Board card title for the same job — see
+     JobCardProps.titleColorLight/Dark (job-list-card.tsx). */
+  body.dark-mode .job-card .job-card-title {
+    color: var(--jct-dark, var(--text));
   }
   body.dark-mode .btn-secondary { background: linear-gradient(180deg, var(--card) 0%, #1c1f28 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 5px rgba(0,0,0,0.3); }
   body.dark-mode .btn-secondary:hover { background: linear-gradient(180deg, #262a35 0%, #1c1f28 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 3px 8px rgba(0,0,0,0.4); }

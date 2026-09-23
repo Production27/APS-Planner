@@ -25,6 +25,11 @@ export interface JobCardProps {
   archived: boolean;
   finished: boolean;
   color: string;
+  // Same job-colored title as the Board's cards (see BoardCardProps.
+  // titleColorLight/Dark in board-card.tsx) — set as custom properties so
+  // a dark-mode toggle doesn't need a re-render.
+  titleColorLight: string;
+  titleColorDark: string;
   name: string;
   dateRangeLabel: string | null;
   // A phased job shows one dot per phase (boardDots); an unphased job
@@ -53,7 +58,7 @@ function JobCard(p: JobCardProps) {
       onKeyDown={onEnterOrSpace(p.onActivate)}
     >
       <div class="color-strip" style={{ background: p.color }} />
-      <div class="job-card-title">{p.name}{p.archived ? <span style={{ fontSize: 'var(--t-2xs)', color: '#888' }}> (archived)</span> : null}</div>
+      <div class="job-card-title" style={{ '--jct-light': p.titleColorLight, '--jct-dark': p.titleColorDark } as Record<string, string>}>{p.name}{p.archived ? <span style={{ fontSize: 'var(--t-2xs)', color: '#888' }}> (archived)</span> : null}</div>
       <div class="job-card-meta">
         {p.dateRangeLabel ? (
           <span>

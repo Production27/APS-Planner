@@ -9,6 +9,7 @@
 import type { Job } from '../core/types';
 import { findJob, getJobPhases, getPhaseCard, getJobCards, getPrimaryPhaseCard } from '../core/models';
 import { genId } from '../utils/id';
+import { tintedTextColor } from '../utils/color';
 import { openModal, closeModal, showToast, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 import { logActivity, deleteJobFromShared, deleteCardFromShared } from '../sync/outbound';
@@ -97,6 +98,11 @@ export function renderJobList(): void {
       archived: !!job.archived,
       finished: isJobFinished(job),
       color: job.color,
+      // Identical to the Board card's title color for this job (same
+      // inputs as buildCardProps() in board.ts), so a job reads as the
+      // same color in both places.
+      titleColorLight: tintedTextColor(job.color || '#3949ab', '#ffffff', 6),
+      titleColorDark: tintedTextColor(job.color || '#3949ab', '#242732', 6),
       name: job.name,
       dateRangeLabel: (s && f) ? ((s as Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + (f as Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) : null,
       boardDots: boardDots,
