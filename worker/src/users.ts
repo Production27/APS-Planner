@@ -1,5 +1,5 @@
 // --- USER ACCOUNTS ---
-import { verifyRoomToken } from './room-token.ts';
+import { verifyRoomToken, DEFAULT_TOKEN_TTL_MS } from './room-token.ts';
 import type { UserRecord, Identity } from './types.ts';
 
 export function bytesToHex(bytes: Uint8Array): string {
@@ -24,6 +24,15 @@ export async function hashPasswordPBKDF2(password: string, saltHex: string): Pro
     256
   );
   return bytesToHex(new Uint8Array(bits));
+}
+
+// Compares in time independent of where the strings first differ, so
+// response timing can't reveal how much of a hash matched.
+export function timingSafeEqualStr(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 export function normalizeUsername(username: unknown): string {
@@ -82,7 +91,7 @@ export async function verifyCredentials(env: Env, username: string, password: st
   const user = await getUser(env, username);
   if (!user || !password) return null;
   const hash = await hashPasswordPBKDF2(password, user.salt);
-  if (hash !== user.passwordHash) return null;
+  if (!timingSafeEqualStr(hash, user.passwordHash)) return null;
   return user;
 }
 
@@ -99,10 +108,21 @@ export async function resolveIdentity(env: Env, username: string, password: stri
 // verifyRoomToken in room-token.ts) instead of re-verifying a password
 // against KV. Returns the same shape as resolveIdentity() so every
 // downstream call site is agnostic to which path produced it.
+//
+// The signature alone isn't enough: a token stays valid for 24 hours, so
+// it's also checked against the account as it is NOW. A removed account
+// is refused, a changed role or project applies immediately, and a token
+// issued before the account's last password reset (tokensValidAfter) is
+// refused, so a reset signs out every existing session. Tokens from
+// before iat existed are dated from their expiry.
 export async function resolveIdentityFromToken(env: Env, token: string | null | undefined): Promise<Identity | null> {
   const payload = await verifyRoomToken(env.ROOM_TOKEN_SECRET, token);
   if (!payload || !payload.username) return null;
-  return { username: payload.username as string, displayName: payload.displayName as string, role: payload.role as string, assignedProjectId: (payload.assignedProjectId as string) || null };
+  const user = await getUser(env, payload.username as string);
+  if (!user) return null;
+  const issuedAt = typeof payload.iat === "number" ? payload.iat : payload.exp - DEFAULT_TOKEN_TTL_MS;
+  if (typeof user.tokensValidAfter === "number" && issuedAt < user.tokensValidAfter) return null;
+  return { username: user.username, displayName: user.displayName, role: user.role, assignedProjectId: user.assignedProjectId || null };
 }
 
 // Single entry point every authenticated JSON-body endpoint uses.

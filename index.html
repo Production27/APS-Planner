@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Content-Security-Policy: the page may only run its own scripts, load
+     its own files plus Google Fonts, and talk to the TeamSync server. An
+     injected <script src> or a request to any other site is blocked.
+     'unsafe-inline' is still needed for scripts: the page uses inline
+     <script> blocks and onclick= attributes throughout. GitHub Pages can't
+     send headers, so this is a <meta> tag; frame-ancestors (clickjacking
+     protection) only works as a header and can't be set here. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://aps-planner-staging.production-db3.workers.dev; connect-src 'self' https://aps-planner-staging.production-db3.workers.dev wss://aps-planner-staging.production-db3.workers.dev; media-src 'self' blob: https://aps-planner-staging.production-db3.workers.dev; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- user-scalable=no — without it, iOS Safari/Android Chrome treat a
      2-finger touch as the page's OWN native pinch-zoom gesture first,
      which either consumes it outright or fights with the Gantt's custom

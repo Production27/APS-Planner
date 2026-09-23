@@ -1,7 +1,7 @@
 // --- THE DURABLE OBJECT — ApsRoom manages a single room's WebSocket
 // connections, presence, and synced state (see room-state.ts for the
 // reducer logic this delegates to). ---
-import { verifyRoomToken } from './room-token.ts';
+import { resolveIdentityFromToken } from './users.ts';
 import { tierAtLeast } from './tiers.ts';
 import {
   emptyRoomState, MESSAGE_TIER_REQUIREMENTS,
@@ -187,7 +187,7 @@ export class ApsRoom {
   async handleWebSocketUpgrade(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const token = url.searchParams.get('token');
-    const identity = await verifyRoomToken(this.env.ROOM_TOKEN_SECRET, token);
+    const identity = await resolveIdentityFromToken(this.env, token);
     if (!identity) {
       return new Response('Unauthorized', { status: 401 });
     }

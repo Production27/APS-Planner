@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeUsername, normalizeUserRecord,
   genSaltHex, hashPasswordPBKDF2,
-  resolveIdentityFromToken,
+  resolveIdentityFromToken, timingSafeEqualStr,
   getAuthFailureCount, bumpAuthFailure, AUTH_LOCKOUT_WINDOW_SECONDS
 } from './users.ts';
 import { signRoomToken } from './room-token.ts';
@@ -43,14 +43,51 @@ test('hashPasswordPBKDF2: a different password produces a different hash', async
   assert.notEqual(hashA, hashB);
 });
 
-test('resolveIdentityFromToken resolves a valid token, wiring through to room-token.ts correctly', async () => {
-  const fakeEnv = { ROOM_TOKEN_SECRET: 'test-secret' };
-  const token = await signRoomToken(fakeEnv.ROOM_TOKEN_SECRET, {
-    username: 'alice', displayName: 'Alice', role: 'admin', assignedProjectId: null
-  });
-  const identity = await resolveIdentityFromToken(fakeEnv, token);
+function envWithUsers(users) {
+  const store = new Map(users.map((u) => ['user:' + u.username, JSON.stringify(u)]));
+  return {
+    ROOM_TOKEN_SECRET: 'test-secret',
+    USERS_KV: { async get(k) { return store.has(k) ? store.get(k) : null; }, async put(k, v) { store.set(k, v); }, async delete(k) { store.delete(k); } }
+  };
+}
+const aliceToken = (env, extra) => signRoomToken(env.ROOM_TOKEN_SECRET, Object.assign({ username: 'alice', displayName: 'Alice', role: 'admin', assignedProjectId: null }, extra || {}));
+
+test('resolveIdentityFromToken resolves a valid token for an existing account', async () => {
+  const env = envWithUsers([{ username: 'alice', displayName: 'Alice', role: 'admin', assignedProjectId: null }]);
+  const identity = await resolveIdentityFromToken(env, await aliceToken(env));
   assert.equal(identity.username, 'alice');
   assert.equal(identity.role, 'admin');
+});
+
+test('resolveIdentityFromToken refuses a still-unexpired token once the account is removed', async () => {
+  const env = envWithUsers([{ username: 'alice', displayName: 'Alice', role: 'admin', assignedProjectId: null }]);
+  const token = await aliceToken(env);
+  await env.USERS_KV.delete('user:alice');
+  assert.equal(await resolveIdentityFromToken(env, token), null);
+});
+
+test("resolveIdentityFromToken uses the account's CURRENT role and project, not the token's", async () => {
+  const env = envWithUsers([{ username: 'alice', displayName: 'Alice', role: 'viewer', assignedProjectId: 'p2' }]);
+  const identity = await resolveIdentityFromToken(env, await aliceToken(env, { role: 'admin', assignedProjectId: null }));
+  assert.equal(identity.role, 'viewer');
+  assert.equal(identity.assignedProjectId, 'p2');
+});
+
+test('resolveIdentityFromToken refuses tokens issued before the last password reset, and accepts newer ones', async () => {
+  const env = envWithUsers([{ username: 'alice', displayName: 'Alice', role: 'admin', assignedProjectId: null }]);
+  const oldToken = await aliceToken(env);
+  await new Promise((r) => setTimeout(r, 5));
+  await env.USERS_KV.put('user:alice', JSON.stringify({ username: 'alice', displayName: 'Alice', role: 'admin', assignedProjectId: null, tokensValidAfter: Date.now() }));
+  assert.equal(await resolveIdentityFromToken(env, oldToken), null);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal((await resolveIdentityFromToken(env, await aliceToken(env))).username, 'alice');
+});
+
+test('timingSafeEqualStr matches only identical strings', () => {
+  assert.equal(timingSafeEqualStr('abc123', 'abc123'), true);
+  assert.equal(timingSafeEqualStr('abc123', 'abc124'), false);
+  assert.equal(timingSafeEqualStr('abc', 'abcd'), false);
+  assert.equal(timingSafeEqualStr('', ''), true);
 });
 
 test('resolveIdentityFromToken returns null for an invalid token', async () => {

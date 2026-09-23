@@ -21,7 +21,8 @@
 // draggedColId (Board's own, in src/views/board.ts).
 import { sendPresenceUpdate } from './presence';
 import { setStoredSessionToken } from '../auth/session';
-import { reauthenticateOnce, buildRoomWsUrl } from '../auth/login';
+import { reauthenticateOnce, buildRoomWsUrl, getSessionToken } from '../auth/login';
+import ReconnectingWebSocket from 'reconnecting-websocket';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomSocket, roomEverConnected, pendingWrites, draggedCardId,
@@ -132,6 +133,8 @@ function isBusyEditing(): boolean {
 }
 
 function handleRoomOpen(): void {
+  socketOpenedSinceLastClose = true;
+  refusedConnects = 0;
   setSyncIndicator('ok');
   cancelOfflineEscalation();
   // Replay anything that didn't get confirmed before the connection
@@ -149,6 +152,29 @@ function handleRoomOpen(): void {
   sendPresenceUpdate();
 }
 
+// A connection the server refuses (e.g. this session was signed out by a
+// password reset, or the account was removed) just fails: browsers don't
+// expose the HTTP 401 behind a failed WebSocket, and the token still looks
+// unexpired locally, so the reconnect loop would retry forever. After two
+// attempts in a row that never opened, ask an ordinary endpoint whether the
+// session is still valid; if it isn't, sign in again. At most once a minute,
+// and a network error (plain offline) changes nothing.
+let socketOpenedSinceLastClose = false;
+let refusedConnects = 0;
+let lastSessionCheckAt = 0;
+function checkSessionAfterRefusedConnect(): void {
+  if (Date.now() - lastSessionCheckAt < 60000) return;
+  lastSessionCheckAt = Date.now();
+  getSessionToken().then(function (token) {
+    return fetch(API_BASE_URL + 'users/roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token }) });
+  }).then(function (res) {
+    if (res.status === 401) {
+      setStoredSessionToken(null);
+      reauthenticateOnce(true);
+    }
+  }).catch(function () { /* offline or unreachable: keep retrying as usual */ });
+}
+
 function handleRoomClose(event?: { code?: number }): void {
   // Close code 4001 = the server force-closed this connection because an
   // admin changed our role/project assignment (see the Worker's
@@ -161,7 +187,10 @@ function handleRoomClose(event?: { code?: number }): void {
   if (event && event.code === 4001) {
     setStoredSessionToken(null);
     reauthenticateOnce(true);
+  } else if (!socketOpenedSinceLastClose && ++refusedConnects >= 2) {
+    checkSessionAfterRefusedConnect();
   }
+  socketOpenedSinceLastClose = false;
   // Escalate to the offline indicator on ANY close, not just one after a
   // previously-successful connection — a first-connection failure (cold
   // start, brief outage right at page load) used to leave the dot stuck on
@@ -189,19 +218,10 @@ async function setupRoomSync(): Promise<void> {
   setSyncIndicator('connecting', 'Connecting…');
 
   try {
-    // Assigned to a variable rather than a string literal directly in the
-    // import() call — a literal specifier makes TypeScript try to resolve
-    // a real module (and its types) for it at compile time, which fails
-    // for an arbitrary runtime CDN URL with no local declarations; a
-    // non-literal specifier is exactly what makes TS fall back to typing
-    // the whole result as `any` instead. esbuild's own bundling behavior
-    // is unaffected either way — an absolute http(s) specifier is already
-    // left external, not bundled, regardless of whether it's a literal or
-    // a variable.
-    const reconnectingWebSocketSpecifier = 'https://esm.sh/reconnecting-websocket@4.4.0';
-    const { default: ReconnectingWebSocketCtor } = await import(reconnectingWebSocketSpecifier);
 
-    roomSocket = new ReconnectingWebSocketCtor(buildRoomWsUrl, [], { maxRetries: Infinity });
+    // Bundled (package.json, pinned) rather than loaded from a CDN at run
+    // time, so no third-party code runs in the app.
+    roomSocket = new ReconnectingWebSocket(buildRoomWsUrl, [], { maxRetries: Infinity }) as any;
     roomSocket!.addEventListener('open', handleRoomOpen);
     roomSocket!.addEventListener('close', handleRoomClose);
     roomSocket!.addEventListener('error', handleRoomSocketError);

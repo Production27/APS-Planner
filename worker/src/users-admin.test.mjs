@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  requireAdmin, computeRoleProjectChange, handleUsersUpdate, handleUsersRemove
+  requireAdmin, computeRoleProjectChange, handleUsersUpdate, handleUsersRemove, handleUsersResetPassword
 } from './users-admin.ts';
+import { resolveIdentityFromToken } from './users.ts';
 import { signRoomToken } from './room-token.ts';
 
 function makeFakeKV(users) {
@@ -139,4 +140,31 @@ test('handleUsersRemove allows removing an admin when another admin remains', as
   const token = await tokenFor(env, { username: 'alice', role: 'admin' });
   const res = await handleUsersRemove(makeRequest({ token, targetUsername: 'carol' }), env, {});
   assert.equal(res.status, 200);
+});
+
+test("a password reset signs out the account's existing sessions, and an admin reset also kicks its connections", async () => {
+  const admin = { username: 'boss', role: 'admin', assignedProjectId: null, createdAt: 1 };
+  const bob = { username: 'bob', role: 'editor', assignedProjectId: null, createdAt: 2 };
+  const env = makeFakeEnv([admin, bob]);
+  const kicks = [];
+  env.APS_ROOM = { idFromName: (n) => ({ n }), get: () => ({ fetch: async (url) => { kicks.push(String(url)); return new Response('ok'); } }) };
+  const bobToken = await tokenFor(env, bob);
+  assert.ok(await resolveIdentityFromToken(env, bobToken), 'valid before the reset');
+  await new Promise((r) => setTimeout(r, 5));
+  const res = await handleUsersResetPassword(makeRequest({ token: await tokenFor(env, admin), targetUsername: 'bob', newPassword: 'fresh-password' }), env, {});
+  assert.equal(res.status, 200);
+  assert.equal(await resolveIdentityFromToken(env, bobToken), null, 'old session refused after the reset');
+  assert.equal(kicks.filter((u) => u.includes('kick-user?username=bob')).length, 1);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.ok(await resolveIdentityFromToken(env, await tokenFor(env, bob)), 'a new sign-in works');
+});
+
+test("a self-service password change does not kick the caller's own connection", async () => {
+  const bob = { username: 'bob', role: 'editor', assignedProjectId: null, createdAt: 2 };
+  const env = makeFakeEnv([bob]);
+  const kicks = [];
+  env.APS_ROOM = { idFromName: (n) => ({ n }), get: () => ({ fetch: async (url) => { kicks.push(String(url)); return new Response('ok'); } }) };
+  const res = await handleUsersResetPassword(makeRequest({ token: await tokenFor(env, bob), targetUsername: 'bob', newPassword: 'fresh-password' }), env, {});
+  assert.equal(res.status, 200);
+  assert.equal(kicks.length, 0);
 });

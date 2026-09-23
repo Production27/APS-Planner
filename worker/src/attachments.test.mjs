@@ -5,8 +5,14 @@ import { signRoomToken } from './room-token.ts';
 
 function makeFakeEnv() {
   const objects = new Map();
+  const kv = new Map();
   return {
     ROOM_TOKEN_SECRET: 'test-secret',
+    // Tokens are checked against the current account (users.ts).
+    USERS_KV: {
+      async get(key) { return kv.has(key) ? kv.get(key) : null; },
+      async put(key, value) { kv.set(key, value); }
+    },
     BACKUP_BUCKET: {
       async put(key, body, opts) { objects.set(key, { body, opts }); },
       async get(key) { return objects.has(key) ? objects.get(key) : null; },
@@ -17,6 +23,7 @@ function makeFakeEnv() {
 }
 
 async function tokenFor(env, role) {
+  await env.USERS_KV.put('user:alice', JSON.stringify({ username: 'alice', displayName: 'Alice', role, assignedProjectId: null }));
   return signRoomToken(env.ROOM_TOKEN_SECRET, { username: 'alice', displayName: 'Alice', role, assignedProjectId: null });
 }
 

@@ -226,6 +226,14 @@ export async function handleUsersResetPassword(request: Request, env: Env, corsH
   const salt = genSaltHex();
   target.passwordHash = await hashPasswordPBKDF2(newPassword, salt);
   target.salt = salt;
+  // Signs out every existing session of this account (see
+  // resolveIdentityFromToken()). Someone changing their own password
+  // signs back in right away (changeMyPasswordUI() in the client).
+  target.tokensValidAfter = Date.now();
   await putUser(env, target);
+  // An admin reset also drops the account's open connections. Not done for
+  // a self-service change, which would drop the caller's own connection
+  // mid-change; other sessions still can't reconnect with their old token.
+  if (!isSelfService) await kickUserFromRoom(env, targetUsername);
   return jsonResponse({ success: true }, 200, corsHeaders);
 }

@@ -113,6 +113,8 @@ export interface UserRecord {
   passwordHash: string;
   salt: string;
   createdAt: number;
+  // Tokens issued before this time are rejected (set on a password reset).
+  tokensValidAfter?: number;
   [key: string]: unknown;
 }
 

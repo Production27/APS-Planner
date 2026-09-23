@@ -252,10 +252,11 @@ export async function changeMyPasswordUI(): Promise<void> {
   if (!newPassword) { showToast('Cancelled — no password entered', 'info'); return; }
   try {
     await postUsersEndpoint('users/reset-password', { targetUsername: username, newPassword: newPassword });
-    // The existing session token stays valid regardless (it doesn't encode
-    // the password) — but mint a fresh one against the new password right
-    // away rather than leaving that to happen naturally on next expiry,
-    // using newPassword while it's still in memory here (never persisted).
+    // The reset signs out every existing session of this account (the
+    // server rejects tokens issued before it), this one included, so mint
+    // a fresh token right away using newPassword while it's still in
+    // memory here (never persisted). If this fails, the next request asks
+    // the user to sign in again.
     try {
       const res = await fetch(API_BASE_URL, {
         method: 'POST',
@@ -264,7 +265,7 @@ export async function changeMyPasswordUI(): Promise<void> {
       });
       const data = await res.json().catch(function() { return {}; });
       if (res.ok && data && data.token) setStoredSessionToken(data.token);
-    } catch (e) { /* best-effort refresh — the old token still works until it naturally expires */ }
+    } catch (e) { /* best-effort; see above */ }
     showToast('Password changed', 'success');
   } catch (err: any) {
     showToast('Could not change password: ' + err.message, 'error');

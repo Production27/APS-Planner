@@ -29,7 +29,10 @@ async function importHmacKey(secret: string, usage: 'sign' | 'verify'): Promise<
 export const DEFAULT_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 export async function signRoomToken(secret: string, payload: Record<string, unknown>, ttlMs?: number): Promise<string> {
   const enc = new TextEncoder();
-  const body = JSON.stringify(Object.assign({}, payload, { exp: Date.now() + (ttlMs || DEFAULT_TOKEN_TTL_MS) }));
+  // iat (issued at) lets resolveIdentityFromToken() (users.ts) reject
+  // tokens issued before an account's password was reset.
+  const now = Date.now();
+  const body = JSON.stringify(Object.assign({}, payload, { iat: now, exp: now + (ttlMs || DEFAULT_TOKEN_TTL_MS) }));
   const bodyB64 = base64UrlEncode(enc.encode(body));
   const key = await importHmacKey(secret, 'sign');
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(bodyB64));
