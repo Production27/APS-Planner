@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TeamSync Privacy Policy</title>
+<meta name="description" content="What TeamSync collects, why, and how long it is kept.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7.2' fill='%232c3e50'/%3E%3Crect x='6.4' y='10.4' width='12' height='4.6' rx='2.3' fill='%23e53935'/%3E%3Crect x='6.4' y='17.2' width='19.2' height='4.6' rx='2.3' fill='white' fill-opacity='.92'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap">
+<!-- Public privacy policy, linked from the Google sign-in consent screen
+     (worker/src/sso.ts). Keep it in step with what the Worker stores. -->
+<style>
+  :root { --bg: #f4f5f9; --surface: #ffffff; --ink: #1c1f2b; --ink-2: #4a5063; --line: #e2e5ee; --brand: #1a237e; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #121318; --surface: #1a1b21; --ink: #eceef4; --ink-2: #b7bbc8; --line: #2c2e37; --brand: #9fa8ff; }
+  }
+  :root[data-theme="dark"] { --bg: #121318; --surface: #1a1b21; --ink: #eceef4; --ink-2: #b7bbc8; --line: #2c2e37; --brand: #9fa8ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 'Public Sans', system-ui, sans-serif; }
+  main { max-width: 760px; margin: 32px auto; padding: 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  h1 { margin: 0 0 4px; font-size: 1.75rem; }
+  h2 { margin: 28px 0 8px; font-size: 1.15rem; }
+  p, li { color: var(--ink-2); }
+  .updated { margin-top: 0; font-size: .9rem; }
+  a { color: var(--brand); }
+  @media (max-width: 800px) { main { margin: 0; border-radius: 0; border-width: 0 0 1px; padding: 24px 16px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>TeamSync Privacy Policy</h1>
+  <p class="updated">Last updated: September 23, 2026</p>
+
+  <p>TeamSync is an internal scheduling tool used by APS staff. This page explains what information it keeps about the people who use it, and why.</p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li><b>Account details:</b> your username, display name, role, and (if you or an administrator add one) your email address. Passwords are stored only as salted hashes, never in readable form.</li>
+    <li><b>Sign in with Google:</b> if you choose to use it, we receive your Google account's email address and whether Google has verified it, and use it only to match you to your TeamSync account. We do not receive your Google password or access your Gmail, Drive, contacts or any other Google data.</li>
+    <li><b>Two-step verification:</b> if you turn it on, an encrypted authenticator secret and hashed recovery codes.</li>
+    <li><b>Planner data:</b> the schedules, jobs and notes your team enters into TeamSync.</li>
+    <li><b>Activity log:</b> a record of sign-ins and changes (who, what, when, and the IP address it came from), kept for security and troubleshooting.</li>
+  </ul>
+
+  <h2>How it is used</h2>
+  <p>Only to run TeamSync: signing you in, keeping your team's planner in sync, and letting administrators review account activity. We do not sell, rent or share your information with advertisers, and TeamSync has no ads or third-party tracking.</p>
+
+  <h2>Where it is stored</h2>
+  <p>The app is served from GitHub Pages. Accounts, planner data and the activity log are stored on Cloudflare's servers. Data is sent over encrypted (HTTPS) connections.</p>
+
+  <h2>How long it is kept</h2>
+  <p>Account details are kept while your account exists and removed when an administrator deletes it. Activity log entries are deleted after 365 days. Your company's administrators can export or permanently delete all TeamSync data.</p>
+
+  <h2>Your choices</h2>
+  <p>You can add, change or remove your email in Settings → My email, and you never have to use Sign in with Google: username or email plus password always works. To see, correct or delete your information, contact your TeamSync administrator.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the date at the top of this page will change too.</p>
+
+  <p><a href="../">Back to TeamSync</a></p>
+</main>
+</body>
+</html>

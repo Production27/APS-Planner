@@ -75,6 +75,7 @@ jobs:
           cp -r assets _site/
           cp -r dist _site/
           cp -r status _site/
+          cp -r privacy _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
