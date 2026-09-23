@@ -25,6 +25,7 @@ import { applyThemeColor, applyProjectBgVisual, getSavedThemeColor, normalizeThe
 import { ensureCardIds, ensureJobTasksMatchColumns, ensureJobHasCards, migrateOrphanedCards, ensureJobAndTaskIds } from '../core/jobs';
 import { renderActivityLogSidebar } from './activity-log';
 import { DEFAULT_JOBS } from './seed-data';
+import { renderReportsIfActive } from '../views/reports';
 
 declare global {
   function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
@@ -451,6 +452,7 @@ export function renderAll(): void {
   renderCalendar();
   renderMyChecklist();
   renderHomeDashboard();
+  renderReportsIfActive();
   updateProjectToggle();
   applyPermissionGating();
 }

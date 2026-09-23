@@ -70,6 +70,7 @@ import { type HomeAlertProps } from './home-widget-alert';
 import { renderHomeStageAlertInto, renderWsmBarsInto, renderWsmBracketInto, type HomeWsmBarProps, type HomeWsmBracketSegmentProps } from './home-board-mini';
 import { renderHomeTodayWidgetInto, type HomeMiniGanttDayProps, type HomeMiniGanttRowProps } from './home-gantt-mini';
 import { renderHomeBoardColumnsInto, type HomeBoardColumnProps } from './home-board-expanded';
+import { renderReports } from './reports';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
@@ -197,6 +198,7 @@ function switchTab(tab: string): void {
   else if (tab === 'board') { renderBoard(); }
   else if (tab === 'calendar') { renderCalendar(); setTimeout(initCalendarDragHandlers, 100); }
   else if (tab === 'checklist') { renderMyChecklist(); }
+  else if (tab === 'reports') { renderReports(); }
   sendPresenceUpdate();
 }
 
@@ -238,6 +240,8 @@ function setMobileView(view: string): void {
     switchTab('checklist');
   } else if (view === 'board') {
     switchTab('board');
+  } else if (view === 'reports') {
+    switchTab('reports');
   } else if (view === 'gantt') {
     switchTab('gantt');
   } else if (view === 'calendar') {
