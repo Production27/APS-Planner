@@ -46,11 +46,14 @@ declare global {
 // instead and redrawn as soon as it's shown (renderJobListIfStale(), from
 // toggleJobRail()/setMobileView()/resize). Checked from the element itself
 // rather than re-deriving the CSS rules that hide it: closed on desktop
-// is opacity 0, hidden on mobile is display:none.
+// is opacity 0, hidden on mobile is display:none. body.job-rail-open counts
+// as visible on its own, since the rail fades in: in the first frame
+// after opening, the computed opacity still reads 0.
 let jobListStale = false;
 function isJobListOnScreen(): boolean {
   const list = document.getElementById('jobList');
-  return !!list && list.getClientRects().length > 0 && getComputedStyle(list).opacity !== '0';
+  if (!list || list.getClientRects().length === 0) return false;
+  return document.body.classList.contains('job-rail-open') || getComputedStyle(list).opacity !== '0';
 }
 export function renderJobListWhenVisible(): void {
   if (isJobListOnScreen()) { renderJobList(); return; }
