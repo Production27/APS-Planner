@@ -26,6 +26,7 @@ import { ensureCardIds, ensureJobTasksMatchColumns, ensureJobHasCards, migrateOr
 import { renderActivityLogSidebar } from './activity-log';
 import { DEFAULT_JOBS } from './seed-data';
 import { renderReportsIfActive } from '../views/reports';
+import { readIdbProjects, writeIdbProjects } from './local-store';
 
 declare global {
   function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
@@ -33,6 +34,9 @@ declare global {
 
 // ===== PROJECT MANAGEMENT =====
 export const PROJECTS_KEY = 'aps-planner:projects-v2';
+// When the localStorage copy under PROJECTS_KEY was written (see
+// src/app/local-store.ts): startup compares it with the IndexedDB copy's.
+export const PROJECTS_SAVED_AT_KEY = 'aps-planner:projects-v2-saved-at';
 export const ACTIVE_PROJECT_KEY = 'aps-planner:active-project-v2';
 
 // True for the remainder of this page load once migrateFromLegacy() below
@@ -119,8 +123,21 @@ export function migrateFromLegacy(): void {
   }
 }
 
-export function loadProjects(): void {
-  const saved = localStorage.getItem(PROJECTS_KEY);
+// The newest local copy's text: IndexedDB's, or localStorage's when that
+// one is newer (written on a page close the IndexedDB write didn't finish)
+// or IndexedDB has none yet (the first load after this moved there).
+export async function readLocalProjectsText(): Promise<string | null> {
+  const idb = await readIdbProjects();
+  let lsText: string | null = null, lsAt = 0;
+  try { lsText = localStorage.getItem(PROJECTS_KEY); lsAt = Number(localStorage.getItem(PROJECTS_SAVED_AT_KEY)) || 0; } catch (e) { /* unavailable */ }
+  if (idb && (!lsText || idb.savedAt >= lsAt)) return idb.text;
+  return lsText;
+}
+
+// savedText: the local copy as read by readLocalProjectsText() at boot.
+// Omitted, it falls back to localStorage alone.
+export function loadProjects(savedText?: string | null): void {
+  const saved = savedText !== undefined ? savedText : localStorage.getItem(PROJECTS_KEY);
   const active = localStorage.getItem(ACTIVE_PROJECT_KEY);
   // safeJsonParse(saved, null) — a corrupted PROJECTS_KEY value used to
   // throw here uncaught, halting the whole script before init() finishes
@@ -137,8 +154,8 @@ export function loadProjects(): void {
 }
 
 // The local copy is written at most once per SAVE_PROJECTS_DELAY_MS
-// rather than on every call. It's a full JSON.stringify + localStorage
-// write of every project (every job, archived ones included), and it ran
+// rather than on every call. It's a full JSON.stringify + storage write
+// of every project (every job, archived ones included), and it ran
 // on every edit and every incoming teammate change: about half of each
 // incoming change's cost at 250 jobs. The server is the source of truth;
 // this copy only exists for instant startup and offline viewing, so a
@@ -153,23 +170,50 @@ export function saveProjects(): void {
   if (saveProjectsTimer === null) saveProjectsTimer = setTimeout(flushProjectsToLocalCache, SAVE_PROJECTS_DELAY_MS);
 }
 
-// Browsers cap localStorage at about 5 MB per site, which a large company's
-// data (roughly 600+ jobs) outgrows. When the copy doesn't fit, drop it
-// entirely instead of throwing. Throwing here used to abort whatever edit
-// or incoming change triggered the save, partway through. With no copy,
-// the next page load starts the way a brand-new browser does and waits for
-// the server's snapshot. Leaving an older copy behind would be worse: the
-// failed write keeps the previous, out-of-date value.
-export function flushProjectsToLocalCache(): void {
+// Writes the local copy to IndexedDB (see src/app/local-store.ts). Also
+// to localStorage when IndexedDB is unavailable, and on a page close
+// (closing: true), where the browser may not let an IndexedDB write
+// finish. A successful IndexedDB write removes an older localStorage copy
+// to free that space.
+let idbUsable: boolean | null = null;
+export function flushProjectsToLocalCache(opts?: { closing?: boolean }): void {
   if (saveProjectsTimer !== null) { clearTimeout(saveProjectsTimer); saveProjectsTimer = null; }
   try { localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId as string); } catch (e) { /* see below */ }
+  const text = JSON.stringify(projects);
+  const savedAt = Date.now();
+  if (idbUsable !== false) {
+    writeIdbProjects({ text: text, savedAt: savedAt }).then(function (ok) {
+      if (ok) {
+        idbUsable = true;
+        try {
+          if (localStorage.getItem(PROJECTS_KEY) !== null && (Number(localStorage.getItem(PROJECTS_SAVED_AT_KEY)) || 0) <= savedAt) {
+            localStorage.removeItem(PROJECTS_KEY);
+            localStorage.removeItem(PROJECTS_SAVED_AT_KEY);
+          }
+        } catch (e) { /* storage unavailable */ }
+      } else {
+        idbUsable = false;
+        writeLocalStorageCopy(text, savedAt);
+      }
+    });
+  }
+  if (opts && opts.closing || idbUsable === false) writeLocalStorageCopy(text, savedAt);
+}
+
+// Browsers cap localStorage at about 5 MB per site, which a large company's
+// data (roughly 600+ jobs) outgrows. When the copy doesn't fit, drop it
+// instead of throwing. Throwing used to abort whatever edit or incoming
+// change triggered the save, partway through. Leaving an older copy
+// behind would be worse: the failed write keeps the previous value.
+function writeLocalStorageCopy(text: string, savedAt: number): void {
   try {
-    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    localStorage.setItem(PROJECTS_KEY, text);
+    localStorage.setItem(PROJECTS_SAVED_AT_KEY, String(savedAt));
   } catch (err) {
-    try { localStorage.removeItem(PROJECTS_KEY); } catch (e) { /* storage unavailable */ }
+    try { localStorage.removeItem(PROJECTS_KEY); localStorage.removeItem(PROJECTS_SAVED_AT_KEY); } catch (e) { /* storage unavailable */ }
     if (!localCacheFullWarned) {
       localCacheFullWarned = true;
-      console.warn('Local copy of project data skipped (too large for browser storage); the server copy is unaffected', err);
+      console.warn('Local copy of project data skipped in localStorage (too large); the server copy is unaffected', err);
     }
   }
 }

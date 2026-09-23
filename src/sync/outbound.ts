@@ -75,15 +75,15 @@ function flushPendingRoomPush(): void {
 }
 
 // Without this, a page close/refresh within that 300ms window loses the
-// edit entirely: it's saved to localStorage synchronously, but the
-// debounced push never fires. Flush any pending push the moment the tab
+// edit entirely: it's already in memory, but the debounced push (and
+// the batched local-copy save) never fires. Flush any pending push the moment the tab
 // is hidden or about to unload.
 function flushPendingSync(): void {
   flushAutoSaveJobForm();
   flushCardAutosave();
   flushPendingRoomPush();
   // Last, after the flushes above have saved any in-progress edit.
-  flushProjectsToLocalCache();
+  flushProjectsToLocalCache({ closing: true });
 }
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'hidden') flushPendingSync();

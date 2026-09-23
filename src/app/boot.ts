@@ -15,7 +15,7 @@ import { initCalendarDragHandlers, buildCalendarEventColorPresets, closeCalendar
 import { closeAllColSettings, initCardFormAutosaveListeners, closeManageFields, closeCardModal } from '../views/board';
 import { closeAllMsDropdowns, isPanelActive } from '../utils/ui';
 import { closeSettingsMenu } from './settings-menu';
-import { loadLinkEnabledPref, loadProjects, enforceFixedProjectSet, loadActiveProjectData, autoArchiveJobs, renderAll, freshLocalSeed } from './project';
+import { loadLinkEnabledPref, loadProjects, readLocalProjectsText, enforceFixedProjectSet, loadActiveProjectData, autoArchiveJobs, renderAll, freshLocalSeed } from './project';
 import { syncCardColumns } from '../core/jobs';
 import { closeDeleteJobModal } from '../views/job-list';
 import { cancelEdit, initJobFormAutosaveListeners, buildColorPresets } from '../views/job-form';
@@ -62,9 +62,11 @@ export function hideFreshLoadOverlay(): void {
   if (el) el.classList.remove('show');
 }
 
-export function init(): void {
+// savedText: the local copy, read (asynchronously, from IndexedDB) by
+// boot() before this runs. Omitted, loadProjects() reads localStorage.
+export function init(savedText?: string | null): void {
   initStaticEventListeners();
-  loadProjects();
+  loadProjects(savedText);
   enforceFixedProjectSet();
   // Catches a stray empty "Untitled Project" already sitting in this
   // browser's own local data (from before a fresh snapshot even arrives) —
@@ -219,7 +221,7 @@ document.addEventListener('keydown', function (e) {
 export async function boot(): Promise<void> {
   const token = await getSessionToken();
   applyIdentityFromTokenPayload(decodeSessionTokenPayload(token));
-  init();
+  init(await readLocalProjectsText());
   initCalendarDragHandlers();
   setupRoomSync();
 }
