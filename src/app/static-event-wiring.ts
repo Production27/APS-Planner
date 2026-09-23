@@ -19,6 +19,7 @@
 // `this`. Everywhere else uses an arrow for brevity.
 import { openExportModal, closeExportModal, runExport } from './export';
 import { openPrintModal, closePrintModal, syncPrintKind, runPrint } from './print';
+import { downloadIcs } from './ics';
 
 declare global {
   function toggleSettingsMenu(): void;
@@ -129,6 +130,7 @@ export function initStaticEventListeners(): void {
   on('exportCancelBtn', () => closeExportModal());
   on('exportRunBtn', () => runExport());
   on('printBtn', () => { closeSettingsMenu(); openPrintModal(); });
+  on('downloadIcsBtn', () => { closeSettingsMenu(); downloadIcs(); });
   on('printCancelBtn', () => closePrintModal());
   on('printRunBtn', () => runPrint());
   document.querySelectorAll<HTMLInputElement>('input[name="printKind"]').forEach((el) => el.addEventListener('change', () => syncPrintKind()));

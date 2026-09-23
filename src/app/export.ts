@@ -132,8 +132,10 @@ function safeFilePart(s: string): string {
   return s.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
 }
 
-export function downloadTextFile(filename: string, text: string, mime: string): void {
-  const blob = new Blob(['﻿' + text], { type: mime });
+// withBom: a UTF-8 byte-order mark so Excel reads accented text correctly;
+// leave it off for formats that must start with exact text (e.g. .ics).
+export function downloadTextFile(filename: string, text: string, mime: string, withBom = true): void {
+  const blob = new Blob([(withBom ? '\uFEFF' : '') + text], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
