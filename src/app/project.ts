@@ -495,7 +495,7 @@ export function applyPermissionGating(): void {
   });
   // A SEPARATE second set entirely — renderJobList() builds its own
   // "+ Add Job" tile at the bottom of the scrolling list, plus a
-  // copy/delete icon pair on every individual job card, none of which
+  // "⋯" menu button (Duplicate/Delete) on every individual job card, none of which
   // share any element with the ones above (those live in the Jobs rail
   // header and the job edit form). Missed in the original pass since
   // they're a different button on a different part of the screen calling
@@ -505,7 +505,7 @@ export function applyPermissionGating(): void {
   const jobListAddBtn = document.querySelector('.job-list-add-btn') as HTMLElement | null;
   if (jobListAddBtn) jobListAddBtn.style.display = hasMinTier('projectAdmin') ? '' : 'none';
   if (!hasMinTier('projectAdmin')) {
-    document.querySelectorAll('.job-card .copy-btn, .job-card .delete-btn').forEach(function (el) {
+    document.querySelectorAll('.job-card .job-card-menu-btn').forEach(function (el) {
       (el as HTMLElement).style.display = 'none';
     });
   }

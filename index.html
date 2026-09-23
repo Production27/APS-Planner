@@ -1202,10 +1202,26 @@
      a dark card background (see the dark-mode override just below). */
   .job-card .note-icon { font-size: var(--t-2xs); color: #b26a00; }
   body.dark-mode .job-card .note-icon { color: var(--warning); }
-  .job-card .delete-btn { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; font-size: var(--t-md); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-  .job-card .delete-btn:hover { background: var(--danger-tint); color: var(--danger); }
-  .job-card .copy-btn { position: absolute; top: 8px; right: 34px; width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent; color: #ccc; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-  .job-card .copy-btn:hover { background: var(--primary-tint); color: var(--primary); }
+  /* One "⋯" button per card (Duplicate/Delete live in its menu — see
+     openJobCardMenu() in job-list-card.tsx). Faint at rest, full strength
+     on card hover/focus; always visible on touch screens (no hover). */
+  .job-card .job-card-menu-btn { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; opacity: 0.55; transition: opacity 0.15s, background 0.15s, color 0.15s; }
+  .job-card:hover .job-card-menu-btn, .job-card:focus-within .job-card-menu-btn, .job-card .job-card-menu-btn[aria-expanded="true"] { opacity: 1; }
+  .job-card .job-card-menu-btn:hover, .job-card .job-card-menu-btn[aria-expanded="true"] { background: var(--primary-tint); color: var(--primary); }
+  .job-card .job-card-menu-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 1px; opacity: 1; }
+  @media (hover: none) { .job-card .job-card-menu-btn { opacity: 1; } }
+  .job-card-menu {
+    position: fixed; z-index: 3000; min-width: 160px; padding: var(--s-1); background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-hover);
+  }
+  .job-card-menu-item {
+    display: block; width: 100%; text-align: left; border: none; background: transparent; color: var(--text);
+    font: inherit; font-size: var(--t-sm); font-weight: 500; padding: var(--s-1-5) var(--s-2-5); border-radius: 6px; cursor: pointer;
+  }
+  .job-card-menu-item:hover, .job-card-menu-item:focus-visible { background: var(--primary-tint); outline: none; }
+  .job-card-menu-item.danger { color: var(--danger); }
+  .job-card-menu-item.danger:hover, .job-card-menu-item.danger:focus-visible { background: var(--danger-tint); }
+  .job-card-menu-sep { height: 1px; background: var(--border); margin: var(--s-1) var(--s-1); }
   .form-title-row { display: flex; align-items: center; gap: var(--s-2-5); margin-bottom: var(--s-6); }
   .duplicate-job-btn { width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; color: var(--text-faint); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; margin-left: auto; }
   .duplicate-job-btn:hover { background: var(--primary-tint); color: var(--primary); }
@@ -3145,9 +3161,12 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
 
   body.dark-mode .job-card.active { background: rgba(57,73,171,0.16); }
-  body.dark-mode .job-card .delete-btn:hover { background: rgba(220,53,69,0.18); }
   body.dark-mode .job-comment-delete:hover { background: rgba(220,53,69,0.18); }
-  body.dark-mode .job-card .copy-btn:hover,
+  body.dark-mode .job-card-menu-item.danger:hover, body.dark-mode .job-card-menu-item.danger:focus-visible { background: rgba(220,53,69,0.18); color: var(--danger); }
+  body.dark-mode .job-card .job-card-menu-btn:hover,
+  body.dark-mode .job-card .job-card-menu-btn[aria-expanded="true"],
+  body.dark-mode .job-card-menu-item:hover,
+  body.dark-mode .job-card-menu-item:focus-visible,
   body.dark-mode .duplicate-job-btn:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
 
   body.dark-mode .form-group label { color: var(--text-light); }
