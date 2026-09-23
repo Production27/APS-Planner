@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://raw.githubusercontent.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TeamSync Status</title>
+<meta name="description" content="Live and historical availability of the TeamSync app and sync server.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7.2' fill='%232c3e50'/%3E%3Crect x='6.4' y='10.4' width='12' height='4.6' rx='2.3' fill='%23e53935'/%3E%3Crect x='6.4' y='17.2' width='19.2' height='4.6' rx='2.3' fill='white' fill-opacity='.92'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap">
+<!-- Public status page. Data: status.json on this repository's status-data
+     branch, written by .github/workflows/status.yml (.github/status/check.mjs
+     documents the format). Status colors are the validated status palette
+     and always come with an icon and a label, never color alone. -->
+<style>
+  :root {
+    --bg: #f4f5f9; --surface: #ffffff; --ink: #1c1f2b; --ink-2: #4a5063; --ink-3: #6b7185;
+    --line: #e2e5ee; --track: #e7e9f0; --brand: #1a237e;
+    --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --nodata: #c9cdd8;
+    --shadow: 0 1px 2px rgba(20, 24, 40, .06), 0 4px 16px rgba(20, 24, 40, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121318; --surface: #1a1b21; --ink: #eceef4; --ink-2: #b7bbc8; --ink-3: #8d92a3;
+      --line: #2c2e37; --track: #262833; --brand: #9fa8ff; --nodata: #3a3d49;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121318; --surface: #1a1b21; --ink: #eceef4; --ink-2: #b7bbc8; --ink-3: #8d92a3;
+    --line: #2c2e37; --track: #262833; --brand: #9fa8ff; --nodata: #3a3d49;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--ink); text-decoration: none; }
+  .brand svg { width: 28px; height: 28px; border-radius: 7px; }
+  .brand small { font-weight: 500; color: var(--ink-3); font-size: 14px; }
+  header a.open { font-size: 14px; font-weight: 600; color: var(--brand); text-decoration: none; }
+  header a.open:hover { text-decoration: underline; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+  .overall { display: flex; align-items: center; gap: 14px; padding: 18px 20px; margin-bottom: 16px; }
+  .overall h1 { font-size: 20px; margin: 0; }
+  .overall p { margin: 2px 0 0; color: var(--ink-3); font-size: 14px; }
+  .icon { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+  .icon svg { width: 18px; height: 18px; }
+  .icon.good { background: var(--good); } .icon.warning { background: var(--warning); color: #3a2a00; } .icon.critical { background: var(--critical); } .icon.nodata { background: var(--nodata); color: var(--ink); }
+  .comp { padding: 18px 20px; }
+  .comp + .comp { border-top: 1px solid var(--line); }
+  .comp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .comp-name { font-weight: 700; font-size: 16px; }
+  .comp-desc { color: var(--ink-3); font-size: 13px; font-weight: 400; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .pill .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .bars { display: flex; gap: 2px; height: 34px; align-items: stretch; }
+  .bar { flex: 1 1 0; min-width: 2px; border-radius: 2px; background: var(--nodata); position: relative; cursor: default; }
+  .bar.good { background: var(--good); } .bar.warning { background: var(--warning); } .bar.critical { background: var(--critical); }
+  .bar:hover, .bar:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+  .stats { display: flex; gap: 4px 20px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--ink-3); }
+  .stats b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+  h2 { font-size: 15px; margin: 28px 0 10px; color: var(--ink-2); }
+  .incidents { padding: 4px 20px; }
+  .incident { padding: 12px 0; display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+  .incident + .incident { border-top: 1px solid var(--line); }
+  .incident .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: none; }
+  .incident small { display: block; color: var(--ink-3); }
+  .muted { color: var(--ink-3); font-size: 14px; padding: 14px 0; margin: 0; }
+  details { margin-top: 16px; font-size: 14px; }
+  summary { cursor: pointer; color: var(--brand); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-3); font-weight: 600; }
+  footer { margin-top: 28px; font-size: 13px; color: var(--ink-3); }
+  footer p { margin: 4px 0; }
+  #tip { position: fixed; z-index: 10; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 600; padding: 6px 9px; border-radius: 6px; white-space: nowrap; display: none; }
+  @media (max-width: 480px) {
+    .wrap { padding-top: 20px; }
+    .bars { gap: 1px; height: 30px; }
+    .overall h1 { font-size: 18px; }
+  }
+  @media (forced-colors: active) {
+    .bar.good, .bar.warning, .bar.critical { forced-color-adjust: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="../">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7.2" fill="#2c3e50"/><rect x="6.4" y="10.4" width="12" height="4.6" rx="2.3" fill="#e53935"/><rect x="6.4" y="17.2" width="19.2" height="4.6" rx="2.3" fill="white" fill-opacity=".92"/></svg>
+      <span>TeamSync <small>Status</small></span>
+    </a>
+    <a class="open" href="../">Open TeamSync →</a>
+  </header>
+
+  <section class="card overall" id="overall" aria-live="polite">
+    <span class="icon nodata" id="overallIcon"></span>
+    <div><h1 id="overallTitle">Checking…</h1><p id="overallSub">Loading the latest checks.</p></div>
+  </section>
+
+  <section class="card" id="components"></section>
+
+  <h2>Recent incidents</h2>
+  <section class="card incidents" id="incidents"><p class="muted">Loading…</p></section>
+
+  <details>
+    <summary>Daily uptime as a table</summary>
+    <table id="table"><thead><tr><th>Date (UTC)</th></tr></thead><tbody></tbody></table>
+  </details>
+
+  <footer>
+    <p id="updated"></p>
+    <p>Each part is checked about every 5 minutes, from outside the service. A check fails if it gets no correct answer within 15 seconds, twice in a row.</p>
+  </footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+(function () {
+  var DATA_URL = 'https://raw.githubusercontent.com/Production27/APS-Planner/status-data/status.json';
+  var DESCRIPTIONS = { app: 'The website you open TeamSync in', api: 'Sign-in, live updates and saving' };
+  var STALE_MS = 30 * 60 * 1000;
+  var ICONS = {
+    good: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="12" cy="18.5" r="1.8" fill="currentColor"/></svg>',
+    critical: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
+    nodata: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="5.5" cy="12" r="2.2" fill="currentColor"/><circle cx="18.5" cy="12" r="2.2" fill="currentColor"/></svg>'
+  };
+  var LABEL = { good: 'Operational', warning: 'Degraded', critical: 'Down', nodata: 'No data' };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function pct(up, total) { return total ? (100 * up / total) : null; }
+  function fmtPct(p) { return p === null ? '—' : (p >= 99.995 ? '100' : p.toFixed(p >= 99 ? 2 : 1)) + '%'; }
+  function dayLevel(p) { return p === null ? 'nodata' : p >= 99.5 ? 'good' : p >= 95 ? 'warning' : 'critical'; }
+  function fmtTime(ms) { return new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  function fmtDay(iso) { return new Date(iso + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }); }
+  function ago(ms) {
+    var m = Math.round((Date.now() - ms) / 60000);
+    return m < 1 ? 'just now' : m === 1 ? '1 minute ago' : m < 60 ? m + ' minutes ago' : Math.round(m / 60) + ' hours ago';
+  }
+  function lastNDays(n) {
+    var out = [], d = new Date();
+    for (var i = n - 1; i >= 0; i--) { var x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - i)); out.push(x.toISOString().slice(0, 10)); }
+    return out;
+  }
+  function windowUptime(checks, idx, sinceMs) {
+    var up = 0, total = 0, ms = 0, n = 0;
+    checks.forEach(function (row) {
+      if (row[0] < sinceMs) return;
+      total++;
+      if (row[idx] >= 0) { up++; ms += row[idx]; n++; }
+    });
+    return { p: pct(up, total), avgMs: n ? Math.round(ms / n) : null };
+  }
+  function incidents(data) {
+    var out = [];
+    data.components.forEach(function (c, i) {
+      var start = null, last = null;
+      data.checks.forEach(function (row) {
+        var down = row[i + 1] < 0;
+        if (down && start === null) start = row[0];
+        if (!down && start !== null) { out.push({ name: c.name, from: start, to: row[0], ongoing: false }); start = null; }
+        last = row[0];
+      });
+      if (start !== null) out.push({ name: c.name, from: start, to: last, ongoing: true });
+    });
+    return out.sort(function (a, b) { return b.from - a.from; });
+  }
+  function duration(ms) {
+    var m = Math.max(5, Math.round(ms / 60000));
+    return m < 60 ? 'about ' + m + ' minutes' : 'about ' + (Math.round(m / 6) / 10) + ' hours';
+  }
+
+  function render(data) {
+    var now = Date.now();
+    var last = data.checks.length ? data.checks[data.checks.length - 1] : null;
+    var stale = !last || now - last[0] > STALE_MS;
+    var days = lastNDays(90);
+
+    // Overall
+    var states = data.components.map(function (c, i) { return !last ? 'nodata' : last[i + 1] >= 0 ? 'good' : 'critical'; });
+    var down = states.filter(function (s) { return s === 'critical'; }).length;
+    var level = stale ? 'nodata' : down === 0 ? 'good' : down < states.length ? 'warning' : 'critical';
+    var titles = { good: 'All systems operational', warning: 'Partial outage', critical: 'Major outage', nodata: 'Checks delayed' };
+    $('overallIcon').className = 'icon ' + level;
+    $('overallIcon').innerHTML = ICONS[level];
+    $('overallTitle').textContent = titles[level];
+    $('overallSub').textContent = stale
+      ? (last ? 'The last check ran ' + ago(last[0]) + '. The service may be fine; the checker is running late.' : 'No checks have run yet.')
+      : down === 0 ? 'Everything is working normally.' : states.map(function (s, i) { return s === 'critical' ? data.components[i].name + ' is not responding.' : ''; }).join(' ').trim();
+
+    // Components
+    var html = '';
+    data.components.forEach(function (c, i) {
+      var st = stale ? 'nodata' : states[i];
+      var d24 = windowUptime(data.checks, i + 1, now - 86400000);
+      var d7 = windowUptime(data.checks, i + 1, now - 7 * 86400000);
+      var up90 = 0, tot90 = 0;
+      var bars = days.map(function (day) {
+        var rec = data.days[day] && data.days[day][c.id];
+        var p = rec ? pct(rec[0], rec[1]) : null;
+        if (rec) { up90 += rec[0]; tot90 += rec[1]; }
+        var label = fmtDay(day) + ': ' + (p === null ? 'no data' : fmtPct(p) + ' up (' + rec[1] + ' checks)');
+        return '<span class="bar ' + dayLevel(p) + '" tabindex="0" role="img" aria-label="' + esc(label) + '" data-tip="' + esc(label) + '"></span>';
+      }).join('');
+      html += '<div class="comp">' +
+        '<div class="comp-head"><div><div class="comp-name">' + esc(c.name) + '</div><div class="comp-desc">' + esc(DESCRIPTIONS[c.id] || '') + '</div></div>' +
+        '<span class="pill"><span class="dot" style="background:var(--' + (st === 'nodata' ? 'nodata' : st) + ')"></span>' + LABEL[st] + '</span></div>' +
+        '<div class="bars">' + bars + '</div>' +
+        '<div class="axis"><span>90 days ago</span><span>Today</span></div>' +
+        '<div class="stats"><span>Last 24 hours <b>' + fmtPct(d24.p) + '</b></span><span>7 days <b>' + fmtPct(d7.p) + '</b></span><span>90 days <b>' + fmtPct(pct(up90, tot90)) + '</b></span>' +
+        (d24.avgMs !== null ? '<span>Response time <b>' + d24.avgMs + ' ms</b></span>' : '') + '</div></div>';
+    });
+    $('components').innerHTML = html;
+
+    // Incidents (last 7 days of individual checks)
+    var list = incidents(data);
+    $('incidents').innerHTML = list.length ? list.slice(0, 10).map(function (x) {
+      return '<div class="incident"><span class="dot" style="background:var(--' + (x.ongoing ? 'critical' : 'warning') + ')"></span><div>' +
+        '<b>' + esc(x.name) + (x.ongoing ? ' is down' : ' was unavailable') + '</b>' +
+        '<small>' + fmtTime(x.from) + (x.ongoing ? ' – ongoing' : ', for ' + duration(x.to - x.from)) + '</small></div></div>';
+    }).join('') : '<p class="muted">No incidents in the last 7 days.</p>';
+
+    // Table view
+    var head = '<tr><th>Date (UTC)</th>' + data.components.map(function (c) { return '<th>' + esc(c.name) + '</th>'; }).join('') + '</tr>';
+    var rows = days.slice().reverse().map(function (day) {
+      return '<tr><td>' + day + '</td>' + data.components.map(function (c) {
+        var rec = data.days[day] && data.days[day][c.id];
+        return '<td>' + (rec ? fmtPct(pct(rec[0], rec[1])) + ' (' + rec[1] + ')' : '—') + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    $('table').innerHTML = '<thead>' + head + '</thead><tbody>' + rows + '</tbody>';
+
+    $('updated').textContent = last ? 'Last check: ' + fmtTime(last[0]) + ' (' + ago(last[0]) + ').' : '';
+  }
+
+  function load() {
+    fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(render)
+      .catch(function () {
+        $('overallIcon').className = 'icon nodata';
+        $('overallIcon').innerHTML = ICONS.nodata;
+        $('overallTitle').textContent = 'Status data unavailable';
+        $('overallSub').textContent = 'Could not load the latest checks. This page will retry in a minute.';
+      });
+  }
+
+  // Tooltip for the daily bars (hover or keyboard focus).
+  var tip = $('tip');
+  function showTip(e) {
+    var t = e.target.closest('.bar');
+    if (!t) return;
+    tip.textContent = t.getAttribute('data-tip');
+    tip.style.display = 'block';
+    var r = t.getBoundingClientRect();
+    var x = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), window.innerWidth - tip.offsetWidth - 8);
+    tip.style.left = x + 'px';
+    tip.style.top = (r.top - tip.offsetHeight - 8) + 'px';
+  }
+  function hideTip() { tip.style.display = 'none'; }
+  document.addEventListener('mouseover', showTip);
+  document.addEventListener('focusin', showTip);
+  document.addEventListener('mouseout', function (e) { if (e.target.closest('.bar')) hideTip(); });
+  document.addEventListener('focusout', hideTip);
+
+  load();
+  setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>

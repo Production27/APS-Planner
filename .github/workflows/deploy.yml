@@ -74,6 +74,7 @@ jobs:
           cp index.html version.txt _site/
           cp -r assets _site/
           cp -r dist _site/
+          cp -r status _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

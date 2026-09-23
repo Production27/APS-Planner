@@ -1,0 +1,51 @@
+name: Status checks
+
+# Feeds the public status page (status/index.html). Every ~5 minutes
+# (GitHub runs schedules best-effort, so gaps of 10-15 minutes happen) it
+# checks the app website and the sync server (.github/status/check.mjs)
+# and saves the results to status.json on the status-data branch. That
+# branch is force-pushed as a single commit each time, so it never grows a
+# history. Note: GitHub pauses scheduled workflows in a repository with no
+# activity for 60 days; re-enable it from the Actions tab if that happens.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: status-checks
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/status
+          path: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Load the current status data
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init -q data
+          cd data
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth 1 origin status-data; then git checkout -q FETCH_HEAD -- status.json || true; fi
+      - name: Run the checks
+        run: node main/.github/status/check.mjs data/status.json
+      - name: Publish
+        run: |
+          cd data
+          git checkout -q --orphan status-data-new
+          git add status.json
+          git -c user.name="TeamSync status" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Status data"
+          git push -q -f origin HEAD:status-data

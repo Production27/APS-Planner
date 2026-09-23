@@ -25,6 +25,7 @@
 // synced data — see attachments.ts.
 
 import { getRoomStub } from './room-stub.ts';
+import { jsonResponse } from './http.ts';
 import { handleAuth } from './auth.ts';
 import { runBackup, handleTriggerBackup, handleListBackups, handleDownloadBackup, handleRestoreBackup } from './backup.ts';
 import {
@@ -71,6 +72,18 @@ export default {
       return getRoomStub(env).fetch(request);
     }
 
+    // Public health check for the status page (.github/workflows/status.yml).
+    // "ok" means this Worker AND the room Durable Object answered; it
+    // reveals nothing about the data.
+    if (url.pathname === "/health" && request.method === "GET") {
+      try {
+        const res = await getRoomStub(env).fetch("https://internal/internal/ping");
+        if (!res.ok) throw new Error("room " + res.status);
+        return jsonResponse({ status: "ok", time: new Date().toISOString() }, 200, corsHeaders);
+      } catch (e) {
+        return jsonResponse({ status: "unavailable" }, 503, corsHeaders);
+      }
+    }
     if (url.pathname === "/" || url.pathname === "/auth") {
       return handleAuth(request, env, corsHeaders, ctx);
     }

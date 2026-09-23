@@ -186,6 +186,10 @@ export class ApsRoom {
       return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     }
 
+    if (url.pathname === '/internal/ping') {
+      return new Response('ok');
+    }
+
     if (url.pathname === '/internal/audit' && request.method === 'POST') {
       let body: { entries?: AuditEntry[] };
       try { body = await request.json(); } catch (e) { return new Response('bad json', { status: 400 }); }
