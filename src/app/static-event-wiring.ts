@@ -18,6 +18,7 @@
 // listener is attached to, identical to an inline onclick's implicit
 // `this`. Everywhere else uses an arrow for brevity.
 import { openExportModal, closeExportModal, runExport } from './export';
+import { openPrintModal, closePrintModal, syncPrintKind, runPrint } from './print';
 
 declare global {
   function toggleSettingsMenu(): void;
@@ -127,6 +128,10 @@ export function initStaticEventListeners(): void {
   on('exportSpreadsheetBtn', () => { closeSettingsMenu(); openExportModal(); });
   on('exportCancelBtn', () => closeExportModal());
   on('exportRunBtn', () => runExport());
+  on('printBtn', () => { closeSettingsMenu(); openPrintModal(); });
+  on('printCancelBtn', () => closePrintModal());
+  on('printRunBtn', () => runPrint());
+  document.querySelectorAll<HTMLInputElement>('input[name="printKind"]').forEach((el) => el.addEventListener('change', () => syncPrintKind()));
   on('changePasswordBtn', () => { closeSettingsMenu(); changeMyPasswordUI(); });
   on('projectToggleBtn', () => { closeSettingsMenu(); toggleProject(); });
   on('logoutBtn', () => { closeSettingsMenu(); logout(); });

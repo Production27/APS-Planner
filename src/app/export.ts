@@ -30,7 +30,7 @@ export function toCsv(rows: Cell[][]): string {
   return rows.map((r) => r.map(csvCell).join(',')).join('\r\n');
 }
 
-function realTasks(tasks: Task[] | undefined): Task[] {
+export function realTasks(tasks: Task[] | undefined): Task[] {
   return (tasks || []).filter((t) => !t.isDueMarker && !t.isJobSpan);
 }
 
@@ -40,7 +40,7 @@ function allJobTasks(job: Job): Task[] {
   return out;
 }
 
-function validDate(s: unknown): string {
+export function validDate(s: unknown): string {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
 }
 
@@ -69,7 +69,7 @@ function person(card: BoardCard | undefined, key: string): string {
   return u ? displayNameForUsername(u) : '';
 }
 
-function jobsToExport(includeArchived: boolean): Job[] {
+export function jobsToExport(includeArchived: boolean): Job[] {
   syncCardColumns(); // stage is date-derived; resolve it before reading card.column
   return getVisibleJobs().filter((j) => !j.isLinkedReference && (includeArchived || !j.archived));
 }
