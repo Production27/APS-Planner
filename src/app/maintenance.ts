@@ -37,6 +37,14 @@ export function applyMaintenanceStatus(status: MaintenanceStatus | null | undefi
   overlay.classList.toggle('show', shouldBlock);
   if (shouldBlock) document.getElementById('maintenanceOverlayMessage')!.textContent = status!.message;
 
+  // The admin-side reminder (see #maintenanceAdminBanner in index.html).
+  const adminBanner = document.getElementById('maintenanceAdminBanner');
+  if (adminBanner) {
+    adminBanner.classList.toggle('show', !!(status && status.active) && roleConfirmed && currentUserRole === 'admin');
+    const offBtn = document.getElementById('maintenanceBannerOffBtn');
+    if (offBtn) offBtn.onclick = function() { setMaintenanceMode(false); };
+  }
+
   const toggle = document.getElementById('maintenanceToggle');
   if (toggle) toggle.classList.toggle('active', !!(status && status.active));
   const enableBtn = document.getElementById('maintenanceEnableBtn');

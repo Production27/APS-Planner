@@ -33,7 +33,6 @@ declare global {
   function changeMyPasswordUI(): void;
   function toggleProject(): void;
   function logout(): void;
-  function openArchivedJobsModal(): void;
   function switchTabMorphed(tab: string): void;
   function toggleJobRail(): void;
   function addNewJob(): void;
@@ -126,7 +125,6 @@ export function initStaticEventListeners(): void {
   on('changePasswordBtn', () => { closeSettingsMenu(); changeMyPasswordUI(); });
   on('projectToggleBtn', () => { closeSettingsMenu(); toggleProject(); });
   on('logoutBtn', () => { closeSettingsMenu(); logout(); });
-  on('archivedJobsBtn', () => { closeSettingsMenu(); openArchivedJobsModal(); });
 
   on('desktopSettingsBtn', () => toggleSettingsMenu());
   document.querySelectorAll<HTMLElement>('.rail-tab[data-tab]').forEach((el) => {

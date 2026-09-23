@@ -121,7 +121,10 @@ export function renderJobList(): void {
   // fixed toolbar below it) so it moves down with the list as more jobs
   // get added, landing right after the last one — same idea as the
   // Board's dashed "+ Add Board" tile at the end of the column row.
-  renderJobListInto(list, cards, function () { addNewJob(); });
+  // Archived jobs are reached from a link at the bottom of this list (it
+  // used to be an item in the settings menu, far from the jobs it's about).
+  const archivedCount = getVisibleJobs().filter(function (j) { return j.archived; }).length;
+  renderJobListInto(list, cards, function () { addNewJob(); }, archivedCount, openArchivedJobsModal);
 
   updateJobCount();
   applyPermissionGating(); // rebuilt on every job list refresh, outside renderAll()'s own sweep

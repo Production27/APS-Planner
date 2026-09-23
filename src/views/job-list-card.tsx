@@ -196,15 +196,27 @@ function openJobCardMenu(anchor: HTMLElement, p: JobCardProps): void {
   items[0].focus();
 }
 
-function JobListView({ cards, onAddJob }: { cards: JobCardProps[]; onAddJob: () => void }) {
+interface JobListViewProps {
+  cards: JobCardProps[];
+  onAddJob: () => void;
+  archivedCount: number;
+  onOpenArchived: () => void;
+}
+
+function JobListView({ cards, onAddJob, archivedCount, onOpenArchived }: JobListViewProps) {
   return (
     <>
       {cards.map((c) => <JobCard key={c.jobKey} {...c} />)}
       <button class="job-list-add-btn" onClick={onAddJob}>+ Add Job</button>
+      {archivedCount > 0 ? (
+        <button class="job-list-archived-link" onClick={onOpenArchived}>
+          Archived jobs ({archivedCount})
+        </button>
+      ) : null}
     </>
   );
 }
 
-export function renderJobListInto(container: HTMLElement, cards: JobCardProps[], onAddJob: () => void): void {
-  render(<JobListView cards={cards} onAddJob={onAddJob} />, container);
+export function renderJobListInto(container: HTMLElement, cards: JobCardProps[], onAddJob: () => void, archivedCount: number, onOpenArchived: () => void): void {
+  render(<JobListView cards={cards} onAddJob={onAddJob} archivedCount={archivedCount} onOpenArchived={onOpenArchived} />, container);
 }
