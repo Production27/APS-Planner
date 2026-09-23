@@ -22,6 +22,12 @@ const PRESENCE_STALE_MS = 90 * 1000;
 // Connections that see the same data share a scope: every admin and every
 // unrestricted account sees everything; a restricted account sees only its
 // assigned project (see filterRoomStateForAttachment()).
+function describeRoom(state: RoomState): string {
+  const ps = Object.values(state.projects || {});
+  const count = (k: 'jobs' | 'boardCards' | 'calendarEvents') => ps.reduce((n, p) => n + Object.keys(p[k] || {}).length, 0);
+  return ps.length + ' projects, ' + count('jobs') + ' jobs, ' + count('boardCards') + ' cards, ' + count('calendarEvents') + ' events';
+}
+
 function scopeKey(a: Attachment | null): string {
   if (!a || a.role === 'admin' || !a.assignedProjectId) return '*';
   return 'p:' + a.assignedProjectId;
@@ -79,6 +85,9 @@ export class ApsRoom {
     const itemized = await readItemizedRoom(storage);
     if (itemized) {
       this.roomState = itemized;
+      // One line per room load (Durable Objects restart on deploys and
+      // after going idle) — confirms which layout is live and how big.
+      console.log('Room loaded (per-item layout): ' + describeRoom(itemized));
       return this.roomState;
     }
     const legacy = await storage.get<RoomState>(LEGACY_KEY);
