@@ -5,7 +5,7 @@
 // setCardColumn/runColumnEntryActions/syncCardColumns), and job
 // visibility/finished-status. See tests/unit-jobs-model.spec.js.
 import type { Job, Phase, SubPhase, Task, BoardCard, BoardColumn } from './types';
-import { getJobPhases, getPhaseSubUnits, getPhaseCard, getPrimaryPhaseCard } from './models';
+import { getJobPhases, getPhaseSubUnits, getPhaseCard, getPrimaryPhaseCard, invalidateCardIndex } from './models';
 import { genId } from '../utils/id';
 import { getStoredUsername } from '../auth/session';
 import { hasMinTier } from '../auth/permissions';
@@ -174,6 +174,7 @@ export function splitJobIntoPhases(job: Job): void {
   job.tasks = [];
   if (existingCard) {
     existingCard.phaseId = phase.id;
+    invalidateCardIndex();
     existingCard.title = job.name + (phase.name ? ' — ' + phase.name : '');
   }
 }
@@ -219,6 +220,7 @@ export function unsplitJobFromPhases(job: Job): boolean {
   const card = getPhaseCard(job, phase.id);
   if (card) {
     card.phaseId = null;
+    invalidateCardIndex();
     card.title = job.name;
   }
   job.phases = [];
@@ -310,8 +312,8 @@ export function ensureJobHasCards(job: Job): void {
       // re-applied on every load so changing a job's color updates its
       // card(s) immediately instead of only at creation time.
       card.color = job.color || '#3949ab';
-      if (!card.jobId) card.jobId = job.id;
-      if ((card.phaseId || null) !== pid) card.phaseId = pid;
+      if (!card.jobId) { card.jobId = job.id; invalidateCardIndex(); }
+      if ((card.phaseId || null) !== pid) { card.phaseId = pid; invalidateCardIndex(); }
     }
   });
 }
@@ -327,6 +329,7 @@ export function migrateOrphanedCards(): void {
     const match = jobs.find(function (j) { return j.name === card.title; });
     if (match) {
       card.jobId = match.id;
+      invalidateCardIndex();
       logActivity('linked orphaned card "' + card.title + '" to matching job');
     } else {
       // No job shares this card's title — adopt it as a new job so it
@@ -341,6 +344,7 @@ export function migrateOrphanedCards(): void {
       };
       jobs.push(stubJob);
       card.jobId = stubJob.id;
+      invalidateCardIndex();
       logActivity('created job for orphaned card "' + card.title + '"');
     }
   });
@@ -539,9 +543,9 @@ export function ensureCardIds(arr: BoardCard[]): BoardCard[] {
 // ===== JOB VISIBILITY BY MEMBERSHIP =====
 export function isJobVisibleToMe(job: Job): boolean {
   if (!job) return false;
+  if (hasMinTier('projectAdmin')) return true;
   const card = getPrimaryPhaseCard(job);
   const members = (card && card.customFields && (card.customFields as any).members) || [];
-  if (hasMinTier('projectAdmin')) return true;
   const asUsername = viewAsUsername || getStoredUsername();
   return members.indexOf(asUsername) !== -1;
 }

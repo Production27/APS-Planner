@@ -115,11 +115,20 @@ function JobChatItem(p: JobChatItemProps) {
   );
 }
 
-function JobChatList({ items }: { items: JobChatItemProps[] }) {
+// olderCount/onShowOlder: the feed can be capped to the newest N (see
+// Home's HOME_JOB_CHAT_PAGE); older messages load on request.
+function JobChatList({ items, olderCount, onShowOlder }: { items: JobChatItemProps[]; olderCount?: number; onShowOlder?: () => void }) {
   if (!items.length) return <div class="job-comments-empty">No comments yet.</div>;
-  return <>{items.map((it) => <JobChatItem key={it.itemKey} {...it} />)}</>;
+  return (
+    <>
+      {items.map((it) => <JobChatItem key={it.itemKey} {...it} />)}
+      {olderCount && onShowOlder ? (
+        <button class="btn job-chat-show-older" onClick={onShowOlder}>Show older messages ({olderCount})</button>
+      ) : null}
+    </>
+  );
 }
 
-export function renderJobCommentFeedInto(container: HTMLElement, items: JobChatItemProps[]): void {
-  render(<JobChatList items={items} />, container);
+export function renderJobCommentFeedInto(container: HTMLElement, items: JobChatItemProps[], olderCount?: number, onShowOlder?: () => void): void {
+  render(<JobChatList items={items} olderCount={olderCount} onShowOlder={onShowOlder} />, container);
 }

@@ -1,4 +1,5 @@
 import { render } from 'preact';
+import { formatDate } from '../utils/date';
 import type { Job, Task } from '../core/types';
 import { getJobPhases, getPhaseSubUnits, getPhaseCard, getPrimaryPhaseCard } from '../core/models';
 import { getVisibleJobs, isJobFinished, syncCardColumns } from '../core/jobs';
@@ -24,7 +25,7 @@ const WEEKS = 8;
 function today0(): Date { return new Date(new Date().toDateString()); }
 function monday(d: Date): Date { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
 function parseDay(s: string): Date { return new Date(s + 'T00:00:00'); }
-function shortDate(d: Date): string { return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+function shortDate(d: Date): string { return formatDate(d, { month: 'short', day: 'numeric' }, undefined); }
 
 function reportJobs(): Job[] {
   return getVisibleJobs().filter((j) => !j.archived && !j.isLinkedReference);
@@ -268,7 +269,7 @@ function ReportsView() {
                 <tbody>
                   {next.map((u, i) => (
                     <tr key={i}>
-                      <td class="nowrap">{u.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                      <td class="nowrap">{formatDate(u.date, { weekday: 'short', month: 'short', day: 'numeric' }, undefined)}</td>
                       <td><a href="#" onClick={openJob(u.jobId)}>{u.job}</a></td>
                       <td>{u.what}</td>
                     </tr>

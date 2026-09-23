@@ -12,10 +12,12 @@ import { logActivity } from '../sync/outbound';
 import { renderHomeJobChat } from './home';
 import { renderJobCommentFeedInto, type JobChatItemProps, type JobChatReply } from './job-comment-item';
 
+// One shared formatter: toLocaleString() with options builds a new
+// formatter on every call, which made this the single most expensive
+// step of a Home redraw on a large project. Same output either way.
+const COMMENT_WHEN_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 export function formatCommentWhen(when: number | undefined): string {
-  return when
-    ? new Date(when).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
-    : 'Imported';
+  return when ? COMMENT_WHEN_FORMAT.format(new Date(when)) : 'Imported';
 }
 
 export function renderJobComments(job: Job): void {

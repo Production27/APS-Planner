@@ -15,11 +15,36 @@ import type { Job, Phase, SubPhase, BoardCard, FoundJob, FoundTask } from './typ
 // `jobs`/`boardCards` (used throughout this file) are declared once,
 // ambiently, in src/shared-globals.d.ts.
 
+// Lookup indexes for findJob()/getPhaseCard(). Both were linear scans,
+// called once per job from most views, so a redraw at 1,000 jobs did about
+// a million comparisons. Each index maps a key to an array position, and
+// every hit is re-checked against the live array: the same array object,
+// the same element at that position, still matching the key. Anything
+// else (the array reassigned, an item replaced, removed, inserted or
+// re-keyed in place) fails the check and rebuilds the index, so the answer
+// is always the same first match a scan would find. A true miss rebuilds
+// too, which costs one scan: no worse than before.
+let jobIndex: Map<string, number> | null = null;
+let jobIndexOf: Job[] | null = null;
+function buildJobIndex(): void {
+  const m = new Map<string, number>();
+  jobs.forEach(function (j, i) { if (j && !m.has(String(j.id))) m.set(String(j.id), i); });
+  jobIndex = m; jobIndexOf = jobs;
+}
+function jobIndexHit(jobId: string): FoundJob | null {
+  const i = jobIndex!.get(String(jobId));
+  if (i === undefined) return null;
+  const j = jobs[i];
+  return j && j.id === jobId ? { job: j, idx: i } : null;
+}
+
 export function findJob(jobId: string): FoundJob | null {
-  for (let i = 0; i < jobs.length; i++) {
-    if (jobs[i].id === jobId) return { job: jobs[i], idx: i };
+  if (jobIndex && jobIndexOf === jobs) {
+    const hit = jobIndexHit(jobId);
+    if (hit) return hit;
   }
-  return null;
+  buildJobIndex();
+  return jobIndexHit(jobId);
 }
 
 export function findTask(jobId: string, taskId: string): FoundTask | null {
@@ -85,9 +110,35 @@ export function getPhaseSubUnits(phase: Phase): SubPhase[] {
 // synthetic default phase id above. Replaces the old
 // `boardCards.find(c => c.jobId === job.id)` pattern that assumed one
 // card per job everywhere.
+let cardIndex: Map<string, number> | null = null;
+// For code that re-points an existing card at a different job or phase in
+// place (core/jobs.ts). The hit check below catches a card moved AWAY from
+// a key, but not an earlier card moved ONTO a key that already has one
+// cached: a scan would then return the earlier card. Call this after any
+// such change so the answer stays exactly what a scan gives.
+export function invalidateCardIndex(): void { cardIndex = null; }
+let cardIndexOf: BoardCard[] | null = null;
+function cardKey(jobId: unknown, phaseId: unknown): string { return String(jobId) + '\u0000' + String(phaseId || ''); }
+function buildCardIndex(): void {
+  const m = new Map<string, number>();
+  boardCards.forEach(function (c, i) { if (!c) return; const k = cardKey(c.jobId, c.phaseId); if (!m.has(k)) m.set(k, i); });
+  cardIndex = m; cardIndexOf = boardCards;
+}
+function cardIndexHit(job: Job, pid: string | null): BoardCard | undefined {
+  const i = cardIndex!.get(cardKey(job.id, pid));
+  if (i === undefined) return undefined;
+  const c = boardCards[i];
+  return c && c.jobId === job.id && (c.phaseId || null) === pid ? c : undefined;
+}
+
 export function getPhaseCard(job: Job, phaseId: string | null | undefined): BoardCard | undefined {
   const pid = phaseId || null;
-  return boardCards.find((c) => c.jobId === job.id && (c.phaseId || null) === pid);
+  if (cardIndex && cardIndexOf === boardCards) {
+    const hit = cardIndexHit(job, pid);
+    if (hit) return hit;
+  }
+  buildCardIndex();
+  return cardIndexHit(job, pid);
 }
 
 export function getJobCards(job: Job): BoardCard[] {

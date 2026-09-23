@@ -90,6 +90,8 @@ test('a delta removal deletes the job locally and records the tombstone', async 
   server.ws.send(JSON.stringify({ type: 'delta', projects: { [ids.pid]: { removedIds: { jobs: [ids.gone] }, deletedIds: { [ids.gone]: Date.now() } } } }));
   await expect.poll(() => page.evaluate((id) => !!findJob(id), ids.gone)).toBe(false);
   expect(await page.evaluate((a) => !!projects[a.pid].deletedIds[a.gone], ids)).toBe(true);
+  // The Jobs rail starts closed, so its list catches up when opened.
+  await page.evaluate(() => toggleJobRail());
   await expect(page.locator('#jobList')).not.toContainText(ids.name);
 });
 
@@ -98,5 +100,33 @@ test('a delta with a new job adds it and shows it in the job list', async ({ pag
   const pid = await page.evaluate(() => activeProjectId);
   const job = { id: 'remote-new-job', name: 'Brand New Remote Job', color: '#1e88e5', archived: false, order: 999, tasks: [], comments: [], updatedAt: Date.now() };
   server.ws.send(JSON.stringify({ type: 'delta', projects: { [pid]: { jobs: { [job.id]: job } } } }));
+  await expect.poll(() => page.evaluate(() => !!findJob('remote-new-job'))).toBe(true);
+  await page.evaluate(() => toggleJobRail());
   await expect(page.locator('#jobList')).toContainText('Brand New Remote Job');
+});
+
+// A7 step 3: a teammate's change skips redrawing the hidden Jobs rail
+// (marked stale, redrawn when shown) but updates it live when it's open.
+test('the Jobs list skips redraws while hidden and updates live while open', async ({ page }) => {
+  const server = await openWithFakeServer(page);
+  const pid = await page.evaluate(() => activeProjectId);
+  const send = (id, name) => server.ws.send(JSON.stringify({ type: 'delta', projects: { [pid]: { jobs: { [id]: { id, name, color: '#1e88e5', archived: false, order: 999, tasks: [], comments: [], updatedAt: Date.now() } } } } }));
+  send('hidden-rail-job', 'Added While Closed');
+  await expect.poll(() => page.evaluate(() => !!findJob('hidden-rail-job'))).toBe(true);
+  await expect(page.locator('#jobList')).not.toContainText('Added While Closed');
+  await page.evaluate(() => toggleJobRail());
+  await expect(page.locator('#jobList')).toContainText('Added While Closed');
+  send('open-rail-job', 'Added While Open');
+  await expect(page.locator('#jobList')).toContainText('Added While Open');
+});
+
+test('a teammate edit refreshes an open Reports tab', async ({ page }) => {
+  const server = await openWithFakeServer(page);
+  const a = await page.evaluate(() => ({ pid: activeProjectId, job: JSON.parse(JSON.stringify(jobs.find((j) => !j.archived && !isJobFinished(j)))) }));
+  await page.evaluate(() => switchTab('reports'));
+  const activeCount = () => page.locator('#panel-reports .rep-tile').first().innerText().then((t) => Number(t.match(/\d+/)[0]));
+  const before = await activeCount();
+  a.job.archived = true;
+  server.ws.send(JSON.stringify({ type: 'delta', projects: { [a.pid]: { jobs: { [a.job.id]: a.job } } } }));
+  await expect.poll(activeCount).toBe(before - 1);
 });

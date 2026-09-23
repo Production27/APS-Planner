@@ -82,6 +82,8 @@ function flushPendingSync(): void {
   flushAutoSaveJobForm();
   flushCardAutosave();
   flushPendingRoomPush();
+  // Last, after the flushes above have saved any in-progress edit.
+  flushProjectsToLocalCache();
 }
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'hidden') flushPendingSync();

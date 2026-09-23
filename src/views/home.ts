@@ -49,8 +49,9 @@
 // circularity: checklist.ts doesn't import from home.ts).
 import type { BoardCard, BoardColumn, Job, WorkflowItem } from '../core/types';
 import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
+import { renderJobListIfStale } from './job-list';
 import { escapeHtml } from '../utils/html';
-import { toIsoDate, getDaysDiff } from '../utils/date';
+import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
 import { darkenColor, softenColor, tintedTextColor, columnLabelTextColor, readableTextColor } from '../utils/color';
 import { renderGantt, setupScrollSync } from './gantt';
 import { onPanelResize } from '../utils/ui';
@@ -211,6 +212,7 @@ function switchTab(tab: string): void {
 // never touches it).
 function toggleJobRail(): void {
   const open = document.body.classList.toggle('job-rail-open');
+  if (open) renderJobListIfStale();
   const btn = document.getElementById('jobRailToggleBtn');
   if (btn) {
     btn.classList.toggle('active', open);
@@ -231,6 +233,7 @@ function toggleJobRail(): void {
 function setMobileView(view: string): void {
   if (view === document.body.dataset.mobileView && view !== 'home') view = 'home';
   document.body.dataset.mobileView = view;
+  if (view === 'jobs') renderJobListIfStale();
   document.querySelectorAll('.mobile-view-btn').forEach(function (b) {
     (b as HTMLElement).classList.toggle('active', (b as HTMLElement).dataset.view === view);
   });
@@ -394,6 +397,7 @@ function toggleHomeWidgetExpand(key: string, event?: Event): void {
 // idle ratios) and shouldn't animate that either mid-drag.
 let homeGridResizeSettleTimer: ReturnType<typeof setTimeout> | null = null;
 window.addEventListener('resize', function () {
+  renderJobListIfStale(); // the list may have just become visible (e.g. crossing into the phone layout)
   const grid = document.querySelector('#panel-home .home-grid');
   if (grid) grid.classList.add('is-resizing-live');
   clearTimeout(homeGridResizeSettleTimer as ReturnType<typeof setTimeout>);
@@ -1341,7 +1345,7 @@ function renderHomeTodayScheduleWidgetInto(containerEl: HTMLElement, rows: HomeS
     const d = new Date(windowStart.getTime() + i * 86400000);
     days.push({
       dayKey: toIsoDate(d),
-      dow: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      dow: formatDate(d, { weekday: 'short' }),
       dayNum: d.getDate(),
       isToday: i === halfWindow,
     });
@@ -1494,12 +1498,20 @@ function buildHomeJobChatItemProps(job: Job, c: any): JobChatItemProps {
   };
 }
 
+// The feed shows the newest messages only; "Show older messages" adds
+// another page. Rendering every comment on every job (8,000+ on a large
+// project) on each update froze the page for over half a second.
+const HOME_JOB_CHAT_PAGE = 100;
+let homeJobChatLimit = HOME_JOB_CHAT_PAGE;
+
 function renderHomeJobChat(): void {
   const listEl = document.getElementById('homeJobChatList');
   if (!listEl) return;
   renderHomeJobChatComposeOptions();
   const rows = buildHomeJobChatFeed();
-  renderJobCommentFeedInto(listEl, rows.map(function (row) { return buildHomeJobChatItemProps(row.job, row.comment); }));
+  const shown = rows.slice(0, homeJobChatLimit);
+  renderJobCommentFeedInto(listEl, shown.map(function (row) { return buildHomeJobChatItemProps(row.job, row.comment); }),
+    rows.length - shown.length, function () { homeJobChatLimit += HOME_JOB_CHAT_PAGE; renderHomeJobChat(); });
   applyPermissionGating(); // rebuilt on every feed refresh, outside renderAll()'s own sweep
 }
 

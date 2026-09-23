@@ -32,7 +32,7 @@
 // what it depends on and produces, rather than reading a shared closure.
 import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { safeJsonParse } from '../utils/id';
-import { toIsoDate, getDaysDiff } from '../utils/date';
+import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
 import { escapeHtml } from '../utils/html';
 import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
@@ -1469,9 +1469,9 @@ function buildRowModel(containerH: number, grid: HTMLElement): BuildRowModelResu
 function formatMergedDateRange(startIso: string | undefined, finishIso: string | undefined, hasDates: boolean): string {
   if (!hasDates || !startIso || !finishIso) return '—';
   const s = new Date(startIso + 'T00:00:00'), f = new Date(finishIso + 'T00:00:00');
-  const sMonth = s.toLocaleDateString('en-US', { month: 'short' });
+  const sMonth = formatDate(s, { month: 'short' });
   if (startIso === finishIso) return sMonth + ' ' + s.getDate();
-  const fMonth = f.toLocaleDateString('en-US', { month: 'short' });
+  const fMonth = formatDate(f, { month: 'short' });
   if (sMonth === fMonth && s.getFullYear() === f.getFullYear()) return sMonth + ' ' + s.getDate() + '–' + f.getDate();
   return sMonth + ' ' + s.getDate() + ' – ' + fMonth + ' ' + f.getDate();
 }
@@ -1887,7 +1887,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
           due = {
             left: dueLeft, top,
             background: markerColor,
-            title: dueTask.name + ': ' + dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            title: dueTask.name + ': ' + formatDate(dueDate, { month: 'short', day: 'numeric', year: 'numeric' }),
             onMouseEnter: (e: MouseEvent) => showTooltip(e, job, dueTask),
             onMouseLeave: hideTooltip,
             onMouseMove: moveTooltip,

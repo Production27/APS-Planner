@@ -54,6 +54,7 @@
 // `function` declaration already attaches to `window` on its own (unlike
 // `let`/`const`), so none of those needed any change to stay visible here
 // — only genuinely mutated DATA globals do.
+import { formatDate } from '../utils/date';
 import type { BoardCard, BoardColumn, WorkflowItem, Job, Task, Phase, CustomFieldDef } from '../core/types';
 import { findJob } from '../core/models';
 import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../core/jobs';
@@ -1270,17 +1271,17 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
   el.style.setProperty('--bct-light', tintedTextColor(cardTitleColor, '#ffffff', 6));
   el.style.setProperty('--bct-dark', tintedTextColor(cardTitleColor, '#242732', 6));
   if (hasOverride) {
-    el.title = 'Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil!).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    el.title = 'Manually placed — auto-sync resumes at ' + formatDate(new Date(card.manualColumnUntil!), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
   const badges: string[] = [];
   const overrideBadge = hasOverride
-    ? '<span class="board-card-override-badge" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="reconnectCard(\'' + card.id + '\', event)" title="Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil!).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '. Click to reconnect now."><svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-2px" xmlns="http://www.w3.org/2000/svg"><path d="M13 3l-9 10h6l-1 8 9-10h-6l1-8z" fill="#f0ad4e"/></svg> Manual <span style="text-decoration:underline;margin-left:2px;">Reconnect</span></span>'
+    ? '<span class="board-card-override-badge" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="reconnectCard(\'' + card.id + '\', event)" title="Manually placed — auto-sync resumes at ' + formatDate(new Date(card.manualColumnUntil!), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '. Click to reconnect now."><svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-2px" xmlns="http://www.w3.org/2000/svg"><path d="M13 3l-9 10h6l-1 8 9-10h-6l1-8z" fill="#f0ad4e"/></svg> Manual <span style="text-decoration:underline;margin-left:2px;">Reconnect</span></span>'
     : '';
 
   if (card.due) {
     const isOverdue = !isFinishedColumnId(card.column) && new Date(card.due + 'T00:00:00') < new Date(new Date().toDateString());
-    const dueLabel = new Date(card.due + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const dueLabel = formatDate(new Date(card.due + 'T00:00:00'), { month: 'short', day: 'numeric' });
     badges.push('<span class="board-card-due' + (isOverdue ? ' overdue' : '') + '"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg> ' + dueLabel + '</span>');
   }
 
@@ -1397,13 +1398,13 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
 function buildCardProps(card: BoardCard, stalledFloors?: Record<string, number>): BoardCardProps {
   const hasOverride = !!(card.manualColumn && card.manualColumnUntil && Date.now() < card.manualColumnUntil);
   const overrideTitle = hasOverride
-    ? 'Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil!).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    ? 'Manually placed — auto-sync resumes at ' + formatDate(new Date(card.manualColumnUntil!), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : '';
 
   let dueBadge: CardDueBadge | null = null;
   if (card.due) {
     const isOverdue = !isFinishedColumnId(card.column) && new Date(card.due + 'T00:00:00') < new Date(new Date().toDateString());
-    const dueLabel = new Date(card.due + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const dueLabel = formatDate(new Date(card.due + 'T00:00:00'), { month: 'short', day: 'numeric' });
     dueBadge = { overdue: isOverdue, label: dueLabel };
   }
 

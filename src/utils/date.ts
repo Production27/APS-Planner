@@ -96,3 +96,16 @@ export function timeToMinutes(hhmm: string | null | undefined): number | null {
   if (isNaN(h) || isNaN(m)) return null;
   return h * 60 + m;
 }
+
+// Date.toLocaleDateString()/toLocaleString() with options build a brand-new
+// Intl formatter on every call, which is slow enough to dominate a redraw
+// that labels hundreds of rows (measured: most of a Gantt or Home refresh
+// on a 1,000-job project). This keeps one formatter per locale+options and
+// gives identical output. Use it anywhere a date is formatted per row.
+const dateFormatCache = new Map<string, Intl.DateTimeFormat>();
+export function formatDate(d: Date, opts: Intl.DateTimeFormatOptions, locale: string | undefined = 'en-US'): string {
+  const key = (locale || '') + '|' + JSON.stringify(opts);
+  let fmt = dateFormatCache.get(key);
+  if (!fmt) { fmt = new Intl.DateTimeFormat(locale, opts); dateFormatCache.set(key, fmt); }
+  return fmt.format(d);
+}

@@ -9,7 +9,7 @@
 // from index.html imports here and gets assigned the same way; this
 // file is the one place that has to know the whole list.
 import { genId, safeJsonParse } from './utils/id';
-import { getDaysDiff, toIsoDate, addMonths, getBusinessDaysDiff, addBusinessDays, formatTimeLabel, timeToMinutes } from './utils/date';
+import { getDaysDiff, toIsoDate, addMonths, getBusinessDaysDiff, addBusinessDays, formatTimeLabel, timeToMinutes, formatDate } from './utils/date';
 import { darkenColor, softenColor, SOFTEN_AMOUNT } from './utils/color';
 import { escapeHtml } from './utils/html';
 import { createAutosaveController } from './utils/autosave';
@@ -48,7 +48,7 @@ import {
   isJobFinished, isTaskFinished, ensureJobAndTaskIds,
 } from './core/jobs';
 import {
-  migrateFromLegacy, loadProjects, saveProjects, getActiveProject, switchProject, enforceProjectScopeForRole,
+  migrateFromLegacy, loadProjects, saveProjects, flushProjectsToLocalCache, getActiveProject, switchProject, enforceProjectScopeForRole,
   slugifyFixedProjectName, enforceFixedProjectSet, loadActiveProjectData, saveActiveProject, toggleProject,
   updateProjectToggle, renderAll, applyPermissionGating, saveJobs, autoArchiveJobs, saveBoardColumns,
   saveWorkflowItems, saveBoardCards, saveCalendarEvents, saveFieldOptions, saveHeader, loadLinkEnabledPref,
@@ -182,6 +182,7 @@ declare global {
     safeJsonParse: typeof safeJsonParse;
     getDaysDiff: typeof getDaysDiff;
     toIsoDate: typeof toIsoDate;
+    formatDate: typeof formatDate;
     addMonths: typeof addMonths;
     getBusinessDaysDiff: typeof getBusinessDaysDiff;
     addBusinessDays: typeof addBusinessDays;
@@ -403,6 +404,7 @@ declare global {
     migrateFromLegacy: typeof migrateFromLegacy;
     loadProjects: typeof loadProjects;
     saveProjects: typeof saveProjects;
+    flushProjectsToLocalCache: typeof flushProjectsToLocalCache;
     getActiveProject: typeof getActiveProject;
     switchProject: typeof switchProject;
     enforceProjectScopeForRole: typeof enforceProjectScopeForRole;
@@ -771,6 +773,7 @@ window.genId = genId;
 window.safeJsonParse = safeJsonParse;
 window.getDaysDiff = getDaysDiff;
 window.toIsoDate = toIsoDate;
+window.formatDate = formatDate;
 window.addMonths = addMonths;
 window.getBusinessDaysDiff = getBusinessDaysDiff;
 window.addBusinessDays = addBusinessDays;
@@ -984,6 +987,7 @@ window.ensureJobAndTaskIds = ensureJobAndTaskIds;
 window.migrateFromLegacy = migrateFromLegacy;
 window.loadProjects = loadProjects;
 window.saveProjects = saveProjects;
+window.flushProjectsToLocalCache = flushProjectsToLocalCache;
 window.getActiveProject = getActiveProject;
 window.switchProject = switchProject;
 window.enforceProjectScopeForRole = enforceProjectScopeForRole;

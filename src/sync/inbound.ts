@@ -25,6 +25,9 @@ import { Job } from '../core/types';
 import { enforceFixedProjectSet } from '../app/project';
 import { renderActivityLogSidebar } from '../app/activity-log';
 import { isPanelActive } from '../utils/ui';
+import { renderMyChecklist } from '../views/checklist';
+import { renderReportsIfActive } from '../views/reports';
+import { renderJobListWhenVisible } from '../views/job-list';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (roomEverConnected, activeProjectId, projects, latestPresenceUsers,
@@ -682,7 +685,7 @@ function refreshActiveProjectFromShared(): void {
   // unconditional, matching isPanelActive()'s own doc comment on why: no
   // tab-switch hook exists to refresh them lazily the way the four panel
   // views have.
-  const renders: (() => void)[] = [renderJobList, updateJobCount, refreshArchivedJobsListIfOpen];
+  const renders: (() => void)[] = [renderJobListWhenVisible, updateJobCount, refreshArchivedJobsListIfOpen];
   if (isPanelActive('gantt')) {
     if (isGanttReorderAnimating()) deferGanttRefreshUntilAnimationDone();
     else renders.push(renderGantt);
@@ -690,6 +693,8 @@ function refreshActiveProjectFromShared(): void {
   if (isPanelActive('board')) renders.push(renderBoard);
   if (isPanelActive('calendar')) renders.push(renderCalendar);
   if (isPanelActive('home')) renders.push(renderHomeDashboard);
+  if (isPanelActive('checklist')) renders.push(renderMyChecklist);
+  if (isPanelActive('reports')) renders.push(renderReportsIfActive);
   // CRITICAL: if a job is open in Job Manager, its form fields (task dates
   // in particular) are plain DOM state — they don't track the `jobs` array
   // automatically. autoSaveJobForm() reads those fields directly on every

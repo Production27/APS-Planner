@@ -136,9 +136,42 @@ export function loadProjects(): void {
   }
 }
 
+// The local copy is written at most once per SAVE_PROJECTS_DELAY_MS
+// rather than on every call. It's a full JSON.stringify + localStorage
+// write of every project (every job, archived ones included), and it ran
+// on every edit and every incoming teammate change: about half of each
+// incoming change's cost at 250 jobs. The server is the source of truth;
+// this copy only exists for instant startup and offline viewing, so a
+// fraction of a second's delay costs nothing. flushPendingSync() (see
+// outbound.ts) writes it immediately when the page is hidden or closed,
+// so a reload never loses an edit.
+const SAVE_PROJECTS_DELAY_MS = 400;
+let saveProjectsTimer: ReturnType<typeof setTimeout> | null = null;
+let localCacheFullWarned = false;
+
 export function saveProjects(): void {
-  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
-  localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId as string);
+  if (saveProjectsTimer === null) saveProjectsTimer = setTimeout(flushProjectsToLocalCache, SAVE_PROJECTS_DELAY_MS);
+}
+
+// Browsers cap localStorage at about 5 MB per site, which a large company's
+// data (roughly 600+ jobs) outgrows. When the copy doesn't fit, drop it
+// entirely instead of throwing. Throwing here used to abort whatever edit
+// or incoming change triggered the save, partway through. With no copy,
+// the next page load starts the way a brand-new browser does and waits for
+// the server's snapshot. Leaving an older copy behind would be worse: the
+// failed write keeps the previous, out-of-date value.
+export function flushProjectsToLocalCache(): void {
+  if (saveProjectsTimer !== null) { clearTimeout(saveProjectsTimer); saveProjectsTimer = null; }
+  try { localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId as string); } catch (e) { /* see below */ }
+  try {
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  } catch (err) {
+    try { localStorage.removeItem(PROJECTS_KEY); } catch (e) { /* storage unavailable */ }
+    if (!localCacheFullWarned) {
+      localCacheFullWarned = true;
+      console.warn('Local copy of project data skipped (too large for browser storage); the server copy is unaffected', err);
+    }
+  }
 }
 
 export function getActiveProject(): any {

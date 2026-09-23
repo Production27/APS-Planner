@@ -75,6 +75,7 @@ declare global {
   // site — this file is just the one place their shared type is defined.
   function saveJobs(): void;
   function saveProjects(): void;
+  function flushProjectsToLocalCache(): void;
   function saveBoardColumns(): void;
   function logActivity(text: string): void;
   function isJobVisibleToMe(job: Job): boolean;

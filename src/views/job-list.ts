@@ -6,6 +6,7 @@
 // lives elsewhere; this file calls that (editJob/addNewJob/cancelEdit/
 // isJobFinished/getVisibleJobs/ensureJobHasCards/syncCardColumns and
 // friends) as ambient globals rather than importing it.
+import { formatDate } from '../utils/date';
 import type { Job } from '../core/types';
 import { findJob, getJobPhases, getPhaseCard, getJobCards, getPrimaryPhaseCard } from '../core/models';
 import { genId } from '../utils/id';
@@ -38,7 +39,31 @@ declare global {
   function cancelPendingJobAutosave(): void;
 }
 
+// Teammates' changes skip redrawing the Jobs list while it isn't on
+// screen (the desktop rail is closed by default; on a phone it only shows
+// in the Jobs view). At 1,000 jobs that redraw was ~85 ms on every
+// incoming change, whatever tab was open. The list is marked stale
+// instead and redrawn as soon as it's shown (renderJobListIfStale(), from
+// toggleJobRail()/setMobileView()/resize). Checked from the element itself
+// rather than re-deriving the CSS rules that hide it: closed on desktop
+// is opacity 0, hidden on mobile is display:none.
+let jobListStale = false;
+function isJobListOnScreen(): boolean {
+  const list = document.getElementById('jobList');
+  return !!list && list.getClientRects().length > 0 && getComputedStyle(list).opacity !== '0';
+}
+export function renderJobListWhenVisible(): void {
+  if (isJobListOnScreen()) { renderJobList(); return; }
+  jobListStale = true;
+  // Still resolve date-derived stages, which renderJobList() would have.
+  syncCardColumns();
+}
+export function renderJobListIfStale(): void {
+  if (jobListStale) renderJobList();
+}
+
 export function renderJobList(): void {
+  jobListStale = false;
   const list = document.getElementById('jobList')!;
   const search = (document.getElementById('jobSearch') as HTMLInputElement).value.toLowerCase();
 
@@ -104,7 +129,7 @@ export function renderJobList(): void {
       titleColorLight: tintedTextColor(job.color || '#3949ab', '#ffffff', 6),
       titleColorDark: tintedTextColor(job.color || '#3949ab', '#242732', 6),
       name: job.name,
-      dateRangeLabel: (s && f) ? ((s as Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + (f as Date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) : null,
+      dateRangeLabel: (s && f) ? (formatDate(s as Date, { month: 'short', day: 'numeric' }) + ' – ' + formatDate(f as Date, { month: 'short', day: 'numeric' })) : null,
       boardDots: boardDots,
       singleBoardTag: singleBoardTag,
       commentCount: (comments && comments.length) || 0,
