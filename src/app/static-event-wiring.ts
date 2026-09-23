@@ -17,6 +17,8 @@
 // ordinary function's `this` inside a 'click' listener is the element the
 // listener is attached to, identical to an inline onclick's implicit
 // `this`. Everywhere else uses an arrow for brevity.
+import { openExportModal, closeExportModal, runExport } from './export';
+
 declare global {
   function toggleSettingsMenu(): void;
   function setMobileView(view: string): void;
@@ -122,6 +124,9 @@ export function initStaticEventListeners(): void {
   // before a real click could ever reach it — an addEventListener here
   // would coexist with, not be replaced by, that reassignment and double-fire.
   on('manageUsersBtn', () => { closeSettingsMenu(); openManageUsersModal(); });
+  on('exportSpreadsheetBtn', () => { closeSettingsMenu(); openExportModal(); });
+  on('exportCancelBtn', () => closeExportModal());
+  on('exportRunBtn', () => runExport());
   on('changePasswordBtn', () => { closeSettingsMenu(); changeMyPasswordUI(); });
   on('projectToggleBtn', () => { closeSettingsMenu(); toggleProject(); });
   on('logoutBtn', () => { closeSettingsMenu(); logout(); });
