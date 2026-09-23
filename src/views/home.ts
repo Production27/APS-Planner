@@ -51,7 +51,7 @@ import type { BoardCard, BoardColumn, Job, WorkflowItem } from '../core/types';
 import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
 import { escapeHtml } from '../utils/html';
 import { toIsoDate, getDaysDiff } from '../utils/date';
-import { darkenColor, softenColor } from '../utils/color';
+import { darkenColor, softenColor, tintedTextColor, columnLabelTextColor, readableTextColor } from '../utils/color';
 import { renderGantt, setupScrollSync } from './gantt';
 import { onPanelResize } from '../utils/ui';
 import { getStoredDisplayName } from '../auth/session';
@@ -589,6 +589,10 @@ interface HomeScheduleRow {
   start: Date;
   finish: Date;
   taskColor: string;
+  // The task's own color only (null when it falls back to the job's) —
+  // decides the Task pill's look, same split as the real Gantt's
+  // taskPillColors().
+  taskOwnColor: string | null;
 }
 
 // Every Gantt task from a visible job whose date range includes today —
@@ -629,7 +633,8 @@ function buildHomeTodayScheduleRows(): HomeScheduleRow[] {
             label: label, phaseName: nameParts.join(' — '), start: start, finish: finish,
             // Same fallback chain the Gantt bars themselves use (task's
             // own color, else its job's, else the app default).
-            taskColor: task.color || job.color || '#3949ab'
+            taskColor: task.color || job.color || '#3949ab',
+            taskOwnColor: task.color || null
           });
         });
       });
@@ -666,7 +671,8 @@ function buildHomeUpcomingScheduleRows(windowStart: Date, windowEnd: Date): Home
           rows.push({
             job: job, phaseId: phase.id, subPhaseId: subUnit.id, taskName: task.name || 'Untitled task',
             label: label, phaseName: nameParts.join(' — '), start: start, finish: finish,
-            taskColor: task.color || job.color || '#3949ab'
+            taskColor: task.color || job.color || '#3949ab',
+            taskOwnColor: task.color || null
           });
         });
       });
@@ -1347,15 +1353,29 @@ function renderHomeTodayScheduleWidgetInto(containerEl: HTMLElement, rows: HomeS
     const leftPct = (getDaysDiff(windowStart, clippedStart) / (windowDays as number)) * 100;
     const widthPct = Math.max((getDaysDiff(clippedStart, clippedFinishExclusive) / (windowDays as number)) * 100, 6);
     const jobColor = row.job.color || '#3949ab';
+    const barColor = softenColor(row.taskColor);
     const titleText = row.label + (row.phaseName ? ' — ' + row.phaseName : '');
+    // Task pill: same rule as the real Gantt's Task column (see
+    // taskPillColors() in gantt.ts) — a task's own color is its board
+    // column's pastel, used as-is with the Board header's label-text rule;
+    // a colorless task falls back to the softened job color.
+    const taskPillBg = row.taskOwnColor ? row.taskOwnColor : softenColor(jobColor);
+    const taskPillText = row.taskOwnColor ? columnLabelTextColor(row.taskOwnColor) : readableTextColor(taskPillBg);
     return {
       rowKey: row.job.id + '::' + row.taskName + '::' + (row.phaseId || '') + '::' + (row.subPhaseId || ''),
       taskName: row.taskName,
       title: titleText,
       leftPct: leftPct,
       widthPct: widthPct,
-      barColor: softenColor(row.taskColor),
+      barColor: barColor,
       jobColor: jobColor,
+      // De-chromed on-bar job tag, same as the real Gantt's
+      // .task-bar-job-tag: plain text in the job's own hue, contrast-
+      // adjusted against this bar's actual fill (the task's softened
+      // color, which can differ from the job's).
+      jobTagColor: tintedTextColor(jobColor, barColor),
+      taskPillBg: taskPillBg,
+      taskPillText: taskPillText,
       jobName: row.job.name,
       // subPhaseId only ever shows up alongside a real phaseId (sub-phases
       // can only exist on a real phase, never on the synthetic no-phases

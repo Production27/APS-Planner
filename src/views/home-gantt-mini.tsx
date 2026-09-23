@@ -25,6 +25,10 @@ export interface HomeMiniGanttRowProps {
   widthPct: number;
   barColor: string;
   jobColor: string;
+  // Text color of the de-chromed on-bar job name (see home.ts).
+  jobTagColor: string;
+  taskPillBg: string;
+  taskPillText: string;
   jobName: string;
   onClick: () => void;
 }
@@ -59,10 +63,10 @@ function MiniGanttDay(p: HomeMiniGanttDayProps) {
 function MiniGanttRow(p: HomeMiniGanttRowProps) {
   return (
     <div class="home-mini-gantt-row" tabIndex={0} role="button" onKeyDown={onEnterOrSpace(p.onClick)} onClick={p.onClick} title={p.title}>
-      <div class="home-mini-gantt-label">{p.taskName}</div>
+      <div class="home-mini-gantt-label"><span class="home-mini-gantt-task-pill" style={{ background: p.taskPillBg, color: p.taskPillText }}>{p.taskName}</span></div>
       <div class="home-mini-gantt-track">
         <div class="home-mini-gantt-bar" style={{ left: p.leftPct + '%', width: p.widthPct + '%', background: p.barColor, borderColor: p.jobColor }}>
-          <span class="home-mini-gantt-pill" style={{ background: p.jobColor }}>{p.jobName}</span>
+          <span class="home-mini-gantt-pill" style={{ color: p.jobTagColor }}>{p.jobName}</span>
         </div>
       </div>
     </div>

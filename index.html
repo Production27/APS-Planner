@@ -2202,8 +2202,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     font-size: var(--t-xs); font-weight: 600; color: var(--text);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: var(--s-1-5);
   }
-  .home-mini-gantt-row:hover .home-mini-gantt-label { color: var(--primary); }
-  body.dark-mode .home-mini-gantt-row:hover .home-mini-gantt-label { color: var(--primary-ondark); }
+  .home-mini-gantt-row:hover .home-mini-gantt-task-pill { filter: brightness(1.15); }
   .home-mini-gantt-track {
     grid-column: 2 / span var(--home-gantt-days, 7); position: relative; height: 18px; border-radius: 4px;
     background: repeating-linear-gradient(90deg, transparent, transparent calc(100% / var(--home-gantt-days, 7) - 1px), var(--border) calc(100% / var(--home-gantt-days, 7) - 1px), var(--border) calc(100% / var(--home-gantt-days, 7)));
@@ -2213,11 +2212,21 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     border: 2px solid; display: flex; align-items: center; padding: 0 var(--s-1); overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
+  /* De-chromed, same as the real Gantt's .task-bar-job-tag: no chip, just
+     the job name in a contrast-adjusted version of the job's own color
+     (set inline — see renderHomeTodayScheduleWidget()). */
   .home-mini-gantt-pill {
-    font-size: var(--t-3xs); font-weight: 700; color: #fff; line-height: 1.5;
-    padding: 1px var(--s-1-5); border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.15);
+    font-size: var(--t-2xs); font-weight: 700; line-height: 1.5;
+    padding: 1px var(--s-0-5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     max-width: 100%; pointer-events: none;
+  }
+  /* The task name as a chip in its board column's color — same look as the
+     real Gantt's Task column pill (.task-row .task-row-pill). */
+  .home-mini-gantt-task-pill {
+    display: inline-block; max-width: 100%; box-sizing: border-box; vertical-align: middle;
+    font-size: var(--t-2xs); font-weight: 600; line-height: 1.5;
+    padding: 1px var(--s-2); border-radius: 10px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   /* Spans every row's own height (top/bottom auto-resolve against
      .home-mini-gantt's own content height, which its other in-flow
