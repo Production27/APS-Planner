@@ -119,7 +119,10 @@ export interface UserRecord {
   // been shown to the user but not yet confirmed with a code.
   mfa?: { secret: string; enabledAt: number; lastStep: number; recovery: string[] };
   mfaPending?: { secret: string; createdAt: number };
-  // Google account email for "Sign in with Google" (see sso.ts).
+  // Optional email, any provider (see setAccountEmail() in users.ts): sign
+  // in with it instead of the username, and "Sign in with Google" matches
+  // on it. googleEmail is the short-lived earlier name, read as email.
+  email?: string;
   googleEmail?: string;
   [key: string]: unknown;
 }

@@ -9,16 +9,18 @@
 //        Google sends the browser back here. The code is exchanged for an
 //        ID token (with the client secret and a PKCE verifier), the token's
 //        signature and claims are checked against Google's published keys,
-//        and its email is matched to a TeamSync account (an admin links
-//        each account to its Google email in Manage Users). The browser is
+//        and its email is matched to a TeamSync account's email (set by
+//        an admin in Manage Users; see users.ts). The browser is
 //        sent back to the app with a one-time code in the #fragment,
 //        never the session itself.
 //   3. POST /sso/redeem {code}  -> {token, user}
 //        The app swaps the one-time code (2 minutes, single use) for a
 //        session, exactly like a password sign-in would give.
-// Nobody gets in just by having a Google account: the email has to be
-// linked to an existing TeamSync account, and (if the admin set one) the
-// Google Workspace domain has to be on the allowed list.
+// Google sign-in is an extra way in: password sign-in (with a username or
+// email) always keeps working. Nobody gets in just by having a Google
+// account: its email has to be an existing TeamSync account's email, and
+// (if the admin set one) the Google Workspace domain has to be on the
+// allowed list.
 //
 // Setup (once): a Google Cloud "OAuth client ID" of type Web application,
 // with this Worker's /sso/google/callback as an authorized redirect URI.
@@ -29,10 +31,9 @@
 import { jsonResponse } from './http.ts';
 import { base64UrlEncode, base64UrlDecode } from './room-token.ts';
 import { recordAudit, clientIp } from './audit.ts';
-import { getUser, putUser, resolveCaller, normalizeUsername } from './users.ts';
+import { getUser, resolveCaller, normalizeEmail, findUserByEmail } from './users.ts';
 import { requireAdmin } from './users-admin.ts';
 import { issueSession } from './auth.ts';
-import type { UserRecord } from './types.ts';
 
 declare global {
   interface Env {
@@ -71,9 +72,6 @@ export interface SsoSettings {
   // Google Workspace domains allowed to sign in (the ID token's `hd`
   // claim). Empty = any Google account whose email is linked to a user.
   allowedDomains: string[];
-  // Only Google sign-in for everyone except admins, who keep their
-  // password as a way in if Google is ever unavailable.
-  requireGoogle: boolean;
   updatedBy?: string;
   updatedAt?: number;
 }
@@ -83,7 +81,6 @@ export async function getSsoSettings(env: Env): Promise<SsoSettings> {
   return {
     googleEnabled: !!s.googleEnabled,
     allowedDomains: Array.isArray(s.allowedDomains) ? s.allowedDomains.filter(function (d) { return typeof d === 'string'; }) : [],
-    requireGoogle: !!s.requireGoogle,
     updatedBy: s.updatedBy, updatedAt: s.updatedAt,
   };
 }
@@ -95,51 +92,6 @@ export function googleConfigured(env: Env): boolean {
 export async function googleActive(env: Env): Promise<{ active: boolean; settings: SsoSettings }> {
   const settings = await getSsoSettings(env);
   return { active: googleConfigured(env) && settings.googleEnabled, settings };
-}
-
-// ---- Linking accounts to Google emails ----
-// "sso-email:<email>" -> username, so a sign-in finds the account without
-// reading every user, and one email can't be linked to two accounts.
-export function normalizeEmail(email: unknown): string {
-  return (typeof email === 'string' ? email : '').trim().toLowerCase();
-}
-export function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
-}
-function emailKey(email: string): string {
-  return 'sso-email:' + normalizeEmail(email);
-}
-// Sets (or, with '', clears) the account's Google email and keeps the
-// index in step. Returns an error message, or null. Caller saves the user.
-export async function linkGoogleEmail(env: Env, user: UserRecord, email: unknown): Promise<string | null> {
-  const next = normalizeEmail(email);
-  const prev = normalizeEmail(user.googleEmail);
-  if (next === prev) return null;
-  if (next) {
-    if (!isValidEmail(next)) return 'That Google email doesn\'t look right';
-    const owner = await env.USERS_KV.get(emailKey(next));
-    if (owner && owner !== normalizeUsername(user.username)) return 'That Google email is already linked to @' + owner;
-    await env.USERS_KV.put(emailKey(next), normalizeUsername(user.username));
-  }
-  if (prev) {
-    const owner = await env.USERS_KV.get(emailKey(prev));
-    if (owner === normalizeUsername(user.username)) await env.USERS_KV.delete(emailKey(prev));
-  }
-  if (next) user.googleEmail = next; else delete user.googleEmail;
-  return null;
-}
-export async function unlinkGoogleEmail(env: Env, user: UserRecord): Promise<void> {
-  const prev = normalizeEmail(user.googleEmail);
-  if (!prev) return;
-  const owner = await env.USERS_KV.get(emailKey(prev));
-  if (owner === normalizeUsername(user.username)) await env.USERS_KV.delete(emailKey(prev));
-}
-export async function findUserByGoogleEmail(env: Env, email: string): Promise<UserRecord | null> {
-  const username = await env.USERS_KV.get(emailKey(email));
-  if (!username) return null;
-  const user = await getUser(env, username);
-  // The index is only a pointer; the account itself must still agree.
-  return user && normalizeEmail(user.googleEmail) === normalizeEmail(email) ? user : null;
 }
 
 // ---- Small crypto helpers ----
@@ -223,7 +175,7 @@ function readCookie(request: Request, name: string): string {
 // Public: what the sign-in screen should offer.
 export async function handleSsoConfig(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   const { active, settings } = await googleActive(env);
-  return jsonResponse({ google: active, requireGoogle: active && settings.requireGoogle }, 200, corsHeaders);
+  return jsonResponse({ google: active }, 200, corsHeaders);
 }
 
 export async function handleGoogleStart(request: Request, env: Env, url: URL): Promise<Response> {
@@ -299,7 +251,7 @@ export async function handleGoogleCallback(request: Request, env: Env, url: URL,
   if (settings.allowedDomains.length && settings.allowedDomains.indexOf((checked.claims.hd || '').toLowerCase()) === -1) {
     return fail('domain', email + ' is not in an allowed Google Workspace domain', email);
   }
-  const user = await findUserByGoogleEmail(env, email);
+  const user = await findUserByEmail(env, email);
   if (!user) return fail('no_account', email + ' is not linked to a TeamSync account', email);
 
   const oneTime = randomToken(24);
@@ -316,35 +268,33 @@ export async function handleSsoRedeem(request: Request, env: Env, corsHeaders: R
   await env.USERS_KV.delete('sso-code:' + code);
   const { username, email } = JSON.parse(raw) as { username: string; email: string };
   const user = await getUser(env, username);
-  if (!user || normalizeEmail(user.googleEmail) !== email) return jsonResponse({ error: 'That account has changed — try again.' }, 401, corsHeaders);
+  if (!user || normalizeEmail(user.email) !== email) return jsonResponse({ error: 'That account has changed — try again.' }, 401, corsHeaders);
   return issueSession(env, request, ctx, user, 'Google (' + email + ')', corsHeaders);
 }
 
 // Admin: read or change the Google sign-in settings.
-// POST {token, googleEnabled?, allowedDomains?, requireGoogle?}
+// POST {token, googleEnabled?, allowedDomains?}
 export async function handleSsoSettings(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
-  let body: { token?: string; googleEnabled?: unknown; allowedDomains?: unknown; requireGoogle?: unknown };
+  let body: { token?: string; googleEnabled?: unknown; allowedDomains?: unknown };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: 'Invalid JSON body' }, 400, corsHeaders); }
   const admin = await requireAdmin(env, await resolveCaller(env, body), corsHeaders);
   if (admin.error) return admin.error;
   const current = await getSsoSettings(env);
   const next: SsoSettings = Object.assign({}, current);
   if (typeof body.googleEnabled === 'boolean') next.googleEnabled = body.googleEnabled;
-  if (typeof body.requireGoogle === 'boolean') next.requireGoogle = body.requireGoogle;
   if (Array.isArray(body.allowedDomains)) {
     const domains = body.allowedDomains.map(function (d) { return String(d).trim().toLowerCase().replace(/^@/, ''); }).filter(Boolean);
     const bad = domains.find(function (d) { return !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d); });
     if (bad) return jsonResponse({ error: '"' + bad + '" isn\'t a domain (like yourcompany.com)' }, 400, corsHeaders);
     next.allowedDomains = Array.from(new Set(domains));
   }
-  if (next.requireGoogle && !next.googleEnabled) next.requireGoogle = false;
-  const changed = JSON.stringify([next.googleEnabled, next.requireGoogle, next.allowedDomains]) !== JSON.stringify([current.googleEnabled, current.requireGoogle, current.allowedDomains]);
+  const changed = JSON.stringify([next.googleEnabled, next.allowedDomains]) !== JSON.stringify([current.googleEnabled, current.allowedDomains]);
   if (changed) {
     next.updatedBy = admin.user!.username;
     next.updatedAt = Date.now();
     await env.USERS_KV.put(SSO_SETTINGS_KEY, JSON.stringify(next));
     await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Changed Google sign-in settings', ip: clientIp(request),
-      details: 'on: ' + (next.googleEnabled ? 'yes' : 'no') + ', Google only: ' + (next.requireGoogle ? 'yes' : 'no') + ', domains: ' + (next.allowedDomains.join(' ') || 'any') });
+      details: 'on: ' + (next.googleEnabled ? 'yes' : 'no') + ', domains: ' + (next.allowedDomains.join(' ') || 'any') });
   }
   return jsonResponse({
     settings: next,
@@ -353,9 +303,3 @@ export async function handleSsoSettings(request: Request, env: Env, corsHeaders:
   }, 200, corsHeaders);
 }
 
-// Used by handleAuth(): with "Google only" on, non-admins can't use a password.
-export async function passwordSignInBlocked(env: Env, user: UserRecord): Promise<boolean> {
-  if (user.role === 'admin') return false;
-  const { active, settings } = await googleActive(env);
-  return active && settings.requireGoogle;
-}

@@ -3466,7 +3466,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     </div>
     <form id="loginForm" autocomplete="off">
       <div class="login-field" id="loginFieldUser">
-        <label class="login-label" for="loginUsername">Username</label>
+        <label class="login-label" for="loginUsername">Username or email</label>
         <div class="login-input-wrap">
           <input class="login-input" id="loginUsername" type="text" autocomplete="username">
         </div>
@@ -4150,8 +4150,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         <input type="text" id="userFormDisplayName" placeholder="shown on comments/activity">
       </div>
       <div class="form-group">
-        <label>Google account email <span style="font-weight:400; color:var(--text-light);">(optional, for Sign in with Google)</span></label>
-        <input type="email" id="userFormGoogleEmail" placeholder="name@yourcompany.com" autocomplete="off" spellcheck="false">
+        <label>Email <span style="font-weight:400; color:var(--text-light);">(optional — any address; they can sign in with it, and with Google if it's a Google account)</span></label>
+        <input type="email" id="userFormEmail" placeholder="name@company.com" autocomplete="off" spellcheck="false">
       </div>
       <div class="form-group">
         <label>Permission Level</label>
@@ -4238,12 +4238,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         <p><code class="mfa-secret" id="ssoRedirectUri"></code></p>
       </div>
       <div id="ssoConfigured" hidden>
-        <p>People sign in with their Google account instead of a password. Link each person's Google email in Manage Users first; nobody else can get in.</p>
+        <p>Adds a "Sign in with Google" button. It works for anyone whose Google account email matches the Email on their TeamSync account (set in Manage Users); nobody else can get in. Passwords keep working for everyone.</p>
         <label class="sec-check"><input type="checkbox" id="ssoEnabledToggle"> Offer "Sign in with Google"</label>
         <div class="print-opts" style="margin-top: var(--s-2);">
           <label for="ssoDomains">Only these Google Workspace domains<input type="text" id="ssoDomains" placeholder="yourcompany.com (blank = any)" spellcheck="false"></label>
         </div>
-        <label class="sec-check"><input type="checkbox" id="ssoRequireToggle"> Google only — no passwords (admins keep theirs as a backup)</label>
         <p class="sec-note" id="ssoNote"></p>
         <button class="btn btn-secondary" id="ssoSaveBtn">Save Google settings</button>
       </div>

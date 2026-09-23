@@ -17,12 +17,11 @@ import { jsonResponse } from './http.ts';
 import { signRoomToken, verifyRoomToken } from './room-token.ts';
 import { recordAudit, clientIp } from './audit.ts';
 import {
-  normalizeUsername, verifyCredentials, getUser, putUser,
+  normalizeUsername, verifyCredentials, getUser, putUser, resolveSignInName,
   AUTH_MAX_FAILURES_PER_USERNAME, AUTH_MAX_FAILURES_PER_IP,
   getAuthFailureCount, bumpAuthFailure
 } from './users.ts';
 import { getSecurityPolicy, verifyTotp, decryptSecret, looksLikeRecoveryCode, hashRecoveryCode } from './mfa.ts';
-import { passwordSignInBlocked } from './sso.ts';
 import type { UserRecord } from './types.ts';
 
 export const MFA_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -99,24 +98,24 @@ export async function handleAuth(request: Request, env: Env, corsHeaders: Record
     return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders);
   }
 
-  const keys = failKeys(request, body.username as string);
+  // The box takes a username or the account's email. Failures count
+  // against the account either way, so switching between the two doesn't
+  // get extra tries.
+  const signInName = await resolveSignInName(env, body.username);
+  const keys = failKeys(request, signInName);
   if (await isLockedOut(env, keys)) {
     // Skips verifyCredentials()/the PBKDF2 hash entirely once locked out.
-    const blocked = recordAudit(env, { user: normalizeUsername(body.username), action: 'Sign-in blocked (too many attempts)', ip: clientIp(request) });
+    const blocked = recordAudit(env, { user: signInName, action: 'Sign-in blocked (too many attempts)', ip: clientIp(request) });
     const wait = later(ctx, blocked); if (wait) await wait;
     return jsonResponse({ error: "Too many attempts — try again in a few minutes." }, 429, corsHeaders);
   }
 
-  const user = body.username ? await verifyCredentials(env, body.username, body.password) : null;
+  const user = signInName ? await verifyCredentials(env, signInName, body.password) : null;
   if (!user) {
     const bump = Promise.all([bumpAuthFailure(env, keys.user), bumpAuthFailure(env, keys.ip),
-      recordAudit(env, { user: normalizeUsername(body.username), action: 'Failed sign-in', ip: clientIp(request) })]);
+      recordAudit(env, { user: signInName, action: 'Failed sign-in', ip: clientIp(request) })]);
     const wait = later(ctx, bump); if (wait) await wait;
     return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
-  }
-
-  if (await passwordSignInBlocked(env, user)) {
-    return jsonResponse({ error: "Your company signs in with Google — use \"Sign in with Google\".", useSso: true }, 403, corsHeaders);
   }
 
   // Password right; the failure count is only cleared once the whole

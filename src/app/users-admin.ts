@@ -62,7 +62,7 @@ export async function loadUsersList(): Promise<void> {
         : '';
       const leadLabel = u.isLead ? ' — Lead' : '';
       const mfaLabel = u.mfaEnabled ? ' — 2-step on' : '';
-      const googleLabel = u.googleEmail ? ' — Google: ' + u.googleEmail : '';
+      const emailLabel = u.email ? ' — ' + u.email : '';
       // "View as" (see setViewAs()) — previews the whole app exactly as
       // this account would see it. Meaningless on your own row (isMe),
       // so it's the one action button omitted there. Toggles: clicking
@@ -74,7 +74,7 @@ export async function loadUsersList(): Promise<void> {
       row.innerHTML =
         '<div style="min-width:0;">' +
           '<div style="font-size: var(--t-base); font-weight:600;">' + escapeHtml(u.displayName) + (isMe ? ' <span style="font-weight:400; color:var(--text-secondary);">(you)</span>' : '') + '</div>' +
-          '<div style="font-size: var(--t-sm); color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + escapeHtml(tierLabel) + escapeHtml(projectLabel) + escapeHtml(leadLabel) + escapeHtml(mfaLabel) + escapeHtml(googleLabel) + '</div>' +
+          '<div style="font-size: var(--t-sm); color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + escapeHtml(tierLabel) + escapeHtml(projectLabel) + escapeHtml(leadLabel) + escapeHtml(emailLabel) + escapeHtml(mfaLabel) + '</div>' +
         '</div>' +
         '<div style="display:flex; gap: var(--s-1-5); flex-shrink:0;">' +
           viewAsBtn +
@@ -89,7 +89,7 @@ export async function loadUsersList(): Promise<void> {
           loadUsersList();
         };
       }
-      (row.querySelector('[data-action="edit"]') as HTMLButtonElement).onclick = function() { showEditUserForm(u.username, u.displayName, u.role, u.assignedProjectId, u.isLead, u.googleEmail || ''); };
+      (row.querySelector('[data-action="edit"]') as HTMLButtonElement).onclick = function() { showEditUserForm(u.username, u.displayName, u.role, u.assignedProjectId, u.isLead, u.email || ''); };
       (row.querySelector('[data-action="reset"]') as HTMLButtonElement).onclick = function() { resetUserPasswordUI(u.username, u.displayName); };
       (row.querySelector('[data-action="remove"]') as HTMLButtonElement).onclick = function() { removeUserUI(u.username, u.displayName); };
       const resetMfaBtn = row.querySelector('[data-action="resetmfa"]') as HTMLButtonElement | null;
@@ -133,7 +133,7 @@ export function showAddUserForm(): void {
   (document.getElementById('userFormPassword') as HTMLInputElement).placeholder = 'at least 6 characters';
   document.getElementById('userFormPasswordLabel')!.textContent = 'Password';
   (document.getElementById('userFormDisplayName') as HTMLInputElement).value = '';
-  (document.getElementById('userFormGoogleEmail') as HTMLInputElement).value = '';
+  (document.getElementById('userFormEmail') as HTMLInputElement).value = '';
   (document.getElementById('userFormTier') as HTMLSelectElement).value = 'editor';
   (document.getElementById('userFormIsLead') as HTMLSelectElement).value = '0';
   populateUserFormProjectSelect('');
@@ -142,7 +142,7 @@ export function showAddUserForm(): void {
   (document.getElementById('userFormPanel') as HTMLElement).style.display = 'block';
 }
 
-export function showEditUserForm(username: string, displayName: string, role: string, assignedProjectId: string | null, isLead: boolean, googleEmail?: string): void {
+export function showEditUserForm(username: string, displayName: string, role: string, assignedProjectId: string | null, isLead: boolean, email?: string): void {
   editingUserFormUsername = username;
   document.getElementById('userFormTitle')!.textContent = 'Edit ' + displayName;
   (document.getElementById('userFormUsername') as HTMLInputElement).value = username;
@@ -151,7 +151,7 @@ export function showEditUserForm(username: string, displayName: string, role: st
   (document.getElementById('userFormPassword') as HTMLInputElement).placeholder = 'leave blank to keep current password';
   document.getElementById('userFormPasswordLabel')!.textContent = 'Password (optional)';
   (document.getElementById('userFormDisplayName') as HTMLInputElement).value = displayName;
-  (document.getElementById('userFormGoogleEmail') as HTMLInputElement).value = googleEmail || '';
+  (document.getElementById('userFormEmail') as HTMLInputElement).value = email || '';
   (document.getElementById('userFormTier') as HTMLSelectElement).value = role;
   (document.getElementById('userFormIsLead') as HTMLSelectElement).value = isLead ? '1' : '0';
   populateUserFormProjectSelect(assignedProjectId || '');
@@ -180,7 +180,7 @@ export async function submitUserForm(): Promise<void> {
   const role = (document.getElementById('userFormTier') as HTMLSelectElement).value;
   const assignedProjectId = (document.getElementById('userFormProject') as HTMLSelectElement).value || null;
   const isLead = (document.getElementById('userFormIsLead') as HTMLSelectElement).value === '1';
-  const googleEmail = (document.getElementById('userFormGoogleEmail') as HTMLInputElement).value.trim();
+  const email = (document.getElementById('userFormEmail') as HTMLInputElement).value.trim();
 
   if (!username) { hintEl.textContent = 'Username is required.'; hintEl.style.display = 'block'; return; }
 
@@ -191,7 +191,7 @@ export async function submitUserForm(): Promise<void> {
         hintEl.style.display = 'block';
         return;
       }
-      await postUsersEndpoint('users/update', { targetUsername: editingUserFormUsername, newRole: role, newAssignedProjectId: assignedProjectId, newIsLead: isLead, newGoogleEmail: googleEmail });
+      await postUsersEndpoint('users/update', { targetUsername: editingUserFormUsername, newRole: role, newAssignedProjectId: assignedProjectId, newIsLead: isLead, newEmail: email });
       if (password) {
         if (editingUserFormUsername === getStoredUsername()) {
           const currentPassword = window.prompt('To change your own password, enter your current password:');
@@ -212,7 +212,7 @@ export async function submitUserForm(): Promise<void> {
         hintEl.style.display = 'block';
         return;
       }
-      await postUsersEndpoint('users/add', { newUsername: username, newPassword: password, newDisplayName: displayName, newRole: role, newAssignedProjectId: assignedProjectId, newIsLead: isLead, newGoogleEmail: googleEmail });
+      await postUsersEndpoint('users/add', { newUsername: username, newPassword: password, newDisplayName: displayName, newRole: role, newAssignedProjectId: assignedProjectId, newIsLead: isLead, newEmail: email });
       logActivity('added user account "' + displayName + '"');
       showToast('User added', 'success');
     }

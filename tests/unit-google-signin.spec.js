@@ -63,23 +63,25 @@ test('coming back with an error explains it on the sign-in screen', async ({ pag
   await mockWorker(page, { 'sso/config': () => ({ body: { google: true } }) });
   await page.goto(APP_URL + '#sso_error=no_account');
   await expect(page.locator('#loginOverlay')).toHaveClass(/show/);
-  await expect(page.locator('#loginBannerText')).toContainText('isn’t linked to a TeamSync account');
+  await expect(page.locator('#loginBannerText')).toContainText('isn’t on a TeamSync account');
   expect(await page.evaluate(() => location.hash)).toBe('');
 });
 
-test('"Google only": a password sign-in is refused with a message pointing at the Google button', async ({ page }) => {
-  await mockWorker(page, {
-    'sso/config': () => ({ body: { google: true, requireGoogle: true } }),
-    '': () => ({ status: 403, body: { error: 'Your company signs in with Google — use "Sign in with Google".', useSso: true } }),
+test('password sign-in with an email address still works next to the Google button, and remembers the real username', async ({ page }) => {
+  const seen = await mockWorker(page, {
+    'sso/config': () => ({ body: { google: true } }),
+    '': () => ({ body: { token } }),
   });
+  await mockRoomWebSocket(page);
   await page.goto(APP_URL);
-  await page.fill('#loginUsername', 'bob');
+  await expect(page.locator('label[for="loginUsername"]')).toHaveText('Username or email');
+  await expect(page.locator('#loginGoogleBtn')).toBeVisible();
+  await page.fill('#loginUsername', 'bob@outlook.com');
   await page.fill('#loginPassword', 'pw');
   await page.click('#loginSubmit');
-  await expect(page.locator('#loginBannerText')).toContainText('signs in with Google');
-  await expect(page.locator('#loginUsername')).toHaveValue('bob');
-  await expect(page.locator('#loginPassword')).toHaveValue('');
-  await expect(page.locator('#loginGoogleBtn')).toBeVisible();
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
+  expect(seen.find((s) => s.path === '').body.username).toBe('bob@outlook.com');
+  expect(await page.evaluate(() => localStorage.getItem('gantt_username_v1'))).toBe('bob');
 });
 
 async function openAdmin(page, routes) {
@@ -93,7 +95,7 @@ async function openAdmin(page, routes) {
 
 test('Security & data: before the server has a Google key, it shows the redirect address to register', async ({ page }) => {
   await openAdmin(page, {
-    'sso/settings': () => ({ body: { settings: { googleEnabled: false, allowedDomains: [], requireGoogle: false }, configured: false, redirectUri: WORKER_ORIGIN + '/sso/google/callback' } }),
+    'sso/settings': () => ({ body: { settings: { googleEnabled: false, allowedDomains: [] }, configured: false, redirectUri: WORKER_ORIGIN + '/sso/google/callback' } }),
   });
   await page.evaluate(() => toggleSettingsMenu());
   await page.locator('#securityDataBtn').click();
@@ -102,40 +104,39 @@ test('Security & data: before the server has a Google key, it shows the redirect
   await expect(page.locator('#ssoConfigured')).toBeHidden();
 });
 
-test('Security & data: an admin turns Google sign-in on with a domain and "Google only"', async ({ page }) => {
+test('Security & data: an admin turns Google sign-in on with a domain', async ({ page }) => {
   const seen = await openAdmin(page, {
     'sso/settings': (b) => ({ body: {
-      settings: { googleEnabled: !!(b && b.googleEnabled), allowedDomains: (b && b.allowedDomains) || [], requireGoogle: !!(b && b.requireGoogle), updatedBy: 'testadmin', updatedAt: Date.now() },
+      settings: { googleEnabled: !!(b && b.googleEnabled), allowedDomains: (b && b.allowedDomains) || [], updatedBy: 'testadmin', updatedAt: Date.now() },
       configured: true, redirectUri: WORKER_ORIGIN + '/sso/google/callback' } }),
   });
-  page.on('dialog', (d) => d.accept());
   await page.evaluate(() => toggleSettingsMenu());
   await page.locator('#securityDataBtn').click();
   await expect(page.locator('#ssoConfigured')).toBeVisible();
+  await expect(page.locator('#ssoRequireToggle')).toHaveCount(0);
   await page.locator('#ssoEnabledToggle').check();
   await page.fill('#ssoDomains', 'aps-cut.com, example.org');
-  await page.locator('#ssoRequireToggle').check();
   await page.click('#ssoSaveBtn');
   await expect(page.locator('#ssoNote')).toContainText('Last changed by testadmin');
   const saved = seen.filter((s) => s.path === 'sso/settings').pop().body;
-  expect(saved).toMatchObject({ googleEnabled: true, requireGoogle: true, allowedDomains: ['aps-cut.com', 'example.org'] });
+  expect(saved).toEqual({ token: expect.any(String), googleEnabled: true, allowedDomains: ['aps-cut.com', 'example.org'] });
 });
 
-test('Manage Users: the Google email is shown, edited and saved', async ({ page }) => {
+test('Manage Users: the account email is shown, edited and saved', async ({ page }) => {
   const seen = await openAdmin(page, {
     'users/list': () => ({ body: { users: [
-      { username: 'testadmin', displayName: 'Test Admin', role: 'admin', assignedProjectId: null, isLead: false, mfaEnabled: false, googleEmail: '' },
-      { username: 'bob', displayName: 'Bob', role: 'editor', assignedProjectId: null, isLead: false, mfaEnabled: false, googleEmail: 'bob@aps-cut.com' },
+      { username: 'testadmin', displayName: 'Test Admin', role: 'admin', assignedProjectId: null, isLead: false, mfaEnabled: false, email: '' },
+      { username: 'bob', displayName: 'Bob', role: 'editor', assignedProjectId: null, isLead: false, mfaEnabled: false, email: 'bob@aps-cut.com' },
     ] } }),
     'users/update': () => ({ body: { success: true } }),
   });
   await page.evaluate(() => openManageUsersModal());
   const bobRow = page.locator('#usersList > div', { hasText: '@bob' });
-  await expect(bobRow).toContainText('Google: bob@aps-cut.com');
+  await expect(bobRow).toContainText('bob@aps-cut.com');
   await bobRow.locator('[data-action="edit"]').click();
-  await expect(page.locator('#userFormGoogleEmail')).toHaveValue('bob@aps-cut.com');
-  await page.fill('#userFormGoogleEmail', 'robert@aps-cut.com');
+  await expect(page.locator('#userFormEmail')).toHaveValue('bob@aps-cut.com');
+  await page.fill('#userFormEmail', 'robert@aps-cut.com');
   await page.click('#userFormSaveBtn');
   await expect.poll(() => seen.filter((s) => s.path === 'users/update').length).toBe(1);
-  expect(seen.find((s) => s.path === 'users/update').body).toMatchObject({ targetUsername: 'bob', newGoogleEmail: 'robert@aps-cut.com' });
+  expect(seen.find((s) => s.path === 'users/update').body).toMatchObject({ targetUsername: 'bob', newEmail: 'robert@aps-cut.com' });
 });

@@ -1,11 +1,11 @@
 // Security & data > Sign in with Google (admins). Server side:
 // worker/src/sso.ts. Until the server has a Google sign-in key this shows
-// the redirect address that key needs; after that, the on/off switch, the
-// allowed Workspace domains, and "Google only".
+// the redirect address that key needs; after that, the on/off switch and
+// the allowed Workspace domains. Passwords always keep working.
 import { showToast } from '../utils/ui';
 import { postUsersEndpoint } from './worker-client';
 
-interface SsoSettings { googleEnabled: boolean; allowedDomains: string[]; requireGoogle: boolean; updatedBy?: string; updatedAt?: number }
+interface SsoSettings { googleEnabled: boolean; allowedDomains: string[]; updatedBy?: string; updatedAt?: number }
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -20,7 +20,6 @@ function render(settings: SsoSettings, configured: boolean, redirectUri: string)
   const uri = el('ssoRedirectUri');
   if (uri) uri.textContent = redirectUri || '';
   el<HTMLInputElement>('ssoEnabledToggle')!.checked = settings.googleEnabled;
-  el<HTMLInputElement>('ssoRequireToggle')!.checked = settings.requireGoogle;
   el<HTMLInputElement>('ssoDomains')!.value = settings.allowedDomains.join(', ');
   const note = el('ssoNote');
   if (note) {
@@ -44,14 +43,11 @@ export async function loadGoogleSettings(): Promise<void> {
 
 export async function saveGoogleSettings(): Promise<void> {
   const enabled = el<HTMLInputElement>('ssoEnabledToggle')!.checked;
-  const requireGoogle = el<HTMLInputElement>('ssoRequireToggle')!.checked;
   const domains = el<HTMLInputElement>('ssoDomains')!.value.split(/[\s,;]+/).filter(Boolean);
-  if (requireGoogle && !enabled) { showToast('Turn on "Sign in with Google" before making it the only way in', 'error'); return; }
-  if (requireGoogle && !window.confirm('Make Google the only way to sign in?\n\nEveryone except admins will need a Google account linked in Manage Users. Admins can still use their password.')) return;
   const btn = el<HTMLButtonElement>('ssoSaveBtn');
   if (btn) btn.disabled = true;
   try {
-    const data = await postUsersEndpoint('sso/settings', { googleEnabled: enabled, requireGoogle: requireGoogle, allowedDomains: domains });
+    const data = await postUsersEndpoint('sso/settings', { googleEnabled: enabled, allowedDomains: domains });
     render(data.settings, !!data.configured, data.redirectUri || '');
     showToast('Google sign-in settings saved', 'success');
   } catch (err: any) {

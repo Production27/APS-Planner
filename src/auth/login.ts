@@ -57,7 +57,7 @@ async function refreshSsoConfig(): Promise<void> {
 }
 
 export const SSO_ERROR_MESSAGES: Record<string, string> = {
-  no_account: 'That Google account isn’t linked to a TeamSync account. Ask your admin to add your Google email in Manage Users.',
+  no_account: 'That Google account’s email isn’t on a TeamSync account. Sign in with your username or email and password, or ask your admin to add this email to your account.',
   domain: 'That Google account isn’t from your company. Sign in with your work Google account.',
   cancelled: 'Google sign-in was cancelled.',
   expired: 'That sign-in took too long, or was started in another browser. Try again.',
@@ -318,16 +318,6 @@ export async function reauthenticate(forceReprompt?: boolean): Promise<string> {
       (document.getElementById('loginPassword') as HTMLInputElement).focus();
       continue;
     }
-    if (res.status === 403) {
-      // "Google only" is on for this company (worker/src/sso.ts): the
-      // password was right, but this account has to use Google.
-      let message = 'Your company signs in with Google.';
-      try { const d = await res.json(); if (d && d.error) message = d.error; } catch (e) { /* default above */ }
-      (document.getElementById('loginPassword') as HTMLInputElement).value = '';
-      setLoginBusy(false);
-      setLoginBanner(message, 'lockout');
-      continue;
-    }
     if (!res.ok) {
       // A rejected login (wrong username OR wrong password — the Worker's
       // handleAuth() doesn't distinguish which) must not leave a bad
@@ -367,6 +357,9 @@ export async function reauthenticate(forceReprompt?: boolean): Promise<string> {
       continue;
     }
     setStoredSessionToken(token);
+    // The box accepts an email too; remember the account's real username.
+    const signedIn = decodeSessionTokenPayload(token);
+    if (signedIn && signedIn.username) localStorage.setItem(USERNAME_KEY, signedIn.username);
     hideLoginOverlay();
     showLoginStep('password');
     return token;

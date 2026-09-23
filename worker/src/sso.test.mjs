@@ -62,10 +62,10 @@ async function makeEnv({ configured = true } = {}) {
     GOOGLE_CLIENT_ID: configured ? CLIENT_ID : undefined, GOOGLE_CLIENT_SECRET: configured ? 'shh' : undefined,
     APS_ROOM: { idFromName: (n) => ({ n }), get: () => ({ fetch: async (url, init) => { if (String(url).includes('/internal/audit')) audit.push(...JSON.parse(init.body).entries); return new Response('{}'); } }) },
   };
-  for (const [username, role, googleEmail] of [['boss', 'admin', 'boss@aps-cut.com'], ['bob', 'editor', 'bob@aps-cut.com'], ['eve', 'editor', null]]) {
+  for (const [username, role, email] of [['boss', 'admin', 'boss@aps-cut.com'], ['bob', 'editor', 'bob@aps-cut.com'], ['eve', 'editor', null], ['ola', 'editor', 'ola@outlook.com']]) {
     const salt = genSaltHex();
     const u = { username, displayName: username, role, assignedProjectId: null, salt, passwordHash: await hashPasswordPBKDF2('pw-' + username, salt), createdAt: 1 };
-    if (googleEmail) { u.googleEmail = googleEmail; kv._store.set('sso-email:' + googleEmail, username); }
+    if (email) { u.email = email; kv._store.set('email:' + email, username); }
     kv._store.set('user:' + username, JSON.stringify(u));
   }
   return { env, audit };
@@ -127,7 +127,7 @@ test('ID tokens: a correctly signed one passes; every kind of tampering is refus
 // ---- settings ----
 test('Google sign-in is off until the server keys exist and an admin turns it on; only admins can change it', async () => {
   const { env } = await makeEnv({ configured: false });
-  assert.deepEqual(await (await handleSsoConfig(getReq('/sso/config'), env, {})).json(), { google: false, requireGoogle: false });
+  assert.deepEqual(await (await handleSsoConfig(getReq('/sso/config'), env, {})).json(), { google: false });
   const res = await (await enable(env)).json();
   assert.equal(res.configured, false);
   assert.equal(res.redirectUri, WORKER + '/sso/google/callback');
@@ -198,42 +198,65 @@ test('with no domain list, any linked Google account works (including personal G
   assert.ok((await browserSignIn(env, 'bob@aps-cut.com')).fragment.get('sso_code'));
 });
 
-test('"Google only": non-admins can\'t use a password any more, admins still can', async () => {
+test('password sign-in keeps working for everyone, with a username or any email address', async () => {
+  const { env, audit } = await makeEnv();
+  await enable(env);
+  for (const typed of ['bob', 'BOB', 'bob@aps-cut.com', ' Bob@APS-cut.com ']) {
+    const res = await handleAuth(jreq({ username: typed, password: 'pw-bob' }), env, {}, undefined);
+    assert.equal(res.status, 200, typed);
+    assert.equal((await res.json()).user.username, 'bob');
+  }
+  const outlook = await (await handleAuth(jreq({ username: 'ola@outlook.com', password: 'pw-ola' }), env, {}, undefined)).json();
+  assert.equal(outlook.user.username, 'ola', 'a non-Google address works the same');
+  assert.equal((await handleAuth(jreq({ username: 'nobody@example.com', password: 'pw-bob' }), env, {}, undefined)).status, 401);
+  // Wrong passwords count against the account whichever name is typed.
+  await handleAuth(jreq({ username: 'bob@aps-cut.com', password: 'wrong' }), env, {}, undefined);
+  await handleAuth(jreq({ username: 'bob', password: 'wrong' }), env, {}, undefined);
+  assert.equal(env.USERS_KV._store.get('authfail:bob'), '2');
+  assert.ok(audit.some((e) => e.action === 'Failed sign-in' && e.user === 'bob'));
+  // An old "Google only" setting is ignored.
+  env.USERS_KV._store.set('sso-settings', JSON.stringify({ googleEnabled: true, allowedDomains: [], requireGoogle: true }));
+  assert.equal((await handleAuth(jreq({ username: 'bob', password: 'pw-bob' }), env, {}, undefined)).status, 200);
+});
+
+test('an account saved during the brief googleEmail naming is still found', async () => {
+  resetJwksCache();
   const { env } = await makeEnv();
-  await enable(env, { requireGoogle: true });
-  const res = await handleAuth(jreq({ username: 'bob', password: 'pw-bob' }), env, {}, undefined);
-  assert.equal(res.status, 403);
-  assert.equal((await res.json()).useSso, true);
-  assert.ok(await tokenOf(env, 'boss'));
-  assert.equal((await (await handleSsoConfig(getReq('/sso/config'), env, {})).json()).requireGoogle, true);
+  await enable(env);
+  const eve = JSON.parse(env.USERS_KV._store.get('user:eve'));
+  eve.googleEmail = 'eve@aps-cut.com';
+  env.USERS_KV._store.set('user:eve', JSON.stringify(eve));
+  env.USERS_KV._store.set('email:eve@aps-cut.com', 'eve');
+  assert.ok((await browserSignIn(env, 'eve@aps-cut.com')).fragment.get('sso_code'));
+  assert.equal((await (await handleAuth(jreq({ username: 'eve@aps-cut.com', password: 'pw-eve' }), env, {}, undefined)).json()).user.username, 'eve');
 });
 
 // ---- linking accounts ----
-test('admins link Google emails in Manage Users; one email can\'t be on two accounts; removal unlinks', async () => {
+test('admins set each account\'s email in Manage Users; one email can\'t be on two accounts; removal frees it', async () => {
   resetJwksCache();
   const { env } = await makeEnv();
   await enable(env);
   const boss = await tokenOf(env, 'boss');
-  const dup = await handleUsersUpdate(jreq({ token: boss, targetUsername: 'eve', newRole: 'editor', newGoogleEmail: 'BOB@aps-cut.com' }), env, {});
+  const dup = await handleUsersUpdate(jreq({ token: boss, targetUsername: 'eve', newRole: 'editor', newEmail: 'BOB@aps-cut.com' }), env, {});
   assert.equal(dup.status, 400);
-  assert.match((await dup.json()).error, /already linked to @bob/);
-  assert.equal((await handleUsersUpdate(jreq({ token: boss, targetUsername: 'eve', newRole: 'editor', newGoogleEmail: 'Eve@APS-cut.com ' }), env, {})).status, 200);
-  assert.equal(JSON.parse(env.USERS_KV._store.get('user:eve')).googleEmail, 'eve@aps-cut.com');
+  assert.match((await dup.json()).error, /already used by @bob/);
+  assert.equal((await handleUsersUpdate(jreq({ token: boss, targetUsername: 'eve', newRole: 'editor', newEmail: 'Eve@APS-cut.com ' }), env, {})).status, 200);
+  assert.equal(JSON.parse(env.USERS_KV._store.get('user:eve')).email, 'eve@aps-cut.com');
   assert.ok((await browserSignIn(env, 'eve@aps-cut.com')).fragment.get('sso_code'));
 
   // Relinking bob to a new address frees the old one.
-  await handleUsersUpdate(jreq({ token: boss, targetUsername: 'bob', newRole: 'editor', newGoogleEmail: 'robert@aps-cut.com' }), env, {});
-  assert.equal(env.USERS_KV._store.get('sso-email:bob@aps-cut.com'), undefined);
+  await handleUsersUpdate(jreq({ token: boss, targetUsername: 'bob', newRole: 'editor', newEmail: 'robert@aps-cut.com' }), env, {});
+  assert.equal(env.USERS_KV._store.get('email:bob@aps-cut.com'), undefined);
   assert.equal((await browserSignIn(env, 'bob@aps-cut.com')).fragment.get('sso_error'), 'no_account');
-  // Leaving newGoogleEmail out keeps it.
+  // Leaving newEmail out keeps it.
   await handleUsersUpdate(jreq({ token: boss, targetUsername: 'bob', newRole: 'viewer' }), env, {});
-  assert.equal(JSON.parse(env.USERS_KV._store.get('user:bob')).googleEmail, 'robert@aps-cut.com');
+  assert.equal(JSON.parse(env.USERS_KV._store.get('user:bob')).email, 'robert@aps-cut.com');
 
-  assert.equal((await handleUsersAdd(jreq({ token: boss, newUsername: 'newbie', newPassword: 'secret1', newGoogleEmail: 'newbie@aps-cut.com' }), env, {})).status, 200);
-  assert.equal(env.USERS_KV._store.get('sso-email:newbie@aps-cut.com'), 'newbie');
-  assert.equal((await handleUsersAdd(jreq({ token: boss, newUsername: 'other', newPassword: 'secret1', newGoogleEmail: 'newbie@aps-cut.com' }), env, {})).status, 400);
+  assert.equal((await handleUsersAdd(jreq({ token: boss, newUsername: 'newbie', newPassword: 'secret1', newEmail: 'newbie@aps-cut.com' }), env, {})).status, 200);
+  assert.equal(env.USERS_KV._store.get('email:newbie@aps-cut.com'), 'newbie');
+  assert.equal((await handleUsersAdd(jreq({ token: boss, newUsername: 'other', newPassword: 'secret1', newEmail: 'newbie@aps-cut.com' }), env, {})).status, 400);
   assert.equal(env.USERS_KV._store.get('user:other'), undefined, 'not created when the email is taken');
 
   await handleUsersRemove(jreq({ token: boss, targetUsername: 'newbie' }), env, {});
-  assert.equal(env.USERS_KV._store.get('sso-email:newbie@aps-cut.com'), undefined);
+  assert.equal(env.USERS_KV._store.get('email:newbie@aps-cut.com'), undefined);
 });

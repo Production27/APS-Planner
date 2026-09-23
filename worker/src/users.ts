@@ -49,6 +49,8 @@ export function normalizeUserRecord(u: UserRecord | null | undefined): UserRecor
   if (!u) return u;
   if (u.role === "member") u.role = "editor";
   if (u.assignedProjectId === undefined) u.assignedProjectId = null;
+  // Briefly (2026-09-23) the email was stored as googleEmail.
+  if (!u.email && typeof u.googleEmail === "string") u.email = u.googleEmail;
   return u;
 }
 
@@ -73,7 +75,7 @@ export interface RosterEntry {
   createdAt: number;
   isLead: boolean;
   mfaEnabled: boolean;
-  googleEmail: string;
+  email: string;
 }
 
 export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
@@ -83,10 +85,67 @@ export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
     const raw = await env.USERS_KV.get(k.name);
     if (!raw) continue;
     const u = normalizeUserRecord(JSON.parse(raw)) as UserRecord;
-    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead, mfaEnabled: !!u.mfa, googleEmail: u.googleEmail || '' });
+    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead, mfaEnabled: !!u.mfa, email: u.email || '' });
   }
   users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   return users;
+}
+
+// ---- Account email ----
+// Optional, any provider. People can sign in with it instead of their
+// username, "Sign in with Google" matches on it (sso.ts), and password
+// reset emails will go to it. "email:<address>" -> username lets a sign-in
+// find the account without reading every user, and keeps one address to
+// one account.
+export function normalizeEmail(email: unknown): string {
+  return (typeof email === "string" ? email : "").trim().toLowerCase();
+}
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+}
+function emailKey(email: string): string {
+  return "email:" + normalizeEmail(email);
+}
+// Sets (or, with '', clears) the account's email and keeps the index in
+// step. Returns an error message, or null. The caller saves the user.
+export async function setAccountEmail(env: Env, user: UserRecord, email: unknown): Promise<string | null> {
+  const next = normalizeEmail(email);
+  const prev = normalizeEmail(user.email);
+  if (next === prev) return null;
+  if (next) {
+    if (!isValidEmail(next)) return "That email address doesn't look right";
+    const owner = await env.USERS_KV.get(emailKey(next));
+    if (owner && owner !== normalizeUsername(user.username)) return "That email is already used by @" + owner;
+    await env.USERS_KV.put(emailKey(next), normalizeUsername(user.username));
+  }
+  if (prev) await clearAccountEmail(env, user);
+  if (next) user.email = next; else delete user.email;
+  delete user.googleEmail;
+  return null;
+}
+export async function clearAccountEmail(env: Env, user: UserRecord): Promise<void> {
+  const prev = normalizeEmail(user.email);
+  if (!prev) return;
+  for (const key of [emailKey(prev), "sso-email:" + prev]) {
+    const owner = await env.USERS_KV.get(key);
+    if (owner === normalizeUsername(user.username)) await env.USERS_KV.delete(key);
+  }
+}
+export async function findUserByEmail(env: Env, email: string): Promise<UserRecord | null> {
+  const address = normalizeEmail(email);
+  if (!address) return null;
+  const username = (await env.USERS_KV.get(emailKey(address))) || (await env.USERS_KV.get("sso-email:" + address));
+  if (!username) return null;
+  const user = await getUser(env, username);
+  // The index is only a pointer; the account itself must still agree.
+  return user && normalizeEmail(user.email) === address ? user : null;
+}
+// What someone typed in the sign-in box: a username, or an account email.
+export async function resolveSignInName(env: Env, typed: unknown): Promise<string> {
+  const name = normalizeUsername(typed);
+  if (name.indexOf("@") === -1) return name;
+  const user = await findUserByEmail(env, name);
+  return user ? normalizeUsername(user.username) : name;
 }
 
 export async function verifyCredentials(env: Env, username: string, password: string | undefined): Promise<UserRecord | null> {
