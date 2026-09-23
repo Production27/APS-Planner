@@ -23,6 +23,7 @@ import { downloadIcs } from './ics';
 import { openSecurityModal, closeSecurityModal, downloadAuditLog, exportAllData, scheduleDeletion, cancelDeletion } from './compliance';
 import { openTwoStepModal, closeTwoStepModal, startTwoStepSetup, confirmTwoStepSetup, makeNewRecoveryCodes, turnOffTwoStep, setRequireTwoStep } from './two-step';
 import { saveGoogleSettings } from './sso-settings';
+import { openAccountEmailModal, closeAccountEmailModal, saveMyEmail, connectGoogleAccount } from './account-email';
 
 declare global {
   function toggleSettingsMenu(): void;
@@ -139,6 +140,10 @@ export function initStaticEventListeners(): void {
   const requireMfaToggle = document.getElementById('requireMfaToggle') as HTMLInputElement | null;
   if (requireMfaToggle) requireMfaToggle.addEventListener('change', () => setRequireTwoStep(requireMfaToggle.checked));
   on('ssoSaveBtn', () => saveGoogleSettings());
+  on('myEmailBtn', () => { closeSettingsMenu(); openAccountEmailModal(); });
+  on('myEmailCloseBtn', () => closeAccountEmailModal());
+  on('myEmailSaveBtn', () => saveMyEmail());
+  on('myEmailGoogleBtn', () => connectGoogleAccount());
   on('twoStepBtn', () => { closeSettingsMenu(); openTwoStepModal(); });
   on('mfaCloseBtn', () => closeTwoStepModal());
   on('mfaStartBtn', () => startTwoStepSetup());

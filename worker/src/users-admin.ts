@@ -97,7 +97,7 @@ export async function handleUsersAdd(request: Request, env: Env, corsHeaders: Re
     salt,
     createdAt: Date.now()
   };
-  const linkError = await setAccountEmail(env, record, body.newEmail);
+  const linkError = await setAccountEmail(env, record, body.newEmail, true);
   if (linkError) return jsonResponse({ error: linkError }, 400, corsHeaders);
   await putUser(env, record);
   await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Added user account', item: newUsername, ip: clientIp(request), details: 'role: ' + newRole + (newAssignedProjectId ? ', project: ' + newAssignedProjectId : '') });
@@ -176,7 +176,7 @@ export async function handleUsersUpdate(request: Request, env: Env, corsHeaders:
   target.assignedProjectId = newAssignedProjectId;
   target.isLead = !!body.newIsLead;
   if (body.newEmail !== undefined) {
-    const linkError = await setAccountEmail(env, target, body.newEmail);
+    const linkError = await setAccountEmail(env, target, body.newEmail, true);
     if (linkError) return jsonResponse({ error: linkError }, 400, corsHeaders);
   }
   await putUser(env, target);

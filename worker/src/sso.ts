@@ -9,8 +9,8 @@
 //        Google sends the browser back here. The code is exchanged for an
 //        ID token (with the client secret and a PKCE verifier), the token's
 //        signature and claims are checked against Google's published keys,
-//        and its email is matched to a TeamSync account's email (set by
-//        an admin in Manage Users; see users.ts). The browser is
+//        and its email is matched to a TeamSync account's confirmed email
+//        (see users.ts). The browser is
 //        sent back to the app with a one-time code in the #fragment,
 //        never the session itself.
 //   3. POST /sso/redeem {code}  -> {token, user}
@@ -22,6 +22,13 @@
 // (if the admin set one) the Google Workspace domain has to be on the
 // allowed list.
 //
+// "Connect Google account" (Settings > My email) runs the same flow for
+// someone already signed in: POST /sso/link-ticket gives a 5-minute ticket,
+// /sso/google/start?link=<ticket> carries it through Google, and the
+// callback sets that account's email to the Google address, confirmed,
+// instead of signing in. Google sign-in itself only accepts confirmed
+// emails (see users.ts).
+//
 // Setup (once): a Google Cloud "OAuth client ID" of type Web application,
 // with this Worker's /sso/google/callback as an authorized redirect URI.
 // Its ID and secret are Worker secrets GOOGLE_CLIENT_ID and
@@ -29,11 +36,11 @@
 // Microsoft (Entra ID) can be added later as a second provider with the
 // same shape.
 import { jsonResponse } from './http.ts';
-import { base64UrlEncode, base64UrlDecode } from './room-token.ts';
+import { base64UrlEncode, base64UrlDecode, signRoomToken } from './room-token.ts';
 import { recordAudit, clientIp } from './audit.ts';
-import { getUser, resolveCaller, normalizeEmail, findUserByEmail } from './users.ts';
+import { getUser, putUser, resolveCaller, normalizeEmail, findUserByEmail, setAccountEmail } from './users.ts';
 import { requireAdmin } from './users-admin.ts';
-import { issueSession } from './auth.ts';
+import { issueSession, resolveTicket } from './auth.ts';
 
 declare global {
   interface Env {
@@ -183,11 +190,18 @@ export async function handleGoogleStart(request: Request, env: Env, url: URL): P
   if (!isAllowedReturn(returnUrl)) return new Response('Sign-in was started from a page that isn\'t TeamSync.', { status: 400 });
   const { active, settings } = await googleActive(env);
   if (!active) return backToApp(returnUrl, { sso_error: 'not_enabled' });
+  // "Connect Google account": the ticket names the signed-in account.
+  let linkUsername: string | undefined;
+  if (url.searchParams.get('link')) {
+    const linkUser = await resolveTicket(env, url.searchParams.get('link'), 'sso-link');
+    if (!linkUser) return backToApp(returnUrl, { sso_error: 'expired' });
+    linkUsername = linkUser.username;
+  }
 
   const state = randomToken(24);
   const nonce = randomToken(24);
   const verifier = randomToken(48);
-  await env.USERS_KV.put('sso-state:' + state, JSON.stringify({ nonce, verifier, returnUrl, createdAt: Date.now() }), { expirationTtl: STATE_TTL_SECONDS });
+  await env.USERS_KV.put('sso-state:' + state, JSON.stringify({ nonce, verifier, returnUrl, linkUsername, createdAt: Date.now() }), { expirationTtl: STATE_TTL_SECONDS });
   const params = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID as string,
     redirect_uri: url.origin + '/sso/google/callback',
@@ -212,7 +226,7 @@ export async function handleGoogleCallback(request: Request, env: Env, url: URL,
   const raw = state ? await env.USERS_KV.get('sso-state:' + state) : null;
   if (!raw) return new Response('This sign-in link has expired. Go back to TeamSync and try again.', { status: 400 });
   await env.USERS_KV.delete('sso-state:' + state); // single use
-  const saved = JSON.parse(raw) as { nonce: string; verifier: string; returnUrl: string };
+  const saved = JSON.parse(raw) as { nonce: string; verifier: string; returnUrl: string; linkUsername?: string };
   const ip = clientIp(request);
   const fail = async function (reason: string, detail: string, who?: string): Promise<Response> {
     await recordAudit(env, { user: who || '', action: 'Failed Google sign-in', ip, details: detail });
@@ -251,8 +265,19 @@ export async function handleGoogleCallback(request: Request, env: Env, url: URL,
   if (settings.allowedDomains.length && settings.allowedDomains.indexOf((checked.claims.hd || '').toLowerCase()) === -1) {
     return fail('domain', email + ' is not in an allowed Google Workspace domain', email);
   }
+  if (saved.linkUsername) {
+    const target = await getUser(env, saved.linkUsername);
+    if (!target) return fail('failed', 'account to connect no longer exists', saved.linkUsername);
+    const error = await setAccountEmail(env, target, email, true);
+    if (error) return fail('email_taken', email + ': ' + error, target.username);
+    await putUser(env, target);
+    await recordAudit(env, { user: target.username, role: target.role, action: 'Connected Google account', ip, details: email + ' (email confirmed)' });
+    return backToApp(saved.returnUrl, { sso_linked: email });
+  }
+
   const user = await findUserByEmail(env, email);
   if (!user) return fail('no_account', email + ' is not linked to a TeamSync account', email);
+  if (!user.emailConfirmed) return fail('unconfirmed', email + ' is on @' + user.username + ' but not confirmed', email);
 
   const oneTime = randomToken(24);
   await env.USERS_KV.put('sso-code:' + oneTime, JSON.stringify({ username: user.username, email }), { expirationTtl: CODE_TTL_SECONDS });
@@ -268,8 +293,20 @@ export async function handleSsoRedeem(request: Request, env: Env, corsHeaders: R
   await env.USERS_KV.delete('sso-code:' + code);
   const { username, email } = JSON.parse(raw) as { username: string; email: string };
   const user = await getUser(env, username);
-  if (!user || normalizeEmail(user.email) !== email) return jsonResponse({ error: 'That account has changed — try again.' }, 401, corsHeaders);
+  if (!user || normalizeEmail(user.email) !== email || !user.emailConfirmed) return jsonResponse({ error: 'That account has changed — try again.' }, 401, corsHeaders);
   return issueSession(env, request, ctx, user, 'Google (' + email + ')', corsHeaders);
+}
+
+// POST {token} -> {ticket}: starts "Connect Google account" for the
+// signed-in person (see the top of this file).
+export async function handleSsoLinkTicket(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  let body: { token?: string };
+  try { body = await request.json(); } catch (e) { return jsonResponse({ error: 'Invalid JSON body' }, 400, corsHeaders); }
+  const caller = await resolveCaller(env, body);
+  if (!caller) return jsonResponse({ error: 'Invalid credentials' }, 401, corsHeaders);
+  if (!(await googleActive(env)).active) return jsonResponse({ error: 'Sign in with Google isn\'t turned on' }, 400, corsHeaders);
+  const ticket = await signRoomToken(env.ROOM_TOKEN_SECRET, { purpose: 'sso-link', username: caller.username }, 5 * 60 * 1000);
+  return jsonResponse({ ticket }, 200, corsHeaders);
 }
 
 // Admin: read or change the Google sign-in settings.

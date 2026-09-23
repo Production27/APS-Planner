@@ -123,6 +123,8 @@ export interface UserRecord {
   // in with it instead of the username, and "Sign in with Google" matches
   // on it. googleEmail is the short-lived earlier name, read as email.
   email?: string;
+  // False for an email the person typed in themselves and hasn't proven.
+  emailConfirmed?: boolean;
   googleEmail?: string;
   [key: string]: unknown;
 }

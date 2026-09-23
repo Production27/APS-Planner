@@ -63,6 +63,8 @@ export const SSO_ERROR_MESSAGES: Record<string, string> = {
   expired: 'That sign-in took too long, or was started in another browser. Try again.',
   not_enabled: 'Sign in with Google isn’t turned on.',
   failed: 'Google sign-in didn’t work. Try again.',
+  unconfirmed: 'That email isn’t confirmed yet. Sign in with your password, then use Settings → My email → Connect Google account.',
+  email_taken: 'That Google address is already confirmed on another TeamSync account.',
 };
 let pendingSsoError: string | null = null;
 let ssoReturnPromise: Promise<string | null> | null = null;
@@ -76,10 +78,22 @@ function takeSsoReturn(): Promise<string | null> {
     const params = new URLSearchParams(location.hash.replace(/^#/, ''));
     const code = params.get('sso_code');
     const error = params.get('sso_error');
-    if (!code && !error) return null;
+    const linked = params.get('sso_linked');
+    if (!code && !error && !linked) return null;
     // Take the code out of the address bar and history straight away.
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* file:// in tests */ }
-    if (error) { pendingSsoError = SSO_ERROR_MESSAGES[error] || SSO_ERROR_MESSAGES.failed; return null; }
+    // Back from "Connect Google account" (src/app/account-email.ts), still
+    // signed in: say how it went.
+    if (linked) {
+      setTimeout(function() { showToast('Google account connected — ' + linked + ' is confirmed. You can now use Sign in with Google.', 'success'); }, 0);
+      return null;
+    }
+    if (error) {
+      const message = SSO_ERROR_MESSAGES[error] || SSO_ERROR_MESSAGES.failed;
+      if (isSessionTokenUsable(getStoredSessionToken())) setTimeout(function() { showToast(message, 'error'); }, 0);
+      else pendingSsoError = message;
+      return null;
+    }
     const { res, data } = await postJson('sso/redeem', { code: code });
     if (res && res.ok && data.token) {
       setStoredSessionToken(data.token);

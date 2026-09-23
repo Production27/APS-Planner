@@ -53,7 +53,7 @@ export async function handleDataExport(request: Request, env: Env, corsHeaders: 
   const roomState = await res.json() as RoomState;
 
   const users = (await listAllUsers(env)).map(function (u) {
-    return { username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, isLead: u.isLead, createdAt: u.createdAt, twoStepEnabled: u.mfaEnabled, email: u.email || null };
+    return { username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, isLead: u.isLead, createdAt: u.createdAt, twoStepEnabled: u.mfaEnabled, email: u.email || null, emailConfirmed: u.emailConfirmed };
   });
 
   const attachments: { key: string; size: number; uploaded: string }[] = [];

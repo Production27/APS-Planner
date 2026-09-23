@@ -140,3 +140,94 @@ test('Manage Users: the account email is shown, edited and saved', async ({ page
   await expect.poll(() => seen.filter((s) => s.path === 'users/update').length).toBe(1);
   expect(seen.find((s) => s.path === 'users/update').body).toMatchObject({ targetUsername: 'bob', newEmail: 'robert@aps-cut.com' });
 });
+
+// ---- Settings > My email (src/app/account-email.ts) ----
+
+async function openMyEmail(page) {
+  await page.evaluate(() => toggleSettingsMenu());
+  await page.locator('#myEmailBtn').click();
+  await expect(page.locator('#accountEmailModal')).toHaveClass(/show/);
+}
+
+test('My email: anyone can add their own email with their password; it shows as not confirmed', async ({ page }) => {
+  await seedSession(page, { role: 'viewer', username: 'eve' });
+  const seen = await mockWorker(page, {
+    'account/me': () => ({ body: { username: 'eve', displayName: 'Eve', email: '', emailConfirmed: false } }),
+    'account/email': (b) => b.password === 'pw' ? { body: { email: b.email.toLowerCase(), emailConfirmed: false } } : { status: 403, body: { error: 'Your password is incorrect' } },
+    'sso/config': () => ({ body: { google: false } }),
+  });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await openMyEmail(page);
+  await expect(page.locator('#myEmailStatus')).toHaveText('No email on your account yet.');
+  await expect(page.locator('#myEmailGoogle')).toBeHidden();
+  await page.fill('#myEmailInput', 'Eve@Yahoo.com');
+  await page.fill('#myEmailPassword', 'nope');
+  await page.click('#myEmailSaveBtn');
+  await expect(page.locator('#myEmailStatus')).toHaveText('No email on your account yet.');
+  await page.fill('#myEmailPassword', 'pw');
+  await page.click('#myEmailSaveBtn');
+  await expect(page.locator('#myEmailStatus')).toContainText('eve@yahoo.com');
+  await expect(page.locator('#myEmailStatus .my-email-badge')).toHaveText('Not confirmed');
+  await expect(page.locator('#myEmailUnconfirmedNote')).toBeVisible();
+  await expect(page.locator('#myEmailPassword')).toHaveValue('');
+  expect(seen.filter((s) => s.path === 'account/email').pop().body).toMatchObject({ email: 'Eve@Yahoo.com', password: 'pw' });
+});
+
+test('My email: "Connect Google account" gets a ticket and sends the page through the Worker with it', async ({ page }) => {
+  await seedSession(page, { role: 'viewer', username: 'eve' });
+  const seen = await mockWorker(page, {
+    'account/me': () => ({ body: { username: 'eve', displayName: 'Eve', email: 'eve@gmail.com', emailConfirmed: true } }),
+    'sso/config': () => ({ body: { google: true } }),
+    'sso/link-ticket': () => ({ body: { ticket: 'LINK-1' } }),
+    'sso/google/start': () => ({ contentType: 'text/html', body: '<p id="went">at the worker</p>' }),
+  });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await openMyEmail(page);
+  await expect(page.locator('#myEmailStatus .my-email-badge')).toHaveText('Confirmed');
+  await expect(page.locator('#myEmailUnconfirmedNote')).toBeHidden();
+  await expect(page.locator('#myEmailGoogleBtn')).toBeVisible();
+  await page.click('#myEmailGoogleBtn');
+  await expect(page.locator('#went')).toBeVisible();
+  const start = new URL(seen.find((s) => s.path === 'sso/google/start').url);
+  expect(start.searchParams.get('link')).toBe('LINK-1');
+  expect(start.searchParams.get('return')).toBe(APP_URL);
+});
+
+test('coming back from "Connect Google account" while signed in shows how it went, without the sign-in screen', async ({ page }) => {
+  await seedSession(page, { role: 'viewer', username: 'eve' });
+  await mockWorker(page, {});
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL + '#sso_linked=eve%40gmail.com');
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
+  await expect(page.locator('.toast', { hasText: 'eve@gmail.com is confirmed' })).toBeVisible();
+  expect(await page.evaluate(() => location.hash)).toBe('');
+
+  // Only the #fragment differs, which wouldn't reload the page by itself.
+  await page.evaluate(() => { location.hash = 'sso_error=email_taken'; location.reload(); });
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await expect(page.locator('.toast', { hasText: 'already confirmed on another' })).toBeVisible();
+  await expect(page.locator('#loginOverlay')).not.toHaveClass(/show/);
+});
+
+test('Google sign-in with an unconfirmed email explains how to confirm it', async ({ page }) => {
+  await mockWorker(page, { 'sso/config': () => ({ body: { google: true } }) });
+  await page.goto(APP_URL + '#sso_error=unconfirmed');
+  await expect(page.locator('#loginBannerText')).toContainText('Settings → My email → Connect Google account');
+});
+
+test('Manage Users marks self-added emails as not confirmed', async ({ page }) => {
+  await openAdmin(page, {
+    'users/list': () => ({ body: { users: [
+      { username: 'testadmin', displayName: 'Test Admin', role: 'admin', assignedProjectId: null, isLead: false, mfaEnabled: false, email: 'admin@aps-cut.com', emailConfirmed: true },
+      { username: 'eve', displayName: 'Eve', role: 'editor', assignedProjectId: null, isLead: false, mfaEnabled: false, email: 'eve@yahoo.com', emailConfirmed: false },
+    ] } }),
+  });
+  await page.evaluate(() => openManageUsersModal());
+  await expect(page.locator('#usersList > div', { hasText: '@eve' })).toContainText('eve@yahoo.com (not confirmed)');
+  await expect(page.locator('#usersList > div', { hasText: '@testadmin' })).not.toContainText('not confirmed');
+});

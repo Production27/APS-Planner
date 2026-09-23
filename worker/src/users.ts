@@ -51,6 +51,8 @@ export function normalizeUserRecord(u: UserRecord | null | undefined): UserRecor
   if (u.assignedProjectId === undefined) u.assignedProjectId = null;
   // Briefly (2026-09-23) the email was stored as googleEmail.
   if (!u.email && typeof u.googleEmail === "string") u.email = u.googleEmail;
+  // Emails from before confirmation existed were all set by an admin.
+  if (u.email && u.emailConfirmed === undefined) u.emailConfirmed = true;
   return u;
 }
 
@@ -76,6 +78,7 @@ export interface RosterEntry {
   isLead: boolean;
   mfaEnabled: boolean;
   email: string;
+  emailConfirmed: boolean;
 }
 
 export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
@@ -85,7 +88,7 @@ export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
     const raw = await env.USERS_KV.get(k.name);
     if (!raw) continue;
     const u = normalizeUserRecord(JSON.parse(raw)) as UserRecord;
-    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead, mfaEnabled: !!u.mfa, email: u.email || '' });
+    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead, mfaEnabled: !!u.mfa, email: u.email || '', emailConfirmed: !!u.emailConfirmed });
   }
   users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   return users;
@@ -93,10 +96,17 @@ export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
 
 // ---- Account email ----
 // Optional, any provider. People can sign in with it instead of their
-// username, "Sign in with Google" matches on it (sso.ts), and password
-// reset emails will go to it. "email:<address>" -> username lets a sign-in
-// find the account without reading every user, and keeps one address to
-// one account.
+// username (the password is the proof there), "Sign in with Google" matches
+// on it (sso.ts), and password reset emails will go to it.
+// "email:<address>" -> username lets a sign-in find the account without
+// reading every user, and keeps one address to one account.
+//
+// Confirmed vs not: an admin-entered email, or one proven by signing in to
+// that Google account, is confirmed. One people type in for themselves
+// (Settings > My email) isn't until they prove it, since it could be a typo
+// or someone else's address. Only confirmed emails work for Google sign-in
+// (and, later, reset emails), and a confirmed claim takes an address over
+// from another account's unconfirmed one, so nobody can squat on it.
 export function normalizeEmail(email: unknown): string {
   return (typeof email === "string" ? email : "").trim().toLowerCase();
 }
@@ -108,18 +118,32 @@ function emailKey(email: string): string {
 }
 // Sets (or, with '', clears) the account's email and keeps the index in
 // step. Returns an error message, or null. The caller saves the user.
-export async function setAccountEmail(env: Env, user: UserRecord, email: unknown): Promise<string | null> {
+export async function setAccountEmail(env: Env, user: UserRecord, email: unknown, confirmed: boolean): Promise<string | null> {
   const next = normalizeEmail(email);
   const prev = normalizeEmail(user.email);
-  if (next === prev) return null;
+  const me = normalizeUsername(user.username);
+  if (next === prev) {
+    if (next && confirmed) user.emailConfirmed = true;
+    return null;
+  }
   if (next) {
     if (!isValidEmail(next)) return "That email address doesn't look right";
-    const owner = await env.USERS_KV.get(emailKey(next));
-    if (owner && owner !== normalizeUsername(user.username)) return "That email is already used by @" + owner;
-    await env.USERS_KV.put(emailKey(next), normalizeUsername(user.username));
+    const ownerName = await env.USERS_KV.get(emailKey(next));
+    if (ownerName && ownerName !== me) {
+      const owner = await getUser(env, ownerName);
+      if (owner && normalizeEmail(owner.email) === next) {
+        if (owner.emailConfirmed || !confirmed) {
+          return confirmed ? "That email is already used by @" + ownerName : "That email is already used by another account";
+        }
+        delete owner.email;
+        delete owner.emailConfirmed;
+        await putUser(env, owner);
+      }
+    }
+    await env.USERS_KV.put(emailKey(next), me);
   }
   if (prev) await clearAccountEmail(env, user);
-  if (next) user.email = next; else delete user.email;
+  if (next) { user.email = next; user.emailConfirmed = confirmed; } else { delete user.email; delete user.emailConfirmed; }
   delete user.googleEmail;
   return null;
 }

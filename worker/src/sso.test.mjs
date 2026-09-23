@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isAllowedReturn, verifyGoogleIdToken, resetJwksCache, handleGoogleStart, handleGoogleCallback,
-  handleSsoRedeem, handleSsoSettings, handleSsoConfig, GOOGLE_JWKS_URL, GOOGLE_TOKEN_URL
+  handleSsoRedeem, handleSsoSettings, handleSsoConfig, handleSsoLinkTicket, GOOGLE_JWKS_URL, GOOGLE_TOKEN_URL
 } from './sso.ts';
 import { handleAuth } from './auth.ts';
+import { handleAccountEmail, handleAccountMe } from './account.ts';
 import { handleUsersAdd, handleUsersUpdate, handleUsersRemove } from './users-admin.ts';
 import { hashPasswordPBKDF2, genSaltHex, resolveIdentityFromToken } from './users.ts';
 import { base64UrlEncode } from './room-token.ts';
@@ -259,4 +260,98 @@ test('admins set each account\'s email in Manage Users; one email can\'t be on t
 
   await handleUsersRemove(jreq({ token: boss, targetUsername: 'newbie' }), env, {});
   assert.equal(env.USERS_KV._store.get('email:newbie@aps-cut.com'), undefined);
+});
+
+// ---- people adding their own email (Settings > My email) ----
+
+// Runs "Connect Google account" for a signed-in person, like a browser would.
+async function browserConnect(env, sessionToken, googleEmail, claims) {
+  const { ticket } = await (await handleSsoLinkTicket(jreq({ token: sessionToken }), env, {})).json();
+  const startUrl = WORKER + '/sso/google/start?return=' + encodeURIComponent(APP) + '&link=' + encodeURIComponent(ticket);
+  const start = await handleGoogleStart(getReq(startUrl), env, new URL(startUrl));
+  const to = new URL(start.headers.get('Location'));
+  const state = to.searchParams.get('state');
+  google.nextIdToken = () => signIdToken(claimsFor(googleEmail, to.searchParams.get('nonce'), claims));
+  const cbUrl = WORKER + '/sso/google/callback?code=abc&state=' + state;
+  const cb = await handleGoogleCallback(getReq(cbUrl, start.headers.get('Set-Cookie').split(';')[0]), env, new URL(cbUrl), undefined);
+  return new URLSearchParams((cb.headers.get('Location') || '').split('#')[1] || '');
+}
+
+test('people can add their own email: needs their password, works for email sign-in at once, but not for Google until confirmed', async () => {
+  resetJwksCache();
+  const { env, audit } = await makeEnv();
+  await enable(env);
+  const eve = await tokenOf(env, 'eve');
+  assert.equal((await handleAccountEmail(jreq({ token: eve, password: 'wrong', email: 'eve@yahoo.com' }), env, {})).status, 403);
+  const set = await (await handleAccountEmail(jreq({ token: eve, password: 'pw-eve', email: 'Eve@Yahoo.com' }), env, {})).json();
+  assert.deepEqual(set, { email: 'eve@yahoo.com', emailConfirmed: false });
+  assert.deepEqual(await (await handleAccountMe(jreq({ token: eve }), env, {})).json(), { username: 'eve', displayName: 'eve', email: 'eve@yahoo.com', emailConfirmed: false });
+  assert.ok(audit.some((e) => e.action === 'Changed own email' && e.user === 'eve'));
+  assert.equal((await (await handleAuth(jreq({ username: 'eve@yahoo.com', password: 'pw-eve' }), env, {}, undefined)).json()).user.username, 'eve');
+  assert.equal((await browserSignIn(env, 'eve@yahoo.com')).fragment.get('sso_error'), 'unconfirmed');
+});
+
+test('"Connect Google account" confirms the email from Google, and then Google sign-in works', async () => {
+  resetJwksCache();
+  const { env, audit } = await makeEnv();
+  await enable(env);
+  const eve = await tokenOf(env, 'eve');
+  await handleAccountEmail(jreq({ token: eve, password: 'pw-eve', email: 'eve.typo@gmail.com' }), env, {});
+  const back = await browserConnect(env, eve, 'eve@gmail.com');
+  assert.equal(back.get('sso_linked'), 'eve@gmail.com');
+  const me = await (await handleAccountMe(jreq({ token: eve }), env, {})).json();
+  assert.deepEqual([me.email, me.emailConfirmed], ['eve@gmail.com', true]);
+  assert.equal(env.USERS_KV._store.get('email:eve.typo@gmail.com'), undefined, 'the old address is freed');
+  assert.ok(audit.some((e) => e.action === 'Connected Google account' && e.user === 'eve'));
+  assert.ok((await browserSignIn(env, 'eve@gmail.com')).fragment.get('sso_code'));
+  // Changing it by hand again makes it unconfirmed again.
+  await handleAccountEmail(jreq({ token: eve, password: 'pw-eve', email: 'eve@other.com' }), env, {});
+  assert.equal((await (await handleAccountMe(jreq({ token: eve }), env, {})).json()).emailConfirmed, false);
+});
+
+test('connecting respects the allowed domains, and needs a live session', async () => {
+  resetJwksCache();
+  const { env } = await makeEnv();
+  await enable(env, { allowedDomains: ['aps-cut.com'] });
+  const eve = await tokenOf(env, 'eve');
+  assert.equal((await browserConnect(env, eve, 'eve@gmail.com')).get('sso_error'), 'domain');
+  assert.equal((await handleSsoLinkTicket(jreq({ token: 'nope' }), env, {})).status, 401);
+  const bad = WORKER + '/sso/google/start?return=' + encodeURIComponent(APP) + '&link=forged';
+  const res = await handleGoogleStart(getReq(bad), env, new URL(bad));
+  assert.match(res.headers.get('Location'), /#sso_error=expired$/);
+});
+
+test('nobody can squat on an address: a confirmed claim takes it over from an unconfirmed one, never the other way', async () => {
+  resetJwksCache();
+  const { env } = await makeEnv();
+  await enable(env);
+  const eve = await tokenOf(env, 'eve');
+  // Eve can't take bob's (admin-set, confirmed) address, and isn't told whose it is.
+  const taken = await handleAccountEmail(jreq({ token: eve, password: 'pw-eve', email: 'bob@aps-cut.com' }), env, {});
+  assert.equal(taken.status, 400);
+  assert.equal((await taken.json()).error, 'That email is already used by another account');
+  // Eve squats on a new person's address; the admin gives it to them anyway.
+  await handleAccountEmail(jreq({ token: eve, password: 'pw-eve', email: 'newbie@aps-cut.com' }), env, {});
+  const boss = await tokenOf(env, 'boss');
+  assert.equal((await handleUsersAdd(jreq({ token: boss, newUsername: 'newbie', newPassword: 'secret1', newEmail: 'newbie@aps-cut.com' }), env, {})).status, 200);
+  assert.equal(JSON.parse(env.USERS_KV._store.get('user:eve')).email, undefined, 'removed from the squatter');
+  assert.equal(env.USERS_KV._store.get('email:newbie@aps-cut.com'), 'newbie');
+  // Google-confirming also wins over an unconfirmed claim.
+  await handleAccountEmail(jreq({ token: eve, password: 'pw-eve', email: 'zed@gmail.com' }), env, {});
+  const ola = await tokenOf(env, 'ola');
+  assert.equal((await browserConnect(env, ola, 'zed@gmail.com')).get('sso_linked'), 'zed@gmail.com');
+  // ...but not over a confirmed one.
+  assert.equal((await browserConnect(env, eve, 'zed@gmail.com')).get('sso_error'), 'email_taken');
+});
+
+test('admin-set emails (including ones saved before confirmation existed) are confirmed', async () => {
+  resetJwksCache();
+  const { env } = await makeEnv();
+  await enable(env);
+  const raw = JSON.parse(env.USERS_KV._store.get('user:bob'));
+  assert.equal(raw.emailConfirmed, undefined, 'fixture predates the flag');
+  assert.ok((await browserSignIn(env, 'bob@aps-cut.com')).fragment.get('sso_code'));
+  const boss = await tokenOf(env, 'boss');
+  await handleUsersUpdate(jreq({ token: boss, targetUsername: 'eve', newRole: 'editor', newEmail: 'eve@aps-cut.com' }), env, {});
+  assert.equal(JSON.parse(env.USERS_KV._store.get('user:eve')).emailConfirmed, true);
 });

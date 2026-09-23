@@ -62,7 +62,7 @@ export async function loadUsersList(): Promise<void> {
         : '';
       const leadLabel = u.isLead ? ' — Lead' : '';
       const mfaLabel = u.mfaEnabled ? ' — 2-step on' : '';
-      const emailLabel = u.email ? ' — ' + u.email : '';
+      const emailLabel = u.email ? ' — ' + u.email + (u.emailConfirmed ? '' : ' (not confirmed)') : '';
       // "View as" (see setViewAs()) — previews the whole app exactly as
       // this account would see it. Meaningless on your own row (isMe),
       // so it's the one action button omitted there. Toggles: clicking

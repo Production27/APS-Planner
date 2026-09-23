@@ -27,7 +27,8 @@
 import { getRoomStub } from './room-stub.ts';
 import { jsonResponse } from './http.ts';
 import { handleAuth, handleAuthMfa } from './auth.ts';
-import { handleSsoConfig, handleGoogleStart, handleGoogleCallback, handleSsoRedeem, handleSsoSettings } from './sso.ts';
+import { handleSsoConfig, handleGoogleStart, handleGoogleCallback, handleSsoRedeem, handleSsoSettings, handleSsoLinkTicket } from './sso.ts';
+import { handleAccountMe, handleAccountEmail } from './account.ts';
 import { handleMfaStatus, handleMfaSetup, handleMfaEnable, handleMfaDisable, handleMfaRecoveryCodes, handleUsersResetMfa, handleSecurityPolicy } from './mfa-handlers.ts';
 import { runBackup, handleTriggerBackup, handleListBackups, handleDownloadBackup, handleRestoreBackup } from './backup.ts';
 import {
@@ -102,6 +103,16 @@ export default {
     }
     if (url.pathname === "/sso/settings" && request.method === "POST") {
       return handleSsoSettings(request, env, corsHeaders);
+    }
+    if (url.pathname === "/sso/link-ticket" && request.method === "POST") {
+      return handleSsoLinkTicket(request, env, corsHeaders);
+    }
+    // Self-service account details — see account.ts.
+    if (url.pathname === "/account/me" && request.method === "POST") {
+      return handleAccountMe(request, env, corsHeaders);
+    }
+    if (url.pathname === "/account/email" && request.method === "POST") {
+      return handleAccountEmail(request, env, corsHeaders);
     }
     // Two-step verification — see auth.ts and mfa-handlers.ts.
     if (url.pathname === "/auth/mfa" && request.method === "POST") {
