@@ -1261,6 +1261,14 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
   el.draggable = hasMinTier('editor');
   el.dataset.id = card.id;
   el.style.borderLeftColor = card.color || 'var(--primary-light)';
+  // Same de-chromed, job-colored title treatment as the real Board's
+  // Preact card (see buildCardProps()'s own comment on titleColorLight/
+  // Dark below) — custom properties inherit, so setting them here reaches
+  // the child .board-card-title div's `color: var(--bct-light, ...)` rule
+  // without needing to find that div separately.
+  const cardTitleColor = card.color || '#3949ab';
+  el.style.setProperty('--bct-light', tintedTextColor(cardTitleColor, '#ffffff', 6));
+  el.style.setProperty('--bct-dark', tintedTextColor(cardTitleColor, '#242732', 6));
   if (hasOverride) {
     el.title = 'Manually placed — auto-sync resumes at ' + new Date(card.manualColumnUntil!).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
