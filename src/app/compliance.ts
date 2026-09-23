@@ -7,6 +7,7 @@ import { postUsersEndpoint, fetchWithReauth } from './worker-client';
 import { toCsv, downloadTextFile } from './export';
 import { toIsoDate } from '../utils/date';
 import { loadSignInPolicy } from './two-step';
+import { loadGoogleSettings } from './sso-settings';
 
 interface AuditEntry {
   at: number; user: string; role?: string; action: string; projectId?: string | null; projectName?: string;
@@ -36,6 +37,7 @@ export function openSecurityModal(): void {
   openModal('securityModal');
   refreshDeletionStatus();
   loadSignInPolicy();
+  loadGoogleSettings();
 }
 
 export function closeSecurityModal(): void {

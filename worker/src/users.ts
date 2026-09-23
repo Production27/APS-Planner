@@ -73,6 +73,7 @@ export interface RosterEntry {
   createdAt: number;
   isLead: boolean;
   mfaEnabled: boolean;
+  googleEmail: string;
 }
 
 export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
@@ -82,7 +83,7 @@ export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
     const raw = await env.USERS_KV.get(k.name);
     if (!raw) continue;
     const u = normalizeUserRecord(JSON.parse(raw)) as UserRecord;
-    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead, mfaEnabled: !!u.mfa });
+    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead, mfaEnabled: !!u.mfa, googleEmail: u.googleEmail || '' });
   }
   users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   return users;

@@ -9,6 +9,7 @@ import {
 import { signRoomToken } from './room-token.ts';
 import type { Identity, UserRecord } from './types.ts';
 import { recordAudit, clientIp } from './audit.ts';
+import { linkGoogleEmail, unlinkGoogleEmail } from './sso.ts';
 
 // Re-checked fresh from KV rather than trusted off the token: an
 // admin-gated endpoint must not honor a caller demoted after their token
@@ -55,6 +56,7 @@ interface UsersAddBody {
   newRole?: string;
   newAssignedProjectId?: string;
   newIsLead?: boolean;
+  newGoogleEmail?: string;
 }
 
 export async function handleUsersAdd(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
@@ -86,7 +88,7 @@ export async function handleUsersAdd(request: Request, env: Env, corsHeaders: Re
 
   const salt = genSaltHex();
   const passwordHash = await hashPasswordPBKDF2(newPassword, salt);
-  await putUser(env, {
+  const record: UserRecord = {
     username: newUsername,
     displayName: newDisplayName,
     role: newRole,
@@ -95,7 +97,10 @@ export async function handleUsersAdd(request: Request, env: Env, corsHeaders: Re
     passwordHash,
     salt,
     createdAt: Date.now()
-  });
+  };
+  const linkError = await linkGoogleEmail(env, record, body.newGoogleEmail);
+  if (linkError) return jsonResponse({ error: linkError }, 400, corsHeaders);
+  await putUser(env, record);
   await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Added user account', item: newUsername, ip: clientIp(request), details: 'role: ' + newRole + (newAssignedProjectId ? ', project: ' + newAssignedProjectId : '') });
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
@@ -135,6 +140,8 @@ interface UsersUpdateBody extends RoleProjectChangeBody {
   token?: string;
   targetUsername?: string;
   newIsLead?: boolean;
+  // undefined = leave as is, '' = unlink.
+  newGoogleEmail?: string;
 }
 
 export async function handleUsersUpdate(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
@@ -169,12 +176,16 @@ export async function handleUsersUpdate(request: Request, env: Env, corsHeaders:
   target.role = body.newRole;
   target.assignedProjectId = newAssignedProjectId;
   target.isLead = !!body.newIsLead;
+  if (body.newGoogleEmail !== undefined) {
+    const linkError = await linkGoogleEmail(env, target, body.newGoogleEmail);
+    if (linkError) return jsonResponse({ error: linkError }, 400, corsHeaders);
+  }
   await putUser(env, target);
 
   if (roleChanged || projectChanged) {
     await kickUserFromRoom(env, targetUsername);
   }
-  await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Changed user account', item: targetUsername, ip: clientIp(request), details: 'role: ' + target.role + ', project: ' + (target.assignedProjectId || 'all') + ', lead: ' + (target.isLead ? 'yes' : 'no') });
+  await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Changed user account', item: targetUsername, ip: clientIp(request), details: 'role: ' + target.role + ', project: ' + (target.assignedProjectId || 'all') + ', lead: ' + (target.isLead ? 'yes' : 'no') + ', Google: ' + (target.googleEmail || 'none') });
 
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
@@ -198,6 +209,7 @@ export async function handleUsersRemove(request: Request, env: Env, corsHeaders:
     }
   }
 
+  await unlinkGoogleEmail(env, target);
   await deleteUser(env, targetUsername);
   await kickUserFromRoom(env, targetUsername);
   await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Removed user account', item: targetUsername, ip: clientIp(request) });

@@ -27,6 +27,7 @@
 import { getRoomStub } from './room-stub.ts';
 import { jsonResponse } from './http.ts';
 import { handleAuth, handleAuthMfa } from './auth.ts';
+import { handleSsoConfig, handleGoogleStart, handleGoogleCallback, handleSsoRedeem, handleSsoSettings } from './sso.ts';
 import { handleMfaStatus, handleMfaSetup, handleMfaEnable, handleMfaDisable, handleMfaRecoveryCodes, handleUsersResetMfa, handleSecurityPolicy } from './mfa-handlers.ts';
 import { runBackup, handleTriggerBackup, handleListBackups, handleDownloadBackup, handleRestoreBackup } from './backup.ts';
 import {
@@ -84,6 +85,23 @@ export default {
       } catch (e) {
         return jsonResponse({ status: "unavailable" }, 503, corsHeaders);
       }
+    }
+    // Sign in with Google — see sso.ts. start/callback are browser
+    // navigations (GET + redirects), not fetches.
+    if (url.pathname === "/sso/config" && request.method === "GET") {
+      return handleSsoConfig(request, env, corsHeaders);
+    }
+    if (url.pathname === "/sso/google/start" && request.method === "GET") {
+      return handleGoogleStart(request, env, url);
+    }
+    if (url.pathname === "/sso/google/callback" && request.method === "GET") {
+      return handleGoogleCallback(request, env, url, ctx);
+    }
+    if (url.pathname === "/sso/redeem" && request.method === "POST") {
+      return handleSsoRedeem(request, env, corsHeaders, ctx);
+    }
+    if (url.pathname === "/sso/settings" && request.method === "POST") {
+      return handleSsoSettings(request, env, corsHeaders);
     }
     // Two-step verification — see auth.ts and mfa-handlers.ts.
     if (url.pathname === "/auth/mfa" && request.method === "POST") {

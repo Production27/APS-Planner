@@ -22,6 +22,7 @@ import {
   getAuthFailureCount, bumpAuthFailure
 } from './users.ts';
 import { getSecurityPolicy, verifyTotp, decryptSecret, looksLikeRecoveryCode, hashRecoveryCode } from './mfa.ts';
+import { passwordSignInBlocked } from './sso.ts';
 import type { UserRecord } from './types.ts';
 
 export const MFA_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -112,6 +113,10 @@ export async function handleAuth(request: Request, env: Env, corsHeaders: Record
       recordAudit(env, { user: normalizeUsername(body.username), action: 'Failed sign-in', ip: clientIp(request) })]);
     const wait = later(ctx, bump); if (wait) await wait;
     return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
+  }
+
+  if (await passwordSignInBlocked(env, user)) {
+    return jsonResponse({ error: "Your company signs in with Google — use \"Sign in with Google\".", useSso: true }, 403, corsHeaders);
   }
 
   // Password right; the failure count is only cleared once the whole

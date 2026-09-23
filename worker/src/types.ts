@@ -119,6 +119,8 @@ export interface UserRecord {
   // been shown to the user but not yet confirmed with a code.
   mfa?: { secret: string; enabledAt: number; lastStep: number; recovery: string[] };
   mfaPending?: { secret: string; createdAt: number };
+  // Google account email for "Sign in with Google" (see sso.ts).
+  googleEmail?: string;
   [key: string]: unknown;
 }
 

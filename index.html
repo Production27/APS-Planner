@@ -2700,6 +2700,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .login-banner.lockout { color: var(--warning); }
   .login-forgot { text-align: center; font-size: var(--t-sm); color: var(--text-light); margin-top: var(--s-4); }
   .login-card [hidden], .sec-modal [hidden] { display: none !important; }
+  .login-or { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-4) 0; color: var(--text-light); font-size: var(--t-sm); }
+  .login-or::before, .login-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .login-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: var(--s-3); font: inherit; font-size: var(--t-lg); font-weight: 600; color: #1f1f1f; background: #fff; border: 1.5px solid #dadce0; border-radius: 8px; cursor: pointer; }
+  .login-google:hover { background: #f8f9fa; }
+  .login-google:disabled { opacity: 0.6; cursor: default; }
   .login-step-text { font-size: var(--t-base); margin: 0 0 var(--s-3); line-height: 1.45; }
   .login-step-hint { font-size: var(--t-sm); color: var(--text-light); margin: var(--s-3) 0 0; line-height: 1.45; }
   .login-code { letter-spacing: 0.18em; font-variant-numeric: tabular-nums; }
@@ -3481,6 +3486,12 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         <span class="login-submit-label">Sign In</span>
       </button>
     </form>
+    <!-- Sign in with Google (src/auth/login.ts, worker/src/sso.ts). Shown
+         only when the server says an admin has turned it on. -->
+    <div class="login-sso" id="loginSso" hidden>
+      <div class="login-or"><span>or</span></div>
+      <button type="button" class="login-google" id="loginGoogleBtn"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Sign in with Google</span></button>
+    </div>
     <!-- Two-step verification (src/auth/login.ts): the code step for an
          account that has it on, the setup step for someone the company
          requires to set it up before they can get in, and the recovery
@@ -4139,6 +4150,10 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         <input type="text" id="userFormDisplayName" placeholder="shown on comments/activity">
       </div>
       <div class="form-group">
+        <label>Google account email <span style="font-weight:400; color:var(--text-light);">(optional, for Sign in with Google)</span></label>
+        <input type="email" id="userFormGoogleEmail" placeholder="name@yourcompany.com" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="form-group">
         <label>Permission Level</label>
         <select id="userFormTier" onchange="onUserFormTierChange()">
           <option value="admin">Admin — full access, both projects, manages accounts</option>
@@ -4214,6 +4229,24 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       <p>Require every account to use two-step verification (password plus a code from a phone app). Anyone who hasn't set it up is walked through it at their next sign-in.</p>
       <label class="sec-check"><input type="checkbox" id="requireMfaToggle"> Require two-step verification for everyone</label>
       <p class="sec-note" id="requireMfaNote"></p>
+    </section>
+
+    <section class="sec-section" id="ssoSection">
+      <h5>Sign in with Google</h5>
+      <div id="ssoNotConfigured" hidden>
+        <p>Not set up on the server yet. It needs a Google sign-in key (an "OAuth client ID" from Google Cloud) with this address as its redirect URI:</p>
+        <p><code class="mfa-secret" id="ssoRedirectUri"></code></p>
+      </div>
+      <div id="ssoConfigured" hidden>
+        <p>People sign in with their Google account instead of a password. Link each person's Google email in Manage Users first; nobody else can get in.</p>
+        <label class="sec-check"><input type="checkbox" id="ssoEnabledToggle"> Offer "Sign in with Google"</label>
+        <div class="print-opts" style="margin-top: var(--s-2);">
+          <label for="ssoDomains">Only these Google Workspace domains<input type="text" id="ssoDomains" placeholder="yourcompany.com (blank = any)" spellcheck="false"></label>
+        </div>
+        <label class="sec-check"><input type="checkbox" id="ssoRequireToggle"> Google only — no passwords (admins keep theirs as a backup)</label>
+        <p class="sec-note" id="ssoNote"></p>
+        <button class="btn btn-secondary" id="ssoSaveBtn">Save Google settings</button>
+      </div>
     </section>
 
     <section class="sec-section">

@@ -25,6 +25,71 @@ function showLoginStep(step: LoginStep): void {
   });
   const forgot = document.getElementById('loginForgot');
   if (forgot) forgot.hidden = step !== 'password';
+  const sso = document.getElementById('loginSso');
+  if (sso) sso.hidden = !(step === 'password' && googleSignInOffered);
+}
+
+// ---- Sign in with Google (worker/src/sso.ts) ----
+// The button shows only when the server says an admin turned it on. It
+// sends the whole page to Google via the Worker; Google sends it back here
+// with #sso_code=... (a one-time code swapped for a session below) or
+// #sso_error=....
+let googleSignInOffered = false;
+async function refreshSsoConfig(): Promise<void> {
+  try {
+    const res = await fetch(API_BASE_URL + 'sso/config', { cache: 'no-store' });
+    const data = await res.json();
+    googleSignInOffered = !!(res.ok && data && data.google);
+  } catch (e) {
+    googleSignInOffered = false;
+  }
+  const form = document.getElementById('loginForm');
+  const sso = document.getElementById('loginSso');
+  if (sso) sso.hidden = !(googleSignInOffered && form && !form.hidden);
+}
+{
+  const googleBtn = document.getElementById('loginGoogleBtn') as HTMLButtonElement | null;
+  if (googleBtn) googleBtn.addEventListener('click', function() {
+    googleBtn.disabled = true;
+    const here = location.href.split('#')[0];
+    location.assign(API_BASE_URL + 'sso/google/start?return=' + encodeURIComponent(here));
+  });
+}
+
+export const SSO_ERROR_MESSAGES: Record<string, string> = {
+  no_account: 'That Google account isn’t linked to a TeamSync account. Ask your admin to add your Google email in Manage Users.',
+  domain: 'That Google account isn’t from your company. Sign in with your work Google account.',
+  cancelled: 'Google sign-in was cancelled.',
+  expired: 'That sign-in took too long, or was started in another browser. Try again.',
+  not_enabled: 'Sign in with Google isn’t turned on.',
+  failed: 'Google sign-in didn’t work. Try again.',
+};
+let pendingSsoError: string | null = null;
+let ssoReturnPromise: Promise<string | null> | null = null;
+
+// Handles the page coming back from Google, once per page load. Returns
+// the new session token, or null (nothing to handle, or it failed, in
+// which case the sign-in screen shows why).
+function takeSsoReturn(): Promise<string | null> {
+  if (ssoReturnPromise) return ssoReturnPromise;
+  ssoReturnPromise = (async function(): Promise<string | null> {
+    const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const code = params.get('sso_code');
+    const error = params.get('sso_error');
+    if (!code && !error) return null;
+    // Take the code out of the address bar and history straight away.
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* file:// in tests */ }
+    if (error) { pendingSsoError = SSO_ERROR_MESSAGES[error] || SSO_ERROR_MESSAGES.failed; return null; }
+    const { res, data } = await postJson('sso/redeem', { code: code });
+    if (res && res.ok && data.token) {
+      setStoredSessionToken(data.token);
+      if (data.user && data.user.username) localStorage.setItem(USERNAME_KEY, data.user.username);
+      return data.token as string;
+    }
+    pendingSsoError = (data && data.error) || SSO_ERROR_MESSAGES.failed;
+    return null;
+  })();
+  return ssoReturnPromise;
 }
 
 // Resolves 'submit' when the step's form is submitted, or 'back' when its
@@ -146,6 +211,7 @@ function showLoginOverlay(prefillUsername?: string): void {
   const passInput = document.getElementById('loginPassword') as HTMLInputElement;
   document.getElementById('loginOverlay')!.classList.add('show');
   showLoginStep('password');
+  refreshSsoConfig();
   userInput.value = prefillUsername || '';
   passInput.value = '';
   passInput.type = 'password';
@@ -212,6 +278,7 @@ export async function reauthenticate(forceReprompt?: boolean): Promise<string> {
   let username = getStoredUsername();
   showLoginOverlay(username);
   if (forceReprompt) setLoginBanner('Your session ended — please sign in again.', 'err');
+  if (pendingSsoError) { setLoginBanner(pendingSsoError, 'err'); pendingSsoError = null; }
 
   while (true) {
     const creds = await waitForLoginSubmit();
@@ -249,6 +316,16 @@ export async function reauthenticate(forceReprompt?: boolean): Promise<string> {
       setLoginBusy(false);
       setLoginBanner(lockoutMessage, 'lockout');
       (document.getElementById('loginPassword') as HTMLInputElement).focus();
+      continue;
+    }
+    if (res.status === 403) {
+      // "Google only" is on for this company (worker/src/sso.ts): the
+      // password was right, but this account has to use Google.
+      let message = 'Your company signs in with Google.';
+      try { const d = await res.json(); if (d && d.error) message = d.error; } catch (e) { /* default above */ }
+      (document.getElementById('loginPassword') as HTMLInputElement).value = '';
+      setLoginBusy(false);
+      setLoginBanner(message, 'lockout');
       continue;
     }
     if (!res.ok) {
@@ -317,6 +394,8 @@ export function reauthenticateOnce(forceReprompt?: boolean): Promise<string> {
   return inFlightAuthPromise;
 }
 export async function getSessionToken(): Promise<string> {
+  const fromGoogle = await takeSsoReturn();
+  if (fromGoogle) return fromGoogle;
   const cached = getStoredSessionToken();
   if (isSessionTokenUsable(cached)) return cached;
   return await reauthenticateOnce(false);
