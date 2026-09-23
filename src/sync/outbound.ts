@@ -159,27 +159,111 @@ function hasPendingWriteForProject(projectId: string): boolean {
   return false;
 }
 
+// ===== What's already in sync with the server =====
+// Per project and per kind, the JSON of each job/card/event as last sent
+// to or received from the server (updatedAt excluded). An item whose
+// current JSON differs is "dirty": it has a local change the server
+// doesn't have yet. pushProjectToShared() sends only dirty items, and
+// src/sync/inbound.ts's delta merge never overwrites a dirty item.
+//
+// This replaces re-sending EVERY item with a fresh updatedAt on every
+// save. Besides the cost (the whole project uploaded per keystroke-save),
+// that let an out-of-date copy of a job someone else had just edited win
+// on timestamp and silently overwrite their change. Now an item is only
+// ever sent — and only ever gets a new updatedAt — when this browser
+// actually changed it.
+type SyncKind = 'jobs' | 'boardCards' | 'calendarEvents';
+const SYNC_KINDS: SyncKind[] = ['jobs', 'boardCards', 'calendarEvents'];
+const syncedJson: Record<string, Record<SyncKind, Map<string, string>>> = {};
+const lastSentHeaderJson: Record<string, string> = {};
+
+function itemSyncJson(item: any): string {
+  const copy = Object.assign({}, item);
+  delete copy.updatedAt;
+  return JSON.stringify(copy);
+}
+function syncedMaps(projectId: string): Record<SyncKind, Map<string, string>> {
+  if (!syncedJson[projectId]) syncedJson[projectId] = { jobs: new Map(), boardCards: new Map(), calendarEvents: new Map() };
+  return syncedJson[projectId];
+}
+
+// Everything in this project now matches the server (called after a full
+// snapshot is merged in).
+function resetSyncedFromProject(projectId: string, proj: any): void {
+  const maps = { jobs: new Map<string, string>(), boardCards: new Map<string, string>(), calendarEvents: new Map<string, string>() };
+  SYNC_KINDS.forEach(function (kind) {
+    (proj[kind] || []).forEach(function (item: any) { if (item && item.id !== undefined) maps[kind].set(String(item.id), itemSyncJson(item)); });
+  });
+  syncedJson[projectId] = maps;
+}
+function markItemSynced(projectId: string, kind: SyncKind, item: any): void {
+  syncedMaps(projectId)[kind].set(String(item.id), itemSyncJson(item));
+}
+function forgetSyncedItem(projectId: string, kind: SyncKind, id: string | number): void {
+  syncedMaps(projectId)[kind].delete(String(id));
+}
+function isItemDirty(projectId: string, kind: SyncKind, item: any): boolean {
+  return syncedMaps(projectId)[kind].get(String(item.id)) !== itemSyncJson(item);
+}
+
+// True if any job/card/event in the project differs from what the server
+// has. After merging remote data the app normalizes it (fills in missing
+// ids/tasks, creates a job's board card, moves a card to its
+// date-derived stage) — those local-only changes must be pushed promptly,
+// or the delta merge would keep treating the items as "mid-edit" and hold
+// back teammates' changes to them.
+function hasDirtyItems(projectId: string): boolean {
+  const proj = projects[projectId];
+  if (!proj) return false;
+  return SYNC_KINDS.some(function (kind) {
+    return (proj[kind] || []).some(function (item: any) { return item && isItemDirty(projectId, kind, item); });
+  });
+}
+
+// Ids of items this browser has sent in a batch the server hasn't
+// acknowledged yet — the delta merge leaves those alone too, until the
+// server's answer (ack + echo, or a rejection + fresh snapshot) arrives.
+function pendingItemIds(projectId: string, kind: SyncKind): Set<string> {
+  const ids = new Set<string>();
+  pendingWrites.forEach(function (entry) {
+    const m = entry.msg as any;
+    if (m && m.projectId === projectId && Array.isArray(m[kind])) m[kind].forEach(function (it: any) { if (it) ids.add(String(it.id)); });
+  });
+  return ids;
+}
+
 // Pushes a project's routine, frequently-changing fields (jobs/cards/
-// calendar events/header) as one batch. Deliberately does NOT touch
-// boardColumns/fieldOptions/workflowItems — those go through
-// pushFieldToShared() instead, fired only from the exact functions that
-// intentionally change them, since (unlike jobs/cards/events, which are
-// per-id maps) they're whole-array/object fields with no per-item id to
-// diff against a teammate's own concurrent change.
-function pushProjectToShared(projectId: string, headerOverride?: any): void {
+// calendar events/header) as one batch — only the items that changed
+// (see syncedJson above); nothing at all if nothing did. Pass
+// {full: true} to send every item regardless (first push into an empty
+// room). Deliberately does NOT touch boardColumns/fieldOptions/
+// workflowItems — those go through pushFieldToShared() instead, fired
+// only from the exact functions that intentionally change them, since
+// (unlike jobs/cards/events, which are per-id maps) they're whole-array/
+// object fields with no per-item id to diff against a teammate's own
+// concurrent change.
+function pushProjectToShared(projectId: string, headerOverride?: any, opts?: { full?: boolean }): void {
   const proj = projects[projectId];
   if (!proj) return;
   const header = headerOverride || proj.header;
+  const full = !!(opts && opts.full);
+  const now = Date.now();
 
-  sendRoomMessage({
-    type: 'upsertProjectBatch',
-    projectId: projectId,
-    name: proj.name,
-    jobs: proj.jobs.map(function (j: any) { return Object.assign({}, j, { updatedAt: Date.now() }); }),
-    boardCards: proj.boardCards.map(function (c: any) { return Object.assign({}, c, { updatedAt: Date.now() }); }),
-    calendarEvents: (proj.calendarEvents || []).map(function (e: any) { return Object.assign({}, e, { updatedAt: Date.now() }); }),
-    header: { title: header.title || proj.name, subtitle: header.subtitle || '', theme: normalizeThemeColor(header.theme) }
+  const msg: Record<string, unknown> = { type: 'upsertProjectBatch', projectId: projectId, name: proj.name };
+  let itemCount = 0;
+  SYNC_KINDS.forEach(function (kind) {
+    const changed = (proj[kind] || []).filter(function (item: any) { return item && (full || isItemDirty(projectId, kind, item)); });
+    msg[kind] = changed.map(function (item: any) { return Object.assign({}, item, { updatedAt: now }); });
+    changed.forEach(function (item: any) { markItemSynced(projectId, kind, item); });
+    itemCount += changed.length;
   });
+  const headerValue = { title: header.title || proj.name, subtitle: header.subtitle || '', theme: normalizeThemeColor(header.theme) };
+  const headerJson = JSON.stringify(headerValue) + '|' + proj.name;
+  const headerChanged = lastSentHeaderJson[projectId] !== headerJson;
+  msg.header = headerValue;
+  if (!full && !itemCount && !headerChanged) return;
+  lastSentHeaderJson[projectId] = headerJson;
+  sendRoomMessage(msg);
 }
 
 // Removes a project's entry entirely — no UI calls this (project
@@ -225,6 +309,7 @@ function pruneStrayEmptyProjects(): void {
 function deleteFromSharedMap(projectId: string | null, mapKey: string, id: string | number): void {
   const keyMap: Record<string, string> = { jobsMap: 'jobs', boardCardsMap: 'boardCards', calendarEventsMap: 'calendarEvents' };
   sendRoomMessage({ type: 'deleteFromMap', projectId: projectId, mapKey: keyMap[mapKey] || mapKey, id: id });
+  if (projectId) forgetSyncedItem(projectId, (keyMap[mapKey] || mapKey) as SyncKind, id);
   const proj = projects[projectId as string];
   if (proj) proj.deletedIds = mergeTombstones(proj.deletedIds, { [String(id)]: Date.now() });
 }
@@ -332,6 +417,12 @@ export {
   clearPendingWrite,
   hasPendingWriteForProject,
   pushProjectToShared,
+  resetSyncedFromProject,
+  markItemSynced,
+  forgetSyncedItem,
+  isItemDirty,
+  hasDirtyItems,
+  pendingItemIds,
   removeProjectFromShared,
   pruneStrayEmptyProjects,
   deleteFromSharedMap,

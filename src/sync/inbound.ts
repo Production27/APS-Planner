@@ -14,7 +14,7 @@
 // natural single owner among the sync files.
 import { isBusyEditing } from './connection';
 import { renderPresenceAvatars, PresenceUser } from './presence';
-import { clearPendingWrite, queueSharedSync, pushProjectToShared, pushRoomState, pruneStrayEmptyProjects, deleteCardFromShared, hasPendingWriteForProject } from './outbound';
+import { clearPendingWrite, queueSharedSync, pushProjectToShared, pushRoomState, pruneStrayEmptyProjects, deleteCardFromShared, hasPendingWriteForProject, resetSyncedFromProject, markItemSynced, forgetSyncedItem, isItemDirty, hasDirtyItems, pendingItemIds } from './outbound';
 import { renderGantt, isGanttReorderAnimating, GANTT_REORDER_MS } from '../views/gantt';
 import { renderBoard } from '../views/board';
 import { renderCalendar, ensureCalendarEventIds } from '../views/calendar';
@@ -48,6 +48,10 @@ function handleRoomMessage(msg: any): void {
     const isFirst = !roomEverConnected;
     roomEverConnected = true;
     applyRoomSnapshot(msg.projects || {}, isFirst);
+    return;
+  }
+  if (msg.type === 'delta') {
+    applyRoomDelta(msg.projects || {});
     return;
   }
   if (msg.type === 'presence') {
@@ -348,6 +352,11 @@ function applyRoomSnapshot(remoteProjects: Record<string, any>, isFirstSnapshot:
         local.calendarEvents = ce;
       }
 
+      // Jobs/cards/events now match the server exactly — record that, so
+      // the next save only sends what changes from here (see syncedJson
+      // in src/sync/outbound.ts).
+      if (!projectSyncPending) resetSyncedFromProject(projectId, local);
+
       // ── fields ──
       if (remoteFieldOpts) local.fieldOptions = safeMergeInto(Object.assign({}, local.fieldOptions), remoteFieldOpts);
 
@@ -456,6 +465,9 @@ function applyRoomSnapshot(remoteProjects: Record<string, any>, isFirstSnapshot:
     // merged and rendered above — safe to reveal the app. No-op if the
     // loading screen was never shown (the normal, returning-device case).
     if (isFirstSnapshot) hideFreshLoadOverlay();
+
+    // See hasDirtyItems(): push what the refresh above normalized locally.
+    if (activeProjectId && hasDirtyItems(activeProjectId)) queueSharedSync();
   }
 
   pruneRemovedProjects();
@@ -469,6 +481,145 @@ function applyRoomSnapshot(remoteProjects: Record<string, any>, isFirstSnapshot:
 
   bootstrapFirstSnapshot();
   triggerPostSnapshotRefresh();
+}
+
+// ===== Delta merge (sync protocol 2) =====
+// After each accepted write the server sends only what changed (see
+// worker/src/room-state.ts's computeRoomDelta()): per project, changed/
+// added jobs, cards and events keyed by id, removed ids, and any changed
+// top-level field. Merged item by item — unlike a full snapshot, which
+// had to be skipped for a whole project while any local write was in
+// flight — and an item is left alone when this browser has a change to
+// it the server doesn't have yet (not sent, or sent and not yet
+// acknowledged). The server's answer to that write (its echo, or a
+// rejection followed by a fresh snapshot) settles it.
+
+type DeltaKind = 'jobs' | 'boardCards' | 'calendarEvents';
+const DELTA_KINDS: DeltaKind[] = ['jobs', 'boardCards', 'calendarEvents'];
+
+function normalizeIncoming(kind: DeltaKind, item: any): any {
+  if (kind === 'jobs') { ensureJobAndTaskIds([item] as Job[]); if (!item.notes) item.notes = ''; }
+  else if (kind === 'boardCards') ensureCardIds([item]);
+  else ensureCalendarEventIds([item]);
+  return item;
+}
+
+// Local projects in the server's shape, so a rare structural change (a
+// whole project added or removed) can go through applyRoomSnapshot()'s
+// full, already-proven path instead of a second implementation of it.
+function localProjectsAsRemote(): Record<string, any> {
+  const out: Record<string, any> = {};
+  Object.keys(projects).forEach(function (pid) {
+    const p = projects[pid];
+    const toMap = function (arr: any[]) { const m: Record<string, any> = {}; (arr || []).forEach(function (x) { m[String(x.id)] = x; }); return m; };
+    out[pid] = {
+      name: p.name, jobs: toMap(p.jobs), boardCards: toMap(p.boardCards), calendarEvents: toMap(p.calendarEvents),
+      boardColumns: p.boardColumns, workflowItems: p.workflowItems, fieldOptions: p.fieldOptions, header: p.header,
+      deletedIds: p.deletedIds, activityLog: p.activityLog, fieldRevisions: p.fieldRevisions,
+    };
+  });
+  return out;
+}
+
+function applyRoomDelta(deltaProjects: Record<string, any>): void {
+  if (!deltaProjects || typeof deltaProjects !== 'object') return;
+
+  if (Object.keys(deltaProjects).some(function (pid) { const d = deltaProjects[pid]; return d && (d.replace || d.projectRemoved); })) {
+    const remote = localProjectsAsRemote();
+    Object.keys(deltaProjects).forEach(function (pid) {
+      const d = deltaProjects[pid];
+      if (d && d.projectRemoved) delete remote[pid];
+      else if (d && d.replace) remote[pid] = d.replace;
+    });
+    applyRoomSnapshot(remote, false);
+    Object.keys(deltaProjects).forEach(function (pid) { if (deltaProjects[pid] && deltaProjects[pid].replace && projects[pid]) resetSyncedFromProject(pid, projects[pid]); });
+    return;
+  }
+
+  let activeChanged = false;
+  let listChanged = false;
+  let logChanged = false;
+
+  Object.keys(deltaProjects).forEach(function (projectId) {
+    const d = deltaProjects[projectId];
+    const local = projects[projectId];
+    if (!d || typeof d !== 'object' || !local) return;
+    let changed = false;
+
+    if (d.deletedIds && typeof d.deletedIds === 'object') {
+      local.deletedIds = mergeTombstones(local.deletedIds, d.deletedIds);
+      changed = true;
+    }
+
+    DELTA_KINDS.forEach(function (kind) {
+      if (!Array.isArray(local[kind])) local[kind] = [];
+      const arr: any[] = local[kind];
+      const removed: string[] = (d.removedIds && Array.isArray(d.removedIds[kind])) ? d.removedIds[kind].map(String) : [];
+      // Also drop anything a merged-in tombstone now covers.
+      const drop = new Set(removed);
+      arr.forEach(function (it) { if (it && local.deletedIds && local.deletedIds[String(it.id)]) drop.add(String(it.id)); });
+      if (drop.size) {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          if (arr[i] && drop.has(String(arr[i].id))) { arr.splice(i, 1); changed = true; }
+        }
+        drop.forEach(function (id) { forgetSyncedItem(projectId, kind, id); });
+      }
+
+      const incoming = d[kind];
+      if (!incoming || typeof incoming !== 'object') return;
+      const pending = pendingItemIds(projectId, kind);
+      Object.keys(incoming).forEach(function (id) {
+        const item = incoming[id];
+        if (!item || typeof item !== 'object') return;
+        if (local.deletedIds && local.deletedIds[String(id)]) return;
+        const idx = arr.findIndex(function (x) { return x && String(x.id) === String(id); });
+        const existing = idx === -1 ? null : arr[idx];
+        if (existing && (isItemDirty(projectId, kind, existing) || pending.has(String(id)))) return;
+        normalizeIncoming(kind, item);
+        // Our own echo (or an identical change) — nothing to redraw.
+        if (existing && JSON.stringify(Object.assign({}, existing, { updatedAt: 0 })) === JSON.stringify(Object.assign({}, item, { updatedAt: 0 }))) {
+          markItemSynced(projectId, kind, existing);
+          return;
+        }
+        if (idx === -1) arr.push(item); else arr[idx] = item;
+        markItemSynced(projectId, kind, item);
+        changed = true;
+      });
+      if (kind === 'jobs' && changed) arr.sort(function (a: any, b: any) { return (a.order || 0) - (b.order || 0); });
+    });
+
+    const projectSyncPending = hasPendingWriteForProject(projectId);
+    if (typeof d.name === 'string' && d.name !== local.name) { local.name = d.name; listChanged = true; changed = true; }
+    if (Array.isArray(d.boardColumns) && d.boardColumns.length) { local.boardColumns = d.boardColumns; changed = true; }
+    if (Array.isArray(d.workflowItems)) { local.workflowItems = d.workflowItems; changed = true; }
+    if (d.fieldOptions && typeof d.fieldOptions === 'object') { local.fieldOptions = safeMergeInto(Object.assign({}, local.fieldOptions), d.fieldOptions); changed = true; }
+    if (d.header && typeof d.header === 'object' && !projectSyncPending) {
+      if (typeof d.header.title === 'string') local.header.title = d.header.title;
+      if (typeof d.header.subtitle === 'string') local.header.subtitle = d.header.subtitle;
+      if (d.header.theme) local.header.theme = d.header.theme;
+      changed = true;
+    }
+    if (Array.isArray(d.activityLog)) { local.activityLog = d.activityLog; logChanged = true; }
+    if (d.fieldRevisions && typeof d.fieldRevisions === 'object') local.fieldRevisions = d.fieldRevisions;
+
+    if (changed && projectId === activeProjectId) {
+      healOrphanedCardsForProject(local, projectId);
+      activeChanged = true;
+    }
+  });
+
+  saveProjects();
+  if (activeChanged) {
+    if (isBusyEditing()) pendingRemoteRefresh = true;
+    else { pendingRemoteRefresh = false; refreshActiveProjectFromShared(); }
+  }
+  if (activeChanged || listChanged) updateProjectToggle();
+  // See hasDirtyItems(): push what the refresh above normalized locally.
+  if (activeChanged && activeProjectId && hasDirtyItems(activeProjectId)) queueSharedSync();
+  if (logChanged) {
+    const sidebar = document.getElementById('activitySidebar');
+    if (sidebar && !sidebar.classList.contains('collapsed')) renderActivityLogSidebar();
+  }
 }
 
 // See refreshActiveProjectFromShared()'s own comment on why the Gantt
@@ -582,5 +733,6 @@ export {
   healOrphanedPhaseCards,
   healOrphanedCardsForProject,
   applyRoomSnapshot,
+  applyRoomDelta,
   refreshActiveProjectFromShared,
 };

@@ -205,5 +205,10 @@ export async function buildRoomWsUrl(): Promise<string> {
   const httpUrl = new URL('room', API_BASE_URL);
   httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   httpUrl.searchParams.set('token', token);
+  // Sync protocol 2: after each write the server sends only what changed
+  // ({type:'delta'}, see src/sync/inbound.ts) instead of a full snapshot.
+  // An older server ignores this and keeps sending snapshots, which are
+  // still handled, so client and worker can be deployed in either order.
+  httpUrl.searchParams.set('proto', '2');
   return httpUrl.toString();
 }
