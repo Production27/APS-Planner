@@ -2197,18 +2197,18 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .home-mini-gantt-day.today { color: var(--primary-ondark); border-bottom-color: var(--primary-ondark); }
   .home-mini-gantt-dow { display: block; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
   .home-mini-gantt-num { display: block; font-size: var(--t-sm); margin-top: 1px; color: var(--text); }
-  .home-mini-gantt-row { height: 30px; cursor: pointer; }
+  .home-mini-gantt-row { height: 36px; cursor: pointer; }
   .home-mini-gantt-label {
     font-size: var(--t-xs); font-weight: 600; color: var(--text);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: var(--s-1-5);
   }
   .home-mini-gantt-row:hover .home-mini-gantt-task-pill { filter: brightness(1.15); }
   .home-mini-gantt-track {
-    grid-column: 2 / span var(--home-gantt-days, 7); position: relative; height: 18px; border-radius: 4px;
+    grid-column: 2 / span var(--home-gantt-days, 7); position: relative; height: 24px; border-radius: 5px;
     background: repeating-linear-gradient(90deg, transparent, transparent calc(100% / var(--home-gantt-days, 7) - 1px), var(--border) calc(100% / var(--home-gantt-days, 7) - 1px), var(--border) calc(100% / var(--home-gantt-days, 7)));
   }
   .home-mini-gantt-bar {
-    position: absolute; top: 1px; bottom: 1px; min-width: 6px; border-radius: 4px; box-sizing: border-box;
+    position: absolute; top: 1px; bottom: 1px; min-width: 6px; border-radius: 5px; box-sizing: border-box;
     border: 2px solid; display: flex; align-items: center; padding: 0 var(--s-1); overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
