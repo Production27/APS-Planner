@@ -120,11 +120,100 @@ export function cloneRoomState<T>(state: T): T {
   return JSON.parse(JSON.stringify(state));
 }
 
+// Copy-on-write replacement for deep-cloning the whole project on every
+// write (which cost O(entire room) per edit — ~20 ms+ at a few hundred
+// jobs, before the broadcast even started). Copies only the containers a
+// handler is allowed to change: the three per-id maps, tombstones, the
+// activity log and fieldRevisions. Every handler below REPLACES items in
+// those containers (next.jobs[id] = job) and never mutates an existing
+// item in place, so the previous project object is left untouched —
+// which is what lets computeRoomDelta() find what changed by reference.
+export function copyProjectForWrite(project: Project): Project {
+  return {
+    ...project,
+    jobs: { ...project.jobs },
+    boardCards: { ...project.boardCards },
+    calendarEvents: { ...project.calendarEvents },
+    deletedIds: { ...project.deletedIds },
+    activityLog: (project.activityLog || []).slice(),
+    fieldRevisions: { ...project.fieldRevisions },
+  };
+}
+
+// ===== Delta sync =====
+// What a write actually changed, so connected clients get just that
+// instead of the whole room re-sent to every socket on every edit (at 250
+// jobs / 50 users that was ~75 MB per edit). Relies on copy-on-write:
+// an unchanged job/card/event is the SAME object in prev and next, so
+// reference comparison finds changes without deep-comparing anything.
+//   projects[pid] = { replace: <whole project> }   — project added
+//   projects[pid] = { projectRemoved: true }         — project removed
+//   projects[pid] = { jobs, boardCards, calendarEvents: {id: item} changed/added,
+//                     removedIds: { jobs: [ids], boardCards: [ids], calendarEvents: [ids] },
+//                     <other top-level fields>: new value, only if changed }
+export type ProjectDelta = Record<string, unknown>;
+export interface RoomDelta { projects: Record<string, ProjectDelta>; }
+
+const DELTA_MAP_KEYS = ['jobs', 'boardCards', 'calendarEvents'] as const;
+
+export function computeProjectDelta(prev: Project, next: Project): ProjectDelta | null {
+  if (prev === next) return null;
+  const delta: ProjectDelta = {};
+  let any = false;
+  const removed: Record<string, string[]> = {};
+  DELTA_MAP_KEYS.forEach(function (key) {
+    const a = (prev[key] || {}) as Record<string, unknown>;
+    const b = (next[key] || {}) as Record<string, unknown>;
+    if (a === b) return;
+    const changed: Record<string, unknown> = {};
+    let n = 0;
+    Object.keys(b).forEach(function (id) { if (a[id] !== b[id]) { changed[id] = b[id]; n++; } });
+    const gone = Object.keys(a).filter(function (id) { return !(id in b); });
+    if (n) { delta[key] = changed; any = true; }
+    if (gone.length) { removed[key] = gone; any = true; }
+  });
+  if (Object.keys(removed).length) delta.removedIds = removed;
+  const keys = new Set(Object.keys(prev).concat(Object.keys(next)));
+  keys.forEach(function (k) {
+    if ((DELTA_MAP_KEYS as readonly string[]).indexOf(k) !== -1 || k === 'removedIds' || k === 'replace' || k === 'projectRemoved') return;
+    const a = (prev as Record<string, unknown>)[k], b = (next as Record<string, unknown>)[k];
+    if (a === b) return;
+    // Copy-on-write re-creates these containers on every write even when
+    // their contents didn't change — only send them when they really did.
+    if ((k === 'deletedIds' || k === 'activityLog' || k === 'fieldRevisions') && deepEqual(a, b)) return;
+    delta[k] = b;
+    any = true;
+  });
+  return any ? delta : null;
+}
+
+export function computeRoomDelta(prev: RoomState, next: RoomState): RoomDelta | null {
+  if (prev === next) return null;
+  const out: RoomDelta = { projects: {} };
+  let any = false;
+  const ids = new Set(Object.keys(prev.projects || {}).concat(Object.keys(next.projects || {})));
+  ids.forEach(function (pid) {
+    const a = prev.projects[pid], b = next.projects[pid];
+    if (!a && b) { out.projects[pid] = { replace: b }; any = true; return; }
+    if (a && !b) { out.projects[pid] = { projectRemoved: true }; any = true; return; }
+    const d = computeProjectDelta(a, b);
+    if (d) { out.projects[pid] = d; any = true; }
+  });
+  return any ? out : null;
+}
+
+// Read-side scoping for a delta, same rule as filterRoomStateForAttachment():
+// a project-restricted (non-admin) connection only ever hears about its own
+// project. Returns null when nothing in the delta is visible to it.
+export function filterRoomDeltaForAttachment(delta: RoomDelta, attachment: Attachment | null | undefined): RoomDelta | null {
+  if (!attachment || attachment.role === 'admin' || !attachment.assignedProjectId) return delta;
+  const own = delta.projects[attachment.assignedProjectId];
+  return own ? { projects: { [attachment.assignedProjectId]: own } } : null;
+}
+
 export function ensureProject(state: RoomState, projectId: string, seedName?: string | null): RoomState {
   if (state.projects[projectId]) return state;
-  const next = cloneRoomState(state);
-  next.projects[projectId] = blankProject(seedName);
-  return next;
+  return { ...state, projects: { ...state.projects, [projectId]: blankProject(seedName) } };
 }
 
 export function emptyRoomState(): RoomState {
@@ -211,7 +300,7 @@ export function handleUpsertJob(project: Project, msg: { job?: Job }, attachment
     return { project, changed: false, rejected: 'stale' };
   }
   sanitizeJobCommentAuthors(job, existing, attachment);
-  const next = cloneRoomState({ projects: { p: project } }).projects.p;
+  const next = copyProjectForWrite(project);
   next.jobs[job.id] = job;
   next.rev++;
   return { project: next, changed: true };
@@ -232,7 +321,7 @@ export function handleUpsertCard(project: Project, msg: { card?: BoardCard }): H
   if (existing && (existing.updatedAt || 0) > incomingUpdatedAt) {
     return { project, changed: false, rejected: 'stale' };
   }
-  const next = cloneRoomState({ projects: { p: project } }).projects.p;
+  const next = copyProjectForWrite(project);
   next.boardCards[card.id] = card;
   next.rev++;
   return { project: next, changed: true };
@@ -253,7 +342,7 @@ export function handleUpsertCalendarEvent(project: Project, msg: { event?: Calen
   if (existing && (existing.updatedAt || 0) > incomingUpdatedAt) {
     return { project, changed: false, rejected: 'stale' };
   }
-  const next = cloneRoomState({ projects: { p: project } }).projects.p;
+  const next = copyProjectForWrite(project);
   next.calendarEvents[event.id] = event;
   next.rev++;
   return { project: next, changed: true };
@@ -279,7 +368,7 @@ export interface UpsertProjectBatchMessage {
 export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBatchMessage, attachment?: Attachment | null): HandlerResult {
   let next = project;
   let changed = false;
-  function ensureCloned() { if (next === project) next = cloneRoomState({ projects: { p: next } }).projects.p; }
+  function ensureCloned() { if (next === project) next = copyProjectForWrite(next); }
 
   if (typeof msg.name === 'string' && msg.name !== next.name) {
     ensureCloned();
@@ -294,6 +383,9 @@ export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBat
     if (next.deletedIds[job.id]) return;
     const existing = next.jobs[job.id];
     if (existing && (existing.updatedAt || 0) > (job.updatedAt || 0)) return;
+    // An identical re-send (older clients push every item on every save)
+    // is a no-op: no re-save, no broadcast, stored updatedAt left alone.
+    if (existing && !fieldsChangedExcluding(job as unknown as Record<string, unknown>, existing as unknown as Record<string, unknown>, ['updatedAt'])) return;
     sanitizeJobCommentAuthors(job, existing, attachment);
     ensureCloned();
     next.jobs[job.id] = job;
@@ -307,6 +399,7 @@ export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBat
     if (next.deletedIds[String(card.id)]) return;
     const existing = next.boardCards[card.id];
     if (existing && (existing.updatedAt || 0) > (card.updatedAt || 0)) return;
+    if (existing && !fieldsChangedExcluding(card as unknown as Record<string, unknown>, existing as unknown as Record<string, unknown>, ['updatedAt'])) return;
     ensureCloned();
     next.boardCards[card.id] = card;
     changed = true;
@@ -319,6 +412,7 @@ export function handleUpsertProjectBatch(project: Project, msg: UpsertProjectBat
     if (next.deletedIds[String(ev.id)]) return;
     const existing = next.calendarEvents[ev.id];
     if (existing && (existing.updatedAt || 0) > (ev.updatedAt || 0)) return;
+    if (existing && !fieldsChangedExcluding(ev as unknown as Record<string, unknown>, existing as unknown as Record<string, unknown>, ['updatedAt'])) return;
     ensureCloned();
     next.calendarEvents[ev.id] = ev;
     changed = true;
@@ -436,7 +530,7 @@ export function handleSetWholeField(project: Project, msg: { baseFieldRevision?:
       return { project, changed: false, error: 'setWholeField: ' + fieldName + ' contains an unsafe id/color value' };
     }
   }
-  const next = cloneRoomState({ projects: { p: project } }).projects.p;
+  const next = copyProjectForWrite(project);
   (next as Record<string, unknown>)[fieldName] = msg.value;
   next.fieldRevisions[fieldName] = currentRev + 1;
   next.rev++;
@@ -449,7 +543,7 @@ export function handleDeleteFromMap(project: Project, msg: { mapKey?: string; id
   if (!mapKey || ['jobs', 'boardCards', 'calendarEvents'].indexOf(mapKey) === -1) {
     return { project, changed: false, error: 'deleteFromMap: invalid mapKey' };
   }
-  const next = cloneRoomState({ projects: { p: project } }).projects.p;
+  const next = copyProjectForWrite(project);
   const map = next[mapKey as 'jobs' | 'boardCards' | 'calendarEvents'] as Record<string, unknown>;
   delete map[id];
   delete map[String(msg.id)];
@@ -460,7 +554,7 @@ export function handleDeleteFromMap(project: Project, msg: { mapKey?: string; id
 
 export function handleRecordTombstone(project: Project, msg: { id: string | number }): HandlerResult {
   const id = String(msg.id);
-  const next = cloneRoomState({ projects: { p: project } }).projects.p;
+  const next = copyProjectForWrite(project);
   next.deletedIds = mergeTombstones(next.deletedIds, { [id]: Date.now() });
   next.rev++;
   return { project: next, changed: true };
@@ -475,7 +569,7 @@ export function handleRecordTombstone(project: Project, msg: { id: string | numb
 // never the client's claim, since a log a caller can backdate isn't much
 // of an audit trail.
 export function handleLogActivity(project: Project, msg: { who?: string; what?: string }, attachment?: Attachment | null): HandlerResult {
-  const next = cloneRoomState({ projects: { p: project } }).projects.p;
+  const next = copyProjectForWrite(project);
   const who = (attachment && attachment.displayName) || msg.who || 'Someone';
   const entry: ActivityLogEntry = { who: who, what: msg.what || '', when: Date.now() };
   next.activityLog.push(entry);
@@ -553,7 +647,7 @@ export function applyMessage(state: RoomState, msg: RoomMessage, attachment?: At
     case 'recordTombstone': result = handleRecordTombstone(project, msg as unknown as { id: string | number }); break;
     case 'logActivity': result = handleLogActivity(project, msg as { who?: string; what?: string }, attachment); break;
     case 'renameProject': {
-      const next = cloneRoomState({ projects: { p: project } }).projects.p;
+      const next = copyProjectForWrite(project);
       next.name = (msg.name as string) || next.name;
       next.rev++;
       result = { project: next, changed: true };
@@ -573,8 +667,7 @@ export function applyMessage(state: RoomState, msg: RoomMessage, attachment?: At
     };
   }
 
-  const newState = cloneRoomState(working);
-  newState.projects[msg.projectId] = result.project;
+  const newState: RoomState = { ...working, projects: { ...working.projects, [msg.projectId]: result.project } };
   return {
     state: newState,
     changed: true,
@@ -593,7 +686,7 @@ export interface RemoveProjectResult {
 // Project deletion is still not exposed anywhere in the app's own UI otherwise.
 export function removeProject(state: RoomState, projectId: string): RemoveProjectResult {
   if (!state.projects[projectId]) return { state, changed: false };
-  const next = cloneRoomState(state);
+  const next: RoomState = { ...state, projects: { ...state.projects } };
   delete next.projects[projectId];
   return { state: next, changed: true };
 }

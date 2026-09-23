@@ -5,7 +5,8 @@ import { verifyRoomToken } from './room-token.ts';
 import { tierAtLeast } from './tiers.ts';
 import {
   emptyRoomState, MESSAGE_TIER_REQUIREMENTS,
-  filterRoomStateForAttachment, filterUpsertProjectBatchByTier, applyMessage
+  filterRoomStateForAttachment, filterUpsertProjectBatchByTier, applyMessage,
+  computeRoomDelta, filterRoomDeltaForAttachment
 } from './room-state.ts';
 import type { UpsertProjectBatchMessage } from './room-state.ts';
 import type { RoomState, RoomMessage, Attachment } from './types.ts';
@@ -16,6 +17,14 @@ import type { RoomState, RoomMessage, Attachment } from './types.ts';
 // brief network hiccup) don't cause a false prune.
 const PRESENCE_STALE_MS = 90 * 1000;
 
+// Connections that see the same data share a scope: every admin and every
+// unrestricted account sees everything; a restricted account sees only its
+// assigned project (see filterRoomStateForAttachment()).
+function scopeKey(a: Attachment | null): string {
+  if (!a || a.role === 'admin' || !a.assignedProjectId) return '*';
+  return 'p:' + a.assignedProjectId;
+}
+
 // What serializeAttachment()/deserializeAttachment() actually stores on
 // each WebSocket — the connect-time identity plus presence fields that
 // get updated on every setPresence heartbeat.
@@ -24,6 +33,10 @@ interface RoomAttachment extends Attachment {
   projectId: string | null;
   sessionId?: string | null;
   lastSeen?: number;
+  // Sync protocol the client said it speaks (the "proto" query param on
+  // the WebSocket URL). 2 = accepts {type:'delta'} messages after every
+  // write; absent/1 = older client, still gets a full snapshot each time.
+  proto?: number;
 }
 
 export class ApsRoom {
@@ -134,7 +147,8 @@ export class ApsRoom {
       role: identity.role as string,
       assignedProjectId: (identity.assignedProjectId as string) || null,
       view: null,
-      projectId: null
+      projectId: null,
+      proto: url.searchParams.get('proto') === '2' ? 2 : 1
     };
     server.serializeAttachment(attachment);
 
@@ -284,21 +298,60 @@ export class ApsRoom {
         return;
       }
       if (result.ack) ws.send(JSON.stringify(result.ack));
-      this.broadcastSnapshot();
+      this.broadcastChange(previousState as RoomState, this.roomState as RoomState);
     } else if (result.ack) {
       ws.send(JSON.stringify(result.ack));
     }
   }
 
-  // Per-socket, not one shared payload — two connections can have
-  // different assignedProjectId scoping (see filterRoomStateForAttachment()),
-  // so what each one is allowed to receive can differ.
+  // Two connections can have different assignedProjectId scoping (see
+  // filterRoomStateForAttachment()), so what each may receive can differ —
+  // but every connection with the SAME scope gets the same bytes, so the
+  // payload is serialized once per scope rather than once per socket.
   broadcastSnapshot(): void {
-    const sockets = this.state.getWebSockets();
-    for (const ws of sockets) {
+    const cache = new Map<string, string>();
+    for (const ws of this.state.getWebSockets()) {
       const attachment = ws.deserializeAttachment() as RoomAttachment | null;
-      const scoped = filterRoomStateForAttachment(this.roomState as RoomState, attachment);
-      const payload = JSON.stringify(Object.assign({ type: 'snapshot' }, scoped));
+      const key = scopeKey(attachment);
+      let payload = cache.get(key);
+      if (payload === undefined) {
+        payload = JSON.stringify(Object.assign({ type: 'snapshot' }, filterRoomStateForAttachment(this.roomState as RoomState, attachment)));
+        cache.set(key, payload);
+      }
+      try { ws.send(payload); } catch (e) { /* dead socket, webSocketClose() cleans up */ }
+    }
+  }
+
+  // After an accepted write: clients that speak protocol 2 get only what
+  // changed ({type:'delta'}, typically a few KB); older clients still get
+  // the full snapshot they expect. The sender gets the delta too — it's
+  // how its own edit is confirmed back into its view, same as the old
+  // snapshot echo. A connection that can see none of the change (a
+  // project-restricted user, edit in another project) gets nothing.
+  broadcastChange(prev: RoomState, next: RoomState): void {
+    const delta = computeRoomDelta(prev, next);
+    if (!delta) return;
+    const snapshotCache = new Map<string, string>();
+    const deltaCache = new Map<string, string | null>();
+    for (const ws of this.state.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as RoomAttachment | null;
+      const key = scopeKey(attachment);
+      let payload: string | null | undefined;
+      if (attachment && attachment.proto === 2) {
+        payload = deltaCache.get(key);
+        if (payload === undefined) {
+          const scoped = filterRoomDeltaForAttachment(delta, attachment);
+          payload = scoped ? JSON.stringify(Object.assign({ type: 'delta' }, scoped)) : null;
+          deltaCache.set(key, payload);
+        }
+      } else {
+        payload = snapshotCache.get(key);
+        if (payload === undefined) {
+          payload = JSON.stringify(Object.assign({ type: 'snapshot' }, filterRoomStateForAttachment(next, attachment)));
+          snapshotCache.set(key, payload);
+        }
+      }
+      if (!payload) continue;
       try { ws.send(payload); } catch (e) { /* dead socket, webSocketClose() cleans up */ }
     }
   }
