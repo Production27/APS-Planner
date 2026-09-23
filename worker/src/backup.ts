@@ -4,6 +4,7 @@
 // External backup FILE shape (v3: jobs/boardCards/calendarEvents as
 // arrays, deletedIds, boardColumns, fieldOptions, header) is kept stable
 // for continuity with existing backups and the client's downloadBackupFile().
+import { recordAudit, clientIp } from './audit.ts';
 import { jsonResponse } from './http.ts';
 import { getRoomStub } from './room-stub.ts';
 import { resolveCaller } from './users.ts';
@@ -159,6 +160,7 @@ export async function handleTriggerBackup(request: Request, env: Env, corsHeader
   if (admin.error) return admin.error;
   try {
     const key = await runBackup(env);
+    await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Ran a manual backup', item: key, ip: clientIp(request) });
     return jsonResponse({ success: true, key }, 200, corsHeaders);
   } catch (err) {
     console.error("Manual backup failed:", err);
@@ -198,6 +200,7 @@ export async function handleDownloadBackup(request: Request, env: Env, corsHeade
 
   const obj = await env.BACKUP_BUCKET.get(key);
   if (!obj) return jsonResponse({ error: "Not found" }, 404, corsHeaders);
+  await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Downloaded a backup', item: key, ip: clientIp(request) });
 
   return new Response(obj.body, {
     headers: {
@@ -223,6 +226,7 @@ export async function handleRestoreBackup(request: Request, env: Env, corsHeader
   }
   try {
     const result = await runRestore(env, key);
+    await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Restored from backup', item: key, ip: clientIp(request) });
     return jsonResponse({ success: true, ...result }, 200, corsHeaders);
   } catch (err) {
     console.error("Restore failed:", err);

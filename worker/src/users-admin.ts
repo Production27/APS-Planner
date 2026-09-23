@@ -6,6 +6,7 @@ import {
   hashPasswordPBKDF2, genSaltHex, normalizeUsername, resolveCaller
 } from './users.ts';
 import type { Identity, UserRecord } from './types.ts';
+import { recordAudit, clientIp } from './audit.ts';
 
 // Re-checked fresh from KV rather than trusted off the token: an
 // admin-gated endpoint must not honor a caller demoted after their token
@@ -93,6 +94,7 @@ export async function handleUsersAdd(request: Request, env: Env, corsHeaders: Re
     salt,
     createdAt: Date.now()
   });
+  await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Added user account', item: newUsername, ip: clientIp(request), details: 'role: ' + newRole + (newAssignedProjectId ? ', project: ' + newAssignedProjectId : '') });
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
 
@@ -170,6 +172,7 @@ export async function handleUsersUpdate(request: Request, env: Env, corsHeaders:
   if (roleChanged || projectChanged) {
     await kickUserFromRoom(env, targetUsername);
   }
+  await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Changed user account', item: targetUsername, ip: clientIp(request), details: 'role: ' + target.role + ', project: ' + (target.assignedProjectId || 'all') + ', lead: ' + (target.isLead ? 'yes' : 'no') });
 
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
@@ -195,6 +198,7 @@ export async function handleUsersRemove(request: Request, env: Env, corsHeaders:
 
   await deleteUser(env, targetUsername);
   await kickUserFromRoom(env, targetUsername);
+  await recordAudit(env, { user: admin.user!.username, role: 'admin', action: 'Removed user account', item: targetUsername, ip: clientIp(request) });
   return jsonResponse({ success: true }, 200, corsHeaders);
 }
 
@@ -235,5 +239,6 @@ export async function handleUsersResetPassword(request: Request, env: Env, corsH
   // a self-service change, which would drop the caller's own connection
   // mid-change; other sessions still can't reconnect with their old token.
   if (!isSelfService) await kickUserFromRoom(env, targetUsername);
+  await recordAudit(env, { user: caller.username, role: caller.role, action: isSelfService ? 'Changed own password' : 'Reset user password', item: targetUsername, ip: clientIp(request) });
   return jsonResponse({ success: true }, 200, corsHeaders);
 }

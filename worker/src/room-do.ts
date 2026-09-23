@@ -12,6 +12,8 @@ import { readItemizedRoom, writeFullRoom, writeRoomChange, migrateLegacyRoom, LE
 import type { KvStorage } from './room-storage.ts';
 import type { UpsertProjectBatchMessage } from './room-state.ts';
 import type { RoomState, RoomMessage, Attachment } from './types.ts';
+import { describeChange, auditKey, AUDIT_PREFIX, AUDIT_RETENTION_DAYS } from './audit.ts';
+import type { AuditEntry } from './audit.ts';
 
 // A presence entry is dropped from the broadcast if its connection hasn't
 // sent a setPresence heartbeat in this long — well above the client's
@@ -45,12 +47,21 @@ interface RoomAttachment extends Attachment {
   // the WebSocket URL). 2 = accepts {type:'delta'} messages after every
   // write; absent/1 = older client, still gets a full snapshot each time.
   proto?: number;
+  // The client's address at connect time, for the audit trail.
+  ip?: string;
 }
+
+// Durable Object storage accepts at most 128 keys per put/delete call.
+const STORAGE_BATCH = 128;
+const AUDIT_PRUNE_EVERY_MS = 6 * 60 * 60 * 1000;
+const AUDIT_LIST_MAX = 5000;
 
 export class ApsRoom {
   state: DurableObjectState;
   env: Env;
   roomState: RoomState | null;
+  auditSeq = 0;
+  lastAuditPruneAt = 0;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -124,8 +135,71 @@ export class ApsRoom {
     else await writeFullRoom(storage, next);
   }
 
+  // ---- Audit trail (see audit.ts) ----
+  async appendAudit(entries: AuditEntry[]): Promise<void> {
+    if (!entries.length) return;
+    const keys = Object.create(null) as Record<string, AuditEntry>;
+    entries.forEach((e) => {
+      keys[auditKey(e.at, (++this.auditSeq).toString(36) + '-' + Math.random().toString(36).slice(2, 6))] = e;
+    });
+    const all = Object.keys(keys);
+    for (let i = 0; i < all.length; i += STORAGE_BATCH) {
+      const chunk: Record<string, AuditEntry> = {};
+      all.slice(i, i + STORAGE_BATCH).forEach((k) => { chunk[k] = keys[k]; });
+      await this.state.storage.put(chunk);
+    }
+    await this.pruneAudit();
+  }
+
+  async pruneAudit(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastAuditPruneAt < AUDIT_PRUNE_EVERY_MS) return;
+    this.lastAuditPruneAt = now;
+    const cutoff = now - AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const old = await this.state.storage.list({ prefix: AUDIT_PREFIX, end: auditKey(cutoff, ''), limit: 1000 });
+    const keys = Array.from(old.keys());
+    for (let i = 0; i < keys.length; i += STORAGE_BATCH) await this.state.storage.delete(keys.slice(i, i + STORAGE_BATCH));
+  }
+
+  // Entries with from <= at <= to, oldest first, a page at a time: pass
+  // the returned cursor back as `after` for the next page (null when done).
+  async listAudit(from: number, to: number, after: string | null, limit: number): Promise<{ entries: AuditEntry[]; cursor: string | null }> {
+    const n = Math.max(1, Math.min(AUDIT_LIST_MAX, limit || AUDIT_LIST_MAX));
+    const opts: DurableObjectListOptions = { prefix: AUDIT_PREFIX, end: auditKey(to + 1, ''), limit: n };
+    if (after) opts.startAfter = after; else opts.start = auditKey(from, '');
+    const rows = await this.state.storage.list<AuditEntry>(opts);
+    const keys = Array.from(rows.keys());
+    return { entries: Array.from(rows.values()), cursor: keys.length === n ? keys[keys.length - 1] : null };
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    // Only ever called by runDueDeletion() (compliance.ts) once a scheduled
+    // deletion's date has passed: removes all project data and the audit
+    // trail, and disconnects everyone.
+    if (url.pathname === '/internal/wipe' && request.method === 'POST') {
+      for (const ws of this.state.getWebSockets()) { try { ws.close(4002, 'Company data deleted'); } catch (e) {} }
+      await this.state.storage.deleteAll();
+      this.roomState = null;
+      this.legacyLayout = false;
+      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (url.pathname === '/internal/audit' && request.method === 'POST') {
+      let body: { entries?: AuditEntry[] };
+      try { body = await request.json(); } catch (e) { return new Response('bad json', { status: 400 }); }
+      const entries = (Array.isArray(body.entries) ? body.entries : []).filter((e) => e && typeof e.action === 'string');
+      await this.appendAudit(entries.map((e) => Object.assign({}, e, { at: typeof e.at === 'number' ? e.at : Date.now() })));
+      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (url.pathname === '/internal/audit-list') {
+      const from = Number(url.searchParams.get('from')) || 0;
+      const to = Number(url.searchParams.get('to')) || Date.now();
+      const page = await this.listAudit(from, to, url.searchParams.get('after'), Number(url.searchParams.get('limit')) || AUDIT_LIST_MAX);
+      return new Response(JSON.stringify(page), { headers: { 'Content-Type': 'application/json' } });
+    }
 
     if (url.pathname === '/internal/export') {
       const roomState = await this.loadRoomState();
@@ -207,7 +281,8 @@ export class ApsRoom {
       assignedProjectId: (identity.assignedProjectId as string) || null,
       view: null,
       projectId: null,
-      proto: url.searchParams.get('proto') === '2' ? 2 : 1
+      proto: url.searchParams.get('proto') === '2' ? 2 : 1,
+      ip: request.headers.get('CF-Connecting-IP') || ''
     };
     server.serializeAttachment(attachment);
 
@@ -355,6 +430,14 @@ export class ApsRoom {
         console.error('Failed to persist room state:', e);
         ws.send(JSON.stringify({ type: 'error', msgId: msg.msgId, message: 'Failed to save — please retry' }));
         return;
+      }
+      // Audit rows for what this write actually changed. Not awaited: the
+      // runtime holds outgoing messages until storage writes started here
+      // have completed, and an audit failure must not fail the edit.
+      const saved = computeRoomDelta(previousState as RoomState, this.roomState as RoomState);
+      if (saved && attachment) {
+        this.appendAudit(describeChange(previousState as RoomState, this.roomState as RoomState, saved, { user: attachment.username, role: attachment.role, ip: attachment.ip }, Date.now()))
+          .catch((e) => console.error('Audit write failed:', e));
       }
       if (result.ack) ws.send(JSON.stringify(result.ack));
       this.broadcastChange(previousState as RoomState, this.roomState as RoomState);

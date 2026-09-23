@@ -20,6 +20,7 @@
 import { openExportModal, closeExportModal, runExport } from './export';
 import { openPrintModal, closePrintModal, syncPrintKind, runPrint } from './print';
 import { downloadIcs } from './ics';
+import { openSecurityModal, closeSecurityModal, downloadAuditLog, exportAllData, scheduleDeletion, cancelDeletion } from './compliance';
 
 declare global {
   function toggleSettingsMenu(): void;
@@ -127,6 +128,12 @@ export function initStaticEventListeners(): void {
   // would coexist with, not be replaced by, that reassignment and double-fire.
   on('manageUsersBtn', () => { closeSettingsMenu(); openManageUsersModal(); });
   on('exportSpreadsheetBtn', () => { closeSettingsMenu(); openExportModal(); });
+  on('securityDataBtn', () => { closeSettingsMenu(); openSecurityModal(); });
+  on('securityCloseBtn', () => closeSecurityModal());
+  on('auditDownloadBtn', () => downloadAuditLog());
+  on('dataExportBtn', () => exportAllData());
+  on('deletionScheduleBtn', () => scheduleDeletion());
+  on('deletionCancelBtn', () => cancelDeletion());
   on('exportCancelBtn', () => closeExportModal());
   on('exportRunBtn', () => runExport());
   on('printBtn', () => { closeSettingsMenu(); openPrintModal(); });

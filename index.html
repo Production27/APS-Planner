@@ -2633,6 +2633,19 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     font-size: var(--t-sm); font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,0.25);
   }
   #maintenanceAdminBanner.show { display: flex; }
+  #dataDeletionBanner {
+    position: fixed; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 9000;
+    display: none; max-width: min(640px, calc(100vw - 24px));
+    background: #b71c1c; color: #fff; border-radius: 10px; padding: var(--s-2-5) var(--s-3-5);
+    font-size: var(--t-sm); font-weight: 600; line-height: 1.4; box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+  }
+  #dataDeletionBanner.show { display: block; }
+  .sec-modal { max-width: 520px; max-height: calc(100vh - 48px); overflow-y: auto; }
+  .sec-section { border-top: 1px solid var(--border); padding: var(--s-3) 0 var(--s-4); }
+  .sec-section h5 { font-size: var(--t-base); margin: 0 0 var(--s-1); }
+  .sec-section p { font-size: var(--t-sm); margin-bottom: var(--s-3); }
+  .sec-danger h5 { color: #c62828; }
+  body.dark-mode .sec-danger h5 { color: #ef9a9a; }
   #maintenanceAdminBanner button { border: none; border-radius: 999px; background: #fff; color: #8a4b00; font: inherit; font-size: var(--t-xs); font-weight: 700; padding: var(--s-1) var(--s-3); cursor: pointer; white-space: nowrap; }
   #maintenanceAdminBanner button:hover { background: #ffe8cc; }
   #maintenanceOverlay { position: fixed; inset: 0; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); z-index: 10000; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 40px; color: #fff; }
@@ -3403,6 +3416,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      mode on (settings menu); admins bypass this so whoever turned it on
      can still get back in to turn it back off. Never covers the login
      screen — see checkMaintenanceStatus()'s own comment on why. -->
+<!-- Shown to every signed-in user while "delete all company data" is
+     pending — see src/app/compliance.ts. -->
+<div id="dataDeletionBanner" role="alert"><span id="dataDeletionBannerText"></span></div>
 <div id="maintenanceAdminBanner" role="status"><span>Maintenance mode is on. Other users are locked out.</span><button type="button" id="maintenanceBannerOffBtn">Turn off</button></div>
 <div id="maintenanceOverlay">
   <svg class="maint-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4L20.5 6.5a1 1 0 0 0-.1-1.5L18.1 3a1 1 0 0 0-1.5-.1L14.7 6.3Z" stroke="white" stroke-width="1.6" stroke-linejoin="round"/></svg>
@@ -3558,6 +3574,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   <div class="settings-dropdown-item" id="manageUsersBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
   <div class="settings-dropdown-item" id="backupsBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
   <div class="settings-dropdown-item" id="errorsBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 20h20L12 2z" fill="#e53935"/><rect x="11" y="9" width="2" height="6" fill="#fff"/><rect x="11" y="16.5" width="2" height="2" fill="#fff"/></svg> Recent Errors</div>
+  <div class="settings-dropdown-item" id="securityDataBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Security &amp; data</div>
   <!-- MAINTENANCE MODE — see checkMaintenanceStatus()/setMaintenanceMode()
        in the script. Doesn't close the menu on click (like Dark Mode's
        toggle above elsewhere in this file, unlike every plain nav item
@@ -4127,6 +4144,49 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div class="modal-actions">
       <button class="btn btn-secondary" id="exportCancelBtn">Cancel</button>
       <button class="btn btn-primary" id="exportRunBtn">Download CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- SECURITY & DATA (admins) — see src/app/compliance.ts -->
+<div class="modal-overlay" id="securityModal">
+  <div class="modal-box sec-modal">
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Security &amp; data</h4>
+
+    <section class="sec-section">
+      <h5>Audit log</h5>
+      <p>Every change, sign-in and admin action, recorded by the server with who did it, when, and from which address. Kept for one year.</p>
+      <div class="print-opts">
+        <label for="auditFrom">From<input type="date" id="auditFrom"></label>
+        <label for="auditTo">To<input type="date" id="auditTo"></label>
+      </div>
+      <button class="btn btn-secondary" id="auditDownloadBtn">Download CSV</button>
+    </section>
+
+    <section class="sec-section">
+      <h5>Export all company data</h5>
+      <p>One file with every project (including archived jobs), the user list without passwords, and a list of attached files.</p>
+      <button class="btn btn-secondary" id="dataExportBtn">Download export</button>
+    </section>
+
+    <section class="sec-section sec-danger">
+      <h5>Delete all company data</h5>
+      <div id="deletionIdle">
+        <p>Permanently deletes every project, attachment, backup, the audit log and all user accounts. It happens <b>7 days</b> after you confirm. Until then everyone sees a warning and any admin can cancel. It can't be undone after that.</p>
+        <div class="print-opts">
+          <label for="deletionPassword">Your password<input type="password" id="deletionPassword" autocomplete="current-password"></label>
+          <label for="deletionPhrase">Type DELETE ALL DATA<input type="text" id="deletionPhrase" autocomplete="off" spellcheck="false"></label>
+        </div>
+        <button class="btn btn-danger" id="deletionScheduleBtn">Schedule deletion</button>
+      </div>
+      <div id="deletionPending" hidden>
+        <p><b>All company data will be permanently deleted on <span id="deletionPendingWhen"></span>.</b> Requested by <span id="deletionPendingBy"></span>.</p>
+        <button class="btn btn-primary" id="deletionCancelBtn">Cancel deletion</button>
+      </div>
+    </section>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="securityCloseBtn">Close</button>
     </div>
   </div>
 </div>

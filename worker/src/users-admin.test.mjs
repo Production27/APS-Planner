@@ -166,5 +166,5 @@ test("a self-service password change does not kick the caller's own connection",
   env.APS_ROOM = { idFromName: (n) => ({ n }), get: () => ({ fetch: async (url) => { kicks.push(String(url)); return new Response('ok'); } }) };
   const res = await handleUsersResetPassword(makeRequest({ token: await tokenFor(env, bob), targetUsername: 'bob', newPassword: 'fresh-password' }), env, {});
   assert.equal(res.status, 200);
-  assert.equal(kicks.length, 0);
+  assert.equal(kicks.filter((u) => u.includes("kick-user")).length, 0);
 });

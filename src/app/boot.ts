@@ -20,6 +20,7 @@ import { syncCardColumns } from '../core/jobs';
 import { closeDeleteJobModal } from '../views/job-list';
 import { cancelEdit, initJobFormAutosaveListeners, buildColorPresets } from '../views/job-form';
 import { initStaticEventListeners } from './static-event-wiring';
+import { startDeletionStatusChecks } from './compliance';
 
 // How long a delete tombstone (see recordTombstone()/deleteFromSharedMap()
 // in src/sync/outbound.ts) sticks around before it's pruned locally.
@@ -224,4 +225,5 @@ export async function boot(): Promise<void> {
   init(await readLocalProjectsText());
   initCalendarDragHandlers();
   setupRoomSync();
+  startDeletionStatusChecks();
 }

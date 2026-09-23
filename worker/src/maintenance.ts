@@ -8,6 +8,7 @@
 // does nothing to stop a script from writing bad data while nobody's
 // watching; it only stops ordinary team members from using a half-
 // migrated app while one is running).
+import { recordAudit, clientIp } from './audit.ts';
 import { jsonResponse } from './http.ts';
 import { resolveCaller } from './users.ts';
 import { requireAdmin } from './users-admin.ts';
@@ -58,5 +59,6 @@ export async function handleSetMaintenanceStatus(request: Request, env: Env, cor
 
   const status = normalizeMaintenanceStatus({ active: !!body.active, message: body.message });
   await env.USERS_KV.put(MAINTENANCE_KV_KEY, JSON.stringify(status));
+  await recordAudit(env, { user: admin.user!.username, role: 'admin', action: status.active ? 'Turned on maintenance mode' : 'Turned off maintenance mode', ip: clientIp(request) });
   return jsonResponse({ success: true, status }, 200, corsHeaders);
 }

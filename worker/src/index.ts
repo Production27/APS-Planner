@@ -34,11 +34,15 @@ import {
 import { handleAttachmentUpload, handleAttachmentDownload, handleAttachmentDelete } from './attachments.ts';
 import { handleReportError, handleErrorsList } from './errors.ts';
 import { handleMaintenanceStatus, handleSetMaintenanceStatus } from './maintenance.ts';
+import { handleAuditExport, handleDataExport, handleDeletionStatus, handleDeletionSchedule, handleDeletionCancel, runDueDeletion } from './compliance.ts';
 export { ApsRoom } from './room-do.ts';
 
 // --- WORKER ENTRYPOINTS ---
 export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    // A due "delete all our data" request runs here, instead of that run's
+    // backup (see runDueDeletion() in compliance.ts).
+    if (await runDueDeletion(env)) return;
     await runBackup(env);
   },
 
@@ -125,6 +129,21 @@ export default {
       return handleSetMaintenanceStatus(request, env, corsHeaders);
     }
 
+    if (url.pathname === "/audit/export" && request.method === "POST") {
+      return handleAuditExport(request, env, corsHeaders);
+    }
+    if (url.pathname === "/data/delete/status" && request.method === "POST") {
+      return handleDeletionStatus(request, env, corsHeaders);
+    }
+    if (url.pathname === "/data/delete/schedule" && request.method === "POST") {
+      return handleDeletionSchedule(request, env, corsHeaders);
+    }
+    if (url.pathname === "/data/delete/cancel" && request.method === "POST") {
+      return handleDeletionCancel(request, env, corsHeaders);
+    }
+    if (url.pathname === "/data/export" && request.method === "POST") {
+      return handleDataExport(request, env, corsHeaders);
+    }
     if (url.pathname === "/attachments/upload" && request.method === "POST") {
       return handleAttachmentUpload(request, env, corsHeaders, url);
     }

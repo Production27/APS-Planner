@@ -1,9 +1,9 @@
 // Shared in-memory stand-ins for Durable Object state/storage and
 // WebSockets, for the worker's node:test suites (no real DO runtime in
 // plain Node). The storage fake implements exactly what room-storage.ts
-// uses — get / put(entries) / delete(keys) / list({prefix}) /
-// transaction() — with transactions that roll back on error, like the
-// real thing.
+// uses — get / put(entries) / delete(keys) / list({prefix, start,
+// startAfter, end, limit}) / transaction() — with transactions that roll
+// back on error, like the real thing.
 
 export function makeFakeStorage(opts = {}) {
   let store = new Map();
@@ -22,11 +22,19 @@ export function makeFakeStorage(opts = {}) {
       for (const k of list) if (store.delete(k)) n++;
       return Array.isArray(keys) ? n : n > 0;
     },
-    async list({ prefix = '' } = {}) {
+    async list({ prefix = '', start, startAfter, end, limit } = {}) {
       const out = new Map();
-      [...store.keys()].sort().forEach((k) => { if (k.startsWith(prefix)) out.set(k, clone(store.get(k))); });
+      for (const k of [...store.keys()].sort()) {
+        if (!k.startsWith(prefix)) continue;
+        if (start !== undefined && k < start) continue;
+        if (startAfter !== undefined && k <= startAfter) continue;
+        if (end !== undefined && k >= end) continue;
+        if (limit !== undefined && out.size >= limit) break;
+        out.set(k, clone(store.get(k)));
+      }
       return out;
     },
+    async deleteAll() { store = new Map(); },
     async transaction(closure) {
       const snapshot = new Map([...store].map(([k, v]) => [k, clone(v)]));
       try { return await closure(storage); } catch (e) { store = snapshot; throw e; }

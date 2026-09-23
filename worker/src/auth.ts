@@ -3,6 +3,7 @@
 // WebSocket connection. ---
 import { jsonResponse } from './http.ts';
 import { signRoomToken } from './room-token.ts';
+import { recordAudit, clientIp } from './audit.ts';
 import {
   normalizeUsername, resolveIdentity,
   AUTH_MAX_FAILURES_PER_USERNAME, AUTH_MAX_FAILURES_PER_IP,
@@ -29,16 +30,20 @@ export async function handleAuth(request: Request, env: Env, corsHeaders: Record
   ]);
   if (userFailures >= AUTH_MAX_FAILURES_PER_USERNAME || ipFailures >= AUTH_MAX_FAILURES_PER_IP) {
     // Skips resolveIdentity()/the PBKDF2 hash entirely once locked out.
+    const blocked = recordAudit(env, { user: normalizeUsername(body.username), action: 'Sign-in blocked (too many attempts)', ip: clientIp(request) });
+    if (ctx) ctx.waitUntil(blocked); else await blocked;
     return jsonResponse({ error: "Too many attempts — try again in a few minutes." }, 429, corsHeaders);
   }
 
   const identity = await resolveIdentity(env, body.username as string, body.password);
   if (!identity) {
-    const bump = Promise.all([bumpAuthFailure(env, usernameFailKey), bumpAuthFailure(env, ipFailKey)]);
+    const bump = Promise.all([bumpAuthFailure(env, usernameFailKey), bumpAuthFailure(env, ipFailKey),
+      recordAudit(env, { user: normalizeUsername(body.username), action: 'Failed sign-in', ip: clientIp(request) })]);
     if (ctx) ctx.waitUntil(bump); else await bump;
     return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
   }
-  const clearUserFailures = env.USERS_KV.delete(usernameFailKey);
+  const clearUserFailures = Promise.all([env.USERS_KV.delete(usernameFailKey),
+    recordAudit(env, { user: identity.username, role: identity.role, action: 'Signed in', ip: clientIp(request) })]);
   if (ctx) ctx.waitUntil(clearUserFailures); else await clearUserFailures;
 
   const token = await signRoomToken(env.ROOM_TOKEN_SECRET, {
