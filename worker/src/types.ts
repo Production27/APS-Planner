@@ -115,6 +115,10 @@ export interface UserRecord {
   createdAt: number;
   // Tokens issued before this time are rejected (set on a password reset).
   tokensValidAfter?: number;
+  // Two-step verification (see mfa.ts). mfaPending holds a secret that has
+  // been shown to the user but not yet confirmed with a code.
+  mfa?: { secret: string; enabledAt: number; lastStep: number; recovery: string[] };
+  mfaPending?: { secret: string; createdAt: number };
   [key: string]: unknown;
 }
 

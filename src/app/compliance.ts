@@ -6,6 +6,7 @@ import { openModal, closeModal, showToast } from '../utils/ui';
 import { postUsersEndpoint, fetchWithReauth } from './worker-client';
 import { toCsv, downloadTextFile } from './export';
 import { toIsoDate } from '../utils/date';
+import { loadSignInPolicy } from './two-step';
 
 interface AuditEntry {
   at: number; user: string; role?: string; action: string; projectId?: string | null; projectName?: string;
@@ -34,6 +35,7 @@ export function openSecurityModal(): void {
   renderDeletionSection(lastDeletionStatus);
   openModal('securityModal');
   refreshDeletionStatus();
+  loadSignInPolicy();
 }
 
 export function closeSecurityModal(): void {

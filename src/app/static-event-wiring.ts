@@ -21,6 +21,7 @@ import { openExportModal, closeExportModal, runExport } from './export';
 import { openPrintModal, closePrintModal, syncPrintKind, runPrint } from './print';
 import { downloadIcs } from './ics';
 import { openSecurityModal, closeSecurityModal, downloadAuditLog, exportAllData, scheduleDeletion, cancelDeletion } from './compliance';
+import { openTwoStepModal, closeTwoStepModal, startTwoStepSetup, confirmTwoStepSetup, makeNewRecoveryCodes, turnOffTwoStep, setRequireTwoStep } from './two-step';
 
 declare global {
   function toggleSettingsMenu(): void;
@@ -134,6 +135,14 @@ export function initStaticEventListeners(): void {
   on('dataExportBtn', () => exportAllData());
   on('deletionScheduleBtn', () => scheduleDeletion());
   on('deletionCancelBtn', () => cancelDeletion());
+  const requireMfaToggle = document.getElementById('requireMfaToggle') as HTMLInputElement | null;
+  if (requireMfaToggle) requireMfaToggle.addEventListener('change', () => setRequireTwoStep(requireMfaToggle.checked));
+  on('twoStepBtn', () => { closeSettingsMenu(); openTwoStepModal(); });
+  on('mfaCloseBtn', () => closeTwoStepModal());
+  on('mfaStartBtn', () => startTwoStepSetup());
+  on('mfaEnableBtn', () => confirmTwoStepSetup());
+  on('mfaNewCodesBtn', () => makeNewRecoveryCodes());
+  on('mfaDisableBtn', () => turnOffTwoStep());
   on('exportCancelBtn', () => closeExportModal());
   on('exportRunBtn', () => runExport());
   on('printBtn', () => { closeSettingsMenu(); openPrintModal(); });

@@ -2699,6 +2699,21 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .login-banner.lockout { background: rgba(240,173,78,0.15); color: #8a5a00; border: 1px solid rgba(240,173,78,0.4); }
   body.dark-mode .login-banner.lockout { color: var(--warning); }
   .login-forgot { text-align: center; font-size: var(--t-sm); color: var(--text-light); margin-top: var(--s-4); }
+  .login-card [hidden], .sec-modal [hidden] { display: none !important; }
+  .login-step-text { font-size: var(--t-base); margin: 0 0 var(--s-3); line-height: 1.45; }
+  .login-step-hint { font-size: var(--t-sm); color: var(--text-light); margin: var(--s-3) 0 0; line-height: 1.45; }
+  .login-code { letter-spacing: 0.18em; font-variant-numeric: tabular-nums; }
+  .login-link { display: block; margin: var(--s-3) auto 0; background: none; border: none; color: var(--primary); font: inherit; font-size: var(--t-sm); cursor: pointer; text-decoration: underline; }
+  .mfa-qr { width: 184px; height: 184px; margin: 0 auto var(--s-3); background: #fff; border-radius: 8px; padding: 4px; }
+  .mfa-qr svg { width: 100%; height: 100%; display: block; }
+  .mfa-secret { font-family: ui-monospace, Consolas, monospace; font-size: var(--t-sm); overflow-wrap: anywhere; user-select: all; }
+  #loginMfaSetupForm .login-step-hint { margin: 0 0 var(--s-3); }
+  .login-card .mfa-codes-actions { margin-bottom: var(--s-3); }
+  .mfa-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-1-5) var(--s-4); margin: 0 0 var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-7); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: var(--t-sm); }
+  .mfa-codes code { font-family: ui-monospace, Consolas, monospace; font-size: var(--t-base); }
+  .mfa-codes-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+  .sec-check { display: flex; align-items: center; gap: var(--s-2); font-size: var(--t-base); font-weight: 600; cursor: pointer; }
+  .sec-note { font-size: var(--t-sm); color: var(--text-light); margin: var(--s-1-5) 0 var(--s-3); }
 
   /* ===== SYNC INDICATOR ===== */
   /* Element itself is built in JS (initSyncIndicator/setSyncIndicator) —
@@ -3466,12 +3481,52 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         <span class="login-submit-label">Sign In</span>
       </button>
     </form>
-    <!-- There's no self-service reset flow (no email infra wired up for
-         one — see Manage Users' own "Only admin accounts can... reset
-         passwords for other users" copy) — this just tells someone stuck
-         at a blank login screen what to actually do instead of leaving
-         them with no next step at all. -->
-    <div class="login-forgot">Forgot your password? Ask your admin to reset it.</div>
+    <!-- Two-step verification (src/auth/login.ts): the code step for an
+         account that has it on, the setup step for someone the company
+         requires to set it up before they can get in, and the recovery
+         codes shown once that setup is done. -->
+    <form id="loginMfaForm" class="login-step" autocomplete="off" hidden>
+      <p class="login-step-text">Enter the 6-digit code from your authenticator app.</p>
+      <div class="login-field" id="loginFieldCode">
+        <label class="login-label" for="loginCode">Code</label>
+        <div class="login-input-wrap">
+          <input class="login-input login-code" id="loginCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="16" spellcheck="false">
+        </div>
+      </div>
+      <button type="submit" class="login-submit" id="loginCodeSubmit">
+        <span class="login-spinner"></span>
+        <span class="login-submit-label">Verify</span>
+      </button>
+      <p class="login-step-hint">No phone? Enter one of your recovery codes instead.</p>
+      <button type="button" class="login-link" id="loginMfaBack">Back to sign in</button>
+    </form>
+    <form id="loginMfaSetupForm" class="login-step" autocomplete="off" hidden>
+      <p class="login-step-text"><b>Your company requires two-step verification.</b> Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…), then enter the code it shows.</p>
+      <div class="mfa-qr" id="loginMfaQr"></div>
+      <p class="login-step-hint">Can't scan? Enter this key in the app: <code class="mfa-secret" id="loginMfaSecret"></code></p>
+      <div class="login-field" id="loginFieldSetupCode">
+        <label class="login-label" for="loginSetupCode">Code from the app</label>
+        <div class="login-input-wrap">
+          <input class="login-input login-code" id="loginSetupCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+      <button type="submit" class="login-submit" id="loginSetupSubmit">
+        <span class="login-spinner"></span>
+        <span class="login-submit-label">Turn on and sign in</span>
+      </button>
+      <button type="button" class="login-link" id="loginMfaSetupBack">Back to sign in</button>
+    </form>
+    <form id="loginRecoveryForm" class="login-step" autocomplete="off" hidden>
+      <p class="login-step-text"><b>Save your recovery codes.</b> If you lose your phone, each code gets you in once. They won't be shown again.</p>
+      <div id="loginRecoveryCodes"></div>
+      <button type="submit" class="login-submit" id="loginRecoveryDone">
+        <span class="login-spinner"></span>
+        <span class="login-submit-label">I've saved them — continue</span>
+      </button>
+    </form>
+    <!-- No self-service reset yet (no email sender set up), so this tells
+         someone stuck at the sign-in screen what to do instead. -->
+    <div class="login-forgot" id="loginForgot">Forgot your password? Ask your admin to reset it.</div>
   </div>
 </div>
 
@@ -3613,6 +3668,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   <div class="settings-dropdown-divider"></div>
   <div class="settings-dropdown-label">Account</div>
   <div class="settings-dropdown-item" id="changePasswordBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</div>
+  <div class="settings-dropdown-item" id="twoStepBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2.5" width="12" height="19" rx="2.5" fill="#3949ab"/><rect x="8" y="5" width="8" height="12" rx="1" fill="#fff"/><path d="M10 11l1.5 1.5L14.5 9" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Two-step verification</div>
   <!-- Moved down here from the top of the menu, and grouped with Log Out —
        both leave the context you're currently in. It used to be the very
        first item under the settings icon, one careless click away from
@@ -4154,6 +4210,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Security &amp; data</h4>
 
     <section class="sec-section">
+      <h5>Sign-in</h5>
+      <p>Require every account to use two-step verification (password plus a code from a phone app). Anyone who hasn't set it up is walked through it at their next sign-in.</p>
+      <label class="sec-check"><input type="checkbox" id="requireMfaToggle"> Require two-step verification for everyone</label>
+      <p class="sec-note" id="requireMfaNote"></p>
+    </section>
+
+    <section class="sec-section">
       <h5>Audit log</h5>
       <p>Every change, sign-in and admin action, recorded by the server with who did it, when, and from which address. Kept for one year.</p>
       <div class="print-opts">
@@ -4187,6 +4250,50 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
     <div class="modal-actions">
       <button class="btn btn-secondary" id="securityCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- TWO-STEP VERIFICATION — see src/app/two-step.ts -->
+<div class="modal-overlay" id="mfaModal">
+  <div class="modal-box sec-modal">
+    <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2.5" width="12" height="19" rx="2.5" fill="#3949ab"/><rect x="8" y="5" width="8" height="12" rx="1" fill="#fff"/><path d="M10 11l1.5 1.5L14.5 9" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Two-step verification</h4>
+    <p id="mfaLoading">Loading…</p>
+    <div id="mfaOff" hidden>
+      <p>Two-step verification is <b>off</b>. When it's on, signing in needs your password <i>and</i> a 6-digit code from an authenticator app on your phone, so a stolen password alone isn't enough.</p>
+      <div class="print-opts">
+        <label for="mfaSetupPassword">Your password<input type="password" id="mfaSetupPassword" autocomplete="current-password"></label>
+      </div>
+      <button class="btn btn-primary" id="mfaStartBtn">Set up</button>
+    </div>
+    <div id="mfaSetup" hidden>
+      <p><b>1.</b> Open an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…) and scan this code.</p>
+      <div class="mfa-qr" id="mfaQr"></div>
+      <p class="sec-note">Can't scan? Enter this key in the app: <code class="mfa-secret" id="mfaSecret"></code></p>
+      <p><b>2.</b> Enter the 6-digit code the app shows.</p>
+      <div class="print-opts">
+        <label for="mfaSetupCode">Code<input type="text" id="mfaSetupCode" inputmode="numeric" autocomplete="one-time-code" maxlength="7" spellcheck="false"></label>
+      </div>
+      <button class="btn btn-primary" id="mfaEnableBtn">Turn on</button>
+    </div>
+    <div id="mfaCodes" hidden>
+      <p><b>Save these recovery codes</b> somewhere safe, like a password manager. If you lose your phone, each code gets you in once. They won't be shown again.</p>
+      <div id="mfaCodesList"></div>
+    </div>
+    <div id="mfaOn" hidden>
+      <p>Two-step verification is <b>on</b> (since <span id="mfaOnSince"></span>). You have <b id="mfaCodesLeft"></b> unused recovery codes.<span id="mfaCodesLeftWarn" hidden> Make new ones soon.</span></p>
+      <p class="sec-note" id="mfaRequiredNote" hidden>Your company requires two-step verification, so it can't be turned off.</p>
+      <div class="print-opts">
+        <label for="mfaManageCode">Code from your app<input type="text" id="mfaManageCode" inputmode="numeric" autocomplete="one-time-code" maxlength="16" spellcheck="false"></label>
+        <label for="mfaDisablePassword" id="mfaDisableGroup">Your password (to turn off)<input type="password" id="mfaDisablePassword" autocomplete="current-password"></label>
+      </div>
+      <div class="mfa-codes-actions">
+        <button class="btn btn-secondary" id="mfaNewCodesBtn">Make new recovery codes</button>
+        <button class="btn btn-danger" id="mfaDisableBtn">Turn off</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="mfaCloseBtn">Close</button>
     </div>
   </div>
 </div>

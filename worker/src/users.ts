@@ -72,6 +72,7 @@ export interface RosterEntry {
   assignedProjectId: string | null;
   createdAt: number;
   isLead: boolean;
+  mfaEnabled: boolean;
 }
 
 export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
@@ -81,7 +82,7 @@ export async function listAllUsers(env: Env): Promise<RosterEntry[]> {
     const raw = await env.USERS_KV.get(k.name);
     if (!raw) continue;
     const u = normalizeUserRecord(JSON.parse(raw)) as UserRecord;
-    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead });
+    users.push({ username: u.username, displayName: u.displayName, role: u.role, assignedProjectId: u.assignedProjectId, createdAt: u.createdAt, isLead: !!u.isLead, mfaEnabled: !!u.mfa });
   }
   users.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   return users;
@@ -118,6 +119,9 @@ export async function resolveIdentity(env: Env, username: string, password: stri
 export async function resolveIdentityFromToken(env: Env, token: string | null | undefined): Promise<Identity | null> {
   const payload = await verifyRoomToken(env.ROOM_TOKEN_SECRET, token);
   if (!payload || !payload.username) return null;
+  // Tickets for a half-finished sign-in (auth.ts) carry a purpose and are
+  // never a session.
+  if (payload.purpose) return null;
   const user = await getUser(env, payload.username as string);
   if (!user) return null;
   const issuedAt = typeof payload.iat === "number" ? payload.iat : payload.exp - DEFAULT_TOKEN_TTL_MS;

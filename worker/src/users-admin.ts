@@ -3,8 +3,10 @@ import { VALID_TIERS } from './tiers.ts';
 import { getRoomStub } from './room-stub.ts';
 import {
   getUser, putUser, deleteUser, listAllUsers,
-  hashPasswordPBKDF2, genSaltHex, normalizeUsername, resolveCaller
+  hashPasswordPBKDF2, genSaltHex, normalizeUsername, resolveCaller,
+  verifyCredentials, bumpAuthFailure
 } from './users.ts';
+import { signRoomToken } from './room-token.ts';
 import type { Identity, UserRecord } from './types.ts';
 import { recordAudit, clientIp } from './audit.ts';
 
@@ -203,14 +205,21 @@ export async function handleUsersRemove(request: Request, env: Env, corsHeaders:
 }
 
 export async function handleUsersResetPassword(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
-  let body: { token?: string; targetUsername?: string; newPassword?: string };
+  let body: { token?: string; targetUsername?: string; newPassword?: string; currentPassword?: string };
   try { body = await request.json(); } catch (e) { return jsonResponse({ error: "Invalid JSON body" }, 400, corsHeaders); }
   const caller = await resolveCaller(env, body);
   if (!caller) return jsonResponse({ error: "Invalid credentials" }, 401, corsHeaders);
 
   const targetUsername = normalizeUsername(body.targetUsername);
   const isSelfService = !!caller.username && caller.username === targetUsername;
-  if (!isSelfService) {
+  if (isSelfService) {
+    // Changing your own password needs the current one, so someone at an
+    // unlocked computer can't take over the account.
+    if (!(await verifyCredentials(env, caller.username, body.currentPassword))) {
+      await bumpAuthFailure(env, "authfail:" + targetUsername);
+      return jsonResponse({ error: "Your current password is incorrect" }, 403, corsHeaders);
+    }
+  } else {
     // Same fresh-from-KV recheck as every other admin-gated handler now
     // uses — this branch used to trust caller.role straight off the
     // token, unlike its siblings, so a demoted admin could reset another
@@ -232,7 +241,7 @@ export async function handleUsersResetPassword(request: Request, env: Env, corsH
   target.salt = salt;
   // Signs out every existing session of this account (see
   // resolveIdentityFromToken()). Someone changing their own password
-  // signs back in right away (changeMyPasswordUI() in the client).
+  // gets a fresh session token in the response below.
   target.tokensValidAfter = Date.now();
   await putUser(env, target);
   // An admin reset also drops the account's open connections. Not done for
@@ -240,5 +249,10 @@ export async function handleUsersResetPassword(request: Request, env: Env, corsH
   // mid-change; other sessions still can't reconnect with their old token.
   if (!isSelfService) await kickUserFromRoom(env, targetUsername);
   await recordAudit(env, { user: caller.username, role: caller.role, action: isSelfService ? 'Changed own password' : 'Reset user password', item: targetUsername, ip: clientIp(request) });
+  if (isSelfService) {
+    // Issued after tokensValidAfter, so this session carries on.
+    const token = await signRoomToken(env.ROOM_TOKEN_SECRET, { username: target.username, displayName: target.displayName, role: target.role, assignedProjectId: target.assignedProjectId || null });
+    return jsonResponse({ success: true, token }, 200, corsHeaders);
+  }
   return jsonResponse({ success: true }, 200, corsHeaders);
 }

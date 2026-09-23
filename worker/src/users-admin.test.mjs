@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   requireAdmin, computeRoleProjectChange, handleUsersUpdate, handleUsersRemove, handleUsersResetPassword
 } from './users-admin.ts';
-import { resolveIdentityFromToken } from './users.ts';
+import { resolveIdentityFromToken, genSaltHex, hashPasswordPBKDF2 } from './users.ts';
 import { signRoomToken } from './room-token.ts';
 
 function makeFakeKV(users) {
@@ -159,12 +159,22 @@ test("a password reset signs out the account's existing sessions, and an admin r
   assert.ok(await resolveIdentityFromToken(env, await tokenFor(env, bob)), 'a new sign-in works');
 });
 
-test("a self-service password change does not kick the caller's own connection", async () => {
-  const bob = { username: 'bob', role: 'editor', assignedProjectId: null, createdAt: 2 };
+test("a self-service password change needs the current password, returns a fresh session, and does not kick the caller's own connection", async () => {
+  const salt = genSaltHex();
+  const bob = { username: 'bob', role: 'editor', assignedProjectId: null, createdAt: 2, salt, passwordHash: await hashPasswordPBKDF2('old-password', salt) };
   const env = makeFakeEnv([bob]);
   const kicks = [];
   env.APS_ROOM = { idFromName: (n) => ({ n }), get: () => ({ fetch: async (url) => { kicks.push(String(url)); return new Response('ok'); } }) };
-  const res = await handleUsersResetPassword(makeRequest({ token: await tokenFor(env, bob), targetUsername: 'bob', newPassword: 'fresh-password' }), env, {});
+  const oldToken = await tokenFor(env, bob);
+  const wrong = await handleUsersResetPassword(makeRequest({ token: oldToken, targetUsername: 'bob', newPassword: 'fresh-password', currentPassword: 'nope' }), env, {});
+  assert.equal(wrong.status, 403);
+  const missing = await handleUsersResetPassword(makeRequest({ token: oldToken, targetUsername: 'bob', newPassword: 'fresh-password' }), env, {});
+  assert.equal(missing.status, 403);
+  await new Promise((r) => setTimeout(r, 5));
+  const res = await handleUsersResetPassword(makeRequest({ token: oldToken, targetUsername: 'bob', newPassword: 'fresh-password', currentPassword: 'old-password' }), env, {});
   assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(await resolveIdentityFromToken(env, oldToken), null, 'the old session is signed out');
+  assert.equal((await resolveIdentityFromToken(env, data.token)).username, 'bob', 'the returned session works');
   assert.equal(kicks.filter((u) => u.includes("kick-user")).length, 0);
 });

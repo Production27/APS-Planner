@@ -26,7 +26,8 @@
 
 import { getRoomStub } from './room-stub.ts';
 import { jsonResponse } from './http.ts';
-import { handleAuth } from './auth.ts';
+import { handleAuth, handleAuthMfa } from './auth.ts';
+import { handleMfaStatus, handleMfaSetup, handleMfaEnable, handleMfaDisable, handleMfaRecoveryCodes, handleUsersResetMfa, handleSecurityPolicy } from './mfa-handlers.ts';
 import { runBackup, handleTriggerBackup, handleListBackups, handleDownloadBackup, handleRestoreBackup } from './backup.ts';
 import {
   handleUsersList, handleUsersRoster, handleUsersAdd,
@@ -83,6 +84,31 @@ export default {
       } catch (e) {
         return jsonResponse({ status: "unavailable" }, 503, corsHeaders);
       }
+    }
+    // Two-step verification — see auth.ts and mfa-handlers.ts.
+    if (url.pathname === "/auth/mfa" && request.method === "POST") {
+      return handleAuthMfa(request, env, corsHeaders, ctx);
+    }
+    if (url.pathname === "/mfa/status" && request.method === "POST") {
+      return handleMfaStatus(request, env, corsHeaders);
+    }
+    if (url.pathname === "/mfa/setup" && request.method === "POST") {
+      return handleMfaSetup(request, env, corsHeaders);
+    }
+    if (url.pathname === "/mfa/enable" && request.method === "POST") {
+      return handleMfaEnable(request, env, corsHeaders, ctx);
+    }
+    if (url.pathname === "/mfa/disable" && request.method === "POST") {
+      return handleMfaDisable(request, env, corsHeaders);
+    }
+    if (url.pathname === "/mfa/recovery-codes" && request.method === "POST") {
+      return handleMfaRecoveryCodes(request, env, corsHeaders);
+    }
+    if (url.pathname === "/users/reset-mfa" && request.method === "POST") {
+      return handleUsersResetMfa(request, env, corsHeaders);
+    }
+    if (url.pathname === "/security/policy" && request.method === "POST") {
+      return handleSecurityPolicy(request, env, corsHeaders);
     }
     if (url.pathname === "/" || url.pathname === "/auth") {
       return handleAuth(request, env, corsHeaders, ctx);

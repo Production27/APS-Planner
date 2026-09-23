@@ -3,6 +3,7 @@ import { openModal, closeModal, showToast } from '../utils/ui';
 import { escapeHtml } from '../utils/html';
 import { getStoredUsername, setStoredSessionToken } from '../auth/session';
 import { postUsersEndpoint } from './worker-client';
+import { resetUserTwoStep } from './two-step';
 import { renderAll } from './project';
 
 // Lets an Admin preview the ENTIRE app — Job Manager, Board, Calendar,
@@ -60,6 +61,7 @@ export async function loadUsersList(): Promise<void> {
         ? (' — ' + ((projects[u.assignedProjectId] && projects[u.assignedProjectId].name) || '(unknown project)'))
         : '';
       const leadLabel = u.isLead ? ' — Lead' : '';
+      const mfaLabel = u.mfaEnabled ? ' — 2-step on' : '';
       // "View as" (see setViewAs()) — previews the whole app exactly as
       // this account would see it. Meaningless on your own row (isMe),
       // so it's the one action button omitted there. Toggles: clicking
@@ -71,12 +73,13 @@ export async function loadUsersList(): Promise<void> {
       row.innerHTML =
         '<div style="min-width:0;">' +
           '<div style="font-size: var(--t-base); font-weight:600;">' + escapeHtml(u.displayName) + (isMe ? ' <span style="font-weight:400; color:var(--text-secondary);">(you)</span>' : '') + '</div>' +
-          '<div style="font-size: var(--t-sm); color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + escapeHtml(tierLabel) + escapeHtml(projectLabel) + escapeHtml(leadLabel) + '</div>' +
+          '<div style="font-size: var(--t-sm); color:var(--text-secondary);">@' + escapeHtml(u.username) + ' — ' + escapeHtml(tierLabel) + escapeHtml(projectLabel) + escapeHtml(leadLabel) + escapeHtml(mfaLabel) + '</div>' +
         '</div>' +
         '<div style="display:flex; gap: var(--s-1-5); flex-shrink:0;">' +
           viewAsBtn +
           '<button class="btn btn-secondary" style="padding: var(--s-1) var(--s-2-5); font-size: var(--t-sm);" data-action="edit">Edit</button>' +
           '<button class="btn btn-secondary" style="padding: var(--s-1) var(--s-2-5); font-size: var(--t-sm);" data-action="reset">Reset Password</button>' +
+          (u.mfaEnabled ? '<button class="btn btn-secondary" style="padding: var(--s-1) var(--s-2-5); font-size: var(--t-sm);" data-action="resetmfa" title="Turn off two-step verification (lost phone)">Reset 2-step</button>' : '') +
           '<button class="btn btn-danger" style="padding: var(--s-1) var(--s-2-5); font-size: var(--t-sm);" data-action="remove">Remove</button>' +
         '</div>';
       if (!isMe) {
@@ -88,6 +91,8 @@ export async function loadUsersList(): Promise<void> {
       (row.querySelector('[data-action="edit"]') as HTMLButtonElement).onclick = function() { showEditUserForm(u.username, u.displayName, u.role, u.assignedProjectId, u.isLead); };
       (row.querySelector('[data-action="reset"]') as HTMLButtonElement).onclick = function() { resetUserPasswordUI(u.username, u.displayName); };
       (row.querySelector('[data-action="remove"]') as HTMLButtonElement).onclick = function() { removeUserUI(u.username, u.displayName); };
+      const resetMfaBtn = row.querySelector('[data-action="resetmfa"]') as HTMLButtonElement | null;
+      if (resetMfaBtn) resetMfaBtn.onclick = async function() { if (await resetUserTwoStep(u.username, u.displayName)) loadUsersList(); };
       listEl.appendChild(row);
     });
   } catch (err: any) {
@@ -184,7 +189,16 @@ export async function submitUserForm(): Promise<void> {
       }
       await postUsersEndpoint('users/update', { targetUsername: editingUserFormUsername, newRole: role, newAssignedProjectId: assignedProjectId, newIsLead: isLead });
       if (password) {
-        await postUsersEndpoint('users/reset-password', { targetUsername: editingUserFormUsername, newPassword: password });
+        if (editingUserFormUsername === getStoredUsername()) {
+          const currentPassword = window.prompt('To change your own password, enter your current password:');
+          if (!currentPassword) { showToast('Password not changed', 'info'); }
+          else {
+            const data = await postUsersEndpoint('users/reset-password', { targetUsername: editingUserFormUsername, newPassword: password, currentPassword: currentPassword });
+            if (data.token) setStoredSessionToken(data.token);
+          }
+        } else {
+          await postUsersEndpoint('users/reset-password', { targetUsername: editingUserFormUsername, newPassword: password });
+        }
       }
       logActivity('updated user account "' + displayName + '"');
       showToast('User updated', 'success');
@@ -247,25 +261,17 @@ export async function removeUserUI(username: string, displayName: string): Promi
 // not just admins (the worker's reset-password endpoint allows that).
 export async function changeMyPasswordUI(): Promise<void> {
   const username = getStoredUsername();
+  const currentPassword = window.prompt('Current password:');
+  if (!currentPassword) { showToast('Cancelled — password not changed', 'info'); return; }
   const newPassword = window.prompt('New password (at least 6 characters):');
   if (newPassword === null) { showToast('Cancelled — password not changed', 'info'); return; }
   if (!newPassword) { showToast('Cancelled — no password entered', 'info'); return; }
   try {
-    await postUsersEndpoint('users/reset-password', { targetUsername: username, newPassword: newPassword });
-    // The reset signs out every existing session of this account (the
-    // server rejects tokens issued before it), this one included, so mint
-    // a fresh token right away using newPassword while it's still in
-    // memory here (never persisted). If this fails, the next request asks
-    // the user to sign in again.
-    try {
-      const res = await fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username, password: newPassword, name: username })
-      });
-      const data = await res.json().catch(function() { return {}; });
-      if (res.ok && data && data.token) setStoredSessionToken(data.token);
-    } catch (e) { /* best-effort; see above */ }
+    const data = await postUsersEndpoint('users/reset-password', { targetUsername: username, newPassword: newPassword, currentPassword: currentPassword });
+    // The change signs out every existing session of this account (the
+    // server rejects tokens issued before it), this one included; the
+    // server returns a fresh token for this one so it carries on.
+    if (data && data.token) setStoredSessionToken(data.token);
     showToast('Password changed', 'success');
   } catch (err: any) {
     showToast('Could not change password: ' + err.message, 'error');

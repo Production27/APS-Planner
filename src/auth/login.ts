@@ -9,13 +9,143 @@
 // file, which this whole flow exists to satisfy).
 import { getStoredUsername, getStoredSessionToken, setStoredSessionToken, isSessionTokenUsable, decodeSessionTokenPayload, USERNAME_KEY } from './session';
 import { applyIdentityFromTokenPayload } from './permissions';
+import { renderQrInto, renderRecoveryCodesInto, formatSecret } from './two-step-render';
+import { showToast } from '../utils/ui';
 
 let loginFormSubmit: (() => void) | null = null;
+
+// Which part of the overlay is showing: the password form, or one of the
+// two-step verification steps (see runCodeStep()/runSetupStep() below).
+type LoginStep = 'password' | 'code' | 'setup' | 'recovery';
+const STEP_FORMS: Record<LoginStep, string> = { password: 'loginForm', code: 'loginMfaForm', setup: 'loginMfaSetupForm', recovery: 'loginRecoveryForm' };
+function showLoginStep(step: LoginStep): void {
+  (Object.keys(STEP_FORMS) as LoginStep[]).forEach(function(k) {
+    const form = document.getElementById(STEP_FORMS[k]);
+    if (form) form.hidden = k !== step;
+  });
+  const forgot = document.getElementById('loginForgot');
+  if (forgot) forgot.hidden = step !== 'password';
+}
+
+// Resolves 'submit' when the step's form is submitted, or 'back' when its
+// "Back to sign in" link is clicked. One pending wait per form.
+const stepWaiters: Record<string, ((how: 'submit' | 'back') => void) | undefined> = {};
+function waitForStep(formId: string): Promise<'submit' | 'back'> {
+  return new Promise(function(resolve) { stepWaiters[formId] = resolve; });
+}
+function settleStep(formId: string, how: 'submit' | 'back'): void {
+  const w = stepWaiters[formId];
+  stepWaiters[formId] = undefined;
+  if (w) w(how);
+}
+[['loginMfaForm', 'loginMfaBack'], ['loginMfaSetupForm', 'loginMfaSetupBack'], ['loginRecoveryForm', '']].forEach(function(pair) {
+  const form = document.getElementById(pair[0]);
+  if (form) form.addEventListener('submit', function(e) { e.preventDefault(); settleStep(pair[0], 'submit'); });
+  const back = pair[1] ? document.getElementById(pair[1]) : null;
+  if (back) back.addEventListener('click', function() { settleStep(pair[0], 'back'); });
+});
+
+function setButtonBusy(id: string, busy: boolean): void {
+  const btn = document.getElementById(id) as HTMLButtonElement | null;
+  if (!btn) return;
+  btn.classList.toggle('loading', busy);
+  btn.disabled = busy;
+}
+
+async function postJson(path: string, body: Record<string, unknown>): Promise<{ res: Response | null; data: any }> {
+  try {
+    const res = await fetch(API_BASE_URL + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json().catch(function() { return {}; });
+    return { res, data };
+  } catch (e) {
+    return { res: null, data: {} };
+  }
+}
+
+// Second half of a sign-in for an account with two-step verification on.
+// Returns the session token, or null to go back to the password form
+// (the user clicked Back, or the ticket expired).
+async function runCodeStep(ticket: string): Promise<string | null> {
+  const input = document.getElementById('loginCode') as HTMLInputElement;
+  showLoginStep('code');
+  setLoginBanner(null);
+  input.value = '';
+  input.focus();
+  while (true) {
+    if (await waitForStep('loginMfaForm') === 'back') { setLoginBanner(null); return null; }
+    const code = input.value.trim();
+    if (!code) continue;
+    setButtonBusy('loginCodeSubmit', true);
+    const { res, data } = await postJson('auth/mfa', { ticket: ticket, code: code });
+    setButtonBusy('loginCodeSubmit', false);
+    if (!res) { setLoginBanner('Could not reach the server — check your connection and try again.', 'err'); continue; }
+    if (res.ok && data.token) {
+      if (typeof data.recoveryCodesLeft === 'number') {
+        const left = data.recoveryCodesLeft;
+        setTimeout(function() {
+          showToast('You used a recovery code — ' + left + ' left. Make new ones in Settings → Two-step verification.', left <= 2 ? 'error' : 'info');
+        }, 0);
+      }
+      return data.token;
+    }
+    if (res.status === 429) { setLoginBanner(data.error || 'Too many attempts — try again in a few minutes.', 'lockout'); continue; }
+    setLoginBanner(data.error || 'That code didn’t work.', 'err');
+    if (data.restart) return null;
+    input.value = '';
+    input.focus();
+  }
+}
+
+// For someone the company requires to use two-step verification who
+// hasn't set it up: shows the QR code, checks the first code, shows the
+// recovery codes once, and returns the session token (or null to go back
+// to the password form).
+async function runSetupStep(ticket: string, username: string): Promise<string | null> {
+  setLoginBanner(null);
+  const start = await postJson('mfa/setup', { ticket: ticket });
+  if (!start.res || !start.res.ok || !start.data.uri) {
+    setLoginBanner(start.data.error || 'Could not start two-step setup — try again.', 'err');
+    return null;
+  }
+  renderQrInto(document.getElementById('loginMfaQr')!, start.data.uri);
+  document.getElementById('loginMfaSecret')!.textContent = formatSecret(start.data.secret);
+  const input = document.getElementById('loginSetupCode') as HTMLInputElement;
+  input.value = '';
+  showLoginStep('setup');
+  input.focus();
+  const clear = function() {
+    document.getElementById('loginMfaQr')!.innerHTML = '';
+    document.getElementById('loginMfaSecret')!.textContent = '';
+  };
+  while (true) {
+    if (await waitForStep('loginMfaSetupForm') === 'back') { clear(); setLoginBanner(null); return null; }
+    const code = input.value.replace(/\s/g, '');
+    if (!/^\d{6}$/.test(code)) { setLoginBanner('Enter the 6-digit code from your app.', 'err'); continue; }
+    setButtonBusy('loginSetupSubmit', true);
+    const { res, data } = await postJson('mfa/enable', { ticket: ticket, code: code });
+    setButtonBusy('loginSetupSubmit', false);
+    if (!res) { setLoginBanner('Could not reach the server — check your connection and try again.', 'err'); continue; }
+    if (res.ok && data.token) {
+      clear();
+      setLoginBanner(null);
+      renderRecoveryCodesInto(document.getElementById('loginRecoveryCodes')!, data.recoveryCodes || [], username);
+      showLoginStep('recovery');
+      await waitForStep('loginRecoveryForm');
+      document.getElementById('loginRecoveryCodes')!.innerHTML = '';
+      return data.token;
+    }
+    setLoginBanner(data.error || 'That code didn’t match.', 'err');
+    if (data.restart || res.status === 410) { clear(); return null; }
+    input.value = '';
+    input.focus();
+  }
+}
 
 function showLoginOverlay(prefillUsername?: string): void {
   const userInput = document.getElementById('loginUsername') as HTMLInputElement;
   const passInput = document.getElementById('loginPassword') as HTMLInputElement;
   document.getElementById('loginOverlay')!.classList.add('show');
+  showLoginStep('password');
   userInput.value = prefillUsername || '';
   passInput.value = '';
   passInput.type = 'password';
@@ -141,15 +271,28 @@ export async function reauthenticate(forceReprompt?: boolean): Promise<string> {
     }
 
     const data = await res.json();
-    if (!data || !data.token) {
-      setLoginBusy(false);
+    setLoginBusy(false);
+    let token: string | null = data && data.token;
+    // Two-step verification: the password was right, and the server
+    // handed back a short-lived ticket for the next step instead of a
+    // session.
+    if (data && data.ticket && (data.mfaRequired || data.mfaSetupRequired)) {
+      token = data.mfaRequired ? await runCodeStep(data.ticket) : await runSetupStep(data.ticket, username);
+      if (!token) {
+        showLoginStep('password');
+        (document.getElementById('loginPassword') as HTMLInputElement).value = '';
+        document.getElementById('loginPassword')!.focus();
+        continue;
+      }
+    }
+    if (!token) {
       setLoginBanner('Unexpected error — please try again.', 'err');
       continue;
     }
-    setStoredSessionToken(data.token);
-    setLoginBusy(false);
+    setStoredSessionToken(token);
     hideLoginOverlay();
-    return data.token;
+    showLoginStep('password');
+    return token;
   }
 }
 
