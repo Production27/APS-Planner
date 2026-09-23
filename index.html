@@ -522,15 +522,30 @@
      as .timeline-body below: this 400px job/task-name column is a large
      solid strip that would otherwise fully block a project's background
      image (applyProjectBgVisual()) on its side of the chart. */
+  /* --gantt-left-w is set on <html> by the column resize handle (see
+     applyGanttLeftWidth() in gantt.ts); 400px is the default. */
   .left-panel {
-    width: 400px; min-width: 400px; background: rgba(255,255,255,0.8); border-right: 1px solid var(--border);
+    width: var(--gantt-left-w, 400px); min-width: var(--gantt-left-w, 400px); background: rgba(255,255,255,0.8); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 6px rgba(0,0,0,0.04);
+    position: relative;
   }
+  /* Drag handle on the left panel's right edge. Invisible until hovered or
+     focused, then shows a thin primary-colored line where the edge is. */
+  .gantt-col-resize {
+    position: absolute; top: 0; right: -4px; width: 8px; height: 100%; z-index: 12;
+    cursor: col-resize; background: transparent; outline: none;
+  }
+  .gantt-col-resize::after {
+    content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px;
+    background: var(--primary-light); opacity: 0; transition: opacity 0.12s;
+  }
+  .gantt-col-resize:hover::after, .gantt-col-resize:focus-visible::after, body.gantt-col-resizing .gantt-col-resize::after { opacity: 1; }
+  body.gantt-col-resizing, body.gantt-col-resizing * { cursor: col-resize !important; user-select: none !important; }
   /* Now just an empty alignment spacer — see the comment on it in the
      markup — the view-mode tabs and later the "View as" picker that used
      to live here are both gone. Kept in sync with .left-panel's width
      above. */
-  .gantt-view-toggle-row { width: 400px; min-width: 400px; box-sizing: border-box; }
+  .gantt-view-toggle-row { width: var(--gantt-left-w, 400px); min-width: var(--gantt-left-w, 400px); box-sizing: border-box; }
   /* 58px — matches .timeline-header-wrap's height exactly (its own
      content is precisely 24px .week-header + 34px .day-header, no
      slack) so the task rows below line up with the bar rows next to
@@ -560,23 +575,19 @@
   .task-row .col-task { width: 90px; }
   .task-row .col-task .task-row-pill { max-width: 100%; margin-left: 0; }
   .task-row .col-jobs { flex: 1; border-right: none; font-weight: 500; color: var(--text); }
-  /* A fixed max-width (with its own ellipsis) rather than letting the name
-     run as long as it wants — otherwise a long job name (always shown
-     here now, regardless of fold state) can eat the whole column and
-     push the trailing pills after it clean off the edge with nothing
-     left to show them in. flex-shrink:0 matters here: .col-jobs is a flex
-     row (inherited from .col), and without it flexbox would treat this
-     max-width as just an upper bound, not a size to actually keep — since
-     the pills below have nothing telling THEM to shrink either, the name
-     was the only flexible item left and got squeezed to zero instead. */
   /* De-chromed, same treatment as the on-bar job tag (.task-bar-job-tag):
      plain text in the job's own contrast-adjusted color, no background
      chip. Two colors (see gantt.ts's rowLabelColors()) rather than one,
      picked via body.dark-mode below — a row sits on the app's plain card
      background, which genuinely differs by theme (unlike a bar's own
      fill), and toggling dark mode doesn't re-render an already-open row. */
+  /* Takes whatever room the column has (flex-basis auto) and only shrinks,
+     with an ellipsis, when trailing phase pills need the space — those
+     keep flex-shrink:0 — down to a 72px floor so it can never be squeezed
+     to nothing. Replaces an old fixed 90px cap that cut off names even in
+     a wide column. */
   .task-row .col-jobs .task-row-name {
-    display: inline-block; flex-shrink: 0; max-width: 90px; overflow: hidden;
+    display: inline-block; flex: 0 1 auto; min-width: 72px; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
     font-size: var(--t-sm); font-weight: 700; line-height: 1.5;
     padding: 1px var(--s-0-5); transition: transform 0.1s ease;
@@ -2601,6 +2612,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
   @media (max-width: 1100px) {
     .left-panel, .gantt-view-toggle-row { width: 260px; min-width: 260px; }
+    /* Fixed narrow width here; the resize handle is desktop-only. */
+    .gantt-col-resize { display: none; }
     .manager-sidebar { width: 210px; min-width: 210px; }
   }
   /* The ≥1101px breakpoint's own closed-rail narrowing (see
@@ -3632,6 +3645,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         </div>
         <div class="gantt-panels-row">
           <div class="left-panel">
+            <div class="gantt-col-resize" id="ganttColResize" role="separator" aria-orientation="vertical" aria-label="Resize the job column (arrow keys, double-click to reset)" title="Drag to resize · double-click to reset" tabindex="0"></div>
             <div class="left-header">
               <div class="col col-date">Date</div>
               <div class="col col-task">Task</div>

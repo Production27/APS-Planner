@@ -138,7 +138,7 @@ function TaskRow(props: TaskRowProps) {
           <span
             class={'task-row-name' + (props.mainLabelClickable ? ' clickable' : '') + (props.mainLabelFocused ? ' focused' : '')}
             style={{ '--jn-light': props.mainLabelColorLight, '--jn-dark': props.mainLabelColorDark } as Record<string, string>}
-            title={props.mainLabelClickable ? (props.mainLabelFocused ? 'Click to show every job again' : 'Click to show only ' + props.mainLabel + ' — every task') : undefined}
+            title={props.mainLabel + (props.mainLabelClickable ? (props.mainLabelFocused ? '\nClick to show every job again' : '\nClick to show only this job — every task') : '')}
             onClick={props.onMainLabelClick ? (e) => { e.stopPropagation(); props.onMainLabelClick!(); } : undefined}
           >
             {props.mainLabel}

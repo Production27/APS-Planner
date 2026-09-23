@@ -3112,6 +3112,89 @@ function setupScrollSync(): void {
   }
   timelineBody.onwheel = handleGanttWheelZoom;
   timelineBody.onmousedown = startGanttPan;
+  setupGanttColumnResize();
+}
+
+// ===== GANTT: RESIZABLE JOB COLUMN =====
+// The left panel's right edge (#ganttColResize) drags to widen or narrow
+// it, so long job names fit. Width lives in the --gantt-left-w custom
+// property on <html> (index.html's .left-panel/.gantt-view-toggle-row read
+// it, defaulting to 400px) and is remembered per browser. Desktop only —
+// the ≤1100px breakpoint pins its own fixed width and hides the handle.
+const GANTT_LEFT_W_KEY = 'gantt_left_panel_width_v1';
+const GANTT_LEFT_W_DEFAULT = 400;
+const GANTT_LEFT_W_MIN = 320;
+let ganttColResizeStart: { x: number; width: number } | null = null;
+
+function ganttLeftWidthMax(): number {
+  return Math.max(GANTT_LEFT_W_MIN, Math.min(760, Math.round(window.innerWidth * 0.55)));
+}
+
+function applyGanttLeftWidth(px: number | null): void {
+  const root = document.documentElement;
+  if (px === null) { root.style.removeProperty('--gantt-left-w'); return; }
+  const clamped = Math.round(Math.max(GANTT_LEFT_W_MIN, Math.min(ganttLeftWidthMax(), px)));
+  root.style.setProperty('--gantt-left-w', clamped + 'px');
+}
+
+function currentGanttLeftWidth(): number {
+  const panel = document.querySelector('.left-panel') as HTMLElement | null;
+  return panel ? panel.getBoundingClientRect().width : GANTT_LEFT_W_DEFAULT;
+}
+
+function saveGanttLeftWidth(): void {
+  const v = document.documentElement.style.getPropertyValue('--gantt-left-w');
+  try {
+    if (v) localStorage.setItem(GANTT_LEFT_W_KEY, String(parseInt(v, 10)));
+    else localStorage.removeItem(GANTT_LEFT_W_KEY);
+  } catch (e) { /* storage unavailable — width just isn't remembered */ }
+}
+
+function onGanttColResizeMove(e: MouseEvent): void {
+  if (!ganttColResizeStart) return;
+  e.preventDefault();
+  applyGanttLeftWidth(ganttColResizeStart.width + (e.clientX - ganttColResizeStart.x));
+}
+
+function onGanttColResizeEnd(): void {
+  ganttColResizeStart = null;
+  document.body.classList.remove('gantt-col-resizing');
+  document.removeEventListener('mousemove', onGanttColResizeMove);
+  document.removeEventListener('mouseup', onGanttColResizeEnd);
+  saveGanttLeftWidth();
+}
+
+// Property assignment (not addEventListener), same as the rest of
+// setupScrollSync(), so re-running it never stacks duplicate listeners.
+function setupGanttColumnResize(): void {
+  const handle = document.getElementById('ganttColResize');
+  if (!handle) return;
+  if (!document.documentElement.style.getPropertyValue('--gantt-left-w')) {
+    let saved: number | null = null;
+    try { saved = parseInt(localStorage.getItem(GANTT_LEFT_W_KEY) || '', 10) || null; } catch (e) { saved = null; }
+    if (saved) applyGanttLeftWidth(saved);
+  }
+  handle.onmousedown = function (e: MouseEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    ganttColResizeStart = { x: e.clientX, width: currentGanttLeftWidth() };
+    document.body.classList.add('gantt-col-resizing');
+    document.addEventListener('mousemove', onGanttColResizeMove);
+    document.addEventListener('mouseup', onGanttColResizeEnd);
+  };
+  handle.ondblclick = function () {
+    applyGanttLeftWidth(null);
+    saveGanttLeftWidth();
+  };
+  handle.onkeydown = function (e: KeyboardEvent) {
+    const step = e.shiftKey ? 64 : 16;
+    if (e.key === 'ArrowLeft') applyGanttLeftWidth(currentGanttLeftWidth() - step);
+    else if (e.key === 'ArrowRight') applyGanttLeftWidth(currentGanttLeftWidth() + step);
+    else if (e.key === 'Home') applyGanttLeftWidth(null);
+    else return;
+    e.preventDefault();
+    saveGanttLeftWidth();
+  };
 }
 
 // ===== Row builders shared with Calendar (src/views/calendar.ts consumes
