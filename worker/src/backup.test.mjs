@@ -109,3 +109,26 @@ test('handleListBackups returns the backup list for a real admin', async () => {
   const data = await res.json();
   assert.equal(data.backups.length, 1);
 });
+
+test('backup → restore round trip keeps workflow items, activity log and revisions (previously dropped)', () => {
+  const room = { projects: { p1: {
+    name: 'P', jobs: { j1: { id: 'j1', order: 0 } }, boardCards: { c1: { id: 'c1' } }, calendarEvents: {},
+    boardColumns: [{ id: 'bid', label: 'Bid' }], fieldOptions: { jobType: ['A'] }, deletedIds: {}, header: { title: 'P' },
+    workflowItems: [{ id: 'w1', label: 'Measure' }], activityLog: [{ who: 'A', what: 'x', when: 1 }], rev: 42,
+    fieldRevisions: { boardColumns: 3, fieldOptions: 1, header: 2, workflowItems: 5 }
+  } } };
+  const back = appFormatToRoomState(JSON.parse(JSON.stringify(roomStateToAppFormat(room))));
+  assert.deepEqual(back.projects.p1.workflowItems, [{ id: 'w1', label: 'Measure' }]);
+  assert.deepEqual(back.projects.p1.activityLog, [{ who: 'A', what: 'x', when: 1 }]);
+  assert.equal(back.projects.p1.rev, 42);
+  assert.equal(back.projects.p1.fieldRevisions.workflowItems, 5);
+  assert.deepEqual(back.projects.p1.jobs, room.projects.p1.jobs);
+});
+
+test('an older backup file without the newer fields still restores', () => {
+  const old = { version: 3, projects: { p1: { name: 'Old', jobs: [{ id: 'j1' }], boardCards: [], calendarEvents: [], boardColumns: [], fieldOptions: {}, deletedIds: {}, header: {} } } };
+  const back = appFormatToRoomState(old);
+  assert.deepEqual(back.projects.p1.workflowItems, []);
+  assert.equal(back.projects.p1.rev, 0);
+  assert.ok(back.projects.p1.jobs.j1);
+});

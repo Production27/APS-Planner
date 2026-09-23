@@ -8,6 +8,8 @@ import {
   filterRoomStateForAttachment, filterUpsertProjectBatchByTier, applyMessage,
   computeRoomDelta, filterRoomDeltaForAttachment
 } from './room-state.ts';
+import { readItemizedRoom, writeFullRoom, writeRoomChange, migrateLegacyRoom, LEGACY_KEY } from './room-storage.ts';
+import type { KvStorage } from './room-storage.ts';
 import type { UpsertProjectBatchMessage } from './room-state.ts';
 import type { RoomState, RoomMessage, Attachment } from './types.ts';
 
@@ -54,15 +56,63 @@ export class ApsRoom {
     }
   }
 
+  // Storage layout — see room-storage.ts. `legacyLayout` is true only if
+  // this room is still on the old single-value layout because migrating
+  // it failed verification; it then keeps working exactly as before.
+  legacyLayout = false;
+
+  // One shared load per instance: two sockets connecting at the same
+  // moment must not both run the migration.
+  private loading: Promise<RoomState> | null = null;
+
   async loadRoomState(): Promise<RoomState> {
     if (this.roomState) return this.roomState;
-    const stored = await this.state.storage.get<RoomState>('room');
-    this.roomState = stored || emptyRoomState();
+    if (!this.loading) {
+      this.loading = this.loadRoomStateOnce().finally(() => { this.loading = null; });
+    }
+    return this.loading;
+  }
+
+  private async loadRoomStateOnce(): Promise<RoomState> {
+    if (this.roomState) return this.roomState;
+    const storage = this.state.storage as unknown as KvStorage;
+    const itemized = await readItemizedRoom(storage);
+    if (itemized) {
+      this.roomState = itemized;
+      return this.roomState;
+    }
+    const legacy = await storage.get<RoomState>(LEGACY_KEY);
+    if (!legacy) {
+      this.roomState = emptyRoomState();
+      await writeFullRoom(storage, this.roomState);
+      return this.roomState;
+    }
+    const result = await migrateLegacyRoom(storage, legacy);
+    if (result.ok) {
+      console.log('Room storage migrated to per-item layout:', JSON.stringify(result));
+      this.roomState = (await readItemizedRoom(storage)) as RoomState;
+    } else {
+      console.error('Room storage migration failed — staying on the single-value layout:', JSON.stringify(result));
+      this.legacyLayout = true;
+      this.roomState = legacy;
+    }
     return this.roomState;
   }
 
-  async persist(): Promise<void> {
-    await this.state.storage.put('room', this.roomState);
+  // Saves the change from `prev` to the current roomState. Per-item layout:
+  // only the entries that write touched. Legacy layout: the whole value,
+  // as before.
+  async persist(prev: RoomState | null): Promise<void> {
+    const storage = this.state.storage as unknown as KvStorage;
+    if (this.legacyLayout) {
+      await storage.put({ [LEGACY_KEY]: this.roomState });
+      return;
+    }
+    const next = this.roomState as RoomState;
+    const delta = prev ? computeRoomDelta(prev, next) : null;
+    if (prev && !delta) return;
+    if (delta) await writeRoomChange(storage, next, delta);
+    else await writeFullRoom(storage, next);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -83,10 +133,10 @@ export class ApsRoom {
       if (!imported || typeof imported !== 'object' || typeof imported.projects !== 'object') {
         return new Response(JSON.stringify({ error: 'expected { projects: {...} }' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
-      const previousState = this.roomState;
+      const previousState = await this.loadRoomState();
       this.roomState = imported;
       try {
-        await this.persist();
+        await this.persist(previousState);
       } catch (e) {
         this.roomState = previousState;
         console.error('Failed to persist imported room state:', e);
@@ -290,7 +340,7 @@ export class ApsRoom {
       const previousState = this.roomState;
       this.roomState = result.state;
       try {
-        await this.persist();
+        await this.persist(previousState);
       } catch (e) {
         this.roomState = previousState;
         console.error('Failed to persist room state:', e);

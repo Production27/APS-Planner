@@ -9,36 +9,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ApsRoom } from './room-do.ts';
+import { readItemizedRoom } from './room-storage.ts';
+import { makeFakeState, makeFakeWs } from './test-fakes.mjs';
 
-function makeFakeState(wsList = [], opts = {}) {
-  const store = new Map();
-  let getCalls = 0;
-  return {
-    storage: {
-      async get(key) { getCalls++; return store.get(key); },
-      async put(key, val) {
-        if (opts.putFails) throw new Error('simulated storage.put failure');
-        store.set(key, val);
-      }
-    },
-    getWebSockets() { return wsList; },
-    _store: store,
-    get _getCalls() { return getCalls; }
-  };
-}
-
-function makeFakeWs(attachment) {
-  const sent = [];
-  return {
-    _attachment: attachment,
-    deserializeAttachment() { return this._attachment; },
-    serializeAttachment(a) { this._attachment = a; },
-    send(payload) { sent.push(JSON.parse(payload)); },
-    close(code, reason) { this._closed = { code, reason }; },
-    _sent: sent,
-    _closed: null
-  };
-}
+async function storedRoom(state) { return readItemizedRoom(state.storage); }
 
 // ── loadRoomState / persist ──
 
@@ -48,15 +22,21 @@ test('loadRoomState returns an empty room when nothing is stored yet, and caches
   const first = await room.loadRoomState();
   assert.deepEqual(first, { projects: {} });
   await room.loadRoomState();
-  assert.equal(state._getCalls, 1, 'second call should use the cached value, not re-read storage');
+  const callsAfterFirst = state._getCalls;
+  await room.loadRoomState();
+  assert.equal(state._getCalls, callsAfterFirst, 'later calls should use the cached value, not re-read storage');
 });
 
-test('persist writes the current roomState to storage under the "room" key', async () => {
+test('persist writes the current roomState to storage (per-item layout)', async () => {
   const state = makeFakeState();
   const room = new ApsRoom(state, {});
-  room.roomState = { projects: { p1: { name: 'Test' } } };
-  await room.persist();
-  assert.deepEqual(state._store.get('room'), { projects: { p1: { name: 'Test' } } });
+  await room.loadRoomState();
+  const prev = room.roomState;
+  room.roomState = { projects: { p1: { name: 'Test', jobs: { j1: { id: 'j1' } } } } };
+  await room.persist(prev);
+  assert.deepEqual(await storedRoom(state), { projects: { p1: { name: 'Test', jobs: { j1: { id: 'j1' } }, boardCards: {}, calendarEvents: {} } } });
+  assert.deepEqual(state._store.get('p|p1|j|j1'), { id: 'j1' }, 'each job is its own storage entry');
+  assert.equal(state._store.get('room'), undefined, 'nothing is written to the old single-value key');
 });
 
 // ── broadcastPresence ──
@@ -87,7 +67,7 @@ test('webSocketMessage rejects a message below the required tier without persist
   const response = viewerWs._sent[0];
   assert.equal(response.type, 'error');
   assert.match(response.message, /Forbidden: requires editor/);
-  assert.equal(state._store.get('room'), undefined, 'a rejected message must not persist anything');
+  assert.deepEqual(await storedRoom(state), { projects: {} }, 'a rejected message must not persist anything');
 });
 
 test('webSocketMessage rejects a write outside a restricted account\'s assigned project', async () => {
@@ -126,7 +106,7 @@ test('a valid, authorized write persists to storage and broadcasts a scoped snap
     type: 'upsertJob', projectId: 'p1', job: { id: 'job-1', updatedAt: 1 }, msgId: 5
   }));
 
-  assert.ok(state._store.get('room').projects.p1.jobs['job-1'], 'the write should have persisted');
+  assert.ok((await storedRoom(state)).projects.p1.jobs['job-1'], 'the write should have persisted');
   const observerSnapshot = observerWs._sent.find(m => m.type === 'snapshot');
   assert.ok(observerSnapshot, 'every connection, not just the writer, should receive the new snapshot');
   assert.ok(observerSnapshot.projects.p1.jobs['job-1']);
@@ -165,7 +145,7 @@ test('webSocketMessage acks only after persist() actually succeeds', async () =>
 
   const ack = writerWs._sent.find(m => m.type === 'ack');
   assert.ok(ack, 'a successful, durably-persisted write should still be acked');
-  assert.ok(state._store.get('room').projects.p1.jobs['job-1'], 'the write must actually be in storage by the time the ack is sent');
+  assert.ok((await storedRoom(state)).projects.p1.jobs['job-1'], 'the write must actually be in storage by the time the ack is sent');
 });
 
 // ── fetch(): /internal/kick-user ──

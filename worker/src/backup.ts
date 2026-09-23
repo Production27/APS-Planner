@@ -23,6 +23,12 @@ export interface AppFormatProject {
   fieldOptions: Record<string, unknown>;
   deletedIds: Record<string, number>;
   header: Record<string, unknown>;
+  // Added later — absent from older backup files, which still restore
+  // (these then fall back to empty/zero, the old behavior).
+  workflowItems?: unknown[];
+  activityLog?: Project['activityLog'];
+  fieldRevisions?: Project['fieldRevisions'];
+  rev?: number;
 }
 
 export interface AppFormat {
@@ -43,7 +49,12 @@ export function roomStateToAppFormat(roomState: RoomState): AppFormat {
       calendarEvents: Object.values(proj.calendarEvents || {}),
       fieldOptions: proj.fieldOptions || {},
       deletedIds: proj.deletedIds || {},
-      header: proj.header || { title: proj.name || 'Untitled', subtitle: '', theme: { c1: '#1a237e', c2: '#3949ab' } }
+      header: proj.header || { title: proj.name || 'Untitled', subtitle: '', theme: { c1: '#1a237e', c2: '#3949ab' } },
+      // Previously left out, so a restore silently wiped Workflow Items.
+      workflowItems: (proj.workflowItems as unknown[]) || [],
+      activityLog: proj.activityLog || [],
+      fieldRevisions: proj.fieldRevisions,
+      rev: proj.rev || 0
     };
   }
   return { version: 3, projects, activeProjectId: Object.keys(projects)[0] || null };
@@ -67,9 +78,10 @@ export function appFormatToRoomState(appData: { projects?: Record<string, Partia
       fieldOptions: proj.fieldOptions || {},
       deletedIds: proj.deletedIds || {},
       header: proj.header || { title: proj.name || 'Untitled', subtitle: '', theme: { c1: '#1a237e', c2: '#3949ab' } },
-      activityLog: [],
-      rev: 0,
-      fieldRevisions: { boardColumns: 0, fieldOptions: 0, header: 0, workflowItems: 0 }
+      workflowItems: Array.isArray(proj.workflowItems) ? proj.workflowItems : [],
+      activityLog: Array.isArray(proj.activityLog) ? proj.activityLog : [],
+      rev: typeof proj.rev === 'number' ? proj.rev : 0,
+      fieldRevisions: Object.assign({ boardColumns: 0, fieldOptions: 0, header: 0, workflowItems: 0 }, proj.fieldRevisions || {})
     };
   }
   return { projects };

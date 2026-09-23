@@ -8,6 +8,7 @@ import {
   filterRoomDeltaForAttachment, copyProjectForWrite
 } from './room-state.ts';
 import { ApsRoom } from './room-do.ts';
+import { makeFakeState, makeFakeWs } from './test-fakes.mjs';
 
 const admin = { username: 'a', displayName: 'Admin', role: 'admin', assignedProjectId: null };
 
@@ -103,15 +104,6 @@ test('delta scoping: a project-restricted user only sees their own project', () 
 });
 
 // ── ApsRoom broadcast ──
-function makeFakeState(wsList) {
-  const store = new Map();
-  return { storage: { async get(k) { return store.get(k); }, async put(k, v) { store.set(k, v); } }, getWebSockets() { return wsList; } };
-}
-function makeFakeWs(attachment) {
-  const sent = [];
-  return { _attachment: attachment, deserializeAttachment() { return this._attachment; }, serializeAttachment(a) { this._attachment = a; }, send(p) { sent.push(JSON.parse(p)); }, close() {}, _sent: sent };
-}
-
 test('broadcast: protocol-2 clients get a delta, older clients a full snapshot, out-of-scope clients nothing', async () => {
   const writer = makeFakeWs({ ...admin, proto: 2 });
   const modern = makeFakeWs({ username: 'm', displayName: 'M', role: 'editor', assignedProjectId: null, proto: 2 });
