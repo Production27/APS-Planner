@@ -903,12 +903,21 @@ function dragPhase(page, ids, phaseId, days) {
   }, { ...ids, phaseId, days });
 }
 
-test('gantt phase order: moving a collapsed phase later pushes later phases by the same amount', async ({ page }) => {
+test('gantt phase order: moving a phase later leaves the next phase alone until its start passes it', async ({ page }) => {
   const ids = await setupTwoPhases(page);
-  await dragPhase(page, ids, 'ph-1', 12);
+  await dragPhase(page, ids, 'ph-1', 5); // Phase 1 now starts 09-06, still before Phase 2's 09-10
+  expect(await readPhases(page, ids)).toEqual([
+    [['2026-09-06', '2026-09-10'], ['2026-09-09', '2026-09-13']],
+    [['2026-09-10', '2026-09-15']],
+  ]);
+});
+
+test('gantt phase order: dragging a phase\'s start past the next phase pushes that phase only as far as needed', async ({ page }) => {
+  const ids = await setupTwoPhases(page);
+  await dragPhase(page, ids, 'ph-1', 12); // Phase 1 now starts 09-13, past Phase 2's 09-10
   expect(await readPhases(page, ids)).toEqual([
     [['2026-09-13', '2026-09-17'], ['2026-09-16', '2026-09-20']],
-    [['2026-09-22', '2026-09-27']],
+    [['2026-09-13', '2026-09-18']],
   ]);
 });
 

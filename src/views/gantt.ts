@@ -237,7 +237,7 @@ function cascadeShiftLaterTasks(jobId: string, taskId: string, deltaDays: number
   // A task move only changes where its sub-phase starts, it doesn't move
   // the sub-phase as a block — so only the order rule applies (delta 0).
   keepSubPhasesInOrder(unitPhase, unit, 0);
-  keepPhasesInOrder(found.job, unitPhase, 0);
+  keepPhasesInOrder(found.job, unitPhase);
 }
 
 // Sub-phase version of the rules above, for a phase split into sub-phases
@@ -270,20 +270,18 @@ function keepSubPhasesInOrder(phase: Phase, anchor: SubPhase, deltaDays: number)
   }
 }
 
-// Phase version, one level further up (in the job's own phase order):
-// moving a whole phase later pushes every later phase by the same amount;
-// earlier leaves them alone; and a later phase never starts before an
-// earlier one. A phase's start is its earliest scheduled task across all
-// its sub-phases (same as its collapsed Gantt bar).
-function keepPhasesInOrder(job: Job, anchor: Phase, deltaDays: number): void {
+// Phase version, one level further up (in the job's own phase order) —
+// but ONLY the order rule: a later phase never starts before an earlier
+// one. Unlike stages/sub-phases, moving a phase later does NOT push the
+// job's later phases along by the same amount; another phase only moves
+// once this one's start actually passes it (pushed, or pulled back when
+// dragging earlier), and then only by as much as needed. A phase's start
+// is its earliest scheduled task across all its sub-phases (same as its
+// collapsed Gantt bar).
+function keepPhasesInOrder(job: Job, anchor: Phase): void {
   const phases = getJobPhases(job);
   if (phases.length < 2) return;
-  const idx = phases.indexOf(anchor);
-  if (idx === -1) return;
   const shiftPhase = (ph: Phase, days: number) => getPhaseSubUnits(ph).forEach((u) => shiftSubUnitDays(u, days));
-  if (deltaDays > 0) {
-    for (let i = idx + 1; i < phases.length; i++) shiftPhase(phases[i], deltaDays);
-  }
   const hidden = getHiddenTaskOrders();
   const startOf = (ph: Phase) => {
     let min: Date | null = null;
@@ -782,17 +780,14 @@ function onBarMoveEnd(e: MouseEvent): void {
       if (jf && phase && spanUnits.length) {
         spanUnits.forEach((u) => shiftSubUnitDays(u, deltaDays));
         // One sub-phase moved on its own: keep the phase's other
-        // sub-phases in order around it, then the job's phases (the moved
-        // sub-phase may have changed where its phase starts). The whole
-        // phase moving together (a collapsed phase bar, or an unsplit
-        // phase's only bar) is a phase move: its sub-phases stay in order
-        // by themselves, and the job's other phases follow the phase rules.
-        if (spanUnits.length === getPhaseSubUnits(phase).length) {
-          keepPhasesInOrder(jf.job, phase, deltaDays);
-        } else if (subUnit) {
+        // sub-phases in order around it. The whole phase moving together
+        // (a collapsed phase bar, or an unsplit phase's only bar) can't put
+        // its own sub-phases out of order. Either way, the job's phases
+        // are then kept in order (see keepPhasesInOrder()).
+        if (subUnit && spanUnits.length < getPhaseSubUnits(phase).length) {
           keepSubPhasesInOrder(phase, subUnit, deltaDays);
-          keepPhasesInOrder(jf.job, phase, 0);
         }
+        keepPhasesInOrder(jf.job, phase);
         bar.dataset.dragged = 'true';
         barMoveState = null;
         renderGantt();
