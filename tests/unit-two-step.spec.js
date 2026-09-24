@@ -187,7 +187,7 @@ test('Security & data: an admin can require two-step verification for everyone',
     'security/policy': (b) => ({ body: { policy: { requireMfa: b.requireMfa === true, updatedBy: b.requireMfa === undefined ? undefined : 'realuser', updatedAt: Date.now() } } }),
   });
   page.on('dialog', (d) => d.accept());
-  await page.evaluate(() => toggleSettingsMenu());
+  await page.evaluate(() => toggleAdminMenu());
   await page.locator('#securityDataBtn').click();
   await expect(page.locator('#requireMfaToggle')).toBeEnabled();
   await expect(page.locator('#requireMfaToggle')).not.toBeChecked();

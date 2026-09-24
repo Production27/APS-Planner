@@ -555,7 +555,7 @@ export function applyPermissionGating(): void {
     const allowed = hasMinTier((el as HTMLElement).dataset.minTier!);
     // Settings menu items are real <button>s since A5 but still hide
     // outright (as they did as divs) rather than sit there greyed out.
-    const isMenuItem = el.classList.contains('settings-dropdown-item');
+    const isMenuItem = el.classList.contains('settings-dropdown-item') || el.classList.contains('admin-menu-wrap');
     if (!isMenuItem && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'BUTTON' || el.tagName === 'TEXTAREA')) {
       (el as HTMLInputElement).disabled = !allowed;
     } else {

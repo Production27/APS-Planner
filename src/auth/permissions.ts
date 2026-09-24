@@ -5,6 +5,7 @@
 // be correct in exactly one place.
 import { DISPLAY_NAME_KEY } from './session';
 import { checkMaintenanceStatus } from '../app/maintenance';
+import { refreshAdminNotices } from '../app/admin-notices';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -63,4 +64,5 @@ export function applyIdentityFromTokenPayload(payload: any): void {
   // may have already run once before this resolved (roleConfirmed was
   // still false then, so it deliberately didn't block anyone yet).
   checkMaintenanceStatus();
+  refreshAdminNotices();
 }

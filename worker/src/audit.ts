@@ -104,14 +104,47 @@ export function describeChange(prev: RoomState, next: RoomState, delta: RoomDelt
 // Object. Best-effort — an audit failure never blocks the action itself,
 // but it is logged.
 export async function recordAudit(env: Env, entry: Omit<AuditEntry, 'at'> & { at?: number }): Promise<void> {
+  const full = Object.assign({ at: Date.now() }, entry);
+  if (ADMIN_NOTICE_ACTIONS.has(full.action)) await recordAdminNotice(env, full);
   try {
-    const full = Object.assign({ at: Date.now() }, entry);
     const res = await getRoomStub(env).fetch('https://internal/internal/audit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries: [full] })
     });
     if (!res.ok) console.error('Audit write failed:', res.status, entry.action);
   } catch (e) {
     console.error('Audit write failed:', e, entry.action);
+  }
+}
+
+// --- ADMIN NOTICES ---
+// The account events an admin should hear about without going looking:
+// they feed the badge on the Admin menu (admin-notices.ts). A short capped
+// KV list, same approach as the client error log, so the badge never has
+// to scan the audit trail (which also holds every job edit). Sign-ins and
+// failed attempts are left out on purpose: they're routine. So is "Deleted
+// all company data": it's written after the wipe, and no admin is left.
+export const ADMIN_NOTICE_LOG_KEY = 'admin_notices';
+export const ADMIN_NOTICE_LOG_CAP = 200;
+export const ADMIN_NOTICE_ACTIONS = new Set([
+  'Changed own email', 'Connected Google account',
+  'Added user account', 'Changed user account', 'Removed user account', 'Reset user password',
+  'Turned off two-step verification', 'Reset two-step verification',
+  'Required two-step verification for everyone', 'Stopped requiring two-step verification',
+  'Changed Google sign-in settings', 'Sign-in blocked (too many attempts)',
+  'Restored from backup', 'Exported all company data',
+  'Scheduled deletion of all company data', 'Cancelled deletion of all company data',
+  'Turned on maintenance mode', 'Turned off maintenance mode',
+]);
+
+async function recordAdminNotice(env: Env, entry: AuditEntry): Promise<void> {
+  try {
+    if (!env.USERS_KV) return;
+    const raw = await env.USERS_KV.get(ADMIN_NOTICE_LOG_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    list.unshift({ at: entry.at, user: entry.user, action: entry.action, item: entry.item || null, details: entry.details || null });
+    await env.USERS_KV.put(ADMIN_NOTICE_LOG_KEY, JSON.stringify(list.slice(0, ADMIN_NOTICE_LOG_CAP)));
+  } catch (e) {
+    console.error('Admin notice write failed:', e, entry.action);
   }
 }
 

@@ -2587,7 +2587,7 @@ test('maintenance mode admin toggle: turning it on sends the right request and u
   await page.goto(APP_URL);
   await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
 
-  await page.evaluate(() => { toggleSettingsMenu(); toggleMaintenancePanel(); });
+  await page.evaluate(() => { toggleAdminMenu(); toggleMaintenancePanel(); });
   await page.locator('#maintenanceMessageInput').fill('Back in 15 minutes for a data migration.');
   await expect(page.locator('#maintenanceEnableBtn')).toHaveText('Turn On Maintenance Mode');
   // Turning maintenance mode ON now confirms first (it immediately blocks

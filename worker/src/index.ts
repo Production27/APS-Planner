@@ -37,6 +37,7 @@ import {
 } from './users-admin.ts';
 import { handleAttachmentUpload, handleAttachmentDownload, handleAttachmentDelete } from './attachments.ts';
 import { handleReportError, handleErrorsList } from './errors.ts';
+import { handleAdminNotices, handleAdminNoticesSeen } from './admin-notices.ts';
 import { handleMaintenanceStatus, handleSetMaintenanceStatus } from './maintenance.ts';
 import { handleAuditExport, handleDataExport, handleDeletionStatus, handleDeletionSchedule, handleDeletionCancel, runDueDeletion } from './compliance.ts';
 export { ApsRoom } from './room-do.ts';
@@ -187,6 +188,12 @@ export default {
     }
     if (url.pathname === "/errors/list" && request.method === "POST") {
       return handleErrorsList(request, env, corsHeaders);
+    }
+    if (url.pathname === "/admin/notices" && request.method === "POST") {
+      return handleAdminNotices(request, env, corsHeaders);
+    }
+    if (url.pathname === "/admin/notices/seen" && request.method === "POST") {
+      return handleAdminNoticesSeen(request, env, corsHeaders);
     }
 
     // Public, no auth — see maintenance.ts's own comment on why.
