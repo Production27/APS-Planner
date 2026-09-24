@@ -18,7 +18,8 @@
 // src/core/jobs.ts. The linked-job data model (getOtherFixedProjectId/
 // isLinkEnabledLocally/linkJobs/setJobLinkEnabled/unlinkJobById), real in
 // src/app/project.ts, is referenced here as an ambient global instead.
-import type { Job, Phase, Task } from '../core/types';
+import type { Job, Phase, Task, BoardCard } from '../core/types';
+import { offerUndo } from '../app/undo';
 import { findJob, getJobPhases, getPhaseSubUnits, getPhaseCard, getPrimaryPhaseCard } from '../core/models';
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
@@ -458,6 +459,17 @@ export function deleteJobPhaseUI(phaseId: string): void {
 
   if (!window.confirm('Delete phase "' + phase.name + '"? This removes its card and dates.')) return;
   flushAutoSaveJobForm();
+  // Copies taken before removal, for Undo. The delete itself goes out
+  // right away (unlike a whole job's — see src/app/undo.ts): other devices
+  // rebuild a phase that's missing but not tombstoned after a 5s grace
+  // (healOrphanedPhaseCards() in src/sync/inbound.ts), so it can't wait.
+  // Undo instead brings back an exact copy under fresh phase/card ids,
+  // since the server keeps the old ones tombstoned for good.
+  const phaseIdx = phases.indexOf(phase);
+  const phaseCopy: Phase = JSON.parse(JSON.stringify(phase));
+  const oldCard = getPhaseCard(found.job, phaseId);
+  const cardCopy = oldCard ? JSON.parse(JSON.stringify(oldCard)) : null;
+  const jobId = found.job.id;
   removeJobPhase(found.job, phaseId);
   if ((editingPhaseId || null) === phaseId) editingPhaseId = found.job.phases![0].id;
   saveJobs();
@@ -468,7 +480,29 @@ export function deleteJobPhaseUI(phaseId: string): void {
   if (isPanelActive('calendar')) renderCalendar();
   if (isPanelActive('board')) renderBoard();
   queueSharedSync();
-  showToast('Phase deleted', 'success');
+  offerUndo('Phase deleted', { commit: function () {}, undo: function () { restoreDeletedPhase(jobId, phaseIdx, phaseCopy, cardCopy); } });
+}
+
+function restoreDeletedPhase(jobId: string, phaseIdx: number, phaseCopy: Phase, cardCopy: BoardCard | null): void {
+  const found = findJob(jobId);
+  if (!found || !found.job.phases) { showToast('Couldn\'t restore the phase — its job is gone', 'error'); return; }
+  const job = found.job;
+  const newPhaseId = genId();
+  const restored: Phase = Object.assign({}, phaseCopy, { id: newPhaseId });
+  const phases = found.job.phases;
+  phases.splice(Math.min(phaseIdx, phases.length), 0, restored);
+  phases.forEach(function (p, i) { p.order = i; });
+  if (cardCopy) boardCards.push(Object.assign({}, cardCopy, { id: genId(), phaseId: newPhaseId }));
+  saveJobs();
+  saveBoardCards();
+  logActivity('restored deleted phase "' + restored.name + '" on job "' + job.name + '"');
+  if (editingJobId === jobId) { editingPhaseId = newPhaseId; editingSubPhaseId = null; renderJobFormForPhase(job); }
+  renderJobList();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
+  if (isPanelActive('board')) renderBoard();
+  queueSharedSync();
+  showToast('Phase restored', 'success');
 }
 
 export function selectJobSubPhase(subId: string): void {

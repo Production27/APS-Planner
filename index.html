@@ -2582,6 +2582,16 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .toast { background: white; border-radius: 8px; padding: var(--s-3) var(--s-5); box-shadow: 0 4px 16px rgba(0,0,0,0.15); font-size: var(--t-base); font-weight: 600; display: flex; align-items: center; gap: var(--s-2-5); animation: slideIn 0.3s ease; border-left: 4px solid var(--success); }
   .toast.error { border-left-color: var(--danger); }
   .toast.info { border-left-color: var(--primary-light); }
+  /* Undo toast (src/app/undo.ts) — the only toast with a button in it. */
+  .undo-toast { gap: var(--s-3); }
+  .undo-toast-btn {
+    font: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--primary-light);
+    background: var(--primary-tint); border: 1px solid transparent; border-radius: 6px;
+    padding: var(--s-1) var(--s-3); cursor: pointer; margin-left: auto;
+  }
+  .undo-toast-btn:hover { border-color: var(--primary-light); }
+  .undo-toast-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
+  body.dark-mode .undo-toast-btn { color: var(--primary-ondark); background: rgba(57,73,171,0.22); }
   @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
   /* ===== NEW USER TUTORIAL ===== see maybeShowTutorialPrompt() and the

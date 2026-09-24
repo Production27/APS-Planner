@@ -67,6 +67,7 @@ import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSe
 import { hasMinTier } from '../auth/permissions';
 import { getStoredSessionToken } from '../auth/session';
 import { fetchWithReauth } from '../app/worker-client';
+import { offerUndo } from '../app/undo';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 import { buildHomeStageSummary, buildHomeStalledRows, computeColumnStalledFloors } from './home';
 import { displayNameForUsername, getLeadRoster, ensureUserRosterLoaded } from '../app/user-roster';
@@ -530,6 +531,15 @@ function deleteBoardColumn(colId: string, event?: Event): void {
     msg += ' ' + cardCount + ' card' + (cardCount === 1 ? '' : 's') + ' will be moved to "' + remaining[0].label + '".';
   }
   if (!confirm(msg)) return;
+  // Copies for Undo: the columns as they were, every card about to move
+  // (its column, stage clock and any checklist the new column auto-adds),
+  // and each job's tasks/phases — once the column is gone, each job's task
+  // for it gets folded into a "Legacy tasks" note the next time jobs are
+  // matched to columns (normalizeTasksToColumns() in src/core/jobs.ts).
+  const columnsBefore: BoardColumn[] = JSON.parse(JSON.stringify(BOARD_COLUMNS));
+  const movedCards: BoardCard[] = JSON.parse(JSON.stringify(boardCards.filter((c) => c.column === colId)));
+  const jobShapesBefore: Record<string, string> = {};
+  jobs.forEach((j) => { jobShapesBefore[j.id] = JSON.stringify({ tasks: j.tasks, phases: j.phases }); });
   if (cardCount > 0) {
     boardCards.forEach((c) => { if (c.column === colId) setCardColumn(c, remaining[0].id); });
     saveBoardCards();
@@ -538,7 +548,38 @@ function deleteBoardColumn(colId: string, event?: Event): void {
   saveBoardColumns();
   logActivity('deleted board "' + col.label + '"');
   renderBoard();
-  showToast('Board deleted', 'info');
+  offerUndo('Board "' + col.label + '" deleted', {
+    commit: function () {},
+    undo: function () { restoreDeletedBoardColumn(col.label, columnsBefore, movedCards, jobShapesBefore); },
+  });
+}
+
+function restoreDeletedBoardColumn(label: string, columnsBefore: BoardColumn[], movedCards: BoardCard[], jobShapesBefore: Record<string, string>): void {
+  BOARD_COLUMNS = columnsBefore;
+  saveBoardColumns();
+  // Put each moved card back exactly as it was (only if it still exists —
+  // someone may have deleted it meanwhile).
+  movedCards.forEach((saved) => {
+    const idx = boardCards.findIndex((c) => c.id === saved.id);
+    if (idx !== -1) boardCards[idx] = saved;
+  });
+  saveBoardCards();
+  // Jobs whose tasks/phases changed since the delete get their earlier
+  // shape back, which returns that stage's dates.
+  jobs.forEach((j) => {
+    const before = jobShapesBefore[j.id];
+    if (!before || before === JSON.stringify({ tasks: j.tasks, phases: j.phases })) return;
+    const shape = JSON.parse(before);
+    j.tasks = shape.tasks;
+    if (shape.phases === undefined) delete j.phases; else j.phases = shape.phases;
+  });
+  saveJobs();
+  logActivity('restored deleted board "' + label + '"');
+  renderBoard();
+  if (isPanelActive('gantt')) renderGantt();
+  if (isPanelActive('calendar')) renderCalendar();
+  renderJobList();
+  showToast('Board restored', 'success');
 }
 
 function renameBoardColumn(colId: string, event?: Event): void {

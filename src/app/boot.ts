@@ -21,6 +21,7 @@ import { closeDeleteJobModal } from '../views/job-list';
 import { cancelEdit, initJobFormAutosaveListeners, buildColorPresets } from '../views/job-form';
 import { initStaticEventListeners } from './static-event-wiring';
 import { startDeletionStatusChecks } from './compliance';
+import { initUndo, finishLeftoverJobDeletes } from './undo';
 
 // How long a delete tombstone (see recordTombstone()/deleteFromSharedMap()
 // in src/sync/outbound.ts) sticks around before it's pruned locally.
@@ -74,6 +75,10 @@ export function init(savedText?: string | null): void {
   // see pruneStrayEmptyProjects(). Safe to call this early: sendRoomMessage()
   // queues the removal and replays it once the socket actually connects.
   pruneStrayEmptyProjects();
+  // Same queue-until-connected safety: a job delete held back for Undo by a
+  // page that was killed mid-window is sent now (see src/app/undo.ts).
+  initUndo();
+  finishLeftoverJobDeletes();
   if (freshLocalSeed) showFreshLoadOverlay();
   loadLinkEnabledPref();
   loadDarkModePref();

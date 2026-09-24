@@ -13,7 +13,8 @@ import { genId } from '../utils/id';
 import { tintedTextColor } from '../utils/color';
 import { openModal, closeModal, showToast, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
-import { logActivity, deleteJobFromShared, deleteCardFromShared } from '../sync/outbound';
+import { logActivity } from '../sync/outbound';
+import { offerUndo, holdBackJobDelete } from '../app/undo';
 import { ensureCardChecklists } from './checklist';
 import { renderGantt } from './gantt';
 import { renderCalendar } from './calendar';
@@ -194,8 +195,8 @@ export function archiveJob(jobId: string): void {
   if (isPanelActive('gantt')) renderGantt();
   if (isPanelActive('calendar')) renderCalendar();
   if (isPanelActive('board')) renderBoard();
-  showToast('Job archived', 'success');
   if (editingJobId === jobId) editJob(jobId);
+  offerUndo('Job archived', { undo: function () { restoreJob(jobId); }, commit: function () {} });
 }
 
 export function restoreJob(jobId: string): void {
@@ -389,13 +390,13 @@ export function executeDelete(): void {
     // used to get cleaned up only as a side effect of the old delete-by-
     // absence push logic, which was removed for being unsafe under
     // concurrent edits; see the comment on pushProjectToShared's jobsMap).
+    const removedJob = found.job;
+    const removedCards = boardCards.filter(function (c) { return c.jobId === jobId; });
     const orphanedCardIds = getJobCards(found.job).map(function (c) { return c.id; });
     boardCards = boardCards.filter(function (c) { return c.jobId !== jobId; });
 
     saveJobs();
-    const activeId = activeProjectId as string;
-    deleteJobFromShared(activeId, jobId);
-    orphanedCardIds.forEach(function (cardId) { deleteCardFromShared(activeId, cardId); });
+    saveBoardCards();
 
     logActivity('deleted job "' + jobName + '"');
     if (editingJobId === deleteTargetJobId) {
@@ -411,8 +412,27 @@ export function executeDelete(): void {
     if (isPanelActive('gantt')) renderGantt();
     if (isPanelActive('calendar')) renderCalendar();
     if (isPanelActive('board')) renderBoard();
-    showToast('Job deleted', 'info');
     refreshArchivedJobsListIfOpen();
+
+    // The server delete itself waits until the Undo window closes — see
+    // holdBackJobDelete() in src/app/undo.ts for why it can't be sent now.
+    holdBackJobDelete(
+      { projectId: activeProjectId as string, jobId: String(jobId), cardIds: orphanedCardIds.map(String) },
+      'Job deleted',
+      function () {
+        jobs.splice(Math.min(idx, jobs.length), 0, removedJob);
+        boardCards = boardCards.concat(removedCards);
+        saveJobs();
+        saveBoardCards();
+        logActivity('restored deleted job "' + jobName + '"');
+        renderJobList();
+        if (isPanelActive('gantt')) renderGantt();
+        if (isPanelActive('calendar')) renderCalendar();
+        if (isPanelActive('board')) renderBoard();
+        refreshArchivedJobsListIfOpen();
+        showToast('Job restored', 'success');
+      },
+    );
   }
   closeDeleteJobModal();
 }

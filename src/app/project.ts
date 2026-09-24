@@ -27,6 +27,7 @@ import { renderActivityLogSidebar } from './activity-log';
 import { DEFAULT_JOBS } from './seed-data';
 import { renderReportsIfActive } from '../views/reports';
 import { readIdbProjects, writeIdbProjects } from './local-store';
+import { commitPendingUndo } from './undo';
 
 declare global {
   function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
@@ -252,6 +253,9 @@ export function switchProject(projectId: string): void {
   cancelEdit();
   closeCardModal();
   closeCalendarEventModal();
+  // Every undo acts on the active project's arrays — finalize it before
+  // they're swapped out (see src/app/undo.ts).
+  commitPendingUndo();
   // Those flushes above can re-arm the debounced ROOM-sync push (see
   // flushPendingRoomPush()'s own comment) — must fire it now, synchronously,
   // while activeProjectId still correctly points at the OLD project.
