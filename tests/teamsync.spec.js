@@ -857,6 +857,79 @@ test('gantt sub-phase order: moving a stage past the start of the next sub-phase
   ]);
 });
 
+// Same rules between a job's phases. Phase 1 is split into two
+// sub-phases (09-01..09-05 and 09-04..09-08, shown collapsed); Phase 2 is
+// unsplit, 09-10..09-15.
+async function setupTwoPhases(page) {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  return page.evaluate(() => {
+    const job = jobs[0];
+    const blank = () => (job.tasks || []).map((t) => ({ ...t, id: t.id + '-' + Math.random().toString(36).slice(2), start: '', finish: '' }));
+    job.phases = [
+      { id: 'ph-1', name: 'Phase 1', order: 0, tasks: blank(), isDefault: false },
+      { id: 'ph-2', name: 'Phase 2', order: 1, tasks: blank(), isDefault: false },
+    ];
+    job.tasks = [];
+    const [p1, p2] = job.phases;
+    splitPhaseIntoSubPhases(p1);
+    addPhaseSubUnit(p1);
+    const first = (tasks) => tasks.slice().sort((a, b) => (a.order || 0) - (b.order || 0))[0];
+    p1.subPhases.forEach((sp) => sp.tasks.forEach((t) => { t.start = ''; t.finish = ''; }));
+    Object.assign(first(p1.subPhases[0].tasks), { start: '2026-09-01', finish: '2026-09-05' });
+    Object.assign(first(p1.subPhases[1].tasks), { start: '2026-09-04', finish: '2026-09-08' });
+    Object.assign(first(p2.tasks), { start: '2026-09-10', finish: '2026-09-15' });
+    renderGantt();
+    return { jobId: job.id };
+  });
+}
+
+function readPhases(page, ids) {
+  return page.evaluate(({ jobId }) => findJob(jobId).job.phases.map((ph) =>
+    getPhaseSubUnits(ph).map((u) => { const t = u.tasks.find((x) => x.start); return t ? [t.start, t.finish] : null; })
+  ), ids);
+}
+
+function dragPhase(page, ids, phaseId, days) {
+  return page.evaluate(({ jobId, phaseId, days }) => {
+    const bar = document.querySelector('.task-bar');
+    startBarMove({ clientX: 0 }, jobId, 'x', bar, true, phaseId, null);
+    barMoveState.moved = true;
+    barMoveState.deltaDays = days;
+    onBarMoveEnd({});
+  }, { ...ids, phaseId, days });
+}
+
+test('gantt phase order: moving a collapsed phase later pushes later phases by the same amount', async ({ page }) => {
+  const ids = await setupTwoPhases(page);
+  await dragPhase(page, ids, 'ph-1', 12);
+  expect(await readPhases(page, ids)).toEqual([
+    [['2026-09-13', '2026-09-17'], ['2026-09-16', '2026-09-20']],
+    [['2026-09-22', '2026-09-27']],
+  ]);
+});
+
+test('gantt phase order: dragging a phase back past an earlier phase pulls that phase back with it', async ({ page }) => {
+  const ids = await setupTwoPhases(page);
+  await dragPhase(page, ids, 'ph-2', -12); // Phase 2 now starts 08-29, before Phase 1's 09-01
+  expect(await readPhases(page, ids)).toEqual([
+    [['2026-08-29', '2026-09-02'], ['2026-09-01', '2026-09-05']],
+    [['2026-08-29', '2026-09-03']],
+  ]);
+});
+
+test('gantt phase order: moving a phase earlier without crossing leaves the other phase alone', async ({ page }) => {
+  const ids = await setupTwoPhases(page);
+  await dragPhase(page, ids, 'ph-2', -3);
+  expect(await readPhases(page, ids)).toEqual([
+    [['2026-09-01', '2026-09-05'], ['2026-09-04', '2026-09-08']],
+    [['2026-09-07', '2026-09-12']],
+  ]);
+});
+
 test('gantt collapsed phase: grabbing where sub-phases overlap drags the whole phase (real mouse)', async ({ page }) => {
   const ids = await setupThreeSubPhases(page, { realMouse: true });
   // The overlap hatch is click-through, so the grab lands on the phase's

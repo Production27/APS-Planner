@@ -198,8 +198,9 @@ interface BarMoveState {
 // before an earlier one. Any later stage the change pushed past gets pushed
 // along with it, and any earlier stage the task was dragged back past gets
 // pulled back with it (each by only as much as needed, duration kept).
-// The same order rule then runs one level up, between the phase's
-// sub-phases (see keepSubPhasesInOrder()).
+// The same order rule then runs further up, between the phase's
+// sub-phases and then between the job's phases (see keepSubPhasesInOrder()/
+// keepPhasesInOrder()).
 function cascadeShiftLaterTasks(jobId: string, taskId: string, deltaDays: number): void {
   const found = findJob(jobId);
   if (!found) return;
@@ -236,6 +237,7 @@ function cascadeShiftLaterTasks(jobId: string, taskId: string, deltaDays: number
   // A task move only changes where its sub-phase starts, it doesn't move
   // the sub-phase as a block — so only the order rule applies (delta 0).
   keepSubPhasesInOrder(unitPhase, unit, 0);
+  keepPhasesInOrder(found.job, unitPhase, 0);
 }
 
 // Sub-phase version of the rules above, for a phase split into sub-phases
@@ -265,6 +267,39 @@ function keepSubPhasesInOrder(phase: Phase, anchor: SubPhase, deltaDays: number)
   for (let i = at - 1; i >= 0; i--) {
     const gap = getDaysDiff(startOf(dated[i + 1])!, startOf(dated[i])!);
     if (gap > 0) shiftSubUnitDays(dated[i], -gap);
+  }
+}
+
+// Phase version, one level further up (in the job's own phase order):
+// moving a whole phase later pushes every later phase by the same amount;
+// earlier leaves them alone; and a later phase never starts before an
+// earlier one. A phase's start is its earliest scheduled task across all
+// its sub-phases (same as its collapsed Gantt bar).
+function keepPhasesInOrder(job: Job, anchor: Phase, deltaDays: number): void {
+  const phases = getJobPhases(job);
+  if (phases.length < 2) return;
+  const idx = phases.indexOf(anchor);
+  if (idx === -1) return;
+  const shiftPhase = (ph: Phase, days: number) => getPhaseSubUnits(ph).forEach((u) => shiftSubUnitDays(u, days));
+  if (deltaDays > 0) {
+    for (let i = idx + 1; i < phases.length; i++) shiftPhase(phases[i], deltaDays);
+  }
+  const hidden = getHiddenTaskOrders();
+  const startOf = (ph: Phase) => {
+    let min: Date | null = null;
+    getPhaseSegments(ph, hidden).forEach((seg) => { if (!min || seg.start < min) min = seg.start; });
+    return min as Date | null;
+  };
+  const dated = phases.filter((ph) => startOf(ph) !== null);
+  const at = dated.indexOf(anchor);
+  if (at === -1) return;
+  for (let i = at + 1; i < dated.length; i++) {
+    const gap = getDaysDiff(startOf(dated[i])!, startOf(dated[i - 1])!);
+    if (gap > 0) shiftPhase(dated[i], gap);
+  }
+  for (let i = at - 1; i >= 0; i--) {
+    const gap = getDaysDiff(startOf(dated[i + 1])!, startOf(dated[i])!);
+    if (gap > 0) shiftPhase(dated[i], -gap);
   }
 }
 
@@ -747,9 +782,17 @@ function onBarMoveEnd(e: MouseEvent): void {
       if (jf && phase && spanUnits.length) {
         spanUnits.forEach((u) => shiftSubUnitDays(u, deltaDays));
         // One sub-phase moved on its own: keep the phase's other
-        // sub-phases in order around it. (The whole collapsed phase moving
-        // together can't put its own sub-phases out of order.)
-        if (subUnit) keepSubPhasesInOrder(phase, subUnit, deltaDays);
+        // sub-phases in order around it, then the job's phases (the moved
+        // sub-phase may have changed where its phase starts). The whole
+        // phase moving together (a collapsed phase bar, or an unsplit
+        // phase's only bar) is a phase move: its sub-phases stay in order
+        // by themselves, and the job's other phases follow the phase rules.
+        if (spanUnits.length === getPhaseSubUnits(phase).length) {
+          keepPhasesInOrder(jf.job, phase, deltaDays);
+        } else if (subUnit) {
+          keepSubPhasesInOrder(phase, subUnit, deltaDays);
+          keepPhasesInOrder(jf.job, phase, 0);
+        }
         bar.dataset.dragged = 'true';
         barMoveState = null;
         renderGantt();
