@@ -184,11 +184,17 @@ interface BarMoveState {
   jobSpanOverlayEls: { el: HTMLElement; origLeft: number }[] | null;
 }
 
-// Cascades a task-date shift onto every LATER task in the same sub-unit
-// (by `order`), keeping the rest of the job's schedule connected instead
-// of only the dragged task moving and leaving a gap or overlap behind.
+// Keeps the rest of a job's schedule in line after one task's dates change.
+// Moving (or extending) a task LATER slides every later task in the same
+// sub-unit (by `order`) along by the same delta, so overlaps between stages
+// are kept exactly as they were. Moving (or shortening) a task EARLIER
+// leaves the later tasks where they are — they were already scheduled and
+// shouldn't be dragged back just because an earlier stage freed up.
+// Either way, stage order is then enforced: a later stage never starts
+// before an earlier one. Any later stage the change pushed past gets pushed
+// along with it, and any earlier stage the task was dragged back past gets
+// pulled back with it (each by only as much as needed, duration kept).
 function cascadeShiftLaterTasks(jobId: string, taskId: string, deltaDays: number): void {
-  if (!deltaDays) return;
   const found = findJob(jobId);
   if (!found) return;
   let unit: { tasks?: GanttTask[] } | null = null;
@@ -203,19 +209,40 @@ function cascadeShiftLaterTasks(jobId: string, taskId: string, deltaDays: number
   const sorted = (unit.tasks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
   const idx = sorted.findIndex((t) => t.id === taskId);
   if (idx === -1) return;
-  for (let i = idx + 1; i < sorted.length; i++) {
-    const t = sorted[i];
-    // Not every later task necessarily has dates set yet (e.g. an
-    // "Invoiced" column task nobody's scheduled) — nothing to shift there.
-    if (!t.start || !t.finish) continue;
-    const newStart = new Date(t.start + 'T00:00:00');
-    const newFinish = new Date(t.finish + 'T00:00:00');
-    if (isNaN(newStart.getTime()) || isNaN(newFinish.getTime())) continue;
-    newStart.setDate(newStart.getDate() + deltaDays);
-    newFinish.setDate(newFinish.getDate() + deltaDays);
-    t.start = toIsoDate(newStart);
-    t.finish = toIsoDate(newFinish);
+  if (deltaDays > 0) {
+    for (let i = idx + 1; i < sorted.length; i++) shiftTaskDays(sorted[i], deltaDays);
   }
+  // Only tasks with real dates take part — an unscheduled "Invoiced" task
+  // (say) neither blocks nor gets moved.
+  const dated = sorted.filter((t) => parseTaskStart(t) !== null);
+  const at = dated.findIndex((t) => t.id === taskId);
+  if (at === -1) return;
+  for (let i = at + 1; i < dated.length; i++) {
+    const gap = getDaysDiff(parseTaskStart(dated[i])!, parseTaskStart(dated[i - 1])!);
+    if (gap > 0) shiftTaskDays(dated[i], gap);
+  }
+  for (let i = at - 1; i >= 0; i--) {
+    const gap = getDaysDiff(parseTaskStart(dated[i + 1])!, parseTaskStart(dated[i])!);
+    if (gap > 0) shiftTaskDays(dated[i], -gap);
+  }
+}
+
+function parseTaskStart(t: GanttTask): Date | null {
+  if (!t.start || !t.finish) return null;
+  const d = new Date(t.start + 'T00:00:00');
+  const f = new Date(t.finish + 'T00:00:00');
+  return isNaN(d.getTime()) || isNaN(f.getTime()) ? null : d;
+}
+
+function shiftTaskDays(t: GanttTask, days: number): void {
+  // Not every task necessarily has dates set yet — nothing to shift there.
+  if (!days || parseTaskStart(t) === null) return;
+  const newStart = new Date(t.start + 'T00:00:00');
+  const newFinish = new Date(t.finish + 'T00:00:00');
+  newStart.setDate(newStart.getDate() + days);
+  newFinish.setDate(newFinish.getDate() + days);
+  t.start = toIsoDate(newStart);
+  t.finish = toIsoDate(newFinish);
 }
 
 function startBarResizeRight(e: MouseEvent, jobId: string, taskId: string, bar: HTMLElement): void {
@@ -339,6 +366,7 @@ function onBarResizeEnd(e: MouseEvent): void {
       const newStart = new Date(barResizeState.finishDateObj!);
       newStart.setDate(newStart.getDate() - (currentDuration - 1));
       task.start = toIsoDate(newStart);
+      cascadeShiftLaterTasks(jobId, taskId, 0);
     }
     barResizeState = null;
     renderGantt();
@@ -726,8 +754,8 @@ function onBarMoveEnd(e: MouseEvent): void {
     newFinish.setDate(newFinish.getDate() + duration - 1);
     task.start = toIsoDate(newStart);
     task.finish = toIsoDate(newFinish);
-    // Keep the rest of the job's schedule connected — later tasks slide
-    // along by the same delta instead of only the dragged one moving.
+    // Keep the rest of the job's schedule in order — see
+    // cascadeShiftLaterTasks() for the later/earlier rules.
     cascadeShiftLaterTasks(jobId, taskId, deltaDays);
     bar.dataset.dragged = 'true';
     barMoveState = null;

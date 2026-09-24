@@ -687,6 +687,86 @@ test('gantt bar resize: dragging the right edge extends a task and cascades ever
   expect(result.laterFinish).toBe('2026-09-13'); // 09-10 cascaded by the same 3 days
 });
 
+// Stage-order rules (see cascadeShiftLaterTasks()): later moves push the
+// rest of the job along; earlier moves leave later stages alone; and a later
+// stage never starts before an earlier one. Three overlapping stages, the way
+// jobs are really scheduled.
+async function setupThreeStages(page) {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  const ids = await page.evaluate(() => {
+    const job = jobs[0];
+    const sub = getPhaseSubUnits(getJobPhases(job)[0])[0];
+    const tasks = (sub.tasks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    if (tasks.length < 3) return null;
+    tasks.forEach((t) => { t.start = ''; t.finish = ''; });
+    tasks[0].start = '2026-09-01'; tasks[0].finish = '2026-09-10';
+    tasks[1].start = '2026-09-05'; tasks[1].finish = '2026-09-15';
+    tasks[2].start = '2026-09-12'; tasks[2].finish = '2026-09-20';
+    renderGantt();
+    return { jobId: job.id, taskIds: tasks.slice(0, 3).map((t) => t.id) };
+  });
+  expect(ids).not.toBeNull();
+  return ids;
+}
+
+function readStages(page, ids) {
+  return page.evaluate(({ jobId, taskIds }) =>
+    taskIds.map((id) => { const t = findTask(jobId, id).task; return [t.start, t.finish]; }), ids);
+}
+
+function moveStage(page, ids, index, days) {
+  return page.evaluate(({ jobId, taskIds, index, days }) => {
+    const t = findTask(jobId, taskIds[index]).task;
+    const s = new Date(t.start + 'T00:00:00'); s.setDate(s.getDate() + days);
+    const f = new Date(t.finish + 'T00:00:00'); f.setDate(f.getDate() + days);
+    t.start = toIsoDate(s); t.finish = toIsoDate(f);
+    cascadeShiftLaterTasks(jobId, taskIds[index], days);
+  }, { ...ids, index, days });
+}
+
+test('gantt stage order: moving a stage later pushes later stages by the same amount, keeping overlaps', async ({ page }) => {
+  const ids = await setupThreeStages(page);
+  await moveStage(page, ids, 0, 3);
+  expect(await readStages(page, ids)).toEqual([
+    ['2026-09-04', '2026-09-13'], ['2026-09-08', '2026-09-18'], ['2026-09-15', '2026-09-23'],
+  ]);
+});
+
+test('gantt stage order: moving a stage earlier leaves later stages where they are', async ({ page }) => {
+  const ids = await setupThreeStages(page);
+  await moveStage(page, ids, 1, -2);
+  expect(await readStages(page, ids)).toEqual([
+    ['2026-09-01', '2026-09-10'], ['2026-09-03', '2026-09-13'], ['2026-09-12', '2026-09-20'],
+  ]);
+});
+
+test('gantt stage order: dragging a stage back past an earlier stage pulls that stage back with it', async ({ page }) => {
+  const ids = await setupThreeStages(page);
+  await moveStage(page, ids, 2, -13); // stage 3 now starts 08-30, before both others
+  expect(await readStages(page, ids)).toEqual([
+    ['2026-08-30', '2026-09-08'], ['2026-08-30', '2026-09-09'], ['2026-08-30', '2026-09-07'],
+  ]);
+});
+
+test('gantt stage order: resizing a stage start past the next stage pushes the next stage along', async ({ page }) => {
+  const ids = await setupThreeStages(page);
+  const result = await page.evaluate(({ jobId, taskIds }) => {
+    const bar = document.querySelector('.task-bar:not(.due-marker-bar)');
+    startBarResizeLeft({ preventDefault() {}, stopPropagation() {}, clientX: 0 }, jobId, taskIds[0], bar);
+    barResizeState.currentDuration = 3; // start moves 09-01 -> 09-08, past stage 2's 09-05
+    onBarResizeEnd({});
+    return true;
+  }, ids);
+  expect(result).toBe(true);
+  expect(await readStages(page, ids)).toEqual([
+    ['2026-09-08', '2026-09-10'], ['2026-09-08', '2026-09-18'], ['2026-09-12', '2026-09-20'],
+  ]);
+});
+
 test('gantt bar drag (real mouse events): dragging a bar body moves its dates, exercising renderTimelineBars()\'s own mousedown wiring', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
