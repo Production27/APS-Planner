@@ -15,7 +15,9 @@ const TARGET_SIZE_EXCEPTIONS = ['.cal-event-bar', '.job-span-due-marker'];
 
 async function openApp(page, { dark } = {}) {
   await seedSession(page, { role: 'admin' });
-  await page.addInitScript(() => { try { localStorage.setItem('onboarding_dismissed_v1', '1'); } catch (e) {} });
+  // The "New here?" tour prompt fades in after a delay; a scan that lands
+  // mid-fade reads its text at partial opacity. Same flag "Don't ask again" sets.
+  await page.addInitScript(() => { try { localStorage.setItem('gantt_tutorial_state_v1_testadmin', JSON.stringify({ neverShow: true })); } catch (e) {} });
   await mockRoomWebSocket(page);
   await page.goto(APP_URL);
   await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
@@ -43,6 +45,7 @@ const SCREENS = {
   'card dialog': () => { switchTabMorphed('board'); openEditCard(boardCards.find((c) => isCardVisibleToMe(c)).id); },
   'settings menu': () => { switchTabMorphed('home'); toggleSettingsMenu(); },
   'calendar event dialog': () => { switchTabMorphed('calendar'); openAddCalendarEvent('2026-09-24'); },
+  'tour prompt': () => { switchTabMorphed('home'); tutorialNotifShow(); },
 };
 
 for (const dark of [false, true]) {
