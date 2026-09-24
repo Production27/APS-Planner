@@ -124,7 +124,7 @@ test('a teammate edit refreshes an open Reports tab', async ({ page }) => {
   const server = await openWithFakeServer(page);
   const a = await page.evaluate(() => ({ pid: activeProjectId, job: JSON.parse(JSON.stringify(jobs.find((j) => !j.archived && !isJobFinished(j)))) }));
   await page.evaluate(() => switchTab('reports'));
-  const activeCount = () => page.locator('#panel-reports .rep-tile').first().innerText().then((t) => Number(t.match(/\d+/)[0]));
+  const activeCount = () => page.locator('#panel-reports .rep-card', { hasText: 'Where open jobs are' }).locator('header p').innerText().then((t) => Number(t.match(/\d+/)[0]));
   const before = await activeCount();
   a.job.archived = true;
   server.ws.send(JSON.stringify({ type: 'delta', projects: { [a.pid]: { jobs: { [a.job.id]: a.job } } } }));
