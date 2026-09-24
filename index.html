@@ -2642,7 +2642,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      logins. Approved as a mockup first; matches its exact visual
      language (see that Artifact for the source of truth on intent). */
   .onb-notif {
-    position: fixed; right: 22px; bottom: 22px; width: 336px; z-index: 2500;
+    position: fixed; right: 22px; bottom: 22px; width: min(336px, calc(100vw - 32px)); z-index: 2500;
     background: var(--card); border: 1px solid var(--border); border-radius: 12px;
     box-shadow: var(--shadow-hover); padding: var(--s-4) var(--s-4) var(--s-3-5);
     opacity: 0; transform: translateY(16px) scale(0.97); pointer-events: none;

@@ -86,6 +86,12 @@ function topOpenModal(): HTMLElement | null {
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function initModalKeyboard(): void {
+  // Escape also dismisses the hover tooltip (WCAG 1.4.13) without moving the mouse.
+  document.addEventListener('keydown', function (e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    const tt = document.getElementById('tooltip');
+    if (tt && tt.classList.contains('show')) hideTooltip();
+  });
   document.addEventListener('keydown', function (e: KeyboardEvent) {
     const overlay = topOpenModal();
     if (!overlay) return;
@@ -109,6 +115,8 @@ export function showToast(msg: string, type?: string): void {
   const container = document.getElementById('toastContainer')!;
   const toast = document.createElement('div');
   toast.className = 'toast ' + (type || 'info');
+  // Read out by screen readers without moving focus (WCAG 4.1.3, A5).
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   const icons: Record<string, string> = { success: '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>', error: '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>', info: '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#3949ab"/><rect x="11" y="10" width="2" height="7" rx="1" fill="#fff"/><circle cx="12" cy="7.3" r="1.3" fill="#fff"/></svg>' };
   toast.innerHTML = '<span>' + (icons[type || ''] || '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#3949ab"/><rect x="11" y="10" width="2" height="7" rx="1" fill="#fff"/><circle cx="12" cy="7.3" r="1.3" fill="#fff"/></svg>') + '</span><span>' + msg + '</span>';
   container.appendChild(toast);
