@@ -15,12 +15,23 @@ export function darkenColor(hex: string | null | undefined, amount: number): str
 // Trello-style rule the Board's column headers use: white on a dark
 // background, otherwise a much darker shade of the same hue. Shared so a
 // Gantt task pill (which mirrors its column's color) reads identically.
+// The dark shade starts at 60% darker and keeps darkening until it reaches
+// WCAG's 4.5:1 for small text (A5) — a fixed 60% fell just short on some
+// mid-tone pastels (e.g. 4.28:1 on #f48fb1).
 export function columnLabelTextColor(bg: string): string {
+  const rgb = parseHexRGB(bg);
+  if (!rgb) return '#fff';
+  const bgLum = luminanceFromRGB(rgb[0], rgb[1], rgb[2]);
   const h = bg.replace('#', '');
   const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
   const num = parseInt(full, 16) || 0;
   const luminance = (0.299 * ((num >> 16) & 255) + 0.587 * ((num >> 8) & 255) + 0.114 * (num & 255)) / 255;
-  return luminance < 0.5 ? '#fff' : darkenColor(bg, 0.6);
+  if (luminance < 0.5) return contrastRatio(1, bgLum) >= 4.5 ? '#fff' : DARK_TEXT_COLOR;
+  for (let amt = 0.6; amt < 0.95; amt += 0.05) {
+    const shade = rgb.map((c) => Math.round(c * (1 - amt)));
+    if (contrastRatio(luminanceFromRGB(shade[0], shade[1], shade[2]), bgLum) >= 4.5) return 'rgb(' + shade.join(',') + ')';
+  }
+  return DARK_TEXT_COLOR;
 }
 
 // Dark slate used for text on light backgrounds — same family as the app's
@@ -66,7 +77,8 @@ export function tintedTextColor(color: string, bg: string, targetContrast?: numb
   const bgRgb = parseHexRGB(bg);
   if (!base || !bgRgb) return color;
   const bgLum = luminanceFromRGB(bgRgb[0], bgRgb[1], bgRgb[2]);
-  const TARGET_CONTRAST = targetContrast || 3.2;
+  // 4.5 = WCAG AA for normal-size text (was 3.2 before the A5 pass).
+  const TARGET_CONTRAST = targetContrast || 4.5;
   const shift = (amt: number, towardBlack: boolean): [number, number, number] => {
     const toward = towardBlack ? 0 : 255;
     const mix = (c: number) => Math.max(0, Math.min(255, Math.round(c + (toward - c) * amt)));

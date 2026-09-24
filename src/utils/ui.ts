@@ -25,12 +25,84 @@ export function isPanelActive(tab: string): boolean {
 // that only needs resetting once the modal's actually closed; any work
 // that must happen BEFORE hiding (like cardModal's autosave flush) stays
 // in the wrapper, ahead of this call.
+//
+// Keyboard/screen-reader behavior (A5), applied here once for all of them:
+// the .modal-box becomes a labelled role="dialog" (aria-modal), focus moves
+// into it on open and back to whatever had it on close, Tab stays inside
+// while it's open, and Escape presses the dialog's own close button — the
+// one marked data-modal-close in index.html (so it runs exactly what that
+// button already does — autosave flushes included — rather than a second,
+// generic close path). Marked explicitly, not matched by id: the Security
+// dialog's first "…CancelBtn" is "Cancel deletion", which Escape must
+// never press.
+const modalReturnFocus: Record<string, HTMLElement | null> = {};
+
+function modalBox(overlay: HTMLElement): HTMLElement {
+  return (overlay.querySelector('.modal-box') as HTMLElement | null) || overlay;
+}
+
+function prepareDialog(overlay: HTMLElement): HTMLElement {
+  const box = modalBox(overlay);
+  if (box.getAttribute('role') !== 'dialog') {
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    const heading = box.querySelector('h1, h2, h3, h4, h5') as HTMLElement | null;
+    if (heading) {
+      if (!heading.id) heading.id = overlay.id + 'Title';
+      box.setAttribute('aria-labelledby', heading.id);
+    }
+    box.tabIndex = -1;
+  }
+  return box;
+}
+
+function isShown(el: HTMLElement): boolean {
+  return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+}
+
 export function openModal(id: string): void {
-  document.getElementById(id)!.classList.add('show');
+  const overlay = document.getElementById(id)!;
+  const box = prepareDialog(overlay);
+  const active = document.activeElement as HTMLElement | null;
+  if (!overlay.classList.contains('show')) modalReturnFocus[id] = active && !overlay.contains(active) ? active : null;
+  overlay.classList.add('show');
+  if (!box.contains(document.activeElement)) box.focus({ preventScroll: true });
 }
 export function closeModal(id: string, onClose?: () => void): void {
-  document.getElementById(id)!.classList.remove('show');
+  const overlay = document.getElementById(id)!;
+  const hadFocus = overlay.contains(document.activeElement);
+  overlay.classList.remove('show');
   if (onClose) onClose();
+  const back = modalReturnFocus[id];
+  delete modalReturnFocus[id];
+  if (hadFocus && back && document.contains(back) && isShown(back)) back.focus({ preventScroll: true });
+}
+
+function topOpenModal(): HTMLElement | null {
+  const open = document.querySelectorAll('.modal-overlay.show');
+  return open.length ? open[open.length - 1] as HTMLElement : null;
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function initModalKeyboard(): void {
+  document.addEventListener('keydown', function (e: KeyboardEvent) {
+    const overlay = topOpenModal();
+    if (!overlay) return;
+    const box = modalBox(overlay);
+    if (e.key === 'Escape') {
+      const closeBtn = Array.prototype.filter.call(box.querySelectorAll('[data-modal-close]'), isShown)[0] as HTMLElement | undefined;
+      if (closeBtn) { e.preventDefault(); closeBtn.click(); }
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const items = Array.prototype.filter.call(box.querySelectorAll(FOCUSABLE), isShown) as HTMLElement[];
+    if (!items.length) { e.preventDefault(); box.focus(); return; }
+    const first = items[0], last = items[items.length - 1];
+    const cur = document.activeElement;
+    if (e.shiftKey && (cur === first || cur === box || !box.contains(cur))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (cur === last || !box.contains(cur))) { e.preventDefault(); first.focus(); }
+  });
 }
 
 export function showToast(msg: string, type?: string): void {

@@ -31,7 +31,7 @@ function ManageColumnChecklistBody(p: ManageColumnChecklistBodyProps) {
             {item.text}
             <button onClick={() => p.onRemove(item.itemId)}>×</button>
           </span>
-        )) : <span style={{ fontSize: '11px', color: '#999' }}>No default items yet</span>}
+        )) : <span style={{ fontSize: '11px', color: 'var(--text-light)' }}>No default items yet</span>}
       </div>
       <div class="manage-field-add-row">
         <input type="text" id="mcc_new_item" placeholder="Add item..." onKeyDown={p.onAddKeyDown} />

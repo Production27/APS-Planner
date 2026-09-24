@@ -13,7 +13,7 @@ import { refreshActiveProjectFromShared } from '../sync/inbound';
 import { renderGantt, hideDatePopover, setupScrollSync, isGanttReorderAnimating } from '../views/gantt';
 import { initCalendarDragHandlers, buildCalendarEventColorPresets, closeCalendarEventModal } from '../views/calendar';
 import { closeAllColSettings, initCardFormAutosaveListeners, closeManageFields, closeCardModal } from '../views/board';
-import { closeAllMsDropdowns, isPanelActive } from '../utils/ui';
+import { closeAllMsDropdowns, isPanelActive, initModalKeyboard } from '../utils/ui';
 import { closeSettingsMenu } from './settings-menu';
 import { loadLinkEnabledPref, loadProjects, readLocalProjectsText, enforceFixedProjectSet, loadActiveProjectData, autoArchiveJobs, renderAll, freshLocalSeed } from './project';
 import { syncCardColumns } from '../core/jobs';
@@ -78,6 +78,7 @@ export function init(savedText?: string | null): void {
   // Same queue-until-connected safety: a job delete held back for Undo by a
   // page that was killed mid-window is sent now (see src/app/undo.ts).
   initUndo();
+  initModalKeyboard();
   finishLeftoverJobDeletes();
   if (freshLocalSeed) showFreshLoadOverlay();
   loadLinkEnabledPref();

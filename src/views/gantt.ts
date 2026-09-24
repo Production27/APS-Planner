@@ -1014,7 +1014,7 @@ function showDatePopover(e: MouseEvent, date: Date): void {
     dayJobs.slice(0, 5).forEach(jt => {
       html += '<div class="dp-row" style="margin-top: var(--s-1);"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + jt.job.color + ';margin-right: var(--s-1-5);"></span>' + escapeHtml(jt.job.name) + '</div>';
     });
-    if (dayJobs.length > 5) html += '<div class="dp-row" style="color:#888;font-size: var(--t-2xs);">+' + (dayJobs.length - 5) + ' more...</div>';
+    if (dayJobs.length > 5) html += '<div class="dp-row" style="color:var(--text-light);font-size: var(--t-2xs);">+' + (dayJobs.length - 5) + ' more...</div>';
   }
   popover.innerHTML = html;
   popover.classList.add('show');
@@ -1772,6 +1772,11 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
     if (validDates && s && f) {
       const startIdx = getDaysDiff(startDate, s);
       const duration = getDaysDiff(s, f) + 1;
+      // Screen-reader name for the bar (A5) — the visible name tag is a
+      // separate element, so the focusable bar itself was otherwise nameless.
+      const fmtDay = (d: Date) => formatDate(d, { month: 'short', day: 'numeric' });
+      const barAriaLabel = [job.name, phaseLabel, task.isJobSpan ? null : task.name].filter(Boolean).join(', ') +
+        ': ' + fmtDay(s) + (duration > 1 ? ' to ' + fmtDay(f) : '') + (job.isLinkedReference ? ' (linked from another project, read-only)' : '');
       // Stable identity across a re-render (Preact reuses a node whose
       // `key` matches — see gantt-task-row.tsx's own note on why that's
       // safe here too) so animateReorderedBars() can tell "this is the
@@ -2075,6 +2080,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
 
         entries.push({
           kind: 'jobspan',
+          ariaLabel: barAriaLabel,
           rowKey, jobId: job.id, phaseId: phaseId || '', subPhaseId: subPhaseId || '',
           linkedRef: !!job.isLinkedReference,
           finished: isTaskFinished(job, task),
@@ -2139,6 +2145,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
         // makes sense, so it gets no resize handles.
         entries.push({
           kind: 'plain',
+          ariaLabel: barAriaLabel,
           rowKey,
           className: 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '') + (task.isDueMarker ? ' due-marker-bar' : '') + (duration === 1 ? ' milestone' : '') + (job.isLinkedReference ? ' linked-ref' : ''),
           left, width, top,
@@ -3132,9 +3139,20 @@ function ganttLeftWidthMax(): number {
 
 function applyGanttLeftWidth(px: number | null): void {
   const root = document.documentElement;
-  if (px === null) { root.style.removeProperty('--gantt-left-w'); return; }
-  const clamped = Math.round(Math.max(GANTT_LEFT_W_MIN, Math.min(ganttLeftWidthMax(), px)));
-  root.style.setProperty('--gantt-left-w', clamped + 'px');
+  if (px === null) root.style.removeProperty('--gantt-left-w');
+  else root.style.setProperty('--gantt-left-w', Math.round(Math.max(GANTT_LEFT_W_MIN, Math.min(ganttLeftWidthMax(), px))) + 'px');
+  syncGanttColResizeAria();
+}
+
+// A focusable role="separator" must report its value (WCAG 4.1.2 / A5) —
+// the column width in px, within its current min/max.
+function syncGanttColResizeAria(): void {
+  const handle = document.getElementById('ganttColResize');
+  if (!handle) return;
+  const v = document.documentElement.style.getPropertyValue('--gantt-left-w');
+  handle.setAttribute('aria-valuemin', String(GANTT_LEFT_W_MIN));
+  handle.setAttribute('aria-valuemax', String(ganttLeftWidthMax()));
+  handle.setAttribute('aria-valuenow', String(v ? parseInt(v, 10) : GANTT_LEFT_W_DEFAULT));
 }
 
 function currentGanttLeftWidth(): number {
@@ -3174,6 +3192,7 @@ function setupGanttColumnResize(): void {
     try { saved = parseInt(localStorage.getItem(GANTT_LEFT_W_KEY) || '', 10) || null; } catch (e) { saved = null; }
     if (saved) applyGanttLeftWidth(saved);
   }
+  syncGanttColResizeAria();
   handle.onmousedown = function (e: MouseEvent) {
     if (e.button !== 0) return;
     e.preventDefault();

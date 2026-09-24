@@ -70,6 +70,7 @@ export interface ResizeHandles {
 
 export interface PlainBarProps {
   kind: 'plain';
+  ariaLabel: string;
   rowKey: string;
   className: string;
   left: number;
@@ -106,6 +107,7 @@ function PlainTaskBar(p: PlainBarProps) {
       style={{ left: p.left + 'px', width: p.width + 'px', top: p.top + 'px', background: p.background, border: p.border }}
       tabIndex={0}
       role="button"
+      aria-label={p.ariaLabel}
       onMouseEnter={p.onMouseEnter}
       onMouseLeave={p.onMouseLeave}
       onMouseMove={p.onMouseMove}
@@ -225,6 +227,7 @@ export interface JobSpanDueData {
 
 export interface JobSpanBarProps {
   kind: 'jobspan';
+  ariaLabel: string;
   rowKey: string;
   jobId: string;
   phaseId: string;
@@ -273,7 +276,7 @@ function JobSpanBarGroup(p: JobSpanBarProps) {
           class={'job-span-due-marker' + (p.linkedRef ? ' linked-ref' : '')}
           data-job-id={p.jobId} data-dragged="false" data-row-key={p.rowKey}
           style={{ left: p.due.left + 'px', top: p.due.top + 'px', background: p.due.background }}
-          title={p.due.title} tabIndex={0} role="button"
+          title={p.due.title} tabIndex={0} role="button" aria-label={p.due.title}
           onMouseEnter={p.due.onMouseEnter} onMouseLeave={p.due.onMouseLeave} onMouseMove={p.due.onMouseMove}
           onMouseDown={p.due.onMouseDown} onClick={p.due.onClick} onKeyDown={onDueKeyDown}
         >🚩</div>
@@ -289,7 +292,7 @@ function JobSpanBarGroup(p: JobSpanBarProps) {
         class={'task-bar job-span-bar' + (p.finished ? ' finished' : '') + (p.milestone ? ' milestone' : '') + (p.linkedRef ? ' linked-ref' : '')}
         data-dragged="false" data-row-key={p.rowKey}
         style={{ left: p.left + 'px', width: p.width + 'px', top: p.top + 'px' }}
-        tabIndex={0} role="button"
+        tabIndex={0} role="button" aria-label={p.ariaLabel}
         onMouseEnter={p.onMouseEnter} onMouseLeave={p.onMouseLeave} onMouseMove={p.onMouseMove}
         onClick={p.onOpen} onKeyDown={onBarKeyDown} onMouseDown={p.onMouseDown}
       />

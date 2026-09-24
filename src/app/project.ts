@@ -553,7 +553,10 @@ export function renderAll(): void {
 export function applyPermissionGating(): void {
   document.querySelectorAll('[data-min-tier]').forEach(function (el) {
     const allowed = hasMinTier((el as HTMLElement).dataset.minTier!);
-    if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'BUTTON' || el.tagName === 'TEXTAREA') {
+    // Settings menu items are real <button>s since A5 but still hide
+    // outright (as they did as divs) rather than sit there greyed out.
+    const isMenuItem = el.classList.contains('settings-dropdown-item');
+    if (!isMenuItem && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'BUTTON' || el.tagName === 'TEXTAREA')) {
       (el as HTMLInputElement).disabled = !allowed;
     } else {
       el.classList.toggle('perm-hidden', !allowed);

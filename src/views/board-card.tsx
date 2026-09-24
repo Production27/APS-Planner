@@ -86,9 +86,6 @@ export interface BoardCardProps {
 }
 
 function BoardCard(p: BoardCardProps) {
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.onOpen(); }
-  };
   const onOverrideKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.overrideBadge!.onClick(); }
   };
@@ -101,11 +98,7 @@ function BoardCard(p: BoardCardProps) {
       data-id={p.id}
       style={{ borderLeftColor: p.borderLeftColor }}
       title={p.title}
-      tabIndex={0}
-      role="button"
-      aria-label={p.ariaLabel}
       onClick={p.onOpen}
-      onKeyDown={onKeyDown}
       onDragStart={p.onDragStart}
       onDragEnd={p.onDragEnd}
     >
@@ -121,10 +114,15 @@ function BoardCard(p: BoardCardProps) {
           <Icon svg={OVERRIDE_ICON} /> Manual <span style={{ textDecoration: 'underline', marginLeft: '2px' }}>Reconnect</span>
         </span>
       ) : null}
-      <div
+      {/* The card's keyboard/screen-reader control (A5): a click anywhere on
+          the card still opens it, but the card itself can't be role="button"
+          while it also holds the Reconnect badge and "Move to" <select>. */}
+      <button
+        type="button"
         class="board-card-title"
+        aria-label={p.ariaLabel}
         style={{ '--bct-light': p.titleColorLight, '--bct-dark': p.titleColorDark } as Record<string, string>}
-      >{p.cardTitle}</div>
+      >{p.cardTitle}</button>
       {hasMeta ? (
         <div class="board-card-meta">
           {p.metaLines.map((m, i) => <div key={i} class="board-card-meta-line">{m.label}: {m.value}</div>)}
@@ -151,6 +149,7 @@ function BoardCard(p: BoardCardProps) {
       <select
         class="board-card-move-select"
         title="Move to a different board"
+        aria-label={'Move ' + (p.cardTitle || 'card') + ' to board'}
         value={p.moveSelectValue}
         onClick={(e: MouseEvent) => e.stopPropagation()}
         onChange={(e: Event) => p.onMoveChange((e.currentTarget as HTMLSelectElement).value)}

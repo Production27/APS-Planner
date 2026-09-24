@@ -152,7 +152,8 @@ function switchTabMorphed(targetTab: string): void {
   const heroWidgetId = heroTab ? HOME_WIDGET_FOR_TAB[heroTab] : null;
   const widgetEl = heroWidgetId ? document.getElementById(heroWidgetId) : null;
 
-  if (!widgetEl || !(document as any).startViewTransition) {
+  // Reduced motion (A5): skip the morph and just switch.
+  if (!widgetEl || !(document as any).startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     switchTab(targetTab);
     return;
   }

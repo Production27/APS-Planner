@@ -161,7 +161,7 @@ function BoardColumnChrome(p: BoardColumnChromeProps) {
                     onClick={s.onClick}
                     title={s.color ? undefined : 'Default (no color)'}
                   >
-                    {s.color ? null : <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#888' }} dangerouslySetInnerHTML={{ __html: DEFAULT_SWATCH_ICON }} />}
+                    {s.color ? null : <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: 'var(--text-light)' }} dangerouslySetInnerHTML={{ __html: DEFAULT_SWATCH_ICON }} />}
                   </div>
                 ))}
               </div>

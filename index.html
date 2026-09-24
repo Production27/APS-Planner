@@ -19,7 +19,7 @@
      not designed to be zoomed as a webpage, so losing page-level pinch
      costs nothing real elsewhere while being the standard, necessary
      precondition for a custom in-app pinch gesture to work at all. -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TeamSync | Live Gantt + Job Manager</title>
 <!-- Bar Mark favicon — two stacked schedule bars, same shape every Gantt
      row uses. Inline SVG data URI so there's no separate asset file to
@@ -33,8 +33,12 @@
   :root {
     --primary: #1a237e; --primary-light: #3949ab; --accent: #e53935;
     --bg: #f5f6fa; --card: #ffffff; --border: #e0e0e0;
-    --text: #2c3e50; --text-light: #666; --text-faint: #6b7684;
+    --text: #2c3e50; --text-light: #666; --text-faint: #5b6573;
     --success: #28a745; --danger: #dc3545; --warning: #f0ad4e;
+    /* Text-weight versions of --danger/--accent: the bright reds are fine
+       as fills and borders but fall under WCAG's 4.5:1 as small text on
+       white or on their own tints (A5 accessibility pass). */
+    --danger-text: #c62828; --accent-text: #c62828; --warning-text: #945a00;
     /* A light tint of --primary/--danger, for a hover/active/badge
        background paired with that color's text — copy-pasted as the
        same literal at 20+/7+ sites respectively (a mechanical audit
@@ -213,13 +217,16 @@
   .settings-dropdown-item {
     display: flex; align-items: center; gap: 9px; padding: var(--s-2-5) var(--s-3); border-radius: 6px;
     font-size: var(--t-base); font-weight: 600; color: var(--text); cursor: pointer; transition: background 0.15s;
+    /* Real <button>s since A5 — reset the browser's button look. */
+    width: 100%; background: none; border: 0; font-family: inherit; text-align: left;
   }
+  .settings-dropdown-item:focus-visible { outline: 2px solid var(--primary-light); outline-offset: -2px; }
   .settings-dropdown-item:hover { background: var(--primary-tint); color: var(--primary); }
   .settings-dropdown-item.toggle-item { justify-content: space-between; }
   .settings-dropdown-divider { height: 1px; background: var(--border); margin: var(--s-1-5) var(--s-1); }
   .settings-dropdown-label {
     font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--text-light); opacity: 0.8; padding: var(--s-1) var(--s-3) var(--s-0-5);
+    color: var(--text-light); padding: var(--s-1) var(--s-3) var(--s-0-5);
   }
   .mini-toggle { width: 34px; height: 18px; border-radius: 10px; background: #ccc; position: relative; transition: background 0.2s; flex-shrink: 0; }
   .mini-toggle.active { background: var(--primary-light); }
@@ -698,13 +705,13 @@
   .timeline-header .day-header:hover { background: #e3f2fd; color: var(--primary); }
   .timeline-header .day-header .day-num { font-weight: 700; font-size: var(--t-xs); }
   .timeline-header .day-header .day-name { font-size: var(--t-3xs); color: var(--text-faint); text-transform: uppercase; }
-  .timeline-header .day-header.weekend { background: var(--divider); color: #aaa; }
+  .timeline-header .day-header.weekend { background: var(--divider); color: var(--text-faint); }
   .timeline-header .day-header.weekend:hover { background: var(--border); }
   .timeline-header .day-header.today-header {
     background: var(--danger-tint) !important; color: var(--accent) !important;
     font-weight: 700;
   }
-  .timeline-header .day-header.today-header .day-num { color: var(--accent); }
+  .timeline-header .day-header.today-header .day-num { color: var(--accent-text); }
 
   /* Slightly transparent, same reasoning as .cal-day above — lets a
      project's background image (set on the panel itself, see
@@ -1036,7 +1043,7 @@
   }
   .today-label {
     position: absolute; top: 2px;
-    background: var(--accent); color: white;
+    background: #d32f2f; color: white;
     font-size: var(--t-3xs); padding: var(--s-0-5) var(--s-2); border-radius: 3px;
     font-weight: 700; z-index: 86; white-space: nowrap;
     pointer-events: none;
@@ -1058,6 +1065,9 @@
     width: 26px; height: 26px; padding: 0; border-radius: 6px; cursor: pointer;
     font-size: var(--t-base); font-weight: 700; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s;
+    /* The toolbar scrolls sideways on a phone — buttons keep their 26px
+       tap size instead of being squeezed (WCAG 2.5.8, A5). */
+    flex-shrink: 0;
   }
   .gantt-toolbar button:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); box-shadow: 0 3px 6px rgba(26,35,126,0.15); transform: translateY(-1px); }
   .gantt-toolbar button:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,0.1) inset; }
@@ -1256,6 +1266,11 @@
   .job-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: var(--s-3) var(--s-3-5); margin-bottom: var(--s-2); cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
   .job-card:hover { border-color: var(--primary-light); box-shadow: var(--shadow-hover); transform: translateY(-1px); }
   .job-card.active { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.15); background: #f8f9ff; }
+  /* A real <button> (keyboard/screen-reader control for the card) that
+     should look like the plain title text it replaced. */
+  button.job-card-title { background: none; border: 0; padding: 0; font-family: inherit; text-align: left; width: 100%; cursor: pointer; }
+  button.job-card-title:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 3px; border-radius: 3px; }
+  .job-card-archived-note { font-size: var(--t-2xs); color: var(--text-light); font-weight: 400; }
   .job-card .job-card-title { font-weight: 700; font-size: var(--t-base); color: var(--jct-light, var(--text)); margin-bottom: var(--s-1); display: flex; align-items: center; gap: var(--s-1-5); }
   .job-card .job-card-meta { font-size: var(--t-xs); color: var(--text-light); display: flex; gap: var(--s-3); align-items: center; }
   .job-card .color-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); }
@@ -1616,7 +1631,8 @@
   .rep-table .num { text-align: right; font-variant-numeric: tabular-nums; }
   .rep-table .nowrap { white-space: nowrap; }
   .rep-table .muted { color: var(--text-light); font-style: italic; }
-  .rep-table a, .rep-list a { color: var(--primary); font-weight: 600; text-decoration: none; }
+  /* inline-block + 5px padding: a 24px-tall tap target (WCAG 2.5.8, A5). */
+  .rep-table a, .rep-list a { color: var(--primary); font-weight: 600; text-decoration: none; display: inline-block; padding: 5px 0; }
   .rep-table a:hover, .rep-list a:hover { text-decoration: underline; }
   body.dark-mode .rep-table a, body.dark-mode .rep-list a { color: var(--primary-ondark); }
   .rep-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1-5); max-height: 320px; overflow-y: auto; }
@@ -1673,7 +1689,7 @@
   .wf-count { background: rgba(0,0,0,0.06); color: var(--text-light); font-size: var(--t-2xs); padding: 1px var(--s-1-5); border-radius: 8px; font-weight: 700; font-variant-numeric: tabular-nums; }
   body.dark-mode .wf-count { background: rgba(255,255,255,0.08); }
   /* Same light/dark split as .job-card .note-icon above, same reason. */
-  .wf-stalled { color: #b26a00; font-size: var(--t-2xs); font-weight: 700; display: flex; align-items: center; gap: var(--s-0-5); }
+  .wf-stalled { color: var(--warning-text); font-size: var(--t-2xs); font-weight: 700; display: flex; align-items: center; gap: var(--s-0-5); }
   body.dark-mode .wf-stalled { color: var(--warning); }
   /* the bracket — an explicit drawn path (angled ticks flaring outward,
      not a squared-off corner), not a border/pseudo-element trick, so
@@ -1729,7 +1745,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     content: 'Drop cards here';
     display: block;
     text-align: center;
-    color: #bbb;
+    color: var(--text-faint);
     font-size: var(--t-xs);
     font-weight: 600;
     padding: var(--s-5) 0;
@@ -1763,12 +1779,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      board-card.tsx's Preact card and board.ts's older imperative
      buildCardEl(), used by Home's board widgets — see
      BoardCardProps.titleColorLight's own comment). */
+  /* Real <button> for keyboard/screen readers, styled as the title text. */
+  button.board-card-title { display: block; background: none; border: 0; padding: 0; font-family: inherit; text-align: left; width: 100%; cursor: pointer; }
+  button.board-card-title:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 3px; border-radius: 3px; }
   .board-card .board-card-title { font-size: var(--t-base); font-weight: 700; color: var(--bct-light, var(--text)); margin-bottom: var(--s-1); word-break: break-word; }
   .board-card .board-card-meta { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-3); }
   .board-card .board-card-meta-line { font-size: var(--t-sm); color: var(--text-faint); font-weight: 500; }
   body.dark-mode .board-card .board-card-meta-line { color: #98a0ae; }
   .board-card .board-card-due { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: var(--primary-tint); color: var(--text-light); }
-  .board-card .board-card-due.overdue { background: var(--danger-tint); color: var(--danger); }
+  .board-card .board-card-due.overdue { background: var(--danger-tint); color: var(--danger-text); }
   .board-card.manual-override { border-left-style: dashed; box-shadow: 0 2px 5px rgba(0,0,0,0.14), inset 0 0 0 1px rgba(240,173,78,0.5); }
   .board-card-override-badge { display: inline-flex; align-items: center; gap: var(--s-0-75); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-1-75); border-radius: 999px; background: #fff3e0; color: #b26a00; margin-bottom: var(--s-1-5); cursor: pointer; }
   .board-card-override-badge:hover { background: #ffe4b3; }
@@ -1849,7 +1868,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      pills, assignee) next to it — .required below goes further still,
      so a killer item stays the clearest thing on the page. */
   .checklist-item .ci-text { flex: 1; font-size: var(--t-base); font-weight: 500; color: var(--text); }
-  .checklist-item.done .ci-text { text-decoration: line-through; color: #aaa; font-weight: 400; }
+  .checklist-item.done .ci-text { text-decoration: line-through; color: var(--text-faint); font-weight: 400; }
   /* Now an .ms-dropdown (see the shared multi-select dropdown styles
      above), not a <select> — item.assignee can hold more than one
      person. Compact toggle to fit inline in the item row; the panel
@@ -1859,7 +1878,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .checklist-item .ci-assignee .ms-dropdown-toggle { font-size: var(--t-xs); padding: var(--s-0-75) var(--s-1-5); gap: var(--s-1); color: var(--text-light); }
   .checklist-item .ci-assignee .ms-dropdown-toggle span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .checklist-item .ci-assignee .ms-dropdown-panel { width: 200px; left: auto; right: 0; }
-  .checklist-item .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: var(--t-lg); padding: var(--s-0-5) var(--s-1-5); flex-shrink: 0; }
+  .checklist-item .ci-delete { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--t-lg); padding: var(--s-0-5) var(--s-1-5); flex-shrink: 0; }
   .checklist-item .ci-delete:hover { color: var(--danger); }
   /* "Killer item" flag — see toggleMyChecklistItemRequired(). Only
      required items are what the board-move confirm (moveCardToColumn's
@@ -1867,7 +1886,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      so this is the control for narrowing that warning down to what
      actually matters instead of every checklist line. */
   .checklist-item .ci-required {
-    background: none; border: none; color: #ccc; cursor: pointer; font-size: var(--t-lg);
+    background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--t-lg);
     padding: var(--s-0-75) var(--s-1-5); border-radius: 6px; flex-shrink: 0; line-height: 1;
     transition: background 0.15s, color 0.15s;
   }
@@ -1885,8 +1904,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .checklist-subitem { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-0-75) 0; }
   .checklist-subitem input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
   .checklist-subitem .ci-text { flex: 1; font-size: var(--t-sm); color: var(--text); }
-  .checklist-subitem.done .ci-text { text-decoration: line-through; color: #aaa; }
-  .checklist-subitem .ci-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: var(--t-base); padding: var(--s-0-5) var(--s-1-25); flex-shrink: 0; }
+  .checklist-subitem.done .ci-text { text-decoration: line-through; color: var(--text-faint); }
+  .checklist-subitem .ci-delete { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--t-base); padding: var(--s-0-5) var(--s-1-25); flex-shrink: 0; }
   .checklist-subitem .ci-delete:hover { color: var(--danger); }
   /* Every item always ends with one of these (whether or not it has any
      sub-items yet — see renderMyChecklistList()), which makes it a
@@ -1937,7 +1956,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     gap: var(--s-2-5); padding: var(--s-5) var(--s-5); font-size: var(--t-base); color: var(--text-light); text-align: center;
   }
   .my-checklist-empty svg { opacity: 0.45; }
-  .my-checklist-empty-caption { font-size: var(--t-xs); color: var(--text-light); opacity: 0.75; max-width: 34ch; }
+  .my-checklist-empty-caption { font-size: var(--t-xs); color: var(--text-light); max-width: 34ch; }
   /* The list's own card — matches .home-widget's recipe so this page
      reads as part of the same app as Home/Board instead of a bare list
      floating on the page background. */
@@ -2153,6 +2172,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      down) — undoes all three of the above so it doesn't imply a click
      that does nothing. */
   .home-widget-header.no-nav:hover { background: none; color: var(--text); transform: none; }
+  /* The header's keyboard/screen-reader control: a real <button> holding
+     the icon + title + subtitle (the header div used to be role="button"
+     itself, with the Expand button nested inside it). Mouse clicks on the
+     rest of the header still navigate via its own listener. */
+  .home-widget-goto {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s-2);
+    background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  }
+  .home-widget-goto:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 4px; border-radius: 4px; }
   /* Header text is now "<page it links to> — <what this widget itself
      shows>" (Karl's own call — the page name up front makes it obvious
      which tab homeWidgetGoTo() lands on, since these two rarely matched
@@ -2199,7 +2227,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      overdue set changes at all (even back to the same count later, from
      different jobs), it reads as a new alert and shows again. */
   .home-widget-alert {
-    display: flex; align-items: center; gap: var(--s-2); background: #fdecea; color: var(--danger);
+    display: flex; align-items: center; gap: var(--s-2); background: #fdecea; color: var(--danger-text);
     font-size: var(--t-sm); font-weight: 600; padding: var(--s-1-75) var(--s-2) var(--s-1-75) var(--s-2-5); border-radius: 6px; margin-bottom: var(--s-2);
   }
   body.dark-mode .home-widget-alert { background: rgba(220,53,69,0.22); color: #ff8a80; }
@@ -2230,7 +2258,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     gap: var(--s-2-5); padding: var(--s-5) var(--s-4); font-size: var(--t-base); color: var(--text-light); text-align: center;
   }
   .home-widget-empty svg { opacity: 0.4; }
-  .home-widget-empty-caption { font-size: var(--t-xs); color: var(--text-light); opacity: 0.75; max-width: 30ch; }
+  .home-widget-empty-caption { font-size: var(--t-xs); color: var(--text-light); max-width: 30ch; }
   .home-row { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-1-75) 0; border-bottom: 1px solid var(--border); font-size: var(--t-base); }
   .home-row:last-child { border-bottom: none; }
   .home-row .home-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
@@ -2258,7 +2286,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   .home-mini-cal-day:hover { background: rgba(57,73,171,0.08); }
   body.dark-mode .home-mini-cal-day:hover { background: rgba(255,255,255,0.06); }
-  .home-mini-cal-day.other-month { color: var(--border); }
+  .home-mini-cal-day.other-month { color: var(--text-faint); font-weight: 400; }
   .home-mini-cal-day.today { background: rgba(57,73,171,0.12); }
   .home-mini-cal-day.today .home-mini-cal-num { color: var(--primary-light); font-weight: 700; }
   body.dark-mode .home-mini-cal-day.today .home-mini-cal-num { color: var(--primary-ondark); }
@@ -2380,7 +2408,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .home-mini-gantt-day { text-align: center; font-size: var(--t-3xs); color: var(--text-light); font-weight: 600; padding-bottom: var(--s-1); border-bottom: 2px solid transparent; }
   .home-mini-gantt-day.today { color: var(--primary-light); border-bottom-color: var(--primary-light); }
   body.dark-mode .home-mini-gantt-day.today { color: var(--primary-ondark); border-bottom-color: var(--primary-ondark); }
-  .home-mini-gantt-dow { display: block; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
+  .home-mini-gantt-dow { display: block; text-transform: uppercase; letter-spacing: .04em; }
   .home-mini-gantt-num { display: block; font-size: var(--t-sm); margin-top: 1px; color: var(--text); }
   .home-mini-gantt-row { height: 36px; cursor: pointer; }
   .home-mini-gantt-label {
@@ -2435,7 +2463,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .attachment-item .att-info { flex: 1; min-width: 0; }
   .attachment-item .att-name { font-size: var(--t-sm); font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
   .attachment-item .att-size { font-size: var(--t-2xs); color: var(--text-light); }
-  .attachment-item .att-remove { background: none; border: none; color: #ccc; cursor: pointer; font-size: var(--t-lg); flex-shrink: 0; }
+  .attachment-item .att-remove { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--t-lg); flex-shrink: 0; }
   .attachment-item .att-remove:hover { color: var(--danger); }
 
   /* Card front badges */
@@ -2748,6 +2776,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .login-submit.loading .login-spinner { display: inline-block; }
   .login-submit.loading .login-submit-label { opacity: 0.85; }
   @media (prefers-reduced-motion: reduce) { .login-spinner { animation: none; } }
+  /* Catch-all for the system "reduce motion" setting (A5): every CSS
+     animation and transition finishes instantly. Near-zero rather than
+     none so code waiting on transitionend/animationend still gets it.
+     !important beats the inline transitions some views set from JS. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
   .login-banner { display: none; align-items: flex-start; gap: 9px; font-size: var(--t-base); line-height: 1.45; padding: var(--s-2-5) var(--s-3); border-radius: 8px; margin-bottom: var(--s-5); }
   .login-banner.show { display: flex; }
   .login-banner svg { flex-shrink: 0; margin-top: 1px; }
@@ -2829,7 +2864,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     background: var(--row-alt-bg);
   }
   .activity-sidebar-close {
-    background: none; border: none; color: #aaa; font-size: var(--t-md); cursor: pointer;
+    background: none; border: none; color: var(--text-faint); font-size: var(--t-md); cursor: pointer;
     width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s; line-height: 1;
   }
@@ -3242,7 +3277,10 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   /* ===== DARK MODE ===== */
   body.dark-mode {
     --bg: #14161c; --card: #1c1f27; --border: #323744;
-    --text: #e7e9ee; --text-light: #98a0ae; --text-faint: #6b7684;
+    --text: #e7e9ee; --text-light: #98a0ae; --text-faint: #8a93a3;
+    /* Accessible text versions of the danger red and accent red (4.5:1 on
+       the dark card and on their own dark tints — see the light values). */
+    --danger-text: #ff8a80; --accent-text: #ff8a80;
     /* --primary/--primary-light stay the SAME navy as light mode on
        purpose — they're also used as solid-fill button/badge
        backgrounds with white text on top (e.g. .badge, .job-rail-add-btn),
@@ -3352,8 +3390,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .timeline-header .week-header:hover { background: rgba(57,73,171,0.28); }
   body.dark-mode .timeline-header .day-header { color: var(--text-light); border-right-color: var(--border); }
   body.dark-mode .timeline-header .day-header:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
-  body.dark-mode .timeline-header .day-header .day-name { color: #656c7a; }
-  body.dark-mode .timeline-header .day-header.weekend { background: #15171d; color: #565d6b; }
+  body.dark-mode .timeline-header .day-header .day-name { color: #9aa1ae; }
+  body.dark-mode .timeline-header .day-header.weekend { background: #15171d; color: #9aa1ae; }
   body.dark-mode .timeline-header .day-header.weekend:hover { background: #20232c; }
   body.dark-mode .timeline-header .day-header.today-header { background: rgba(229,57,53,0.2) !important; }
 
@@ -3368,6 +3406,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .row-bg { border-bottom-color: rgba(255,255,255,0.04); }
   body.dark-mode .row-bg:nth-child(even) { background: rgba(255,255,255,0.02); }
 
+  /* Its light --primary-tint background is set inline; in dark mode that
+     left the inactive Month/Week label light gray on near-white. */
+  body.dark-mode .calendar-view-toggle-wrap { background: rgba(57,73,171,0.22) !important; }
   body.dark-mode .gantt-toolbar button { background: transparent; border-color: var(--border); color: var(--text-light); }
   body.dark-mode .gantt-toolbar button:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; border-color: var(--primary-light); }
 
@@ -3421,8 +3462,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .mini-badge,
   body.dark-mode .att-icon,
   body.dark-mode .manage-field-chip {
-    background: rgba(57,73,171,0.2);
+    background: rgba(57,73,171,0.2); color: var(--primary-ondark);
   }
+  body.dark-mode .manage-field-chip button { color: var(--primary-ondark); }
   body.dark-mode .board-card-due.overdue { background: rgba(220,53,69,0.2); }
   body.dark-mode .mini-badge.checklist-complete { background: rgba(40,167,69,0.2); }
   body.dark-mode .board-add-column-form { background: #232732; }
@@ -3641,7 +3683,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        except Jobs, so anything nested inside it — the dropdown included,
        when it used to live there — was unreachable from any other
        mobile view). -->
-  <button class="mobile-view-btn settings-menu-wrap" id="mobileSettingsBtn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg></button>
+  <button class="mobile-view-btn settings-menu-wrap" id="mobileSettingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg></button>
   <button class="mobile-view-btn active" data-view="jobs" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
   <!-- No Home button here either (see setMobileView()'s own comment) —
        same "turn off the tab you're in" gesture as desktop: tapping
@@ -3659,7 +3701,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      which is display:none on most mobile views) and position:fixed, with
      its actual screen position computed fresh from whichever trigger is
      currently visible each time it opens — see positionSettingsMenu(). -->
-<div class="settings-dropdown" id="settingsDropdown">
+<div class="settings-dropdown" id="settingsDropdown" role="group" aria-label="Settings">
   <!-- Was its own standalone square icon button in the rail row —
        see updateProjectToggle(), which now targets this list item
        (id kept the same) instead of a <button>, writing the "next
@@ -3679,37 +3721,37 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        items, so nobody sees a heading with nothing under it. Archived Jobs
        moved out of this menu to a link at the bottom of the job list. -->
   <div class="settings-dropdown-label">Preferences</div>
-  <div class="settings-dropdown-item toggle-item" id="darkModeBtn" tabindex="0" role="button">
+  <button type="button" class="settings-dropdown-item toggle-item" id="darkModeBtn">
     <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
     <span class="mini-toggle" id="darkModeToggle"></span>
-  </div>
+  </button>
   <!-- No data-min-tier — the new-user tour (src/app/onboarding.ts) applies
        to every tier, so this stays available to everyone, same as Dark
        Mode above. Reopens from slide 1 regardless of the auto-popup's own
        dismissal/login-count state, since this is an independent, explicit
        request rather than that state's business. -->
-  <div class="settings-dropdown-item" id="replayTourBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L2 8l10 5 8-4.2V15h2V8L12 3z" fill="#3949ab"/><path d="M6 12.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-3.5l-6 3-6-3z" fill="#3949ab" opacity="0.55"/></svg> Replay Tour</div>
+  <button type="button" class="settings-dropdown-item" id="replayTourBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L2 8l10 5 8-4.2V15h2V8L12 3z" fill="#3949ab"/><path d="M6 12.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-3.5l-6 3-6-3z" fill="#3949ab" opacity="0.55"/></svg> Replay Tour</button>
   <div class="settings-dropdown-divider" data-min-tier="projectAdmin"></div>
   <div class="settings-dropdown-label" data-min-tier="projectAdmin">Project</div>
-  <div class="settings-dropdown-item" id="activityToggleBtn" data-min-tier="projectAdmin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Activity Log</div>
-  <div class="settings-dropdown-item" id="themeColorBtn" data-min-tier="projectAdmin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Theme Color</div>
-  <div class="settings-dropdown-item" id="workflowItemsBtn" data-min-tier="projectAdmin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="9" width="6" height="6" rx="1.5" fill="#3949ab"/><rect x="9.5" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.75"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.5"/></svg> Workflow Items</div>
+  <button type="button" class="settings-dropdown-item" id="activityToggleBtn" data-min-tier="projectAdmin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Activity Log</button>
+  <button type="button" class="settings-dropdown-item" id="themeColorBtn" data-min-tier="projectAdmin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Theme Color</button>
+  <button type="button" class="settings-dropdown-item" id="workflowItemsBtn" data-min-tier="projectAdmin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="9" width="6" height="6" rx="1.5" fill="#3949ab"/><rect x="9.5" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.75"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#3949ab" opacity="0.5"/></svg> Workflow Items</button>
   <div class="settings-dropdown-divider" data-min-tier="admin"></div>
   <div class="settings-dropdown-label" data-min-tier="admin">Admin</div>
-  <div class="settings-dropdown-item" id="manageUsersBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</div>
-  <div class="settings-dropdown-item" id="backupsBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</div>
-  <div class="settings-dropdown-item" id="errorsBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 20h20L12 2z" fill="#e53935"/><rect x="11" y="9" width="2" height="6" fill="#fff"/><rect x="11" y="16.5" width="2" height="2" fill="#fff"/></svg> Recent Errors</div>
-  <div class="settings-dropdown-item" id="securityDataBtn" data-min-tier="admin" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Security &amp; data</div>
+  <button type="button" class="settings-dropdown-item" id="manageUsersBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</button>
+  <button type="button" class="settings-dropdown-item" id="backupsBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</button>
+  <button type="button" class="settings-dropdown-item" id="errorsBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 20h20L12 2z" fill="#e53935"/><rect x="11" y="9" width="2" height="6" fill="#fff"/><rect x="11" y="16.5" width="2" height="2" fill="#fff"/></svg> Recent Errors</button>
+  <button type="button" class="settings-dropdown-item" id="securityDataBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Security &amp; data</button>
   <!-- MAINTENANCE MODE — see checkMaintenanceStatus()/setMaintenanceMode()
        in the script. Doesn't close the menu on click (like Dark Mode's
        toggle above elsewhere in this file, unlike every plain nav item
        here) since it expands an inline panel within this same menu,
        reusing .board-col-color-panel's collapse mechanics verbatim
        rather than inventing a second one. -->
-  <div class="settings-dropdown-item toggle-item" id="maintenanceToggleBtn" data-min-tier="admin" tabindex="0" role="button">
+  <button type="button" class="settings-dropdown-item toggle-item" id="maintenanceToggleBtn" data-min-tier="admin">
     <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4L20.5 6.5a1 1 0 0 0-.1-1.5L18.1 3a1 1 0 0 0-1.5-.1L14.7 6.3Z" stroke="#8d6e63" stroke-width="1.8" fill="none" stroke-linejoin="round"/></svg> Maintenance Mode</span>
     <span class="mini-toggle" id="maintenanceToggle"></span>
-  </div>
+  </button>
   <div class="board-col-color-panel" id="maintenancePanel">
     <div style="padding: var(--s-2-5) var(--s-3) var(--s-3);">
       <div style="font-size: var(--t-xs);font-weight:600;color:var(--text-light);text-transform:uppercase;letter-spacing:0.04em;margin-bottom: var(--s-1-5);">Message shown to the team</div>
@@ -3732,14 +3774,14 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        user can already see (see src/app/export.ts). -->
   <div class="settings-dropdown-divider"></div>
   <div class="settings-dropdown-label">Export &amp; print</div>
-  <div class="settings-dropdown-item" id="exportSpreadsheetBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2" fill="#1f7a4a"/><path d="M3 9h18M3 15h18M9 3v18" stroke="#fff" stroke-width="1.4"/></svg> Export to spreadsheet…</div>
-  <div class="settings-dropdown-item" id="printBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="3" width="12" height="6" rx="1" fill="#90a4ae"/><rect x="3" y="8" width="18" height="9" rx="2" fill="#546e7a"/><rect x="7" y="13" width="10" height="8" rx="1" fill="#fff" stroke="#546e7a" stroke-width="1.4"/></svg> Print or save as PDF…</div>
-  <div class="settings-dropdown-item" id="downloadIcsBtn" tabindex="0" role="button" title="A calendar file for Outlook, Google Calendar or Apple Calendar"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#1e88e5" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#1e88e5"/><path d="M12 11v6m0 0l-2.5-2.5M12 17l2.5-2.5" stroke="#1e88e5" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Add to my calendar (.ics)</div>
+  <button type="button" class="settings-dropdown-item" id="exportSpreadsheetBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2" fill="#1f7a4a"/><path d="M3 9h18M3 15h18M9 3v18" stroke="#fff" stroke-width="1.4"/></svg> Export to spreadsheet…</button>
+  <button type="button" class="settings-dropdown-item" id="printBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="3" width="12" height="6" rx="1" fill="#90a4ae"/><rect x="3" y="8" width="18" height="9" rx="2" fill="#546e7a"/><rect x="7" y="13" width="10" height="8" rx="1" fill="#fff" stroke="#546e7a" stroke-width="1.4"/></svg> Print or save as PDF…</button>
+  <button type="button" class="settings-dropdown-item" id="downloadIcsBtn" title="A calendar file for Outlook, Google Calendar or Apple Calendar"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#1e88e5" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#1e88e5"/><path d="M12 11v6m0 0l-2.5-2.5M12 17l2.5-2.5" stroke="#1e88e5" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Add to my calendar (.ics)</button>
   <div class="settings-dropdown-divider"></div>
   <div class="settings-dropdown-label">Account</div>
-  <div class="settings-dropdown-item" id="changePasswordBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</div>
-  <div class="settings-dropdown-item" id="myEmailBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2" fill="#3949ab"/><path d="M4 7l8 6 8-6" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> My email</div>
-  <div class="settings-dropdown-item" id="twoStepBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2.5" width="12" height="19" rx="2.5" fill="#3949ab"/><rect x="8" y="5" width="8" height="12" rx="1" fill="#fff"/><path d="M10 11l1.5 1.5L14.5 9" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Two-step verification</div>
+  <button type="button" class="settings-dropdown-item" id="changePasswordBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</button>
+  <button type="button" class="settings-dropdown-item" id="myEmailBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2" fill="#3949ab"/><path d="M4 7l8 6 8-6" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> My email</button>
+  <button type="button" class="settings-dropdown-item" id="twoStepBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2.5" width="12" height="19" rx="2.5" fill="#3949ab"/><rect x="8" y="5" width="8" height="12" rx="1" fill="#fff"/><path d="M10 11l1.5 1.5L14.5 9" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Two-step verification</button>
   <!-- Moved down here from the top of the menu, and grouped with Log Out —
        both leave the context you're currently in. It used to be the very
        first item under the settings icon, one careless click away from
@@ -3748,8 +3790,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        before switching, but that popup was more annoying than useful on
        the deliberate path, so it's gone — see toggleProject()'s own
        comment). -->
-  <div class="settings-dropdown-item" id="projectToggleBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></div>
-  <div class="settings-dropdown-item" id="logoutBtn" tabindex="0" role="button"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H5a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 005 20h4" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11 12h10m0 0l-3.5-3.5M21 12l-3.5 3.5" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Log Out</div>
+  <button type="button" class="settings-dropdown-item" id="projectToggleBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></button>
+  <button type="button" class="settings-dropdown-item" id="logoutBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H5a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 005 20h4" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11 12h10m0 0l-3.5-3.5M21 12l-3.5 3.5" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Log Out</button>
 </div>
 
 <div class="app-shell">
@@ -3782,7 +3824,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
          selectors rather than duplicating them). -->
     <div class="rail-tab-row">
       <div class="settings-menu-wrap">
-        <button class="settings-dots-btn" id="desktopSettingsBtn" title="Settings"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="rail-tab-label">Settings</span></button>
+        <button class="settings-dots-btn" id="desktopSettingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="rail-tab-label">Settings</span></button>
       </div>
       <!-- No Home button — see switchTabMorphed()'s own comment: getting
            back to Home is done by toggling off whichever tab is
@@ -3824,11 +3866,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
                split stays independent of the right group's. -->
           <div class="home-grid-left">
             <div class="home-widget" id="homeWidgetChecklist">
-              <div class="home-widget-header" data-goto="checklist" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span><button class="home-widget-expand-btn" data-widget="checklist" title="Expand" aria-label="Expand Checklist"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-              <div class="home-widget-body" id="homeChecklistBody"></div>
+              <div class="home-widget-header" data-goto="checklist"><button type="button" class="home-widget-goto" title="Go to Checklist"><span class="home-widget-icon tint-green"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Checklist <span class="home-widget-subtitle">My Open Items</span></button><button class="home-widget-expand-btn" data-widget="checklist" title="Expand" aria-label="Expand Checklist"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-body" id="homeChecklistBody" tabindex="0" role="region" aria-label="My open checklist items"></div>
             </div>
             <div class="home-widget" id="homeWidgetWorkflow">
-              <div class="home-widget-header" data-goto="board" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span><button class="home-widget-expand-btn" data-widget="board" title="Expand" aria-label="Expand Board"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-header" data-goto="board"><button type="button" class="home-widget-goto" title="Go to Board"><span class="home-widget-icon tint-amber"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></span> Board <span class="home-widget-subtitle">Workflow Summary</span></button><button class="home-widget-expand-btn" data-widget="board" title="Expand" aria-label="Expand Board"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               <div class="home-widget-body" id="homeStageBody">
                 <div id="homeStageAlert"></div>
                 <div class="wsm-bracket-band"><div class="wsm-bracket-track" id="wsmBracketTrack"></div></div>
@@ -3849,22 +3891,22 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             </div>
             <div class="home-widget-body">
               <div class="job-chat-compose">
-                <select id="homeJobChatJobPicker" onchange="updateHomeJobChatComposeState()"></select>
+                <select id="homeJobChatJobPicker" aria-label="Job to post to" onchange="updateHomeJobChatComposeState()"></select>
                 <input type="text" id="homeJobChatInput" data-min-tier="commenter" placeholder="Message the team on this job&hellip;" onkeydown="if(event.key==='Enter'){event.preventDefault();postHomeJobChatComment();}">
                 <button class="btn btn-primary" id="homeJobChatPostBtn" data-min-tier="commenter" disabled>Post</button>
               </div>
-              <div class="job-comments-list job-chat-feed" id="homeJobChatList"></div>
+              <div class="job-comments-list job-chat-feed" id="homeJobChatList" tabindex="0" role="region" aria-label="Job chat messages"></div>
             </div>
           </div>
           <!-- Right group — Calendar over Gantt, same independent-2-row
                idea as .home-grid-left above. -->
           <div class="home-grid-right">
             <div class="home-widget" id="homeWidgetCalendar">
-              <div class="home-widget-header" data-goto="calendar" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span><button class="home-widget-expand-btn" data-widget="calendar" title="Expand" aria-label="Expand Calendar"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-header" data-goto="calendar"><button type="button" class="home-widget-goto" title="Go to Calendar"><span class="home-widget-icon tint-red"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></span> Calendar <span class="home-widget-subtitle">Overdue &amp; Due Soon</span></button><button class="home-widget-expand-btn" data-widget="calendar" title="Expand" aria-label="Expand Calendar"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               <div class="home-widget-body" id="homeOverdueBody"></div>
             </div>
             <div class="home-widget" id="homeWidgetToday">
-              <div class="home-widget-header" data-goto="gantt" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span><button class="home-widget-expand-btn" data-widget="gantt" title="Expand" aria-label="Expand Gantt Chart"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="home-widget-header" data-goto="gantt"><button type="button" class="home-widget-goto" title="Go to Gantt Chart"><span class="home-widget-icon tint-indigo"><svg viewBox="0 0 24 24" width="15" height="15" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></span> Gantt Chart <span class="home-widget-subtitle">Today's Schedule</span></button><button class="home-widget-expand-btn" data-widget="gantt" title="Expand" aria-label="Expand Gantt Chart"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
               <div class="home-widget-body" id="homeTodayBody"></div>
             </div>
           </div>
@@ -3875,7 +3917,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div class="tab-panel" id="panel-checklist">
       <div class="my-checklist-wrapper">
         <div class="my-checklist-add-bar">
-          <select id="myChecklistAddJobSelect" onchange="onMyChecklistContextChange()"></select>
+          <select id="myChecklistAddJobSelect" aria-label="Job for the new item" onchange="onMyChecklistContextChange()"></select>
           <input type="text" id="myChecklistAddInput" placeholder="Add item…" onkeydown="if(event.key==='Enter'){event.preventDefault();addMyChecklistItemFromBar();}">
           <button type="button" id="myChecklistAddBtn" class="btn btn-primary" style="padding: var(--s-1-5) var(--s-3-5);font-size: var(--t-base);">Add</button>
           <span id="myChecklistAddVisibility"></span>
@@ -3910,7 +3952,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         </div>
         <div class="calendar-grid" id="calendarWeekdays"></div>
         <div class="calendar-grid calendar-days" id="calendarDays"></div>
-        <div class="week-hour-section" id="weekHourSection">
+        <div class="week-hour-section" id="weekHourSection" tabindex="0" role="region" aria-label="Week hours">
           <div class="week-hour-labels" id="weekHourLabels"></div>
           <div class="week-hour-cols" id="weekHourCols"></div>
         </div>
@@ -3965,7 +4007,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <div class="timeline-header-wrap" id="timelineHeaderWrap">
               <div class="timeline-header" id="timelineHeader"></div>
             </div>
-            <div class="timeline-body" id="timelineBody">
+            <div class="timeline-body" id="timelineBody" tabindex="0" role="region" aria-label="Gantt timeline (arrow keys scroll)">
               <div class="timeline-grid" id="timelineGrid"></div>
               <div class="date-popover" id="datePopover"></div>
             </div>
@@ -3987,9 +4029,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
           </div>
           <div class="job-current-board-indicator" id="jobCurrentBoardIndicator" style="display:none;"></div>
           <div class="form-group mobile-collapsible">
-            <label class="mobile-field-toggle">Job Name *</label>
+            <label class="mobile-field-toggle" id="f_job_label">Job Name *</label>
             <div class="mobile-field-body">
-              <input type="text" id="f_job" data-min-tier="projectAdmin" placeholder="e.g. Electrical shop area">
+              <input type="text" id="f_job" aria-labelledby="f_job_label" aria-required="true" data-min-tier="projectAdmin" placeholder="e.g. Electrical shop area">
               <span class="field-error-hint" id="f_job_hint" style="display:none;">Name required to save</span>
             </div>
           </div>
@@ -4020,15 +4062,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             </div>
             <div class="color-picker-panel" id="jobColorPickerPanel">
               <div class="color-picker-wrapper">
-                <input type="color" id="f_color" value="#3949ab" oninput="updateJobColorSwatch()">
+                <input type="color" id="f_color" aria-label="Custom job color" value="#3949ab" oninput="updateJobColorSwatch()">
                 <div class="color-presets" id="colorPresets"></div>
               </div>
             </div>
           </div>
           <div class="form-group mobile-collapsible">
-            <label class="mobile-field-toggle">Due Date</label>
+            <label class="mobile-field-toggle" id="f_due_label">Due Date</label>
             <div class="mobile-field-body">
-              <input type="date" id="f_due">
+              <input type="date" id="f_due" aria-labelledby="f_due_label">
             </div>
           </div>
 
@@ -4121,7 +4163,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Activity Log</span>
       <button class="activity-sidebar-close" id="activitySidebarCloseBtn" title="Close" aria-label="Close activity log"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
-    <div class="activity-sidebar-body" id="activitySidebarBody">
+    <div class="activity-sidebar-body" id="activitySidebarBody" tabindex="0" role="region" aria-label="Activity log">
       <div class="activity-log-empty">Open to see recent changes</div>
     </div>
   </div>
@@ -4138,15 +4180,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div class="theme-presets" id="themePresets"></div>
     <div class="theme-custom-row">
       <div class="cf-field">
-        <label>Custom Color</label>
-        <input type="color" id="theme_color" oninput="updateThemePreview()">
+        <label for="theme_color">Custom Color</label>
+        <input type="color" id="theme_color" aria-label="Custom header color" oninput="updateThemePreview()">
       </div>
     </div>
     <div class="theme-preview" id="themePreview">Sample Button</div>
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-secondary" id="themeResetDefaultBtn">Reset to Default</button>
       <div style="display:flex; gap: var(--s-2-5);">
-        <button class="btn btn-secondary" id="themeCancelBtn">Cancel</button>
+        <button class="btn btn-secondary" id="themeCancelBtn" data-modal-close>Cancel</button>
         <button class="btn btn-primary" id="themeApplyBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Apply</button>
       </div>
     </div>
@@ -4165,7 +4207,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div id="backupsListStatus" style="font-size: var(--t-base); color:var(--text-secondary); margin-bottom: var(--s-2);"></div>
     <div id="backupsList" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" id="backupsCloseBtn">Close</button>
+      <button class="btn btn-primary" id="backupsCloseBtn" data-modal-close>Close</button>
     </div>
   </div>
 </div>
@@ -4181,7 +4223,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div id="errorsListStatus" style="font-size: var(--t-base); color:var(--text-secondary); margin-bottom: var(--s-2);"></div>
     <div id="errorsList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" id="errorsCloseBtn">Close</button>
+      <button class="btn btn-primary" id="errorsCloseBtn" data-modal-close>Close</button>
     </div>
   </div>
 </div>
@@ -4201,23 +4243,23 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div id="userFormPanel" style="display:none; border:1px solid var(--border); border-radius:8px; padding: var(--s-3-5); margin-bottom: var(--s-4); background:var(--bg);">
       <h5 id="userFormTitle" style="margin: 0 0 var(--s-3);">Add User</h5>
       <div class="form-group">
-        <label>Username</label>
+        <label for="userFormUsername">Username</label>
         <input type="text" id="userFormUsername" placeholder="letters, numbers, . _ - only">
       </div>
       <div class="form-group">
-        <label id="userFormPasswordLabel">Password</label>
+        <label for="userFormPassword" id="userFormPasswordLabel">Password</label>
         <input type="password" id="userFormPassword" placeholder="at least 6 characters">
       </div>
       <div class="form-group">
-        <label>Display Name</label>
+        <label for="userFormDisplayName">Display Name</label>
         <input type="text" id="userFormDisplayName" placeholder="shown on comments/activity">
       </div>
       <div class="form-group">
-        <label>Email <span style="font-weight:400; color:var(--text-light);">(optional — any address; they can sign in with it, and with Google if it's a Google account)</span></label>
+        <label for="userFormEmail">Email <span style="font-weight:400; color:var(--text-light);">(optional — any address; they can sign in with it, and with Google if it's a Google account)</span></label>
         <input type="email" id="userFormEmail" placeholder="name@company.com" autocomplete="off" spellcheck="false">
       </div>
       <div class="form-group">
-        <label>Permission Level</label>
+        <label for="userFormTier">Permission Level</label>
         <select id="userFormTier" onchange="onUserFormTierChange()">
           <option value="admin">Admin — full access, both projects, manages accounts</option>
           <option value="projectAdmin">Project Admin — full content control, one project</option>
@@ -4227,11 +4269,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
         </select>
       </div>
       <div class="form-group" id="userFormProjectGroup">
-        <label>Project</label>
+        <label for="userFormProject">Project</label>
         <select id="userFormProject"></select>
       </div>
       <div class="form-group">
-        <label>Classification</label>
+        <label for="userFormIsLead">Classification</label>
         <select id="userFormIsLead">
           <option value="0">Member</option>
           <option value="1">Lead — eligible for Project Manager / Foreman</option>
@@ -4246,7 +4288,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div id="usersListStatus" style="font-size: var(--t-base); color:var(--text-secondary); margin-bottom: var(--s-2);"></div>
     <div id="usersList" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" id="manageUsersCloseBtn">Close</button>
+      <button class="btn btn-primary" id="manageUsersCloseBtn" data-modal-close>Close</button>
     </div>
   </div>
 </div>
@@ -4258,7 +4300,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <p>Jobs older than 90 days are auto-archived. Restore a job to bring it back onto the board, or delete it permanently.</p>
     <div id="archivedJobsList" style="max-height:360px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" id="archivedJobsCloseBtn">Close</button>
+      <button class="btn btn-primary" id="archivedJobsCloseBtn" data-modal-close>Close</button>
     </div>
   </div>
 </div>
@@ -4276,7 +4318,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     </div>
     <label class="export-check"><input type="checkbox" id="exportIncludeArchived"> Include archived jobs</label>
     <div class="modal-actions">
-      <button class="btn btn-secondary" id="exportCancelBtn">Cancel</button>
+      <button class="btn btn-secondary" id="exportCancelBtn" data-modal-close>Cancel</button>
       <button class="btn btn-primary" id="exportRunBtn">Download CSV</button>
     </div>
   </div>
@@ -4344,7 +4386,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     </section>
 
     <div class="modal-actions">
-      <button class="btn btn-secondary" id="securityCloseBtn">Close</button>
+      <button class="btn btn-secondary" id="securityCloseBtn" data-modal-close>Close</button>
     </div>
   </div>
 </div>
@@ -4367,7 +4409,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       <button type="button" class="login-google" id="myEmailGoogleBtn" style="max-width: 320px;"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Connect Google account</span></button>
     </section>
     <div class="modal-actions">
-      <button class="btn btn-secondary" id="myEmailCloseBtn">Close</button>
+      <button class="btn btn-secondary" id="myEmailCloseBtn" data-modal-close>Close</button>
     </div>
   </div>
 </div>
@@ -4411,7 +4453,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       </div>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" id="mfaCloseBtn">Close</button>
+      <button class="btn btn-secondary" id="mfaCloseBtn" data-modal-close>Close</button>
     </div>
   </div>
 </div>
@@ -4442,7 +4484,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       <label for="printCalMonth">Month<input type="month" id="printCalMonth"></label>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" id="printCancelBtn">Cancel</button>
+      <button class="btn btn-secondary" id="printCancelBtn" data-modal-close>Cancel</button>
       <button class="btn btn-primary" id="printRunBtn">Print…</button>
     </div>
   </div>
@@ -4454,26 +4496,26 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <h4 id="calendarEventModalTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#7e57c2" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#7e57c2"/><rect x="6" y="13" width="3" height="3" fill="#7e57c2"/><rect x="10.5" y="13" width="3" height="3" fill="#7e57c2"/><rect x="15" y="13" width="3" height="3" fill="#7e57c2"/></svg> New Event</h4>
     <p style="font-size: var(--t-sm);color:var(--text-light);margin-top: calc(-1 * var(--s-2));margin-bottom: var(--s-4);">Calendar-only — doesn't create a job or task, and never shows up on the Gantt or Board.</p>
     <div class="form-group">
-      <label>Title *</label>
+      <label for="ce_title">Title *</label>
       <input type="text" id="ce_title" placeholder="e.g. Team meeting">
       <span class="field-error-hint" id="ce_title_hint" style="display:none;">Title is required</span>
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Date</label>
+        <label for="ce_date">Date</label>
         <input type="date" id="ce_date">
       </div>
       <div class="form-group">
-        <label>Time (optional)</label>
+        <label for="ce_time">Time (optional)</label>
         <input type="time" id="ce_time">
       </div>
     </div>
     <div class="form-group">
-      <label>Duration (days)</label>
+      <label for="ce_duration">Duration (days)</label>
       <input type="number" id="ce_duration" min="1" value="1">
     </div>
     <div class="form-group">
-      <label>Repeat</label>
+      <label for="ce_repeat">Repeat</label>
       <select id="ce_repeat" onchange="toggleRepeatUntilField()">
         <option value="none">Does not repeat</option>
         <option value="daily">Daily</option>
@@ -4482,7 +4524,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       </select>
     </div>
     <div class="form-group" id="ce_repeat_until_group" style="display:none;">
-      <label>Repeat Until</label>
+      <label for="ce_repeat_until">Repeat Until</label>
       <input type="date" id="ce_repeat_until">
       <span class="field-error-hint" style="display:block;color:var(--text-light);font-weight:500;">Leave blank to repeat for about 6 months</span>
     </div>
@@ -4496,13 +4538,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       </div>
       <div class="color-picker-panel" id="ceColorPickerPanel">
         <div class="color-picker-wrapper">
-          <input type="color" id="ce_color" value="#7e57c2" oninput="updateCalendarEventColorSwatch()">
+          <input type="color" id="ce_color" aria-label="Custom event color" value="#7e57c2" oninput="updateCalendarEventColorSwatch()">
           <div class="color-presets" id="ceColorPresets"></div>
         </div>
       </div>
     </div>
     <div class="form-group">
-      <label>Visibility</label>
+      <label for="ce_visibility">Visibility</label>
       <select id="ce_visibility" onchange="toggleCalendarEventVisibilityFields()">
         <option value="all">Everyone</option>
         <option value="private">Private (only me)</option>
@@ -4510,9 +4552,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       </select>
     </div>
     <div class="form-group" id="ce_visibility_members_group" style="display:none;">
-      <label>Visible to</label>
+      <label id="ce_visible_label">Visible to</label>
       <div class="ms-dropdown" id="ceVisibilityMsDropdown">
-        <button type="button" class="ms-dropdown-toggle" id="ceVisibilityMsToggleBtn"><span>Select members...</span><span class="ms-dropdown-arrow">▾</span></button>
+        <button type="button" class="ms-dropdown-toggle" id="ceVisibilityMsToggleBtn" aria-labelledby="ce_visible_label ceVisibilityMsToggleBtn"><span>Select members...</span><span class="ms-dropdown-arrow">▾</span></button>
         <div class="ms-dropdown-panel">
           <div class="ms-dropdown-actions" id="ce_visibility_members_actions" style="display:none;">
             <button type="button" id="ceVisibilitySelectAllBtn">Select All</button>
@@ -4525,7 +4567,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-secondary" id="ceDeleteBtn" data-min-tier="editor" style="display:none; color:var(--danger);" title="Deletes the whole series, not just one occurrence"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
       <div style="display:flex; gap: var(--s-2-5);">
-        <button class="btn btn-secondary" id="ceCancelBtn">Cancel</button>
+        <button class="btn btn-secondary" id="ceCancelBtn" data-modal-close>Cancel</button>
         <button class="btn btn-primary" data-min-tier="editor" id="ceSaveBtn">Save</button>
       </div>
     </div>
@@ -4538,12 +4580,12 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <div class="card-modal-scroll">
       <h4 id="cardModalTitle"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#28a745"/><rect x="11" y="6.5" width="2" height="11" rx="1" fill="#fff"/><rect x="6.5" y="11" width="11" height="2" rx="1" fill="#fff"/></svg>New Card</h4>
       <div class="form-group">
-        <label id="c_title_label">Title *</label>
+        <label for="c_title" id="c_title_label">Title *</label>
         <input type="text" id="c_title" placeholder="e.g. Follow up on change order">
         <span class="field-error-hint" id="c_title_hint" style="display:none;">Title required to save</span>
       </div>
       <div class="form-group">
-        <label>Due Date</label>
+        <label for="c_due">Due Date</label>
         <input type="date" id="c_due">
       </div>
       <!-- TEAM: Project Manager / Lead-Foreman / Members — pulled out of
@@ -4578,7 +4620,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       <div class="modal-actions" style="justify-content:space-between; margin-top: var(--s-6); padding-top: var(--s-5); border-top:1px solid var(--border);">
         <button class="btn btn-secondary" id="cardDeleteBtn" data-min-tier="editor" style="display:none; color:var(--danger);"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/><path d="M10 11v6"/><path d="M14 11v6"/></svg> Delete</button>
         <div style="display:flex; gap: var(--s-2-5);">
-          <button class="btn btn-secondary" id="cardCloseBtn">Close</button>
+          <button class="btn btn-secondary" id="cardCloseBtn" data-modal-close>Close</button>
         </div>
       </div>
     </div>
@@ -4592,7 +4634,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <p>Add or remove the choices available in each dropdown field.</p>
     <div id="manageFieldsBody"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" id="manageFieldsDoneBtn">Done</button>
+      <button class="btn btn-primary" id="manageFieldsDoneBtn" data-modal-close>Done</button>
     </div>
   </div>
 </div>
@@ -4609,7 +4651,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <p>Items added here are what a job's checklist starts with the first time it's opened on this board.</p>
     <div id="manageColumnChecklistBody"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" id="manageColumnChecklistDoneBtn">Done</button>
+      <button class="btn btn-primary" id="manageColumnChecklistDoneBtn" data-modal-close>Done</button>
     </div>
   </div>
 </div>
@@ -4621,7 +4663,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <p>Named groups boards can be assigned to, independent of any board's own name — see the "Workflow Item" picker in each board's own ⋮ menu.</p>
     <div id="workflowItemsBody"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" id="workflowItemsDoneBtn">Done</button>
+      <button class="btn btn-primary" id="workflowItemsDoneBtn" data-modal-close>Done</button>
     </div>
   </div>
 </div>
@@ -4636,7 +4678,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <h4><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" fill="#dc3545"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg> Delete Job?</h4>
     <p>Are you sure you want to delete "<span id="deleteJobName"></span>"? This action cannot be undone.</p>
     <div class="modal-actions">
-      <button class="btn btn-secondary" id="deleteJobCancelBtn">Cancel</button>
+      <button class="btn btn-secondary" id="deleteJobCancelBtn" data-modal-close>Cancel</button>
       <button class="btn btn-danger" id="deleteJobConfirmBtn">Delete</button>
     </div>
   </div>

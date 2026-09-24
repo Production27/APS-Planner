@@ -21,16 +21,41 @@ export function positionSettingsMenu(): void {
   dropdown.style.top = (rect.bottom + 8) + 'px';
 }
 
+// The on-screen trigger button (desktop ⋮ or the mobile one).
+function visibleSettingsTrigger(): HTMLElement | null {
+  let btn: HTMLElement | null = null;
+  document.querySelectorAll('.settings-menu-wrap').forEach(function(el) {
+    if (btn || (el as HTMLElement).offsetParent === null) return;
+    btn = el.matches('button') ? el as HTMLElement : el.querySelector('button');
+  });
+  return btn;
+}
+function setSettingsTriggersExpanded(open: boolean): void {
+  document.querySelectorAll('#desktopSettingsBtn, #mobileSettingsBtn').forEach(function(el) {
+    el.setAttribute('aria-expanded', String(open));
+  });
+}
+
 export function toggleSettingsMenu(): void {
   const dropdown = document.getElementById('settingsDropdown') as HTMLElement;
   const opening = !dropdown.classList.contains('show');
   if (opening) positionSettingsMenu();
   dropdown.classList.toggle('show', opening);
+  setSettingsTriggersExpanded(opening);
   cancelSettingsMenuAutoClose();
+  // #settingsDropdown sits far earlier in the page than its triggers, so
+  // Tab from the trigger would never reach it — opened from the keyboard,
+  // move focus into it (A5). A mouse click leaves focus alone.
+  const trigger = visibleSettingsTrigger();
+  if (opening && trigger && trigger.matches(':focus-visible')) {
+    const first = dropdown.querySelector('.settings-dropdown-item:not([style*="display: none"]):not([style*="display:none"])') as HTMLElement | null;
+    if (first) first.focus();
+  }
 }
 
 export function closeSettingsMenu(): void {
   document.getElementById('settingsDropdown')!.classList.remove('show');
+  setSettingsTriggersExpanded(false);
   cancelSettingsMenuAutoClose();
 }
 
@@ -67,15 +92,14 @@ document.querySelectorAll('.settings-menu-wrap').forEach(function(el) {
     settingsDropdownEl.addEventListener('mouseleave', function() {
       if (settingsDropdownEl.classList.contains('show')) armSettingsMenuAutoClose();
     });
-    // Delegated rather than one onkeydown= per .settings-dropdown-item
-    // (each already has tabindex="0" role="button" for Tab reachability)
-    // — one listener here covers every item, including any added later,
-    // instead of relying on remembering to repeat the attribute.
+    // Items are real <button>s (A5), so Enter/Space work natively. Escape
+    // closes the menu and puts focus back on whichever trigger opened it.
     settingsDropdownEl.addEventListener('keydown', function(e) {
-      const ke = e as KeyboardEvent;
-      if (ke.key !== 'Enter' && ke.key !== ' ') return;
-      const item = (e.target as HTMLElement).closest('.settings-dropdown-item') as HTMLElement | null;
-      if (item) { e.preventDefault(); item.click(); }
+      if ((e as KeyboardEvent).key !== 'Escape') return;
+      e.preventDefault();
+      closeSettingsMenu();
+      const trigger = visibleSettingsTrigger();
+      if (trigger) trigger.focus();
     });
   }
 }

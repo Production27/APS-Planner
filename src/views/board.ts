@@ -711,7 +711,7 @@ function renderWorkflowItemsBody(): void {
     '</div>';
   }).join('');
   container.innerHTML = '<div class="manage-field-group">' +
-    (rows || '<span style="font-size:11px;color:#999;">No workflow items yet</span>') +
+    (rows || '<span style="font-size:11px;color:var(--text-light);">No workflow items yet</span>') +
     '<div class="manage-field-add-row">' +
     '<input type="text" id="wfi_new_item" placeholder="Add workflow item..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addWorkflowItem();}">' +
     '<button class="btn btn-secondary" onclick="addWorkflowItem()">Add</button>' +
@@ -1393,7 +1393,7 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
   if (attachments.length) badges.push('<span class="mini-badge"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M8 12.5V7a4 4 0 018 0v9a2.5 2.5 0 01-5 0V8.5" stroke="#78909c" stroke-width="2" fill="none" stroke-linecap="round"/></svg> ' + attachments.length + '</span>');
 
   el.innerHTML = overrideBadge +
-    '<div class="board-card-title">' + escapeHtml(card.title || '') + '</div>' +
+    '<button type="button" class="board-card-title">' + escapeHtml(card.title || '') + '</button>' +
     (cfLines.length ? '<div class="board-card-meta">' + cfLines.join('') + '</div>' : '') +
     (badges.length ? '<div class="board-card-badges">' + badges.join('') + '</div>' : '');
 
@@ -1404,6 +1404,7 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
   const moveSelect = document.createElement('select');
   moveSelect.className = 'board-card-move-select';
   moveSelect.title = 'Move to a different board';
+  moveSelect.setAttribute('aria-label', 'Move ' + (card.title || 'card') + ' to board');
   BOARD_COLUMNS.forEach((col) => {
     const opt = document.createElement('option');
     opt.value = col.id;
@@ -1415,19 +1416,14 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
   moveSelect.addEventListener('change', function () { moveCardToColumn(card.id, moveSelect.value); });
   el.appendChild(moveSelect);
 
+  // A click anywhere on the card opens it. The keyboard/screen-reader
+  // path is the title <button> (its click bubbles here) — the card itself
+  // isn't role="button" any more, since it also holds the "Move to"
+  // <select> and override badge, and a control can't contain controls.
+  // Dragging stays mouse/touch-only; "Move to" is its keyboard equivalent.
   el.addEventListener('click', () => openEditCard(card.id));
   el.addEventListener('dragstart', handleCardDragStart);
   el.addEventListener('dragend', handleCardDragEnd);
-  // Opening the edit modal is the primary interaction and needs a
-  // keyboard path independent of the drag gesture (dragging itself stays
-  // mouse/touch-only — the mobile "Move to" <select> above is the
-  // existing keyboard-reachable way to change a card's column).
-  el.tabIndex = 0;
-  el.setAttribute('role', 'button');
-  el.setAttribute('aria-label', 'Open ' + (card.title || 'card'));
-  el.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditCard(card.id); }
-  });
   return el;
 }
 
@@ -1799,7 +1795,7 @@ function renderFieldDefHtml(def: CustomFieldDef, val: unknown, onNeedsRoster: ()
     const optionsHtml = '<option value="">Select...</option>' + opts.map((o) =>
       '<option value="' + escapeHtml(o) + '"' + (o === val ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'
     ).join('');
-    return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+    return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select data-field="' + def.key + '" data-min-tier="editor" aria-label="' + escapeHtml(def.label) + '">' + optionsHtml + '</select></div>';
   }
   if (def.type === 'user-select') {
     // Real-account single-select (PM/Foreman) — same roster source as
@@ -1808,12 +1804,12 @@ function renderFieldDefHtml(def: CustomFieldDef, val: unknown, onNeedsRoster: ()
     // field).
     if (!cachedUserRoster) {
       ensureUserRosterLoaded().then(onNeedsRoster);
-      return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select disabled><option>Loading…</option></select></div>';
+      return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select disabled aria-label="' + escapeHtml(def.label) + '"><option>Loading…</option></select></div>';
     }
     const optionsHtml = '<option value="">Select...</option>' + getLeadRoster(val as string).map(function (u) {
       return '<option value="' + escapeHtml(u.username) + '"' + (u.username === val ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
     }).join('');
-    return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select data-field="' + def.key + '" data-min-tier="editor">' + optionsHtml + '</select></div>';
+    return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><select data-field="' + def.key + '" data-min-tier="editor" aria-label="' + escapeHtml(def.label) + '">' + optionsHtml + '</select></div>';
   }
   if (def.type === 'multiselect') {
     // Backed by the REAL account roster (same one the "Visible to"
@@ -1839,7 +1835,7 @@ function renderFieldDefHtml(def: CustomFieldDef, val: unknown, onNeedsRoster: ()
       : '<span class="cf-multiselect-empty">No team accounts yet</span>';
     return '<div class="cf-field cf-field-wide"><label>' + escapeHtml(def.label) + '</label>' +
       '<div class="ms-dropdown" id="' + dropdownId + '">' +
-        '<button type="button" class="ms-dropdown-toggle" onclick="toggleMsDropdown(\'' + dropdownId + '\')"><span>' + msDropdownLabelText(selected.length) + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
+        '<button type="button" class="ms-dropdown-toggle" aria-label="' + escapeHtml(def.label) + ': ' + escapeHtml(msDropdownLabelText(selected.length)) + '" onclick="toggleMsDropdown(\'' + dropdownId + '\')"><span>' + msDropdownLabelText(selected.length) + '</span><span class="ms-dropdown-arrow">▾</span></button>' +
         '<div class="ms-dropdown-panel">' +
           (cachedUserRoster.length ? '<div class="ms-dropdown-actions"><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', true)">Select All</button><button type="button" data-min-tier="editor" onclick="msSetAll(\'' + optionsId + '\', false)">Unselect All</button></div>' : '') +
           '<div class="cf-multiselect" id="' + optionsId + '">' + optionsHtml + '</div>' +
@@ -1847,7 +1843,7 @@ function renderFieldDefHtml(def: CustomFieldDef, val: unknown, onNeedsRoster: ()
       '</div>' +
     '</div>';
   }
-  return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" value="' + escapeHtml(val as string) + '" placeholder="Add ' + escapeHtml(def.label) + '..."></div>';
+  return '<div class="cf-field"><label>' + escapeHtml(def.label) + '</label><input type="text" data-field="' + def.key + '" data-min-tier="editor" aria-label="' + escapeHtml(def.label) + '" value="' + escapeHtml(val as string) + '" placeholder="Add ' + escapeHtml(def.label) + '..."></div>';
 }
 
 function renderCustomFieldsGrid(values: Record<string, unknown>): void {
@@ -1983,7 +1979,7 @@ function renderAttachmentPanel(config: AttachmentPanelConfig): void {
   if (!container) return;
   const items = config.draftArrayGetter();
   if (!items.length) {
-    container.innerHTML = '<p style="font-size: var(--t-xs);color:#999;">No attachments yet.</p>';
+    container.innerHTML = '<p style="font-size: var(--t-xs);color:var(--text-light);">No attachments yet.</p>';
     return;
   }
   container.innerHTML = items.map((att) => {
@@ -2089,7 +2085,7 @@ function buildManageFieldGroup(key: string, label: string): string {
     '<button onclick="removeFieldOption(\'' + key + '\', \'' + o.replace(/'/g, "\\'") + '\')">×</button></span>').join('');
   return '<div class="manage-field-group">' +
     '<h5>' + escapeHtml(label) + '</h5>' +
-    '<div class="manage-field-chips">' + (chips || '<span style="font-size: var(--t-xs);color:#999;">No options yet</span>') + '</div>' +
+    '<div class="manage-field-chips">' + (chips || '<span style="font-size: var(--t-xs);color:var(--text-light);">No options yet</span>') + '</div>' +
     '<div class="manage-field-add-row">' +
     '<input type="text" id="mf_new_' + key + '" placeholder="Add option..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFieldOption(\'' + key + '\');}">' +
     '<button class="btn btn-secondary" onclick="addFieldOption(\'' + key + '\')">Add</button>' +

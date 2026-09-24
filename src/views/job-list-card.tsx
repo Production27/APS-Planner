@@ -44,21 +44,19 @@ export interface JobCardProps {
   onDelete: (e: Event) => void;
 }
 
-function onEnterOrSpace(fn: () => void) {
-  return (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
-}
-
 function JobCard(p: JobCardProps) {
   return (
+    // The whole card stays clickable for the mouse, but the keyboard/
+    // screen-reader control is the title <button> — a card that was itself
+    // role="button" couldn't also contain the ⋯ menu button (a control
+    // nested in a control is unreachable for assistive tech). A click on
+    // the title bubbles to the card's own onClick, so it fires once.
     <div
       class={'job-card' + (p.active ? ' active' : '') + (p.archived ? ' archived' : '') + (p.finished ? ' finished' : '')}
-      tabIndex={0}
-      role="button"
       onClick={p.onActivate}
-      onKeyDown={onEnterOrSpace(p.onActivate)}
     >
       <div class="color-strip" style={{ background: p.color }} />
-      <div class="job-card-title" style={{ '--jct-light': p.titleColorLight, '--jct-dark': p.titleColorDark } as Record<string, string>}>{p.name}{p.archived ? <span style={{ fontSize: 'var(--t-2xs)', color: '#888' }}> (archived)</span> : null}</div>
+      <button type="button" class="job-card-title" aria-current={p.active ? 'true' : undefined} style={{ '--jct-light': p.titleColorLight, '--jct-dark': p.titleColorDark } as Record<string, string>}>{p.name}{p.archived ? <span class="job-card-archived-note"> (archived)</span> : null}</button>
       <div class="job-card-meta">
         {p.dateRangeLabel ? (
           <span>
