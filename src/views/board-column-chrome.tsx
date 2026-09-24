@@ -70,6 +70,10 @@ export interface BoardColumnChromeProps {
   onManageChecklist: (e: MouseEvent) => void;
   onRename: (e: MouseEvent) => void;
   onDelete: (e: MouseEvent) => void;
+  // Move left/right: the non-drag way to reorder boards (WCAG 2.1.1 /
+  // 2.5.7, A5). null at the matching end.
+  onMoveLeft: ((e: MouseEvent) => void) | null;
+  onMoveRight: ((e: MouseEvent) => void) | null;
   onHeaderDragStart: (e: DragEvent) => void;
   onHeaderDragEnd: (e: DragEvent) => void;
   onColumnDragOver: (e: DragEvent) => void;
@@ -78,25 +82,25 @@ export interface BoardColumnChromeProps {
   onSwatchKeyDown: (e: KeyboardEvent) => void;
 }
 
-function onEnterOrSpace(fn: (e: KeyboardEvent) => void) {
-  return (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } };
-}
-
+// A real on/off switch (A5) — its name is the icon span's text.
 function ColToggleRow(p: { icon: string; title?: string; on: boolean; onToggle: (e: MouseEvent) => void }) {
   return (
-    <div
+    <button
+      type="button"
       class="board-col-gantt-toggle"
-      tabIndex={0}
-      role="button"
+      role="switch"
+      aria-checked={p.on}
       title={p.title}
-      onKeyDown={onEnterOrSpace((e) => p.onToggle(e as unknown as MouseEvent))}
       onClick={p.onToggle}
     >
       <span dangerouslySetInnerHTML={{ __html: p.icon }} />
-      <span class={'board-col-gantt-switch' + (p.on ? ' on' : '')}><span class="knob" /></span>
-    </div>
+      <span class={'board-col-gantt-switch' + (p.on ? ' on' : '')} aria-hidden="true"><span class="knob" /></span>
+    </button>
   );
 }
+
+const MOVE_LEFT_ICON = '<span aria-hidden="true" style="display:inline-block;width:15px;margin-right:3px;text-align:center">←</span> Move left';
+const MOVE_RIGHT_ICON = '<span aria-hidden="true" style="display:inline-block;width:15px;margin-right:3px;text-align:center">→</span> Move right';
 
 const COLOR_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18c1.5 0 2-1 2-2s-.5-1.5-.5-2.5c0-1 .8-1.5 2-1.5h2a4 4 0 004-4c0-4.4-4-8-9.5-8z" fill="#dcdfe6"/><circle cx="7.5" cy="10.5" r="1.7" fill="#e53935"/><circle cx="9.5" cy="7" r="1.7" fill="#f0ad4e"/><circle cx="14.5" cy="7" r="1.7" fill="#3949ab"/><circle cx="16.5" cy="11" r="1.7" fill="#28a745"/></svg> Color';
 const DISCONNECTED_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 3L3 9l3 3 3-3 3 3-6 6 3 3 6-6-3-3 3-3-3-3-3 3-3-3z" fill="#8d6e63"/></svg>';
@@ -138,15 +142,15 @@ function BoardColumnChrome(p: BoardColumnChromeProps) {
           ) : null}
         </div>
         <div class="board-col-settings-wrap" data-min-tier="projectAdmin">
-          <button class="board-col-settings-btn" draggable={false} title="Settings" style={{ color: p.settingsBtnColor }} onClick={p.onToggleSettings}>⋮</button>
+          <button class="board-col-settings-btn" draggable={false} title="Settings" aria-label={'Settings for the ' + p.label + ' board'} aria-haspopup="true" aria-expanded="false" aria-controls={'col-settings-' + p.id} style={{ color: p.settingsBtnColor }} onClick={p.onToggleSettings}>⋮</button>
           <div class="board-col-settings-dropdown" id={'col-settings-' + p.id}>
-            <div class="board-col-color-toggle" onClick={p.onToggleColorPanel}>
+            <button type="button" class="board-col-color-toggle" aria-controls={'col-panel-' + p.id} onClick={p.onToggleColorPanel}>
               <span dangerouslySetInnerHTML={{ __html: COLOR_ICON }} />
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }} aria-hidden="true">
                 <span class="col-color-swatch" id={'col-swatch-' + p.id} style={{ background: p.colorSwatches.find((s) => s.selected)?.color || '#eceef4' }} />
                 <span class="col-color-arrow" id={'col-arrow-' + p.id}>▾</span>
               </span>
-            </div>
+            </button>
             <div class="board-col-color-panel" id={'col-panel-' + p.id}>
               <div class="board-col-color-grid" id={'col-colors-' + p.id} role="radiogroup" aria-label="Column color">
                 {p.colorSwatches.map((s, i) => (
@@ -160,6 +164,7 @@ function BoardColumnChrome(p: BoardColumnChromeProps) {
                     onKeyDown={p.onSwatchKeyDown}
                     onClick={s.onClick}
                     title={s.color ? undefined : 'Default (no color)'}
+                    aria-label={s.color ? 'Color ' + s.color : 'Default (no color)'}
                   >
                     {s.color ? null : <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: 'var(--text-light)' }} dangerouslySetInnerHTML={{ __html: DEFAULT_SWATCH_ICON }} />}
                   </div>
@@ -171,7 +176,7 @@ function BoardColumnChrome(p: BoardColumnChromeProps) {
             <ColToggleRow icon={FINISHED_TRIGGER_ICON} on={p.isFinishedTrigger} onToggle={p.onToggleFinishedTrigger} title="Jobs whose card sits in this board count as finished — they stop showing as overdue/due-soon or counting toward Active Jobs on Home." />
             <div class="board-col-duration-row" title="Groups this board under a named item in the strip above Board, independent of this board's own name — see ⚙ Settings → Workflow Items to add more.">
               <span dangerouslySetInnerHTML={{ __html: WORKFLOW_ITEM_ICON }} />
-              <select class="board-col-duration-input" style={{ width: 'auto', flex: 1 }} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetWorkflowItem}>
+              <select class="board-col-duration-input" aria-label="Workflow item" style={{ width: 'auto', flex: 1 }} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetWorkflowItem}>
                 <option value="">None</option>
                 {p.workflowItemOptions.map((o) => <option key={o.value} value={o.value} selected={o.selected}>{o.label}</option>)}
               </select>
@@ -180,7 +185,7 @@ function BoardColumnChrome(p: BoardColumnChromeProps) {
             {p.autoAssignChecklist ? (
               <div class="board-col-duration-row" title="Who the checklist items get assigned to on arrival. Left on Auto, it uses the card's own Foreman, then Project Manager, whichever is set.">
                 <span dangerouslySetInnerHTML={{ __html: ASSIGN_TO_ICON }} />
-                <select class="board-col-duration-input" style={{ width: 'auto', flex: 1 }} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetChecklistAssignee}>
+                <select class="board-col-duration-input" aria-label="Assign checklist to" style={{ width: 'auto', flex: 1 }} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetChecklistAssignee}>
                   <option value="">Auto (card's Foreman/PM)</option>
                   {p.assigneeOptions.map((o) => <option key={o.value} value={o.value} selected={o.selected}>{o.label}</option>)}
                 </select>
@@ -188,16 +193,18 @@ function BoardColumnChrome(p: BoardColumnChromeProps) {
             ) : null}
             <div class="board-col-duration-row" title="How many days this board's task defaults to when only a start date is set in Job Manager">
               <span dangerouslySetInnerHTML={{ __html: DEFAULT_DURATION_ICON }} />
-              <input type="number" min={1} class="board-col-duration-input" value={p.defaultDuration} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetDefaultDuration} />
+              <input type="number" min={1} class="board-col-duration-input" aria-label="Default duration (days)" value={p.defaultDuration} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetDefaultDuration} />
             </div>
             <div class="board-col-duration-row" title="How many days a card can sit in this board before it shows up as Stalled on Home and gets a badge on the card.">
               <span dangerouslySetInnerHTML={{ __html: STALLED_AFTER_ICON }} />
-              <input type="number" min={1} class="board-col-duration-input" value={p.stalledAfterDays} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetStalledThreshold} />
+              <input type="number" min={1} class="board-col-duration-input" aria-label="Stalled after (days)" value={p.stalledAfterDays} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetStalledThreshold} />
             </div>
-            <div class="board-col-settings-item" onClick={p.onManageChecklist} dangerouslySetInnerHTML={{ __html: CHECKLIST_ITEM_ICON }} />
-            <div class="board-col-settings-item" onClick={p.onRename} dangerouslySetInnerHTML={{ __html: RENAME_ICON }} />
+            <button type="button" class="board-col-settings-item" onClick={p.onManageChecklist} dangerouslySetInnerHTML={{ __html: CHECKLIST_ITEM_ICON }} />
+            <button type="button" class="board-col-settings-item" onClick={p.onRename} dangerouslySetInnerHTML={{ __html: RENAME_ICON }} />
+            {p.onMoveLeft ? <button type="button" class="board-col-settings-item" onClick={p.onMoveLeft} dangerouslySetInnerHTML={{ __html: MOVE_LEFT_ICON }} /> : null}
+            {p.onMoveRight ? <button type="button" class="board-col-settings-item" onClick={p.onMoveRight} dangerouslySetInnerHTML={{ __html: MOVE_RIGHT_ICON }} /> : null}
             <div class="board-col-settings-divider" />
-            <div class="board-col-settings-item danger" onClick={p.onDelete} dangerouslySetInnerHTML={{ __html: DELETE_ICON }} />
+            <button type="button" class="board-col-settings-item danger" onClick={p.onDelete} dangerouslySetInnerHTML={{ __html: DELETE_ICON }} />
           </div>
         </div>
       </div>

@@ -2507,6 +2507,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     cursor: pointer; transition: background 0.15s;
   }
   .board-col-settings-item:hover { background: var(--primary-tint); color: var(--primary); }
+  /* Real <button>s since A5 — reset the browser's button look. */
+  .board-col-settings-item, .board-col-color-toggle, .board-col-gantt-toggle {
+    width: 100%; background: none; border: 0; font-family: inherit; text-align: left;
+  }
+  .board-col-settings-item:focus-visible, .board-col-color-toggle:focus-visible, .board-col-gantt-toggle:focus-visible {
+    outline: 2px solid var(--primary-light); outline-offset: -2px;
+  }
   .board-col-settings-item.danger:hover { background: var(--danger-tint); color: var(--danger); }
   .board-col-settings-divider { height: 1px; background: var(--border); margin: var(--s-1) var(--s-1-5); }
   .board-col-color-toggle {
@@ -4587,6 +4594,12 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       <div class="form-group">
         <label for="c_due">Due Date</label>
         <input type="date" id="c_due">
+      </div>
+      <!-- The non-drag way to change a card's board (A5, WCAG 2.5.7) — same
+           effect as dropping the card there (moveCardToColumn()). -->
+      <div class="form-group">
+        <label for="c_column">Board</label>
+        <select id="c_column" data-min-tier="editor"></select>
       </div>
       <!-- TEAM: Project Manager / Lead-Foreman / Members — pulled out of
            Custom Fields into their own section since they're real-account

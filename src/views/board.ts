@@ -243,6 +243,25 @@ function getDragAfterColumn(container: HTMLElement, x: number): Element | null {
   ).element;
 }
 
+// Menu alternative to dragging a board's header (A5). Keeps keyboard focus
+// on that board's ⋮ button afterward so the next Move is one Enter away.
+function moveBoardColumn(colId: string, delta: number, event?: Event): void {
+  if (event) event.stopPropagation();
+  const idx = BOARD_COLUMNS.findIndex((c) => c.id === colId);
+  const to = idx + delta;
+  if (idx === -1 || to < 0 || to >= BOARD_COLUMNS.length) return;
+  const cols = BOARD_COLUMNS.slice();
+  const [col] = cols.splice(idx, 1);
+  cols.splice(to, 0, col);
+  BOARD_COLUMNS = cols;
+  saveBoardColumns();
+  logActivity('moved board "' + col.label + '" ' + (delta < 0 ? 'left' : 'right'));
+  renderBoard();
+  showToast('Board "' + col.label + '" moved ' + (delta < 0 ? 'left' : 'right'), 'success');
+  const btn = document.querySelector('.board-column[data-column="' + colId + '"] .board-col-settings-btn') as HTMLElement | null;
+  if (btn) btn.focus();
+}
+
 function syncColumnsFromDOM(): void {
   const wrapper = document.getElementById('boardWrapper')!;
   const orderedIds = [...wrapper.querySelectorAll('.board-column')].map((el) => (el as HTMLElement).dataset.column);
@@ -817,6 +836,21 @@ function openEditCard(id: string): void {
     (document.getElementById('c_title') as HTMLInputElement).value = card.title || '';
   }
   (document.getElementById('c_due') as HTMLInputElement).value = card.due || '';
+  const colSelect = document.getElementById('c_column') as HTMLSelectElement;
+  colSelect.innerHTML = '';
+  BOARD_COLUMNS.forEach((col) => {
+    const opt = document.createElement('option');
+    opt.value = col.id;
+    opt.textContent = col.label;
+    colSelect.appendChild(opt);
+  });
+  colSelect.value = card.column;
+  colSelect.onchange = () => {
+    moveCardToColumn(card.id, colSelect.value);
+    // Declined (e.g. open checklist items) — show where it really is.
+    const now = boardCards.find((c) => c.id === card.id);
+    if (now) colSelect.value = now.column;
+  };
   renderCustomFieldsGrid(card.customFields || {});
   renderTeamFieldsGrid(card.customFields || {});
   renderAttachments();
@@ -1131,7 +1165,7 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
   document.querySelectorAll('.board-col-color-panel').forEach((p) => p.classList.remove('open'));
   document.querySelectorAll('.board-col-color-toggle').forEach((t) => t.classList.remove('open'));
 
-  const columnProps: BoardColumnChromeProps[] = BOARD_COLUMNS.map((col) => {
+  const columnProps: BoardColumnChromeProps[] = BOARD_COLUMNS.map((col, colIdx) => {
     const dark = col.color ? isDarkColor(col.color) : false;
     const colorSwatches: ColorSwatch[] = [
       { color: null, selected: !col.color, onClick: (e: MouseEvent) => changeColumnColor(col.id, '', e) },
@@ -1178,6 +1212,8 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
       onManageChecklist: (e) => openManageColumnChecklist(col.id, e),
       onRename: (e) => renameBoardColumn(col.id, e),
       onDelete: (e) => deleteBoardColumn(col.id, e),
+      onMoveLeft: colIdx > 0 ? (e) => moveBoardColumn(col.id, -1, e) : null,
+      onMoveRight: colIdx < BOARD_COLUMNS.length - 1 ? (e) => moveBoardColumn(col.id, 1, e) : null,
       // Stable named function references, matched by class/data-*
       // traversal inside each one (see their own definitions above) —
       // never DOM node identity — so passing them straight through as
@@ -1567,9 +1603,28 @@ function isDarkColor(hex: string): boolean {
 function toggleColSettings(colId: string, event: Event): void {
   event.stopPropagation();
   const dropdown = document.getElementById('col-settings-' + colId)!;
+  // The ⋮ button is the dropdown's own previous sibling — looked up rather
+  // than taken from event.currentTarget, which a direct call may not have.
+  const btn = dropdown.previousElementSibling as HTMLElement | null;
   const isOpen = dropdown.classList.contains('show');
   closeAllColSettings();
-  if (!isOpen) dropdown.classList.add('show');
+  if (isOpen) return;
+  dropdown.classList.add('show');
+  if (!btn) return;
+  btn.setAttribute('aria-expanded', 'true');
+  // Opened from the keyboard: focus the first control inside, and let
+  // Escape close it and hand focus back to the ⋮ button (A5).
+  if (btn.matches(':focus-visible')) {
+    const first = dropdown.querySelector('button, select, input') as HTMLElement | null;
+    if (first) first.focus();
+  }
+  dropdown.onkeydown = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeAllColSettings();
+    btn.focus();
+  };
 }
 
 function toggleColColorPanel(colId: string, event: Event): void {
@@ -1580,9 +1635,11 @@ function toggleColColorPanel(colId: string, event: Event): void {
   // Close other color panels first
   document.querySelectorAll('.board-col-color-panel').forEach((p) => p.classList.remove('open'));
   document.querySelectorAll('.board-col-color-toggle').forEach((t) => t.classList.remove('open'));
+  document.querySelectorAll('.board-col-color-toggle').forEach((t) => t.setAttribute('aria-expanded', 'false'));
   if (open) {
     panel.classList.add('open');
     toggle.classList.add('open');
+    toggle.setAttribute('aria-expanded', 'true');
   }
 }
 
@@ -1617,6 +1674,7 @@ function changeColumnColor(colId: string, color: string, event: Event): void {
 
 function closeAllColSettings(): void {
   document.querySelectorAll('.board-col-settings-dropdown').forEach((d) => d.classList.remove('show'));
+  document.querySelectorAll('.board-col-settings-btn').forEach((b) => b.setAttribute('aria-expanded', 'false'));
 }
 
 // A hidden board still exists as a real column — jobs still get a task for

@@ -46,6 +46,7 @@ const SCREENS = {
   'settings menu': () => { switchTabMorphed('home'); toggleSettingsMenu(); },
   'calendar event dialog': () => { switchTabMorphed('calendar'); openAddCalendarEvent('2026-09-24'); },
   'tour prompt': () => { switchTabMorphed('home'); tutorialNotifShow(); },
+  'board column menu': () => { switchTabMorphed('board'); document.querySelector('.board-col-settings-btn').click(); },
 };
 
 for (const dark of [false, true]) {
@@ -116,4 +117,41 @@ test('a11y: job cards and Board cards open from the keyboard through their title
   await card.focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#cardModal')).toHaveClass(/show/);
+});
+
+test('a11y: a Board column menu works from the keyboard, and Move right reorders boards without dragging', async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => switchTabMorphed('board'));
+  const first = await page.evaluate(() => BOARD_COLUMNS.map((c) => c.id));
+  const btn = page.locator('.board-column[data-column="' + first[0] + '"] .board-col-settings-btn');
+  await btn.focus();
+  await page.keyboard.press('Enter');
+  await expect(btn).toHaveAttribute('aria-expanded', 'true');
+  expect(await page.evaluate((id) => document.getElementById('col-settings-' + id).contains(document.activeElement), first[0])).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  await expect(btn).toBeFocused();
+
+  await btn.click();
+  await page.locator('#col-settings-' + first[0] + ' button', { hasText: 'Move right' }).click();
+  const after = await page.evaluate(() => BOARD_COLUMNS.map((c) => c.id));
+  expect(after).toEqual([first[1], first[0]].concat(first.slice(2)));
+  await expect(page.locator('.board-column[data-column="' + first[0] + '"] .board-col-settings-btn')).toBeFocused();
+  // The first board has no "Move left"; the last has no "Move right".
+  expect(await page.locator('#col-settings-' + first[1] + ' button', { hasText: 'Move left' }).count()).toBe(0);
+});
+
+test('a11y: the card dialog\'s Board dropdown moves a card without dragging', async ({ page }) => {
+  await openApp(page);
+  page.on('dialog', (d) => d.accept());
+  const { cardId, target } = await page.evaluate(() => {
+    switchTabMorphed('board');
+    const card = boardCards.find((c) => isCardVisibleToMe(c));
+    const target = BOARD_COLUMNS.find((c) => c.id !== card.column).id;
+    openEditCard(card.id);
+    return { cardId: card.id, target };
+  });
+  await expect(page.locator('#c_column')).toHaveValue(await page.evaluate((id) => boardCards.find((c) => c.id === id).column, cardId));
+  await page.locator('#c_column').selectOption(target);
+  expect(await page.evaluate((id) => boardCards.find((c) => c.id === id).column, cardId)).toBe(target);
 });
