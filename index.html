@@ -3174,8 +3174,10 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        .gantt-toolbar-text-btn's own selector already uses for the same
        reason: a bare .gantt-zoom-btn selector loses to that compound
        rule's display:flex regardless of which comes later in the
-       stylesheet, since specificity outranks source order. */
-    .gantt-toolbar button.gantt-zoom-btn { display: none; }
+       stylesheet, since specificity outranks source order.
+       A5: no longer hidden on phones — pinch can't be the ONLY way to
+       zoom (WCAG 2.5.1, pointer gestures need a single-tap alternative).
+       The toolbar scrolls sideways, so the extra buttons fit. */
     /* Collapsed entirely rather than just narrowed — .right-panel is
        flex:1 (see its own rule), so it fills the freed width automatically,
        no JS involved. Each bar still carries its own job-name tag directly
@@ -3995,10 +3997,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <button class="gantt-toolbar-text-btn" id="ganttExpandAllBtn" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
             <button class="gantt-toolbar-text-btn" id="ganttCollapseAllBtn" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
             <button class="gantt-toolbar-text-btn" id="ganttKeyBtn" title="What the colors and patterns mean" aria-expanded="false" aria-controls="ganttKeyPanel">Key</button>
-            <!-- Desktop only — see .gantt-zoom-btn's mobile hide rule.
-                 Mobile zooms by pinch instead (see the GANTT PINCH-TO-ZOOM
-                 JS block); these stay for mouse/keyboard-only desktop use
-                 where there's no pinch gesture available at all. -->
+            <!-- Shown everywhere since A5: phones can also pinch (see the
+                 GANTT PINCH-TO-ZOOM JS block), but a single-tap way to zoom
+                 is required too (WCAG 2.5.1). -->
             <button class="gantt-zoom-btn" id="ganttZoomInBtn" title="Zoom in" aria-label="Zoom in">+</button>
             <button class="gantt-zoom-btn" id="ganttZoomOutBtn" title="Zoom out" aria-label="Zoom out">−</button>
             <button class="gantt-zoom-btn" id="ganttResetZoomBtn" title="Reset zoom" aria-label="Reset zoom">⟲</button>
