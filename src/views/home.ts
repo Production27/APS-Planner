@@ -186,14 +186,14 @@ function switchTab(tab: string): void {
   // cancelEdit() also flushes any debounced edit first, same safety net
   // switchTab() always had. Harmless no-op if nothing was open.
   cancelEdit();
-  document.querySelectorAll('.rail-tab').forEach((b) => b.classList.remove('active'));
+  document.querySelectorAll('.rail-tab').forEach((b) => { b.classList.remove('active'); b.removeAttribute('aria-current'); });
   document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
   // No rail-tab represents Home any more (see its own removal note in
   // the markup) — every OTHER tab still has one, so this just skips the
   // (now-nonexistent) #tab-home lookup rather than needing a whole
   // separate branch for it.
   const tabBtn = document.getElementById('tab-' + tab);
-  if (tabBtn) tabBtn.classList.add('active');
+  if (tabBtn) { tabBtn.classList.add('active'); tabBtn.setAttribute('aria-current', 'page'); }
   document.getElementById('panel-' + tab)!.classList.add('active');
   if (tab === 'home') { renderHomeDashboard(); }
   else if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }

@@ -193,6 +193,15 @@ export function initStaticEventListeners(): void {
   on('ganttExpandAllBtn', () => expandAllGantt());
   on('ganttCollapseAllBtn', () => collapseAllGantt());
   on('ganttKeyBtn', () => toggleGanttKey());
+
+  // "Skip to main content" (A5): focus the content directly instead of
+  // relying on #hash navigation, which doesn't reliably move focus here.
+  const skipLink = document.querySelector('.skip-link');
+  if (skipLink) skipLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    const main = document.getElementById('panelsContainer');
+    if (main) main.focus();
+  });
   on('ganttZoomInBtn', () => zoomIn());
   on('ganttZoomOutBtn', () => zoomOut());
   on('ganttResetZoomBtn', () => resetZoom());

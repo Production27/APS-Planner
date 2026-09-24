@@ -155,3 +155,14 @@ test('a11y: the card dialog\'s Board dropdown moves a card without dragging', as
   await page.locator('#c_column').selectOption(target);
   expect(await page.evaluate((id) => boardCards.find((c) => c.id === id).column, cardId)).toBe(target);
 });
+
+test('a11y: the first Tab reaches "Skip to main content", which jumps focus to the current tab', async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.skip-link')).toBeFocused();
+  await expect(page.locator('.skip-link')).toBeInViewport();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#panelsContainer')).toBeFocused();
+  await expect(page.locator('.rail-tab[aria-current="page"], .rail-tab.active')).toHaveCount(await page.locator('.rail-tab.active').count());
+});
