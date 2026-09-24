@@ -14,10 +14,12 @@ const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 // visible "duplicate bar": the row's own outline sitting apart from its
 // own colored segment mid-drag (reported via a screenshot showing exactly
 // this — a white-bordered box overlapping a colored segment at a
-// different position). Fixed by matching on rowKey instead, which every
-// piece of one visual row already shares regardless of which specific
-// task or sub-phase it individually represents.
-test('dragging one segment of a collapsed multi-subphase row moves its border with it', async ({ page }) => {
+// different position). First fixed by moving every piece of the row
+// together — but only the grabbed sub-phase actually moves on drop, so
+// that previewed the wrong thing. Now the grabbed piece moves alone and
+// the row's outline is hidden until the drop redraws it, so no box is
+// ever left sitting apart from its segment.
+test('dragging one segment of a collapsed multi-subphase row hides its border instead of leaving it behind', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
   await page.goto(APP_URL);
@@ -50,7 +52,6 @@ test('dragging one segment of a collapsed multi-subphase row moves its border wi
       const target = solids[1] || solids[0];
       const border = Array.from(document.querySelectorAll('.job-span-border')).filter(el => el.dataset.phaseId === phaseId)[0];
       const rect = target.getBoundingClientRect();
-      const borderLeftBefore = parseFloat(border.style.left);
       const solidLeftBefore = parseFloat(target.style.left);
 
       target.dispatchEvent(new MouseEvent('mousedown', { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, bubbles: true }));
@@ -61,12 +62,12 @@ test('dragging one segment of a collapsed multi-subphase row moves its border wi
       // synchronously on dispatch.
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
-          const borderLeftDuring = parseFloat(border.style.left);
+          const borderHidden = getComputedStyle(border).opacity === '0';
           const solidLeftDuring = parseFloat(target.style.left);
           document.dispatchEvent(new MouseEvent('mouseup', { clientX: rect.left + rect.width / 2 + 60, clientY: rect.top + rect.height / 2, bubbles: true }));
           resolve({
             solidDelta: solidLeftDuring - solidLeftBefore,
-            borderDelta: borderLeftDuring - borderLeftBefore,
+            borderHidden,
           });
         });
       });
@@ -74,5 +75,5 @@ test('dragging one segment of a collapsed multi-subphase row moves its border wi
   }, setup);
 
   expect(Math.abs(dragResult.solidDelta)).toBeGreaterThan(10);
-  expect(Math.abs(dragResult.borderDelta - dragResult.solidDelta)).toBeLessThan(1);
+  expect(dragResult.borderHidden).toBe(true);
 });

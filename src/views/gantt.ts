@@ -182,6 +182,10 @@ interface BarMoveState {
   origLeftPx: number;
   isJobSpan: boolean;
   jobSpanOverlayEls: { el: HTMLElement; origLeft: number }[] | null;
+  // Grabbing one task's (or sub-phase's) solid piece of a condensed bar:
+  // the piece is stretched to that task's FULL length for the drag, and
+  // the rest of the row is dimmed — see startBarMove(). Undone on drop.
+  preview: { left: string; width: string; dimmed: HTMLElement[] } | null;
 }
 
 // Keeps the rest of a job's schedule in line after one task's dates change.
@@ -194,18 +198,21 @@ interface BarMoveState {
 // before an earlier one. Any later stage the change pushed past gets pushed
 // along with it, and any earlier stage the task was dragged back past gets
 // pulled back with it (each by only as much as needed, duration kept).
+// The same order rule then runs one level up, between the phase's
+// sub-phases (see keepSubPhasesInOrder()).
 function cascadeShiftLaterTasks(jobId: string, taskId: string, deltaDays: number): void {
   const found = findJob(jobId);
   if (!found) return;
-  let unit: { tasks?: GanttTask[] } | null = null;
+  let unit: SubPhase | null = null;
+  let unitPhase: Phase | null = null;
   const phases = getJobPhases(found.job);
   outer: for (let p = 0; p < phases.length; p++) {
     const units = getPhaseSubUnits(phases[p]);
     for (let u = 0; u < units.length; u++) {
-      if ((units[u].tasks || []).some((t) => t.id === taskId)) { unit = units[u]; break outer; }
+      if ((units[u].tasks || []).some((t) => t.id === taskId)) { unit = units[u]; unitPhase = phases[p]; break outer; }
     }
   }
-  if (!unit) return;
+  if (!unit || !unitPhase) return;
   const sorted = (unit.tasks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
   const idx = sorted.findIndex((t) => t.id === taskId);
   if (idx === -1) return;
@@ -216,15 +223,63 @@ function cascadeShiftLaterTasks(jobId: string, taskId: string, deltaDays: number
   // (say) neither blocks nor gets moved.
   const dated = sorted.filter((t) => parseTaskStart(t) !== null);
   const at = dated.findIndex((t) => t.id === taskId);
+  if (at !== -1) {
+    for (let i = at + 1; i < dated.length; i++) {
+      const gap = getDaysDiff(parseTaskStart(dated[i])!, parseTaskStart(dated[i - 1])!);
+      if (gap > 0) shiftTaskDays(dated[i], gap);
+    }
+    for (let i = at - 1; i >= 0; i--) {
+      const gap = getDaysDiff(parseTaskStart(dated[i + 1])!, parseTaskStart(dated[i])!);
+      if (gap > 0) shiftTaskDays(dated[i], -gap);
+    }
+  }
+  // A task move only changes where its sub-phase starts, it doesn't move
+  // the sub-phase as a block — so only the order rule applies (delta 0).
+  keepSubPhasesInOrder(unitPhase, unit, 0);
+}
+
+// Sub-phase version of the rules above, for a phase split into sub-phases
+// (in the phase's own sub-phase order). Moving a whole sub-phase later
+// pushes every later sub-phase by the same amount; moving it earlier
+// leaves them alone; and a later sub-phase never starts before an earlier
+// one — crossing one pushes/pulls it along, keeping its own schedule
+// intact. A sub-phase's start is its earliest scheduled task (same rule as
+// the Gantt bar drawn for it).
+function keepSubPhasesInOrder(phase: Phase, anchor: SubPhase, deltaDays: number): void {
+  const units = getPhaseSubUnits(phase);
+  if (units.length < 2) return;
+  const idx = units.indexOf(anchor);
+  if (idx === -1) return;
+  if (deltaDays > 0) {
+    for (let i = idx + 1; i < units.length; i++) shiftSubUnitDays(units[i], deltaDays);
+  }
+  const hidden = getHiddenTaskOrders();
+  const startOf = (u: SubPhase) => { const seg = buildSegment(u, hidden); return seg ? seg.start : null; };
+  const dated = units.filter((u) => startOf(u) !== null);
+  const at = dated.indexOf(anchor);
   if (at === -1) return;
   for (let i = at + 1; i < dated.length; i++) {
-    const gap = getDaysDiff(parseTaskStart(dated[i])!, parseTaskStart(dated[i - 1])!);
-    if (gap > 0) shiftTaskDays(dated[i], gap);
+    const gap = getDaysDiff(startOf(dated[i])!, startOf(dated[i - 1])!);
+    if (gap > 0) shiftSubUnitDays(dated[i], gap);
   }
   for (let i = at - 1; i >= 0; i--) {
-    const gap = getDaysDiff(parseTaskStart(dated[i + 1])!, parseTaskStart(dated[i])!);
-    if (gap > 0) shiftTaskDays(dated[i], -gap);
+    const gap = getDaysDiff(startOf(dated[i + 1])!, startOf(dated[i])!);
+    if (gap > 0) shiftSubUnitDays(dated[i], -gap);
   }
+}
+
+// The sub-unit(s) a condensed bar stands for. A collapsed phase row has a
+// null subPhaseId meaning "every sub-phase at once" — but an unsplit
+// phase's single default sub-unit ALSO has a null id, so which one it
+// means depends on whether the phase is actually split.
+function getSpanSubUnits(phase: Phase, subPhaseId: string | null): SubPhase[] {
+  const units = getPhaseSubUnits(phase);
+  if (!subPhaseId && phase.subPhases && phase.subPhases.length) return units;
+  return units.filter((s) => (s.id || null) === (subPhaseId || null));
+}
+
+function shiftSubUnitDays(unit: SubPhase, days: number): void {
+  (unit.tasks || []).forEach((t) => shiftTaskDays(t, days));
 }
 
 function parseTaskStart(t: GanttTask): Date | null {
@@ -499,14 +554,14 @@ function startBarMove(e: MouseEvent, jobId: string, taskId: string, bar: HTMLEle
     if (!jf) return;
     const phase = getJobPhases(jf.job).find((p) => (p.id || null) === (phaseId || null));
     if (!phase) return;
-    const subUnit = getPhaseSubUnits(phase).find((s) => (s.id || null) === (subPhaseId || null));
-    if (!subUnit) return;
+    const spanUnits = getSpanSubUnits(phase, subPhaseId ?? null);
+    if (!spanUnits.length) return;
     const hiddenOrders = new Set(
       BOARD_COLUMNS.map((c, i) => (c.hideFromSchedule ? i : null)).filter((i) => i !== null)
     );
     let minStart: Date | null = null;
     let maxFinish: Date | null = null;
-    (subUnit.tasks || []).forEach((t) => {
+    spanUnits.flatMap((u) => u.tasks || []).forEach((t) => {
       if (hiddenOrders.has(t.order as number)) return;
       if (!t.start || !t.finish) return;
       const s = new Date(t.start + 'T00:00:00');
@@ -535,11 +590,33 @@ function startBarMove(e: MouseEvent, jobId: string, taskId: string, bar: HTMLEle
   const f = new Date(task.finish + 'T00:00:00');
   const duration = getDaysDiff(s, f) + 1;
 
+  // A solid piece of a condensed bar only covers the days where its task
+  // (or sub-phase) doesn't overlap a neighbour — the overlapped days are
+  // drawn as a separate hatch piece. Moving just the solid piece left that
+  // hatch behind as a "ghost" of the same task (and moving the whole row
+  // with it, as this once did, showed everything else moving when it
+  // wouldn't). Instead, stretch the grabbed piece over its task's whole
+  // length, dim the rest of the row, and hide the row's outline (it's
+  // redrawn around the new dates on drop), so what moves is exactly what
+  // will move.
+  let preview: BarMoveState['preview'] = null;
+  if (bar.dataset.fullLeft && bar.dataset.fullWidth) {
+    preview = {
+      left: bar.style.left, width: bar.style.width,
+      dimmed: Array.from(document.querySelectorAll<HTMLElement>(
+        '.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-border'
+      )).filter((el) => el !== bar && el.dataset.rowKey === bar.dataset.rowKey),
+    };
+    bar.style.left = bar.dataset.fullLeft + 'px';
+    bar.style.width = bar.dataset.fullWidth + 'px';
+  }
+
   barMoveState = {
     jobId, taskId, task, bar, startX: e.clientX,
     startDateObj: s, duration, deltaDays: 0, moved: false, phaseId: phaseId || null, subPhaseId: subPhaseId || null,
     origLeftPx: parseFloat(bar.style.left),
     isJobSpan: !!isJobSpan,
+    preview,
     // Queried + filtered ONCE here at drag start instead of on every
     // mousemove tick (see applyBarMoveMove()) — this used to be a
     // whole-document 6-class querySelectorAll + per-element dataset
@@ -567,7 +644,7 @@ function startBarMove(e: MouseEvent, jobId: string, taskId: string, bar: HTMLEle
     // task or sub-phase it individually represents — already carries this
     // same rowKey, so this reliably grabs the whole row's worth of pieces
     // no matter which one the user actually grabbed.
-    jobSpanOverlayEls: isJobSpan ? Array.from(document.querySelectorAll<HTMLElement>(
+    jobSpanOverlayEls: isJobSpan && !preview ? Array.from(document.querySelectorAll<HTMLElement>(
       '.job-span-task-tick, .job-span-gap-hash, .job-span-task-hatch, .job-span-task-solid, .job-span-name-wrap, .job-span-border'
     )).filter((tk) => tk.dataset.rowKey === bar.dataset.rowKey)
       .map((tk) => ({ el: tk, origLeft: parseFloat(tk.dataset.origLeft || '0') })) : null,
@@ -609,6 +686,7 @@ function applyBarMoveMove(e: MouseEvent): void {
   if (Math.abs(deltaX) > 3) {
     barMoveState.moved = true;
     barMoveState.bar.classList.add('moving');
+    if (barMoveState.preview) barMoveState.preview.dimmed.forEach((el) => el.classList.add('gantt-drag-dim'));
   }
   if (!barMoveState.moved) return;
 
@@ -649,22 +727,29 @@ function onBarMoveEnd(e: MouseEvent): void {
   document.removeEventListener('mouseup', onBarMoveEnd);
   bar.classList.remove('moving');
   hideTooltip();
+  // Undo the drag preview before any re-render — Preact only rewrites a
+  // style it thinks changed, so a stretched width left on an element that
+  // survives the render (e.g. a drag that ended back where it started)
+  // would otherwise stick.
+  const preview = barMoveState.preview;
+  if (preview) {
+    bar.style.left = preview.left;
+    bar.style.width = preview.width;
+    preview.dimmed.forEach((el) => el.classList.remove('gantt-drag-dim'));
+  }
 
   if (isJobSpan) {
     if (moved && deltaDays !== 0) {
       const jf = findJob(jobId);
       const phase = jf && getJobPhases(jf.job).find((p) => (p.id || null) === (phaseId || null));
-      const subUnit = phase && getPhaseSubUnits(phase).find((s) => (s.id || null) === (subPhaseId || null));
-      if (jf && phase && subUnit) {
-        (subUnit.tasks || []).forEach((t) => {
-          if (!t.start || !t.finish) return;
-          const ns = new Date(t.start + 'T00:00:00');
-          ns.setDate(ns.getDate() + deltaDays);
-          const nf = new Date(t.finish + 'T00:00:00');
-          nf.setDate(nf.getDate() + deltaDays);
-          t.start = toIsoDate(ns);
-          t.finish = toIsoDate(nf);
-        });
+      const spanUnits = phase ? getSpanSubUnits(phase, subPhaseId) : [];
+      const subUnit = spanUnits.length === 1 ? spanUnits[0] : null;
+      if (jf && phase && spanUnits.length) {
+        spanUnits.forEach((u) => shiftSubUnitDays(u, deltaDays));
+        // One sub-phase moved on its own: keep the phase's other
+        // sub-phases in order around it. (The whole collapsed phase moving
+        // together can't put its own sub-phases out of order.)
+        if (subUnit) keepSubPhasesInOrder(phase, subUnit, deltaDays);
         bar.dataset.dragged = 'true';
         barMoveState = null;
         renderGantt();
@@ -679,7 +764,7 @@ function onBarMoveEnd(e: MouseEvent): void {
         // freezing for a beat right as it was meant to start moving.
         setTimeout(function () {
           saveJobs();
-          logActivity('moved job "' + jf.job.name + '"' + (phase.isDefault ? '' : ' phase "' + phase.name + '"') + (subUnit.isDefault ? '' : ' sub-phase "' + subUnit.name + '"'));
+          logActivity('moved job "' + jf.job.name + '"' + (phase.isDefault ? '' : ' phase "' + phase.name + '"') + (!subUnit || subUnit.isDefault ? '' : ' sub-phase "' + subUnit.name + '"'));
           showToast('Job dates updated', 'success');
         }, 0);
         // renderJobList()/refreshJobFormIfOpen() rebuild real DOM (the
@@ -2057,6 +2142,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
                 jobId: job.id, phaseId: phaseId || '',
                 subPhaseId: isCollapsedRow ? ((dt.t.subPhaseId as string | undefined) || '') : (subPhaseId || ''),
                 rowKey, origLeft: segLeft, left: segLeft, width: segWidth, top,
+                fullLeft: dt.sIdx * dayWidth, fullWidth: (dt.eIdx - dt.sIdx + 1) * dayWidth,
                 title: dt.t.name,
                 background: softenColor((dt.t.color as string | undefined) || job.color || '#3949ab'),
                 onMouseEnter: (e: MouseEvent) => showTooltip(e, job, dt.t),

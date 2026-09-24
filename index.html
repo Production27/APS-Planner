@@ -860,7 +860,11 @@
     transition: filter 0.15s;
   }
   .job-span-task-solid:hover { filter: brightness(1.12); }
-  .job-span-task-solid.moving { cursor: grabbing; filter: brightness(1.15); transition: none; }
+  .job-span-task-solid.moving { cursor: grabbing; filter: brightness(1.15); transition: none; z-index: 66; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
+  /* The rest of a condensed bar while one task/sub-phase piece of it is
+     being dragged (see startBarMove()) — it isn't moving, so it steps back. */
+  .gantt-drag-dim { opacity: 0.35; }
+  .job-span-border.gantt-drag-dim { opacity: 0; }
   .job-span-task-hatch {
     /* Two or more tasks overlap on this stretch — hard-edged stripes
        alternating between their colors, set inline per element. */

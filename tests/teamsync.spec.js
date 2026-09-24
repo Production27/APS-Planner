@@ -767,6 +767,137 @@ test('gantt stage order: resizing a stage start past the next stage pushes the n
   ]);
 });
 
+// Same order rules one level up: a phase split into sub-phases. Sub-phase
+// A runs 09-01..09-10, B 09-05..09-15 (overlapping), C 09-12..09-20.
+// The phase starts collapsed in Tasks view (one bar for the whole phase).
+async function setupThreeSubPhases(page, { realMouse = false } = {}) {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  if (realMouse) {
+    // See the real-mouse bar drag test below — the tab morph has to settle
+    // before on-screen positions mean anything.
+    await page.waitForFunction(() => getActiveTab() === 'gantt');
+    await page.waitForTimeout(1500);
+  }
+  const ids = await page.evaluate(() => {
+    const job = jobs[0];
+    // A real (stored) phase — an unphased job's default phase is synthetic.
+    job.phases = [{ id: 'ph-test', name: 'Install', order: 0, tasks: job.tasks || [], isDefault: false }];
+    job.tasks = [];
+    const phase = job.phases[0];
+    splitPhaseIntoSubPhases(phase);
+    addPhaseSubUnit(phase);
+    addPhaseSubUnit(phase);
+    const ranges = [['2026-09-01', '2026-09-10'], ['2026-09-05', '2026-09-15'], ['2026-09-12', '2026-09-20']];
+    phase.subPhases.forEach((sub, i) => {
+      (sub.tasks || []).forEach((t) => { t.start = ''; t.finish = ''; });
+      const first = sub.tasks.slice().sort((a, b) => (a.order || 0) - (b.order || 0))[0];
+      first.start = ranges[i][0]; first.finish = ranges[i][1];
+    });
+    renderGantt();
+    return { jobId: job.id, phaseId: phase.id, subIds: phase.subPhases.map((sp) => sp.id) };
+  });
+  return ids;
+}
+
+function readSubPhases(page, ids) {
+  return page.evaluate(({ jobId, phaseId }) => {
+    const phase = getJobPhases(findJob(jobId).job).find((p) => p.id === phaseId);
+    return phase.subPhases.map((sp) => {
+      const t = sp.tasks.filter((x) => x.start).map((x) => [x.start, x.finish]);
+      return t[0];
+    });
+  }, ids);
+}
+
+function dragSpan(page, ids, subId, days) {
+  return page.evaluate(({ jobId, phaseId, subId, days }) => {
+    const bar = document.querySelector('.task-bar');
+    startBarMove({ clientX: 0 }, jobId, 'x', bar, true, phaseId, subId);
+    barMoveState.moved = true;
+    barMoveState.deltaDays = days;
+    onBarMoveEnd({});
+  }, { ...ids, subId, days });
+}
+
+test('gantt sub-phase order: moving a sub-phase later pushes later sub-phases by the same amount', async ({ page }) => {
+  const ids = await setupThreeSubPhases(page);
+  await dragSpan(page, ids, ids.subIds[0], 4);
+  expect(await readSubPhases(page, ids)).toEqual([
+    ['2026-09-05', '2026-09-14'], ['2026-09-09', '2026-09-19'], ['2026-09-16', '2026-09-24'],
+  ]);
+});
+
+test('gantt sub-phase order: moving a sub-phase earlier leaves later ones; crossing an earlier one pulls it back', async ({ page }) => {
+  const ids = await setupThreeSubPhases(page);
+  await dragSpan(page, ids, ids.subIds[1], -2);
+  expect(await readSubPhases(page, ids)).toEqual([
+    ['2026-09-01', '2026-09-10'], ['2026-09-03', '2026-09-13'], ['2026-09-12', '2026-09-20'],
+  ]);
+  await dragSpan(page, ids, ids.subIds[2], -12); // C now starts 08-31, before A and B
+  expect(await readSubPhases(page, ids)).toEqual([
+    ['2026-08-31', '2026-09-09'], ['2026-08-31', '2026-09-10'], ['2026-08-31', '2026-09-08'],
+  ]);
+});
+
+test('gantt sub-phase order: moving a stage past the start of the next sub-phase pushes that sub-phase along', async ({ page }) => {
+  const ids = await setupThreeSubPhases(page);
+  await page.evaluate(({ jobId, phaseId }) => {
+    const phase = getJobPhases(findJob(jobId).job).find((p) => p.id === phaseId);
+    const t = phase.subPhases[0].tasks.find((x) => x.start);
+    t.start = '2026-09-08'; t.finish = '2026-09-17'; // A's only stage moved 7 days later
+    cascadeShiftLaterTasks(jobId, t.id, 7);
+  }, ids);
+  // B started 09-05, now before A's 09-08 — pushed 3 days; C (09-12) still fine.
+  expect(await readSubPhases(page, ids)).toEqual([
+    ['2026-09-08', '2026-09-17'], ['2026-09-08', '2026-09-18'], ['2026-09-12', '2026-09-20'],
+  ]);
+});
+
+test('gantt collapsed phase: grabbing where sub-phases overlap drags the whole phase (real mouse)', async ({ page }) => {
+  const ids = await setupThreeSubPhases(page, { realMouse: true });
+  // The overlap hatch is click-through, so the grab lands on the phase's
+  // own bar underneath — which used to find no sub-phase and do nothing.
+  const hatch = page.locator('.job-span-task-hatch[data-phase-id="' + ids.phaseId + '"]').first();
+  await hatch.scrollIntoViewIfNeeded();
+  const box = await hatch.boundingBox();
+  const x = box.x + box.width - 6, y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 68, y, { steps: 6 }); // ~2 cells at dayWidth 34
+  await page.mouse.up();
+  const after = await readSubPhases(page, ids);
+  // Every sub-phase moved by the same (positive) number of days.
+  const shift = (a, b) => Math.round((new Date(a) - new Date(b)) / 86400000);
+  const d = shift(after[0][0], '2026-09-01');
+  expect(d).toBeGreaterThan(0);
+  expect(shift(after[1][0], '2026-09-05')).toBe(d);
+  expect(shift(after[2][0], '2026-09-12')).toBe(d);
+});
+
+test('gantt condensed bar: dragging one piece previews its whole length and dims the rest (no ghost left behind)', async ({ page }) => {
+  const ids = await setupThreeSubPhases(page, { realMouse: true });
+  const solid = page.locator('.job-span-task-solid[data-phase-id="' + ids.phaseId + '"][data-sub-phase-id="' + ids.subIds[0] + '"]');
+  await solid.scrollIntoViewIfNeeded();
+  const fullWidth = Number(await solid.getAttribute('data-full-width'));
+  const box = await solid.boundingBox();
+  expect(fullWidth).toBeGreaterThan(box.width); // part of A overlaps B
+  await page.mouse.move(box.x + 4, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 30, box.y + box.height / 2, { steps: 5 });
+  const mid = await page.evaluate(() => ({
+    width: parseFloat(document.querySelector('.job-span-task-solid.moving').style.width),
+    dimmed: document.querySelectorAll('.gantt-drag-dim').length,
+  }));
+  expect(mid.width).toBe(fullWidth);
+  expect(mid.dimmed).toBeGreaterThan(0);
+  await page.mouse.up();
+  expect(await page.locator('.gantt-drag-dim').count()).toBe(0);
+});
+
 test('gantt bar drag (real mouse events): dragging a bar body moves its dates, exercising renderTimelineBars()\'s own mousedown wiring', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

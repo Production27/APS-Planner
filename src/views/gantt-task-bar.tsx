@@ -174,6 +174,11 @@ export interface JobSpanSegmentData {
   left: number;
   width: number;
   top: number;
+  // Solid pieces only: the whole task's (or sub-phase's) own extent, which
+  // can be wider than this piece when part of it overlaps a neighbour —
+  // used to preview the whole task while dragging (see startBarMove()).
+  fullLeft?: number;
+  fullWidth?: number;
   title: string;
   background?: string;
   onMouseEnter?: (e: MouseEvent) => void;
@@ -197,6 +202,8 @@ function JobSpanSegment(s: JobSpanSegmentData) {
       data-sub-phase-id={s.subPhaseId}
       data-row-key={s.rowKey}
       data-orig-left={s.origLeft}
+      data-full-left={s.fullLeft}
+      data-full-width={s.fullWidth}
       data-dragged={isSolid ? 'false' : undefined}
       style={{ left: s.left + 'px', width: s.width + 'px', top: s.top + 'px', background: s.background }}
       title={s.title}
