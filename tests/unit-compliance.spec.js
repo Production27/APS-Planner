@@ -27,14 +27,14 @@ async function openApp(page, role, routes) {
 }
 
 async function openPanel(page) {
-  await page.evaluate(() => toggleAdminMenu());
+  await page.evaluate(() => { toggleSettingsMenu(); showSettingsTab('admin'); });
   await page.locator('#securityDataBtn').click();
   await expect(page.locator('#securityModal')).toHaveClass(/show/);
 }
 
 test('the Security & data item is only shown to admins', async ({ page }) => {
   await openApp(page, 'editor');
-  await page.evaluate(() => toggleAdminMenu());
+  await page.evaluate(() => { toggleSettingsMenu(); showSettingsTab('admin'); });
   await expect(page.locator('#securityDataBtn')).toBeHidden();
 });
 

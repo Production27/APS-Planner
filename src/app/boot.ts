@@ -14,7 +14,7 @@ import { renderGantt, hideDatePopover, setupScrollSync, isGanttReorderAnimating 
 import { initCalendarDragHandlers, buildCalendarEventColorPresets, closeCalendarEventModal } from '../views/calendar';
 import { closeAllColSettings, initCardFormAutosaveListeners, closeManageFields, closeCardModal } from '../views/board';
 import { closeAllMsDropdowns, isPanelActive, initModalKeyboard } from '../utils/ui';
-import { closeSettingsMenu, closeAdminMenu } from './settings-menu';
+import { closeSettingsMenu } from './settings-menu';
 import { loadLinkEnabledPref, loadProjects, readLocalProjectsText, enforceFixedProjectSet, loadActiveProjectData, autoArchiveJobs, renderAll, freshLocalSeed } from './project';
 import { syncCardColumns } from '../core/jobs';
 import { closeDeleteJobModal } from '../views/job-list';
@@ -125,7 +125,6 @@ document.addEventListener('click', function (e) {
   // querying a single wrap and checking .contains()) is what makes this
   // correct regardless of which trigger opened it.
   if (!target.closest('.settings-menu-wrap') && !target.closest('#settingsDropdown')) closeSettingsMenu();
-  if (!target.closest('.admin-menu-wrap') && !target.closest('#adminDropdown')) closeAdminMenu();
 
   // Close column settings dropdowns
   if (!target.closest('.board-col-settings-wrap')) closeAllColSettings();
@@ -166,7 +165,6 @@ document.addEventListener('keydown', function (e) {
     const calendarEventModalEl = document.getElementById('calendarEventModal');
     if (calendarEventModalEl && calendarEventModalEl.classList.contains('show')) closeCalendarEventModal();
     closeSettingsMenu();
-    closeAdminMenu();
     const manageFieldsModalEl = document.getElementById('manageFieldsModal');
     if (manageFieldsModalEl && manageFieldsModalEl.classList.contains('show')) closeManageFields();
     const themeModalEl = document.getElementById('themeModal');

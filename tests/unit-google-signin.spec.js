@@ -97,7 +97,7 @@ test('Security & data: before the server has a Google key, it shows the redirect
   await openAdmin(page, {
     'sso/settings': () => ({ body: { settings: { googleEnabled: false, allowedDomains: [] }, configured: false, redirectUri: WORKER_ORIGIN + '/sso/google/callback' } }),
   });
-  await page.evaluate(() => toggleAdminMenu());
+  await page.evaluate(() => { toggleSettingsMenu(); showSettingsTab('admin'); });
   await page.locator('#securityDataBtn').click();
   await expect(page.locator('#ssoNotConfigured')).toBeVisible();
   await expect(page.locator('#ssoRedirectUri')).toHaveText(WORKER_ORIGIN + '/sso/google/callback');
@@ -110,7 +110,7 @@ test('Security & data: an admin turns Google sign-in on with a domain', async ({
       settings: { googleEnabled: !!(b && b.googleEnabled), allowedDomains: (b && b.allowedDomains) || [], updatedBy: 'testadmin', updatedAt: Date.now() },
       configured: true, redirectUri: WORKER_ORIGIN + '/sso/google/callback' } }),
   });
-  await page.evaluate(() => toggleAdminMenu());
+  await page.evaluate(() => { toggleSettingsMenu(); showSettingsTab('admin'); });
   await page.locator('#securityDataBtn').click();
   await expect(page.locator('#ssoConfigured')).toBeVisible();
   await expect(page.locator('#ssoRequireToggle')).toHaveCount(0);

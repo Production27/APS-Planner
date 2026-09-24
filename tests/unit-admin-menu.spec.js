@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { APP_URL, WORKER_ORIGIN, seedSession, mockRoomWebSocket } = require('./helpers');
 
-// The Admin menu (src/app/settings-menu.ts) and its "What's new" badge
+// Settings' Admin tab (src/app/settings-menu.ts) and its badge
 // (src/app/admin-notices.ts), against mocked Worker endpoints.
 
 async function openApp(page, role, routes) {
@@ -33,37 +33,40 @@ const NOTICES = {
   seenAt: Date.now() - 86400000,
 };
 
-test('admin items live in the Admin menu, not Settings', async ({ page }) => {
+test('admin items sit behind the Admin tab in Settings', async ({ page }) => {
   await openApp(page, 'admin');
-  await page.evaluate(() => toggleSettingsMenu());
-  await expect(page.locator('#settingsDropdown #manageUsersBtn')).toHaveCount(0);
-  await expect(page.locator('#settingsDropdown #errorsBtn')).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await page.locator('#desktopAdminBtn').click();
-  await expect(page.locator('#adminDropdown')).toHaveClass(/show/);
-  await expect(page.locator('#adminDropdown #errorsBtn')).toBeVisible();
-  await expect(page.locator('#adminDropdown #manageUsersBtn')).toBeVisible();
-  // Only one of the two menus is open at a time.
-  await page.evaluate(() => toggleSettingsMenu());
+  await page.locator('#desktopSettingsBtn').click();
+  await expect(page.locator('#settingsTabGeneral')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#manageUsersBtn')).toBeHidden();
+  await expect(page.locator('#changePasswordBtn')).toBeVisible();
+  await page.locator('#settingsTabAdmin').click();
   await expect(page.locator('#settingsDropdown')).toHaveClass(/show/);
-  await expect(page.locator('#adminDropdown')).not.toHaveClass(/show/);
+  await expect(page.locator('#manageUsersBtn')).toBeVisible();
+  await expect(page.locator('#errorsBtn')).toBeVisible();
+  await expect(page.locator('#changePasswordBtn')).toBeHidden();
+  // Reopening starts back on the Settings tab.
+  await page.keyboard.press('Escape');
+  await page.locator('#desktopSettingsBtn').click();
+  await expect(page.locator('#changePasswordBtn')).toBeVisible();
 });
 
-test('the Admin button is hidden from non-admins', async ({ page }) => {
+test('non-admins see no tabs, just their settings', async ({ page }) => {
   await openApp(page, 'editor');
-  await expect(page.locator('#desktopAdminBtn')).toBeHidden();
+  await page.locator('#desktopSettingsBtn').click();
+  await expect(page.locator('#settingsTabAdmin')).toBeHidden();
+  await expect(page.locator('#changePasswordBtn')).toBeVisible();
 });
 
-test('new account events and errors show a badge, which clears when the menu is opened', async ({ page }) => {
+test('new account events and errors badge the Settings button, and opening the Admin tab clears it', async ({ page }) => {
   const seen = await openApp(page, 'admin', { 'admin/notices': () => NOTICES, 'admin/notices/seen': () => ({ success: true }) });
-  const badge = page.locator('#desktopAdminBtn .admin-badge');
+  const badge = page.locator('#desktopSettingsBtn .admin-badge');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveText('2');
-  await page.locator('#desktopAdminBtn').click();
-  await expect(page.locator('#adminNoticesList .admin-notice')).toHaveCount(3);
-  await expect(page.locator('#adminNoticesList .admin-notice.is-new')).toHaveCount(2);
-  await expect(page.locator('#adminNoticesList')).toContainText('bob changed their email');
-  await expect(page.locator('#adminNoticesList')).toContainText('bob@example.com');
+  await page.locator('#desktopSettingsBtn').click();
+  await expect(page.locator('#settingsTabAdmin .admin-badge')).toHaveText('2');
+  await page.locator('#settingsTabAdmin').click();
+  await expect(page.locator('#errorsNewCount')).toHaveText('1');
   await expect(badge).toBeHidden();
+  await expect(page.locator('#settingsTabAdmin .admin-badge')).toBeHidden();
   await expect.poll(() => seen.find((s) => s.path === 'admin/notices/seen')?.body?.at).toBe(NOTICES.items[0].at);
 });

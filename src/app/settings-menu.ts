@@ -1,11 +1,11 @@
-// The Settings (⋮) and Admin dropdowns. Each has two triggers sharing one
-// dropdown — the desktop rail-tab-row's and the mobile view-switcher's own
-// — only one of which is ever actually on-screen at a time, per the usual
-// @media rules. The dropdowns themselves live at the top level (see
-// #settingsDropdown's own markup comment), not nested inside either
-// trigger, so each one's position is computed fresh from whichever trigger
-// is visible each time it opens rather than relying on being a positioned
-// ancestor's child. Only one of the two menus is open at a time.
+// The Settings (⋮) dropdown. Two triggers share this one dropdown — the
+// desktop rail-tab-row's and the mobile view-switcher's own — only one of
+// which is ever actually on-screen at a time, per the usual @media rules.
+// #settingsDropdown itself lives at the top level (see its own markup
+// comment), not nested inside either trigger, so its position is computed
+// fresh from whichever one is visible each time it opens rather than
+// relying on being a positioned ancestor's child. Admins also get
+// Settings | Admin tabs at the top of it (showSettingsTab()).
 
 interface MenuDef {
   dropdownId: string;
@@ -19,16 +19,30 @@ const settingsMenu: MenuDef = {
   dropdownId: 'settingsDropdown', wrapSelector: '.settings-menu-wrap',
   triggerIds: ['desktopSettingsBtn', 'mobileSettingsBtn'], closeTimer: null,
 };
-const adminMenu: MenuDef = {
-  dropdownId: 'adminDropdown', wrapSelector: '.admin-menu-wrap',
-  triggerIds: ['desktopAdminBtn', 'mobileAdminBtn'], closeTimer: null,
-};
-const MENUS = [settingsMenu, adminMenu];
+const MENUS = [settingsMenu];
 
-// src/app/admin-notices.ts fills the Admin menu's notice list as it opens.
-export function setAdminMenuOnOpen(fn: () => void): void {
-  adminMenu.onOpen = fn;
+// Settings | Admin tabs. Every open starts on Settings. src/app/admin-notices.ts
+// hooks the Admin tab opening to clear its badge.
+let onAdminTabOpen: (() => void) | null = null;
+export function setAdminTabOnOpen(fn: () => void): void {
+  onAdminTabOpen = fn;
 }
+export function showSettingsTab(tab: 'general' | 'admin'): void {
+  const admin = tab === 'admin';
+  const general = document.getElementById('settingsGeneralPanel');
+  const adminPanel = document.getElementById('settingsAdminPanel');
+  if (general) general.hidden = admin;
+  if (adminPanel) adminPanel.hidden = !admin;
+  [['settingsTabGeneral', !admin], ['settingsTabAdmin', admin]].forEach(function(pair) {
+    const btn = document.getElementById(pair[0] as string);
+    if (!btn) return;
+    btn.classList.toggle('active', pair[1] as boolean);
+    btn.setAttribute('aria-pressed', String(pair[1]));
+  });
+  if (admin && onAdminTabOpen) onAdminTabOpen();
+  positionMenu(settingsMenu);
+}
+settingsMenu.onOpen = function() { showSettingsTab('general'); };
 
 function positionMenu(menu: MenuDef): void {
   const dropdown = document.getElementById(menu.dropdownId) as HTMLElement | null;
@@ -112,8 +126,6 @@ export function toggleSettingsMenu(): void { toggleMenu(settingsMenu); }
 export function closeSettingsMenu(): void { closeMenu(settingsMenu); }
 export function armSettingsMenuAutoClose(): void { armAutoClose(settingsMenu); }
 export function cancelSettingsMenuAutoClose(): void { cancelAutoClose(settingsMenu); }
-export function toggleAdminMenu(): void { toggleMenu(adminMenu); }
-export function closeAdminMenu(): void { closeMenu(adminMenu); }
 
 MENUS.forEach(function(menu) {
   document.querySelectorAll(menu.wrapSelector).forEach(function(el) {

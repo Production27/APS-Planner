@@ -186,7 +186,7 @@
      more — it's a shared top-level element, position:fixed, positioned
      in JS off whichever trigger (this one, or the mobile view-switcher's
      own copy — see its markup) is actually visible each time it opens. */
-  .settings-menu-wrap, .admin-menu-wrap {
+  .settings-menu-wrap {
     display: flex; align-items: center; position: relative;
     flex: 0 0 34px; height: 34px; border-radius: 8px;
     transition: background 0.2s ease;
@@ -284,35 +284,36 @@
      afterward (no mouse to move away and un-hover), which is exactly
      what looked like the settings icon staying highlighted after closing
      the menu. */
-  .rail-tab-row .settings-menu-wrap:hover, .rail-tab-row .admin-menu-wrap:hover {
+  .rail-tab-row .settings-menu-wrap:hover {
     background: var(--primary-light); color: white;
   }
-  .rail-tab-row .settings-menu-wrap:hover .settings-dots-btn, .rail-tab-row .admin-menu-wrap:hover .settings-dots-btn { color: white; }
+  .rail-tab-row .settings-menu-wrap:hover .settings-dots-btn { color: white; }
   /* Settings' own hover fills its background solid indigo, the exact
      --primary-light Gantt already uses as its own hardcoded icon color,
      so it needs forcing to white there or it'd vanish against it — the
      Outline Ring's own active state never fills a background (a border
      only), so no equivalent case exists for the rail-tab icons
      themselves. */
-  .rail-tab-row .settings-menu-wrap:hover svg, .rail-tab-row .admin-menu-wrap:hover svg { filter: brightness(0) invert(1); }
-  /* Admin menu: unread count on its trigger, and the "What's new" list
-     at the top of the dropdown (src/app/admin-notices.ts). */
+  .rail-tab-row .settings-menu-wrap:hover svg { filter: brightness(0) invert(1); }
+  /* Settings | Admin tabs (admins only) and the unread badge shown on the
+     Settings button and the Admin tab (src/app/admin-notices.ts). */
+  .settings-tabs { display: flex; gap: 2px; padding: 2px; margin: 0 var(--s-1) var(--s-1-5); background: rgba(127,127,127,0.12); border: 1px solid var(--border); border-radius: 8px; }
+  .settings-tab {
+    flex: 1; position: relative; padding: var(--s-1-5) var(--s-2); border: 0; border-radius: 6px; background: transparent;
+    font-family: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--text); cursor: pointer;
+  }
+  .settings-tab.active { background: var(--card, #fff); color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+  .settings-tab:focus-visible { outline: 2px solid var(--primary-light); outline-offset: -2px; }
+  .settings-tab .admin-badge { position: static; display: inline-block; margin-left: 4px; vertical-align: 1px; }
+  .settings-panel[hidden] { display: none; }
   .admin-badge {
     position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px; padding: 0 4px;
     border-radius: 8px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700;
     line-height: 16px; text-align: center; pointer-events: none; box-sizing: border-box;
   }
-  .admin-badge[hidden] { display: none; }
+  .admin-badge[hidden] { display: none !important; }
   .mobile-view-btn .admin-badge { top: 4px; right: calc(50% - 20px); z-index: 2; }
-  .admin-dropdown { width: 280px; }
-  .admin-notices-list { max-height: 260px; overflow-y: auto; }
-  .admin-notice { padding: var(--s-1-5) var(--s-3); border-radius: 6px; font-size: var(--t-sm); line-height: 1.35; border-left: 3px solid transparent; }
-  .admin-notice.is-new { background: var(--primary-tint); border-left-color: var(--primary-light); }
-  .admin-notice.is-new.is-error { border-left-color: var(--danger); }
-  .admin-notice-text { color: var(--text); }
-  .admin-notice-details { color: var(--text-secondary); word-break: break-word; margin-top: 1px; }
-  .admin-notice-time { color: var(--text-light); font-size: var(--t-xs); margin-top: 2px; }
-  .admin-notice-empty { padding: var(--s-1-5) var(--s-3) var(--s-2); font-size: var(--t-sm); color: var(--text-secondary); }
+  .settings-dropdown-item .admin-badge { position: static; margin-left: auto; }
   .manager-sidebar-header .badge { background: var(--primary-light); color: white; font-size: var(--t-2xs); padding: var(--s-0-5) var(--s-1-75); border-radius: 10px; font-weight: 700; margin-left: var(--s-0-5); }
 
   .tab-panel { display: none; height: 100%; overflow: hidden; }
@@ -3521,7 +3522,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .color-toggle-row:hover { background: rgba(255,255,255,0.05); }
 
   body.dark-mode .settings-dropdown-item:hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
-  body.dark-mode .admin-notice.is-new { background: rgba(57,73,171,0.2); }
+  body.dark-mode .settings-tab.active { background: var(--border); color: var(--primary-ondark); }
   body.dark-mode .settings-dropdown-divider { background: var(--border); }
   body.dark-mode .modal-box p { color: var(--text-light); }
 
@@ -3724,8 +3725,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        except Jobs, so anything nested inside it — the dropdown included,
        when it used to live there — was unreachable from any other
        mobile view). -->
-  <button class="mobile-view-btn settings-menu-wrap" id="mobileSettingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg></button>
-  <button class="mobile-view-btn admin-menu-wrap" id="mobileAdminBtn" data-min-tier="admin" title="Admin" aria-label="Admin" aria-haspopup="true" aria-expanded="false" aria-controls="adminDropdown"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="admin-badge" hidden></span></button>
+  <button class="mobile-view-btn settings-menu-wrap" id="mobileSettingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="admin-badge" hidden></span></button>
   <button class="mobile-view-btn active" data-view="jobs" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
   <!-- No Home button here either (see setMobileView()'s own comment) —
        same "turn off the tab you're in" gesture as desktop: tapping
@@ -3762,6 +3762,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        Each section's label and divider carry the same data-min-tier as its
        items, so nobody sees a heading with nothing under it. Archived Jobs
        moved out of this menu to a link at the bottom of the job list. -->
+  <!-- Admins get two tabs: everyday settings, and the admin tools
+       (people, backups, errors, security, maintenance). The red badge on
+       the Admin tab and on the Settings button counts new errors and
+       account events — see src/app/admin-notices.ts. -->
+  <div class="settings-tabs" data-min-tier="admin" role="group" aria-label="Menu section">
+    <button type="button" class="settings-tab active" id="settingsTabGeneral" aria-pressed="true">Settings</button>
+    <button type="button" class="settings-tab" id="settingsTabAdmin" aria-pressed="false">Admin <span class="admin-badge" hidden></span></button>
+  </div>
+  <div class="settings-panel" id="settingsGeneralPanel">
   <div class="settings-dropdown-label">Preferences</div>
   <button type="button" class="settings-dropdown-item toggle-item" id="darkModeBtn">
     <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
@@ -3800,21 +3809,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        comment). -->
   <button type="button" class="settings-dropdown-item" id="projectToggleBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></button>
   <button type="button" class="settings-dropdown-item" id="logoutBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H5a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 005 20h4" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11 12h10m0 0l-3.5-3.5M21 12l-3.5 3.5" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Log Out</button>
-</div>
-
-<!-- ADMIN MENU — admins only, split out of Settings so the everyday menu
-     stays short. Same shared-dropdown setup as #settingsDropdown (see
-     src/app/settings-menu.ts). "What's new" is filled by
-     src/app/admin-notices.ts, which also drives the red badge on both
-     triggers. -->
-<div class="settings-dropdown admin-dropdown" id="adminDropdown" role="group" aria-label="Admin">
-  <div class="settings-dropdown-label">What's new</div>
-  <div class="admin-notices-list" id="adminNoticesList" aria-live="polite"></div>
-  <div class="settings-dropdown-divider"></div>
-  <div class="settings-dropdown-label">Admin</div>
+  </div>
+  <div class="settings-panel" id="settingsAdminPanel" hidden>
   <button type="button" class="settings-dropdown-item" id="manageUsersBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</button>
   <button type="button" class="settings-dropdown-item" id="backupsBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="7" width="18" height="13" rx="1.5" fill="#90a4ae"/><rect x="2" y="3" width="20" height="4.5" rx="1.5" fill="#607d8b"/><rect x="9.5" y="11" width="5" height="2" rx="1" fill="#eceff1"/></svg> Backups</button>
-  <button type="button" class="settings-dropdown-item" id="errorsBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 20h20L12 2z" fill="#e53935"/><rect x="11" y="9" width="2" height="6" fill="#fff"/><rect x="11" y="16.5" width="2" height="2" fill="#fff"/></svg> Recent Errors</button>
+  <button type="button" class="settings-dropdown-item" id="errorsBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 20h20L12 2z" fill="#e53935"/><rect x="11" y="9" width="2" height="6" fill="#fff"/><rect x="11" y="16.5" width="2" height="2" fill="#fff"/></svg> Recent Errors<span class="admin-badge" id="errorsNewCount" hidden></span></button>
   <button type="button" class="settings-dropdown-item" id="securityDataBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Security &amp; data</button>
   <!-- MAINTENANCE MODE — see checkMaintenanceStatus()/setMaintenanceMode()
        in the script. Doesn't close the menu on click (like Dark Mode's
@@ -3843,6 +3842,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
       <textarea id="maintenanceMessageInput" rows="3" placeholder="We're making some backend changes — back shortly." style="width:0;min-width:100%;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:12.5px;padding: var(--s-2) var(--s-2-5);resize:none;outline:none;color:var(--text);"></textarea>
       <button id="maintenanceEnableBtn" style="margin-top: var(--s-2);width:0;min-width:100%;background:var(--accent);color:white;border:none;border-radius:6px;padding: var(--s-2) var(--s-2-5);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;">Turn On Maintenance Mode</button>
     </div>
+  </div>
   </div>
 </div>
 
@@ -3876,11 +3876,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
          selectors rather than duplicating them). -->
     <div class="rail-tab-row">
       <div class="settings-menu-wrap">
-        <button class="settings-dots-btn" id="desktopSettingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="rail-tab-label">Settings</span></button>
-      </div>
-      <!-- Admins only (data-min-tier on the wrap hides it outright). -->
-      <div class="admin-menu-wrap" data-min-tier="admin">
-        <button class="settings-dots-btn" id="desktopAdminBtn" title="Admin" aria-label="Admin" aria-haspopup="true" aria-expanded="false" aria-controls="adminDropdown"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#3949ab"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="admin-badge" hidden></span></button>
+        <button class="settings-dots-btn" id="desktopSettingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="rail-tab-label">Settings</span><span class="admin-badge" hidden></span></button>
       </div>
       <!-- No Home button — see switchTabMorphed()'s own comment: getting
            back to Home is done by toggling off whichever tab is

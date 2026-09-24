@@ -17,7 +17,7 @@
 // ordinary function's `this` inside a 'click' listener is the element the
 // listener is attached to, identical to an inline onclick's implicit
 // `this`. Everywhere else uses an arrow for brevity.
-import { toggleAdminMenu, closeAdminMenu } from './settings-menu';
+import { showSettingsTab } from './settings-menu';
 import { openExportModal, closeExportModal, runExport } from './export';
 import { openPrintModal, closePrintModal, syncPrintKind, runPrint } from './print';
 import { downloadIcs } from './ics';
@@ -121,8 +121,8 @@ export function initStaticEventListeners(): void {
   on('replayTourBtn', () => { closeSettingsMenu(); tutorialNotifShow(); });
   on('themeColorBtn', () => { closeSettingsMenu(); openThemeModal(); });
   on('workflowItemsBtn', () => { closeSettingsMenu(); openWorkflowItemsModal(); });
-  on('backupsBtn', () => { closeAdminMenu(); openBackupsModal(); });
-  on('errorsBtn', () => { closeAdminMenu(); openErrorsModal(); });
+  on('backupsBtn', () => { closeSettingsMenu(); openBackupsModal(); });
+  on('errorsBtn', () => { closeSettingsMenu(); openErrorsModal(); });
   on('maintenanceToggleBtn', () => toggleMaintenancePanel());
   // maintenanceEnableBtn is deliberately NOT wired here — applyMaintenanceStatus()
   // (src/app/maintenance.ts) always assigns its .onclick directly, toggling
@@ -131,9 +131,9 @@ export function initStaticEventListeners(): void {
   // onclick="setMaintenanceMode(true)" attribute was ALWAYS overwritten by
   // before a real click could ever reach it — an addEventListener here
   // would coexist with, not be replaced by, that reassignment and double-fire.
-  on('manageUsersBtn', () => { closeAdminMenu(); openManageUsersModal(); });
+  on('manageUsersBtn', () => { closeSettingsMenu(); openManageUsersModal(); });
   on('exportSpreadsheetBtn', () => { closeSettingsMenu(); openExportModal(); });
-  on('securityDataBtn', () => { closeAdminMenu(); openSecurityModal(); });
+  on('securityDataBtn', () => { closeSettingsMenu(); openSecurityModal(); });
   on('securityCloseBtn', () => closeSecurityModal());
   on('auditDownloadBtn', () => downloadAuditLog());
   on('dataExportBtn', () => exportAllData());
@@ -164,8 +164,8 @@ export function initStaticEventListeners(): void {
   on('logoutBtn', () => { closeSettingsMenu(); logout(); });
 
   on('desktopSettingsBtn', () => toggleSettingsMenu());
-  on('desktopAdminBtn', () => toggleAdminMenu());
-  on('mobileAdminBtn', () => toggleAdminMenu());
+  on('settingsTabGeneral', () => showSettingsTab('general'));
+  on('settingsTabAdmin', () => showSettingsTab('admin'));
   document.querySelectorAll<HTMLElement>('.rail-tab[data-tab]').forEach((el) => {
     el.addEventListener('click', () => switchTabMorphed(el.dataset.tab as string));
   });

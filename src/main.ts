@@ -17,7 +17,7 @@ import { openModal, closeModal, showToast, moveTooltip, hideTooltip, toggleMsDro
 import { checkForNewerVersion } from './app/version-check';
 import { checkMaintenanceStatus, applyMaintenanceStatus, toggleMaintenancePanel, setMaintenanceMode } from './app/maintenance';
 import { reportClientError } from './app/error-reporting';
-import { positionSettingsMenu, toggleSettingsMenu, closeSettingsMenu, armSettingsMenuAutoClose, cancelSettingsMenuAutoClose, toggleAdminMenu } from './app/settings-menu';
+import { positionSettingsMenu, toggleSettingsMenu, closeSettingsMenu, armSettingsMenuAutoClose, cancelSettingsMenuAutoClose, showSettingsTab } from './app/settings-menu';
 import { applyDarkMode, loadDarkModePref, toggleDarkMode, DEFAULT_THEME_COLOR, normalizeThemeColor, getSavedThemeColor, applyThemeColor, buildThemePresets, updateThemePreview, openThemeModal, closeThemeModal, applyTheme, resetThemeDefault, applyProjectBgVisual } from './app/theme';
 import {
   tutorialStateKey, getTutorialState, saveTutorialState,
@@ -298,7 +298,7 @@ declare global {
     closeSettingsMenu: typeof closeSettingsMenu;
     armSettingsMenuAutoClose: typeof armSettingsMenuAutoClose;
     cancelSettingsMenuAutoClose: typeof cancelSettingsMenuAutoClose;
-    toggleAdminMenu: typeof toggleAdminMenu;
+    showSettingsTab: typeof showSettingsTab;
     applyDarkMode: typeof applyDarkMode;
     loadDarkModePref: typeof loadDarkModePref;
     toggleDarkMode: typeof toggleDarkMode;
@@ -890,7 +890,7 @@ window.toggleSettingsMenu = toggleSettingsMenu;
 window.closeSettingsMenu = closeSettingsMenu;
 window.armSettingsMenuAutoClose = armSettingsMenuAutoClose;
 window.cancelSettingsMenuAutoClose = cancelSettingsMenuAutoClose;
-window.toggleAdminMenu = toggleAdminMenu;
+window.showSettingsTab = showSettingsTab;
 window.applyDarkMode = applyDarkMode;
 window.loadDarkModePref = loadDarkModePref;
 window.toggleDarkMode = toggleDarkMode;
