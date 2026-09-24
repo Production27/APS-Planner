@@ -823,11 +823,19 @@ function dragSpan(page, ids, subId, days) {
   }, { ...ids, subId, days });
 }
 
-test('gantt sub-phase order: moving a sub-phase later pushes later sub-phases by the same amount', async ({ page }) => {
+test('gantt sub-phase order: moving a sub-phase later leaves the next one alone until its start passes it', async ({ page }) => {
   const ids = await setupThreeSubPhases(page);
-  await dragSpan(page, ids, ids.subIds[0], 4);
+  await dragSpan(page, ids, ids.subIds[0], 4); // A now starts 09-05 — same day as B, not past it
   expect(await readSubPhases(page, ids)).toEqual([
-    ['2026-09-05', '2026-09-14'], ['2026-09-09', '2026-09-19'], ['2026-09-16', '2026-09-24'],
+    ['2026-09-05', '2026-09-14'], ['2026-09-05', '2026-09-15'], ['2026-09-12', '2026-09-20'],
+  ]);
+});
+
+test('gantt sub-phase order: dragging a sub-phase\'s start past the next one pushes it only as far as needed', async ({ page }) => {
+  const ids = await setupThreeSubPhases(page);
+  await dragSpan(page, ids, ids.subIds[0], 13); // A now starts 09-14, past B (09-05) and C (09-12)
+  expect(await readSubPhases(page, ids)).toEqual([
+    ['2026-09-14', '2026-09-23'], ['2026-09-14', '2026-09-24'], ['2026-09-14', '2026-09-22'],
   ]);
 });
 
