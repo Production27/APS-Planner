@@ -1075,6 +1075,52 @@
   body.dark-mode .gantt-job-focus-banner b { color: var(--primary-ondark); }
   .gantt-job-focus-hint { font-weight: 500; font-style: italic; color: var(--text-light); }
 
+  /* ===== GANTT KEY =====
+     Legend panel under the toolbar (see src/views/gantt-key.tsx). Lives in
+     .gantt-wrapper, not inside .gantt-toolbar, since the toolbar scrolls
+     sideways on narrow screens and would clip it. z-index 200 clears the
+     timeline's own overlays (today line 85, bars up to 82). */
+  .gantt-wrapper { position: relative; }
+  .gantt-key {
+    position: absolute; top: 49px; right: var(--s-2); z-index: 200;
+    width: min(360px, calc(100vw - 16px)); max-height: calc(100% - 57px); overflow-y: auto;
+    background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2); padding: var(--s-2-5) var(--s-3-5) var(--s-3);
+    font-size: var(--t-xs); line-height: 1.45;
+  }
+  .gantt-key[hidden] { display: none; }
+  .gantt-key-head { display: flex; align-items: center; justify-content: space-between; }
+  .gantt-key h3 { font-size: var(--t-sm); color: var(--primary); margin: 0; }
+  .gantt-key h4 { font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin: var(--s-3) 0 var(--s-1-5); }
+  .gantt-key-close { border: 0; background: none; font-size: 20px; line-height: 1; color: var(--text-light); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .gantt-key-close:hover { background: var(--primary-tint); color: var(--primary); }
+  .gantt-key-note { margin: 0 0 var(--s-1-5); color: var(--text-light); }
+  .gantt-key-stages { list-style: none; margin: 0 0 var(--s-1-5); padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-1-5) var(--s-3); }
+  .gantt-key-stages li { display: flex; align-items: center; gap: var(--s-1-5); }
+  .gantt-key-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+  .gantt-key-row { display: flex; align-items: flex-start; gap: var(--s-2-5); }
+  .gantt-key-swatch-cell { flex: 0 0 44px; display: flex; justify-content: center; padding-top: 1px; }
+  .gantt-key-sw { display: inline-block; width: 40px; height: 16px; border-radius: 3px; box-sizing: border-box; position: relative; flex-shrink: 0; }
+  .gantt-key-sw-stage { width: 22px; height: 14px; border: 1px solid rgba(0,0,0,0.08); }
+  .gantt-key-sw-outline { border: 3px solid var(--primary-light); border-radius: 4px; }
+  .gantt-key-sw-gap { display: inline-flex; overflow: hidden; }
+  .gantt-key-sw-gap span { flex: 1; }
+  .gantt-key-sw-tick span { position: absolute; left: 18px; top: -2px; bottom: -3px; width: 2px; background: rgba(255,255,255,0.9); box-shadow: 0 0 0 1px rgba(0,0,0,0.25); border-radius: 1px; }
+  .gantt-key-sw-due {
+    display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%;
+    font-size: 8px; background: var(--primary-light); border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--accent);
+  }
+  .gantt-key-sw-connector { display: inline-block; width: 40px; height: 16px; border-top: 2px solid var(--primary-light); border-right: 2px solid var(--primary-light); border-radius: 0 6px 0 0; margin-top: 7px; height: 9px; box-sizing: border-box; }
+  .gantt-key-sw-linked { border: 1px dashed rgba(0,0,0,0.45); filter: saturate(0.55); font-size: 11px; line-height: 14px; text-align: center; }
+  .gantt-key-sw-focus { font-size: var(--t-2xs); font-weight: 600; color: var(--primary-light); outline: 1.5px dashed currentColor; outline-offset: 2px; border-radius: 3px; padding: 0 2px; }
+  .gantt-key-sw-today { display: inline-block; width: 40px; height: 16px; background: linear-gradient(to right, transparent 0 19px, var(--accent) 19px 21px, rgba(229,57,53,0.12) 21px); }
+  .gantt-key-sw-weekend { background: var(--divider); border: 1px solid var(--border); }
+  body.dark-mode .gantt-key { background: var(--card); }
+  body.dark-mode .gantt-key h3 { color: var(--primary-ondark); }
+  body.dark-mode .gantt-key-close:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
+  body.dark-mode .gantt-key-sw-due { border-color: var(--card); }
+  body.dark-mode .gantt-key-sw-linked { border-color: rgba(255,255,255,0.5); }
+
   /* ===== DATE POPOVER ===== */
   .date-popover {
     position: absolute; background: white; border-radius: 8px;
@@ -3880,6 +3926,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
             <button class="gantt-toolbar-text-btn" id="ganttExpandAllBtn" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
             <button class="gantt-toolbar-text-btn" id="ganttCollapseAllBtn" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
+            <button class="gantt-toolbar-text-btn" id="ganttKeyBtn" title="What the colors and patterns mean" aria-expanded="false" aria-controls="ganttKeyPanel">Key</button>
             <!-- Desktop only — see .gantt-zoom-btn's mobile hide rule.
                  Mobile zooms by pinch instead (see the GANTT PINCH-TO-ZOOM
                  JS block); these stay for mouse/keyboard-only desktop use
@@ -3891,6 +3938,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <button id="ganttScrollTodayBtn" title="Jump to today" aria-label="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
           </div>
         </div>
+        <!-- Filled by src/views/gantt-key.tsx each time #ganttKeyBtn opens it. -->
+        <div class="gantt-key" id="ganttKeyPanel" role="dialog" aria-labelledby="ganttKeyTitle" hidden></div>
         <div class="gantt-panels-row">
           <div class="left-panel">
             <div class="gantt-col-resize" id="ganttColResize" role="separator" aria-orientation="vertical" aria-label="Resize the job column (arrow keys, double-click to reset)" title="Drag to resize · double-click to reset" tabindex="0"></div>

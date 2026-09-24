@@ -24,6 +24,7 @@ import { openSecurityModal, closeSecurityModal, downloadAuditLog, exportAllData,
 import { openTwoStepModal, closeTwoStepModal, startTwoStepSetup, confirmTwoStepSetup, makeNewRecoveryCodes, turnOffTwoStep, setRequireTwoStep } from './two-step';
 import { saveGoogleSettings } from './sso-settings';
 import { openAccountEmailModal, closeAccountEmailModal, saveMyEmail, connectGoogleAccount } from './account-email';
+import { toggleGanttKey } from '../views/gantt-key';
 
 declare global {
   function toggleSettingsMenu(): void;
@@ -191,6 +192,7 @@ export function initStaticEventListeners(): void {
 
   on('ganttExpandAllBtn', () => expandAllGantt());
   on('ganttCollapseAllBtn', () => collapseAllGantt());
+  on('ganttKeyBtn', () => toggleGanttKey());
   on('ganttZoomInBtn', () => zoomIn());
   on('ganttZoomOutBtn', () => zoomOut());
   on('ganttResetZoomBtn', () => resetZoom());

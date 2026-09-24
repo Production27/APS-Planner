@@ -822,6 +822,43 @@ test('gantt zoom: zoomIn/zoomOut/resetZoom step dayWidth and clamp to [14, 80]',
   expect(result.clampedHigh).toBe(80);
 });
 
+test('gantt key: the Key button opens a legend listing each stage color, and Escape or an outside click closes it', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('gantt'));
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+
+  // One stage with its own color, the rest without — the key lists the
+  // colored one as a swatch and names the others as using the job's color.
+  const { coloredLabel, otherLabel } = await page.evaluate(() => {
+    BOARD_COLUMNS.forEach((c, i) => { c.color = i === 0 ? '#4dd0e1' : undefined; });
+    return { coloredLabel: BOARD_COLUMNS[0].label, otherLabel: BOARD_COLUMNS[1].label };
+  });
+
+  const btn = page.locator('#ganttKeyBtn');
+  const panel = page.locator('#ganttKeyPanel');
+  await expect(panel).toBeHidden();
+  await btn.click();
+  await expect(panel).toBeVisible();
+  await expect(btn).toHaveAttribute('aria-expanded', 'true');
+  await expect(panel.locator('.gantt-key-stages li')).toHaveText([coloredLabel]);
+  await expect(panel.locator('.gantt-key-note').last()).toContainText(otherLabel);
+  await expect(panel).toContainText('Stripes');
+  await expect(panel).not.toContainText(/turn (the )?stripes off/i);
+
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+  await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  await expect(btn).toBeFocused();
+
+  await btn.click();
+  await expect(panel).toBeVisible();
+  await page.mouse.click(300, 400);
+  await expect(panel).toBeHidden();
+});
+
 test('gantt zoom: fitToView computes a dayWidth that fits the whole visible date range in the container', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
