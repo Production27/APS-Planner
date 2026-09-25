@@ -531,6 +531,61 @@ test('calendar bar drag: dragging a calendar event bar reschedules it by the dra
   expect(result.duration).toBe(before.duration);
 });
 
+test('calendar toolbar: "Jobs" shows one bar per job; job, person and stage filters narrow the bars and hide calendar-only events', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTabMorphed('calendar'));
+  await page.waitForFunction(() => getActiveTab() === 'calendar');
+
+  const stageIds = await page.evaluate(() => {
+    const cols = BOARD_COLUMNS.map((c, i) => ({ c, i })).filter((x) => !x.c.hideFromSchedule).slice(0, 2);
+    // Two stages with a one-day gap between them, so "Stages" draws two bars per job.
+    const mk = (id, name, pm) => {
+      const job = { id, name, color: '#1e88e5', archived: false, comments: [], order: 0, tasks: [
+        { id: id + 'a', name: cols[0].c.label, columnId: cols[0].c.id, order: cols[0].i, start: '2026-09-08', finish: '2026-09-09' },
+        { id: id + 'b', name: cols[1].c.label, columnId: cols[1].c.id, order: cols[1].i, start: '2026-09-11', finish: '2026-09-12' },
+      ] };
+      jobs.push(job);
+      ensureJobHasCards(job);
+      boardCards.find((c) => c.jobId === id).customFields = { pm };
+    };
+    mk('calF1', 'Filter Job One', 'alice');
+    mk('calF2', 'Filter Job Two', 'bob');
+    calendarEvents.push({ id: 'calFevt', title: 'Crew meeting', start: '2026-09-10', duration: 1, repeat: 'none', repeatUntil: null, color: '#7e57c2', exceptions: {}, visibility: 'all', visibleMembers: [] });
+    calendarViewDate = new Date('2026-09-15T00:00:00');
+    calendarViewMode = 'month';
+    renderCalendar();
+    return cols.map((x) => x.c.id);
+  });
+
+  const bars = (jobId) => page.locator('#calendarDays .cal-event-bar[data-cal-job-id="' + jobId + '"]');
+  await expect(bars('calF1')).toHaveCount(2);
+
+  await page.locator('#calFilterBar').getByRole('button', { name: 'Jobs', exact: true }).click();
+  await expect(bars('calF1')).toHaveCount(1);
+  await expect(bars('calF1')).toHaveAttribute('data-cal-task-start', '2026-09-08');
+  await expect(bars('calF1')).toHaveAttribute('data-cal-task-finish', '2026-09-12');
+  await page.locator('#calFilterBar').getByRole('button', { name: 'Stages', exact: true }).click();
+
+  await page.locator('#calFilterBar .rep-filter-btn').click();
+  await page.locator('#calFilterBar select').nth(1).selectOption('alice');
+  await expect(bars('calF2')).toHaveCount(0);
+  await expect(bars('calF1')).toHaveCount(2);
+  await expect(page.locator('.cal-event-bar', { hasText: 'Crew meeting' })).toHaveCount(0);
+
+  await page.locator('#calFilterBar select').nth(2).selectOption(stageIds[1]);
+  await expect(bars('calF1')).toHaveCount(1);
+  await expect(bars('calF1')).toHaveAttribute('data-cal-task-start', '2026-09-11');
+
+  // Removing both chips brings everything back.
+  await page.locator('#calFilterBar .rep-chip button').first().click();
+  await page.locator('#calFilterBar .rep-chip button').first().click();
+  await expect(bars('calF2')).toHaveCount(2);
+  await expect(page.locator('.cal-event-bar', { hasText: 'Crew meeting' })).toHaveCount(1);
+});
+
 test('calendar wheel navigation: a horizontal trackpad scroll pages the month, a vertical one does not', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);

@@ -3567,11 +3567,31 @@ function isCalendarJobSpanTaskId(taskId: unknown): boolean {
 // collapsed-row look, a real scheduling gap between two of a sub-phase's
 // tasks gets no bar at all instead of one continuous bar painted
 // straight through it.
-function buildCalendarJobRows(jobsArr: Job[]): any[] {
+//
+// Calendar tab options: onlyColumnId keeps just that stage's tasks (every
+// other stage is treated like a hideFromSchedule one); perJob replaces
+// all of a job's bars with one plain bar in the job's color from its
+// first start to its last finish.
+function buildCalendarJobRows(jobsArr: Job[], opts?: { onlyColumnId?: string; perJob?: boolean }): any[] {
   const hiddenOrders = getHiddenTaskOrders();
+  if (opts && opts.onlyColumnId) {
+    BOARD_COLUMNS.forEach(function (c, i) { if (c.id !== opts.onlyColumnId) hiddenOrders.add(i); });
+  }
   const rows: any[] = [];
+  const jobSpans = new Map<string, { job: Job; start: Date; finish: Date }>();
   forEachVisibleSubUnit(jobsArr, function (job, jobIdx, phase, phaseName, subUnit, subIdx, subPhaseName) {
     const clusters = buildSubUnitClusters(job, subUnit, hiddenOrders);
+    if (opts && opts.perJob) {
+      clusters.forEach(function (cluster) {
+        const span = jobSpans.get(job.id);
+        if (!span) jobSpans.set(job.id, { job: job, start: cluster.start, finish: cluster.finish });
+        else {
+          if (cluster.start < span.start) span.start = cluster.start;
+          if (cluster.finish > span.finish) span.finish = cluster.finish;
+        }
+      });
+      return;
+    }
     const namePart = (phaseName ? ' — ' + phaseName : '') + (subPhaseName ? ' — ' + subPhaseName : '');
     clusters.forEach(function (cluster, clusterIdx) {
       const single = cluster.segments.length === 1 ? cluster.segments[0] : null;
@@ -3586,6 +3606,15 @@ function buildCalendarJobRows(jobsArr: Job[]): any[] {
     });
   }, function (job, jobIdx, phase, phaseName, subUnit, subPhaseName, dueTask) {
     rows.push({ job: job, task: dueTask, phaseId: phase.id, phaseName: phaseName, subPhaseId: subUnit.id, subPhaseName: subPhaseName });
+  });
+  jobSpans.forEach(function (span) {
+    const pseudoTask = {
+      id: CALENDAR_JOB_SPAN_TASK_PREFIX + span.job.id + '|||0',
+      name: span.job.name,
+      start: toIsoDate(span.start), finish: toIsoDate(span.finish),
+      notes: '', color: span.job.color, order: 0, isJobSpan: true,
+    };
+    rows.push({ job: span.job, task: pseudoTask, phaseId: null, phaseName: '', subPhaseId: null, subPhaseName: '' });
   });
   return rows;
 }

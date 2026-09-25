@@ -41,6 +41,7 @@ import { getStoredUsername } from '../auth/session';
 import { ensureUserRosterLoaded } from '../app/user-roster';
 import { renderCalBarsInto, type CalBarProps, type CalBarContent, type CalBarSegmentBlock } from './calendar-bar';
 import { renderWeekHourLabelsInto, renderWeekHourColsInto, type HourLabel, type WeekHourColumn, type WeekTimedEvent } from './calendar-hourgrid';
+import { getCalendarViewOptions, filterCalendarJobs, renderCalendarFilterBar } from './calendar-filters';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS-style shared state, saveJobs()-style shared functions,
@@ -68,7 +69,7 @@ declare global {
   // gets its own narrower view of the same real function.
   function getVisibleJobs(): CalJob[];
   function flattenJobs(jobsArr: CalJob[]): CalRow[];
-  function buildCalendarJobRows(jobsArr: CalJob[]): CalRow[];
+  function buildCalendarJobRows(jobsArr: CalJob[], opts?: { onlyColumnId?: string; perJob?: boolean }): CalRow[];
   function isTaskFinished(job: CalJob, task: CalTask): boolean;
   function isDarkColor(hex: string): boolean;
   function editJob(jobId: string, phaseId?: string | null): void;
@@ -534,6 +535,21 @@ function calendarExitDayView(): void {
   renderCalendar();
 }
 
+// The Calendar tab's own job rows, narrowed by its toolbar options (see
+// calendar-filters.tsx). Home's calendar widget calls
+// buildCalendarJobRows() directly, so it always shows everything.
+function buildCalendarRowsForView(): CalRow[] {
+  const v = getCalendarViewOptions();
+  return buildCalendarJobRows(filterCalendarJobs(getVisibleJobs()), { perJob: v.perJob, onlyColumnId: v.stage });
+}
+
+// Calendar-only events belong to no job, person or stage, so any active
+// filter hides them.
+function calendarFiltersActive(): boolean {
+  const v = getCalendarViewOptions();
+  return !!(v.jobId || v.person || v.stage);
+}
+
 function renderCalendar(): void {
   // Exposed on <body> so mobile CSS can key off it — see the
   // body[data-calendar-mode="week"] #weekHourSection rule, which day mode
@@ -548,6 +564,8 @@ function renderCalendar(): void {
   // positions, so they landed 48px left of where the columns actually
   // ended up once the padding kicked in.
   document.body.dataset.calendarMode = calendarViewMode;
+  const filterBar = document.getElementById('calFilterBar');
+  if (filterBar) renderCalendarFilterBar(filterBar, { jobs: getVisibleJobs() as unknown as Job[], mode: calendarViewMode, onChange: renderCalendar });
   if (calendarViewMode === 'week') {
     renderWeekCalendar();
   } else if (calendarViewMode === 'day') {
@@ -916,13 +934,13 @@ function renderMonthCalendar(): void {
   // flattenJobs()) so a job's sub-units always render as one condensed,
   // overlapping bar each instead of one row per task — see its own
   // comment for the full rationale.
-  const flatRows = buildCalendarJobRows(getVisibleJobs());
+  const flatRows = buildCalendarRowsForView();
   const allJobs: CalDateRow[] = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start! + 'T00:00:00');
     const f = new Date(row.task.finish! + 'T00:00:00');
     return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName };
   });
-  flattenCalendarEventsForRange(cellDates[0], cellDates[cellDates.length - 1]).forEach(function (row, i) {
+  if (!calendarFiltersActive()) flattenCalendarEventsForRange(cellDates[0], cellDates[cellDates.length - 1]).forEach(function (row, i) {
     allJobs.push({ flatIdx: 'ce-' + i, job: row.job, task: row.task, start: row.start, finish: row.finish });
   });
 
@@ -1054,14 +1072,14 @@ function renderWeekCalendar(): void {
   // except calendar events that have a time set, which render in the
   // separate hourly grid below (built further down) instead of up here in
   // the all-day-style row.
-  const flatRows = buildCalendarJobRows(getVisibleJobs());
+  const flatRows = buildCalendarRowsForView();
   const allJobs: CalDateRow[] = flatRows.map((row, flatIdx) => {
     const s = new Date(row.task.start! + 'T00:00:00');
     const f = new Date(row.task.finish! + 'T00:00:00');
     return { flatIdx, job: row.job, task: row.task, start: s, finish: f, phaseId: row.phaseId, phaseName: row.phaseName, subPhaseId: row.subPhaseId, subPhaseName: row.subPhaseName };
   });
   const timedCalRows: { job: CalJob; task: CalTask; start: Date; finish: Date }[] = [];
-  flattenCalendarEventsForRange(weekStart, weekEnd).forEach(function (row, i) {
+  if (!calendarFiltersActive()) flattenCalendarEventsForRange(weekStart, weekEnd).forEach(function (row, i) {
     if (row.task.time) { timedCalRows.push(row); return; }
     allJobs.push({ flatIdx: 'ce-' + i, job: row.job, task: row.task, start: row.start, finish: row.finish });
   });
@@ -1277,14 +1295,16 @@ function calendarOpenJob(jobId: string, taskId: string, phaseId?: string | null)
 function getScheduledItemsForDate(dateStr: string): { job: CalJob; task: CalTask; phaseId?: string | null }[] {
   const d = new Date(dateStr + 'T00:00:00');
   const items: { job: CalJob; task: CalTask; phaseId?: string | null }[] = [];
-  flattenJobs(getVisibleJobs()).forEach(function (row) {
+  const stage = getCalendarViewOptions().stage;
+  flattenJobs(filterCalendarJobs(getVisibleJobs())).forEach(function (row) {
     if (!row.task.start || !row.task.finish) return;
+    if (stage && !row.task.isDueMarker && row.task.columnId !== stage) return;
     const s = new Date(row.task.start + 'T00:00:00');
     const f = new Date(row.task.finish + 'T00:00:00');
     if (isNaN(s.getTime()) || isNaN(f.getTime())) return;
     if (d >= s && d <= f) items.push({ job: row.job, task: row.task, phaseId: row.phaseId });
   });
-  flattenCalendarEventsForRange(d, d).forEach(function (row) {
+  if (!calendarFiltersActive()) flattenCalendarEventsForRange(d, d).forEach(function (row) {
     items.push({ job: row.job, task: row.task });
   });
   // All-day items first, then timed items chronologically — matches how

@@ -413,6 +413,8 @@
      everything else pushed to the right (see .calendar-view-toggle-wrap's
      margin-left: auto). */
   .calendar-toolbar h3 { font-size: var(--t-xl); color: var(--text); }
+  .cal-filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+  .cal-filter-menu { width: 280px; }
   /* Slightly smaller than the app's default .btn (padding: 10px var(--s-6)) —
      the request was specifically to make this bar a little shorter, and
      the default button size was what set its height. */
@@ -4099,6 +4101,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
                empty-cell-to-click affordance for adding an event the way
                month/week's grid cells do. -->
           <button class="btn btn-secondary" id="calAddEventBtn" data-min-tier="editor" style="display:none;">+ Add</button>
+          <!-- Stages/Jobs bars + Filter menu, rendered by calendar-filters.tsx. -->
+          <div class="cal-filter-bar" id="calFilterBar"></div>
           <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap: var(--s-1);background:var(--primary-tint);padding: var(--s-0-75);border-radius:8px;">
             <button class="btn btn-secondary" id="calViewMonth" style="padding: var(--s-1-5) var(--s-3-5);font-size: var(--t-sm);">Month</button>
             <button class="btn btn-secondary" id="calViewWeek" style="padding: var(--s-1-5) var(--s-3-5);font-size: var(--t-sm);">Week</button>
