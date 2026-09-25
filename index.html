@@ -104,7 +104,7 @@
     padding: var(--s-1-5) var(--s-4); font-size: var(--t-sm); font-weight: 700; cursor: pointer; flex-shrink: 0;
     transition: transform 0.15s;
   }
-  .new-version-banner button:hover { transform: translateY(-1px); }
+  .new-version-banner button:hover { background: #eef0fb; }
 
   /* ===== EDITABLE HEADER ===== */
   /* The whole title bar is gone per user request — its functional
@@ -1078,16 +1078,16 @@
      if Expand All/Collapse All plus every icon button don't all fit. */
   .gantt-toolbar { display: flex; gap: var(--s-1); align-items: center; justify-content: flex-end; flex: 1; box-sizing: border-box; padding: 0 var(--s-2); overflow-x: auto; }
   .gantt-toolbar button {
-    background: transparent; border: 1px solid var(--border); color: var(--text-light);
-    width: 26px; height: 26px; padding: 0; border-radius: 6px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--border); color: var(--text);
+    width: 28px; height: 28px; padding: 0; border-radius: 8px; cursor: pointer;
     font-size: var(--t-base); font-weight: 700; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s;
     /* The toolbar scrolls sideways on a phone — buttons keep their 26px
        tap size instead of being squeezed (WCAG 2.5.8, A5). */
     flex-shrink: 0;
   }
-  .gantt-toolbar button:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); box-shadow: 0 3px 6px rgba(26,35,126,0.15); transform: translateY(-1px); }
-  .gantt-toolbar button:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,0.1) inset; }
+  .gantt-toolbar button:hover { background: var(--primary-tint); }
+
   /* See ganttFocusedJobId/ganttFocusedTaskColumnId/syncGanttFocusBanner() —
      sits ahead of the icon buttons, pushed to the toolbar's left edge via
      margin-right: auto so the zoom/today/etc. buttons stay pinned right
@@ -1342,9 +1342,9 @@
   /* Same solid, clearly-clickable treatment as .btn-secondary (e.g.
      jmAttachmentAddBtn's "+ Add") instead of the old transparent/dashed
      look, which read as a disabled placeholder rather than an action. */
-  .job-phase-strip-btn { padding: var(--s-1-25) var(--s-2-5); border-radius: 14px; background: linear-gradient(180deg, #ffffff 0%, var(--btn-gradient-end) 100%); border: 1px solid var(--border); color: var(--text); font-size: var(--t-sm); font-weight: 600; cursor: pointer; box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 2px rgba(0,0,0,0.04), 0 2px 5px rgba(0,0,0,0.06); transition: all 0.15s; }
-  .job-phase-strip-btn:hover { border-color: var(--primary-light); color: var(--primary-light); background: linear-gradient(180deg, #ffffff 0%, #eef0f4 100%); transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 3px 8px rgba(0,0,0,0.1); }
-  body.dark-mode .job-phase-strip-btn { background: linear-gradient(180deg, var(--card) 0%, #1c1f28 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 5px rgba(0,0,0,0.3); }
+  .job-phase-strip-btn { padding: var(--s-1-25) var(--s-2-5); border-radius: 8px; background: var(--card); border: 1px solid var(--border); color: var(--text); font-size: var(--t-sm); font-weight: 600; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+  .job-phase-strip-btn:hover { background: var(--primary-tint); }
+  body.dark-mode .job-phase-strip-btn:hover { background: rgba(57,73,171,0.2); }
   body.dark-mode .job-phase-strip-btn:hover { border-color: var(--primary-ondark); color: var(--primary-ondark); background: linear-gradient(180deg, #262a35 0%, #1c1f28 100%); }
   .job-subphase-strip { margin: var(--s-1-5) 0 0 var(--s-5); padding-left: var(--s-2-5); border-left: 2px solid #dcdfe6; }
   body.dark-mode .job-subphase-strip { border-left-color: rgba(255,255,255,0.15); }
@@ -1528,10 +1528,10 @@
     width: 100%; box-sizing: border-box; padding: var(--s-2) var(--s-1-5);
     border: 1px solid var(--border); border-radius: 6px; font-size: var(--t-base);
     font-family: inherit; color: var(--text);
-    background: #eef0f5; cursor: pointer; user-select: none; min-height: 33px;
+    background: var(--card); cursor: pointer; user-select: none; min-height: 33px;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
-  .task-fixed-date-display:hover { border-color: var(--primary-light); background: #e1e5f5; color: var(--primary); }
+  .task-fixed-date-display:hover { border-color: var(--primary-light); background: var(--primary-tint); color: var(--primary); }
   .task-fixed-date-display.empty { color: var(--text-light); }
   .task-fixed-date-display.empty:hover { color: var(--primary); }
   body.dark-mode .task-fixed-date-display:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
@@ -1549,7 +1549,7 @@
        itself, just callable. */
     pointer-events: none;
   }
-  body.dark-mode .task-fixed-date-display { background: rgba(255,255,255,0.06); }
+  body.dark-mode .task-fixed-date-display { background: var(--card); }
   .task-fixed-swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
   .task-fixed-name { font-size: var(--t-base); font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .task-fixed-header { display: grid; grid-template-columns: auto 1fr 92px 50px 92px; gap: var(--s-1-5); font-size: var(--t-xs); font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: var(--s-1-5); padding: 0 var(--s-0-5); }
@@ -1563,20 +1563,24 @@
   .color-preset:hover { transform: scale(1.15); box-shadow: 0 3px 8px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.3); }
   .color-preset.selected { border-color: var(--text); transform: scale(1.15); box-shadow: 0 3px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3); }
   .form-actions { display: flex; gap: var(--s-2-5); margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--border); }
-  .btn { padding: var(--s-2-5) var(--s-6); border-radius: 8px; font-size: var(--t-base); font-weight: 700; cursor: pointer; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: var(--s-1-5); position: relative; }
-  .btn:active { transform: translateY(1px) !important; }
-  .btn-primary { background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: white; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); }
-  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 3px 6px rgba(26,35,126,0.3), 0 8px 18px rgba(26,35,126,0.35); }
-  .btn-primary:active { box-shadow: 0 -1px 0 rgba(255,255,255,0.12) inset, 0 2px 4px rgba(0,0,0,0.2) inset, 0 1px 3px rgba(26,35,126,0.35); }
-  .btn-secondary { background: linear-gradient(180deg, #ffffff 0%, var(--btn-gradient-end) 100%); color: var(--text); border: 1px solid var(--border); box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 2px rgba(0,0,0,0.04), 0 2px 5px rgba(0,0,0,0.06); }
-  .btn-secondary:hover { background: linear-gradient(180deg, #ffffff 0%, #eef0f4 100%); border-color: #c8ccd6; box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 3px 8px rgba(0,0,0,0.1); transform: translateY(-1px); }
-  .btn-secondary:active { background: #eceef2; box-shadow: 0 1px 3px rgba(0,0,0,0.1) inset; }
-  .btn-success { background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%); color: white; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(46,125,50,0.25), 0 4px 10px rgba(46,125,50,0.25); }
-  .btn-success:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 3px 6px rgba(46,125,50,0.3), 0 8px 18px rgba(46,125,50,0.35); }
-  .btn-success:active { box-shadow: 0 -1px 0 rgba(255,255,255,0.12) inset, 0 2px 4px rgba(0,0,0,0.2) inset, 0 1px 3px rgba(46,125,50,0.35); }
-  .btn-danger { background: linear-gradient(135deg, #e53935 0%, #c62828 100%); color: white; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(198,40,40,0.25), 0 4px 10px rgba(198,40,40,0.25); }
-  .btn-danger:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 3px 6px rgba(198,40,40,0.3), 0 8px 18px rgba(198,40,40,0.35); }
-  .btn-danger:active { box-shadow: 0 -1px 0 rgba(255,255,255,0.12) inset, 0 2px 4px rgba(0,0,0,0.2) inset, 0 1px 3px rgba(198,40,40,0.35); }
+  /* Flat buttons app-wide (2026-09-25): one look everywhere, the one the
+     Reports and Calendar toolbars use. No gradients, 3D shadows or lift on
+     hover; secondary = card fill + 1px border, tinted on hover. */
+  .btn { padding: var(--s-2) var(--s-4); min-height: 34px; border-radius: 8px; font-size: var(--t-sm); font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background 0.15s, border-color 0.15s, color 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: var(--s-1-5); position: relative; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn:active:not(:disabled) { filter: brightness(0.95); }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-light); }
+
+  .btn-secondary { background: var(--card); color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover:not(:disabled) { background: var(--primary-tint); }
+
+  .btn-success { background: #2e7d32; color: white; }
+  .btn-success:hover:not(:disabled) { background: #388e3c; }
+
+  .btn-danger { background: #c62828; color: white; }
+  .btn-danger:hover:not(:disabled) { background: #d32f2f; }
+
   /* "+ Add Job" tile appended as the last child of #jobList itself (see
      renderJobList()) so it sits right after the last job and moves down
      with the list as more get added — same look as the Board's dashed
@@ -2770,7 +2774,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .onb-notif-x { margin-left: auto; background: none; border: none; color: var(--text-light); cursor: pointer; font-size: var(--t-lg); line-height: 1; padding: var(--s-0-5); opacity: 0.6; flex-shrink: 0; }
   .onb-notif-x:hover { opacity: 1; }
   .onb-notif-actions { display: flex; align-items: center; gap: var(--s-2); }
-  .onb-notif-primary { flex: 1; padding: var(--s-2) var(--s-3); border-radius: 7px; font-size: var(--t-base); font-weight: 700; cursor: pointer; border: none; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: #fff; box-shadow: 0 2px 4px rgba(26,35,126,0.25); }
+  .onb-notif-primary { flex: 1; padding: var(--s-2) var(--s-3); border-radius: 7px; font-size: var(--t-base); font-weight: 700; cursor: pointer; border: none; background: var(--primary); color: #fff; }
   .onb-notif-secondary { padding: var(--s-2) var(--s-3); border-radius: 7px; font-size: var(--t-base); font-weight: 600; cursor: pointer; background: none; border: 1px solid var(--border); color: var(--text); }
   .onb-notif-secondary:hover { background: var(--bg); }
   .onb-notif-never { display: block; width: 100%; text-align: center; background: none; border: none; margin-top: var(--s-2-5); font-size: var(--t-xs); color: var(--text-light); text-decoration: underline; cursor: pointer; padding: var(--s-0-5); }
@@ -2796,7 +2800,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .onb-tut-back { background: none; color: var(--text-light); }
   .onb-tut-back:hover { color: var(--text); }
   .onb-tut-back:disabled { visibility: hidden; }
-  .onb-tut-next { background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: #fff; }
+  .onb-tut-next { background: var(--primary); color: #fff; }
   .onb-tut-skip { font-size: var(--t-sm); color: var(--text-light); text-decoration: underline; cursor: pointer; background: none; border: none; padding: var(--s-1); }
 
   .onb-cm-dim { position: fixed; inset: 0; z-index: 5000; opacity: 0; pointer-events: none; transition: opacity .2s ease; }
@@ -2813,7 +2817,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .onb-cm-nav button { padding: var(--s-1-5) var(--s-3); border-radius: 6px; font-size: var(--t-sm); font-weight: 700; cursor: pointer; border: none; }
   .onb-cm-back { background: none; color: var(--text-light); }
   .onb-cm-back:disabled { visibility: hidden; }
-  .onb-cm-next { background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); color: #fff; }
+  .onb-cm-next { background: var(--primary); color: #fff; }
   .onb-cm-skip { font-size: var(--t-xs); color: var(--text-light); text-decoration: underline; cursor: pointer; background: none; border: none; padding: var(--s-0-75); }
   .onb-cm-progress { font-size: var(--t-xs); color: var(--text-light); }
 
@@ -2894,8 +2898,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .pw-toggle svg.eye-off { display: none; }
   .pw-toggle.showing svg.eye { display: none; }
   .pw-toggle.showing svg.eye-off { display: block; }
-  .login-submit { width: 100%; padding: var(--s-3); font-size: var(--t-lg); font-weight: 600; font-family: inherit; color: #fff; border: none; border-radius: 8px; cursor: pointer; background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -2px 4px rgba(0,0,0,0.15) inset, 0 2px 4px rgba(26,35,126,0.25), 0 4px 10px rgba(26,35,126,0.25); display: flex; align-items: center; justify-content: center; gap: 9px; transition: filter 0.15s, transform 0.05s; margin-top: var(--s-1); }
-  .login-submit:hover { filter: brightness(1.06); }
+  .login-submit { width: 100%; padding: var(--s-3); font-size: var(--t-lg); font-weight: 600; font-family: inherit; color: #fff; border: none; border-radius: 8px; cursor: pointer; background: var(--primary); display: flex; align-items: center; justify-content: center; gap: 9px; transition: filter 0.15s, transform 0.05s; margin-top: var(--s-1); }
+  .login-submit:hover:not(:disabled) { background: var(--primary-light); }
   .login-submit:active { transform: translateY(1px); }
   .login-submit:disabled { cursor: default; filter: none; opacity: 0.85; }
   .login-spinner { display: none; width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; animation: freshLoadSpin 0.7s linear infinite; }
@@ -2963,7 +2967,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .activity-log-empty { padding: var(--s-5); text-align:center; color:var(--text-faint); font-size: var(--t-base); }
   body.dark-mode .activity-log-item { border-bottom-color:var(--border); }
   body.dark-mode .activity-log-empty { color:var(--text-faint); }
-
 
   /* ===== APP SHELL =====
      Full-height row: the job rail (#jobRail) on the left spans the entire
@@ -3483,9 +3486,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .job-card .job-card-title {
     color: var(--jct-dark, var(--text));
   }
-  body.dark-mode .btn-secondary { background: linear-gradient(180deg, var(--card) 0%, #1c1f28 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 5px rgba(0,0,0,0.3); }
-  body.dark-mode .btn-secondary:hover { background: linear-gradient(180deg, #262a35 0%, #1c1f28 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 3px 8px rgba(0,0,0,0.4); }
-  body.dark-mode .btn-secondary:active { background: #1a1d24; }
+  body.dark-mode .btn-secondary { background: var(--card); }
+  body.dark-mode .btn-secondary:hover:not(:disabled) { background: rgba(57,73,171,0.2); }
 
   /* Bigger canvas areas get a soft gradient instead of a flat fill */
   body.dark-mode .manager-form-area,
@@ -3534,8 +3536,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .row-bg { border-bottom-color: rgba(255,255,255,0.04); }
   body.dark-mode .row-bg:nth-child(even) { background: rgba(255,255,255,0.02); }
 
-  body.dark-mode .gantt-toolbar button { background: transparent; border-color: var(--border); color: var(--text-light); }
-  body.dark-mode .gantt-toolbar button:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; border-color: var(--primary-light); }
+  body.dark-mode .gantt-toolbar button { background: var(--card); border-color: var(--border); color: var(--text); }
+  body.dark-mode .gantt-toolbar button:hover { background: rgba(57,73,171,0.2); }
 
   body.dark-mode .date-popover .dp-label,
   body.dark-mode .cf-field label,
@@ -3630,8 +3632,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      these showed up on the old icon-only archive button this replaced,
      since a 15px SVG icon fits fine even forced into a 26px square. */
   .gantt-toolbar button.gantt-toolbar-text-btn {
-    background: transparent; border: 1px solid var(--border); color: var(--text-light);
-    width: auto; padding: 0 var(--s-2-5); height: 26px; border-radius: 6px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--border); color: var(--text);
+    width: auto; padding: 0 var(--s-2-5); height: 28px; border-radius: 8px; cursor: pointer;
     font-size: var(--t-sm); font-weight: 600; display: flex; align-items: center; gap: var(--s-1);
     transition: all 0.15s;
     /* .gantt-toolbar is a flex row with no explicit flex-basis on its
@@ -3640,9 +3642,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        lines instead of just letting the toolbar run tight/scroll. */
     white-space: nowrap; flex-shrink: 0;
   }
-  .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: var(--primary-tint); color: var(--primary); border-color: var(--primary-light); }
-  body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn { border-color: var(--border); color: var(--text-light); }
-  body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
+  .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: var(--primary-tint); }
+  body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn { border-color: var(--border); color: var(--text); }
+  body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: rgba(57,73,171,0.2); }
   .job-card.archived { opacity: 0.55; }
   .task-row.archived { opacity: 0.55; }
 
