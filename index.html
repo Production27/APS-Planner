@@ -1883,8 +1883,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .board-column.card-drag-over .board-column-body {
     background: #e3e7f5;
   }
-  .board-card { background: var(--card); border-radius: var(--radius); padding: var(--s-2-5) var(--s-3); border: 1px solid var(--border); cursor: grab; border-left: 4px solid var(--primary-light); transition: border-color 0.15s, background 0.15s; }
-  .board-card:hover { border-top-color: var(--primary-light); border-right-color: var(--primary-light); border-bottom-color: var(--primary-light); }
+  .board-card { background: var(--card); border-radius: var(--radius); padding: var(--s-2-5) var(--s-3); border: 1px solid var(--border); cursor: grab; transition: border-color 0.15s, background 0.15s; }
+  .board-card:hover { border-color: var(--primary-light); }
   /* Mobile-only VISUALLY (see the @media (max-width:480px) rule that
      keeps it always shown there, for touch — native HTML5 drag doesn't
      work there) — see buildCardEl() for where it's built. On a wider
@@ -1910,7 +1910,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .board-card .board-card-meta-line { color: #98a0ae; }
   .board-card .board-card-due { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: var(--primary-tint); color: var(--text-light); }
   .board-card .board-card-due.overdue { background: var(--danger-tint); color: var(--danger-text); }
-  .board-card.manual-override { border-left-style: dashed; box-shadow: inset 0 0 0 1px rgba(240,173,78,0.5); }
+  .board-card.manual-override { box-shadow: inset 0 0 0 1px rgba(240,173,78,0.5); }
   .board-card-override-badge { display: inline-flex; align-items: center; gap: var(--s-0-75); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-1-75); border-radius: 999px; background: #fff3e0; color: #b26a00; margin-bottom: var(--s-1-5); cursor: pointer; }
   .board-card-override-badge:hover { background: #ffe4b3; }
   body.dark-mode .board-card-override-badge { background: rgba(240,173,78,0.18); color: var(--warning); }

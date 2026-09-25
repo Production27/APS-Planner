@@ -1338,7 +1338,6 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
   el.className = 'board-card' + (hasOverride ? ' manual-override' : '');
   el.draggable = hasMinTier('editor');
   el.dataset.id = card.id;
-  el.style.borderLeftColor = card.color || 'var(--primary-light)';
   // Same de-chromed, job-colored title treatment as the real Board's
   // Preact card (see buildCardProps()'s own comment on titleColorLight/
   // Dark below) — custom properties inherit, so setting them here reaches
@@ -1564,7 +1563,6 @@ function buildCardProps(card: BoardCard, stalledFloors?: Record<string, number>)
     id: String(card.id),
     manualOverride: hasOverride,
     draggable: hasMinTier('editor'),
-    borderLeftColor: card.color || 'var(--primary-light)',
     titleColorLight,
     titleColorDark,
     title: hasOverride ? overrideTitle : undefined,

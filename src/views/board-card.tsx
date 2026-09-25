@@ -61,7 +61,6 @@ export interface BoardCardProps {
   id: string;
   manualOverride: boolean;
   draggable: boolean;
-  borderLeftColor: string;
   // The card's job color, contrast-adjusted per theme (see buildCardProps()
   // in board.ts) — same treatment as the Gantt's own job-name labels,
   // picked via a body.dark-mode CSS override same as those (a plain
@@ -96,7 +95,6 @@ function BoardCard(p: BoardCardProps) {
       class={'board-card' + (p.manualOverride ? ' manual-override' : '')}
       draggable={p.draggable}
       data-id={p.id}
-      style={{ borderLeftColor: p.borderLeftColor }}
       title={p.title}
       onClick={p.onOpen}
       onDragStart={p.onDragStart}
