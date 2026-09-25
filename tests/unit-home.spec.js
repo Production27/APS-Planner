@@ -63,6 +63,37 @@ test('buildHomeOverdueRows: separates overdue from due-soon, excludes finished c
   ]);
 });
 
+test('buildHomeOverdueRows: a card with no Due date uses its last stage finish; work whose last stage has ended never counts', async ({ page }) => {
+  await page.goto(FIXTURE_URL);
+  const result = await page.evaluate((dates) => {
+    isJobVisibleToMe = () => true;
+    isFinishedColumnId = (colId) => colId === 'complete';
+    const task = (id, start, finish) => ({ id, name: id, start, finish });
+    jobs = [
+      { id: 'j1', name: 'Wrapping Up', archived: false, tasks: [task('t1', dates.past, dates.soon)] },
+      { id: 'j2', name: 'Far Off', archived: false, tasks: [task('t2', dates.past, dates.far)] },
+      { id: 'j3', name: 'Schedule Ended', archived: false, tasks: [task('t3', dates.past, dates.yesterday)] },
+      { id: 'j4', name: 'Late Due Date', archived: false, tasks: [task('t4', dates.past, dates.far)] },
+      { id: 'j5', name: 'Undated', archived: false, tasks: [] },
+      { id: 'j6', name: 'Ended With Due', archived: false, tasks: [task('t6', dates.past, dates.yesterday)] },
+    ];
+    boardCards = [
+      { id: 'c1', jobId: 'j1', column: 'active' },
+      { id: 'c2', jobId: 'j2', column: 'active' },
+      { id: 'c3', jobId: 'j3', column: 'active' },
+      { id: 'c4', jobId: 'j4', column: 'active', due: dates.past },
+      { id: 'c5', jobId: 'j5', column: 'active' },
+      { id: 'c6', jobId: 'j6', column: 'active', due: dates.past },
+    ];
+    return buildHomeOverdueRows().map((r) => ({ job: r.job.name, isOverdue: r.isOverdue }));
+  }, { past: isoDaysFromNow(-10), yesterday: isoDaysFromNow(-1), soon: isoDaysFromNow(3), far: isoDaysFromNow(30) });
+
+  expect(result).toEqual([
+    { job: 'Late Due Date', isOverdue: true },
+    { job: 'Wrapping Up', isOverdue: false },
+  ]);
+});
+
 test('buildHomeStalledRows: uses a column\'s own stalledAfterDays, falling back to DEFAULT_STALLED_AFTER_DAYS, sorted longest-stalled first', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate(() => {

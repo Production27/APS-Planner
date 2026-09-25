@@ -72,6 +72,7 @@ import { renderHomeStageAlertInto, renderWsmBarsInto, renderWsmBracketInto, type
 import { renderHomeTodayWidgetInto, type HomeMiniGanttDayProps, type HomeMiniGanttRowProps } from './home-gantt-mini';
 import { renderHomeBoardColumnsInto, type HomeBoardColumnProps } from './home-board-expanded';
 import { renderReports } from './reports';
+import { realTasks, validDate } from '../app/export';
 
 // Ambient globals this file shares verbatim with other src/ files
 // (BOARD_COLUMNS, jobs, activeProjectId, applyPermissionGating(), etc.)
@@ -452,23 +453,45 @@ interface HomeOverdueRow {
   isToday: boolean;
 }
 
+// Last task finish across a phase's sub-phases (due markers and job-span
+// rows skipped), or null when it has no dated tasks.
+function phaseLastFinish(phase: ReturnType<typeof getJobPhases>[number]): Date | null {
+  let last = '';
+  getPhaseSubUnits(phase).forEach(function (sub) {
+    realTasks(sub.tasks).forEach(function (t) {
+      const f = validDate(t.finish) || validDate(t.start);
+      if (f > last) last = f;
+    });
+  });
+  return last ? new Date(last + 'T00:00:00') : null;
+}
+
 // Same visibility/archived gate buildMyChecklistRows() uses, deliberately
 // WITHOUT its isChecklistStageVisibleToMe() check — that's a checklist-
-// privacy control, unrelated to a job's due date. Excludes cards already
-// in a finished-trigger column (isFinishedColumnId()), same columns
-// buildCardEl()'s own overdue badge excludes.
+// privacy control, unrelated to a job's due date. A card with no Due date
+// falls back to its phase's last stage finish, so jobs the Gantt shows
+// wrapping up appear here too. Finished work never counts, by the same rule
+// Reports uses: a card in a finished-trigger column (isFinishedColumnId(),
+// same columns buildCardEl()'s overdue badge excludes), or one whose last
+// stage has already ended.
 function buildHomeOverdueRows(): HomeOverdueRow[] {
   const todayMidnight = new Date(new Date().toDateString());
   const dueSoonCutoff = new Date(todayMidnight.getTime() + HOME_DUE_SOON_DAYS * 86400000);
   const rows: HomeOverdueRow[] = [];
   boardCards.forEach(function (card) {
-    if (!card.column || !card.due) return;
+    if (!card.column) return;
     if (isFinishedColumnId(card.column)) return;
     const found = findJob(card.jobId as string);
     if (!found || found.job.archived) return;
     const job = found.job;
     if (!isJobVisibleToMe(job)) return;
-    const dueDate = new Date(card.due as string + 'T00:00:00');
+    const phases = getJobPhases(job);
+    const phase = phases.find(function (p) { return (p.id || null) === (card.phaseId || null); });
+    const lastFinish = phase ? phaseLastFinish(phase) : null;
+    if (lastFinish && lastFinish < todayMidnight) return;
+    const dueStr = validDate(card.due) || (lastFinish ? toIsoDate(lastFinish) : '');
+    if (!dueStr) return;
+    const dueDate = new Date(dueStr + 'T00:00:00');
     const isOverdue = dueDate < todayMidnight;
     const isDueSoon = !isOverdue && dueDate <= dueSoonCutoff;
     if (!isOverdue && !isDueSoon) return;
@@ -477,8 +500,6 @@ function buildHomeOverdueRows(): HomeOverdueRow[] {
     // by anything that only cares about isOverdue, so this is additive,
     // not a shape change.
     const isToday = !isOverdue && dueDate.getTime() === todayMidnight.getTime();
-    const phases = getJobPhases(job);
-    const phase = phases.find(function (p) { return (p.id || null) === (card.phaseId || null); });
     const label = job.name + (phases.length > 1 && phase && !phase.isDefault ? ' — ' + phase.name : '');
     rows.push({ job: job, card: card, label: label, dueDate: dueDate, isOverdue: isOverdue, isToday: isToday });
   });
