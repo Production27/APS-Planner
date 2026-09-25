@@ -415,28 +415,14 @@
   .calendar-toolbar h3 { font-size: var(--t-xl); color: var(--text); }
   .cal-filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
   .cal-filter-menu { width: 280px; }
-  /* Slightly smaller than the app's default .btn (padding: 10px var(--s-6)) —
-     the request was specifically to make this bar a little shorter, and
-     the default button size was what set its height. */
-  .calendar-toolbar .btn { padding: var(--s-1-75) var(--s-3-5); font-size: var(--t-sm); }
-  /* Google-Calendar-style paired prev/next — one small pill split into
-     two icon buttons sitting flush against each other, replacing the
-     separate "‹ Prev"/"Next ›" text buttons. */
-  .cal-nav-group {
-    display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
-    background: linear-gradient(180deg, #ffffff 0%, var(--btn-gradient-end) 100%);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 2px rgba(0,0,0,0.04);
-  }
-  .cal-nav-btn {
-    border: none; background: transparent; cursor: pointer; padding: var(--s-1-5) var(--s-2-5);
-    font-size: var(--t-lg); line-height: 1; color: var(--text); font-weight: 700;
-  }
-  .cal-nav-btn:first-child { border-right: 1px solid var(--border); }
-  .cal-nav-btn:hover { background: rgba(0,0,0,0.05); }
-  .cal-nav-btn:active { background: rgba(0,0,0,0.1); }
-  body.dark-mode .cal-nav-group { background: linear-gradient(180deg, var(--card) 0%, #1c1f28 100%); }
-  body.dark-mode .cal-nav-btn:hover { background: rgba(255,255,255,0.06); }
-  body.dark-mode .cal-nav-btn:active { background: rgba(255,255,255,0.1); }
+  /* Toolbar buttons share the Reports toolbar's flat look: Today/Back/Add
+     match the Filter button (.rep-filter-btn), ‹ › match .rep-step, and
+     Month/Week is a .rep-seg toggle like Stages/Jobs. */
+  .cal-tool-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; }
+  .cal-tool-btn:hover { background: var(--primary-tint); }
+  body.dark-mode .cal-tool-btn:hover { background: rgba(57,73,171,0.2); }
+  .cal-nav-group { display: inline-flex; gap: 2px; }
+  .cal-view-toggle { margin-left: auto; }
   .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
   /* Plain shared-border grid (Google-Calendar-style) instead of gapped
      rounded cards — cells butt up against each other on a single border
@@ -3548,9 +3534,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .row-bg { border-bottom-color: rgba(255,255,255,0.04); }
   body.dark-mode .row-bg:nth-child(even) { background: rgba(255,255,255,0.02); }
 
-  /* Its light --primary-tint background is set inline; in dark mode that
-     left the inactive Month/Week label light gray on near-white. */
-  body.dark-mode .calendar-view-toggle-wrap { background: rgba(57,73,171,0.22) !important; }
   body.dark-mode .gantt-toolbar button { background: transparent; border-color: var(--border); color: var(--text-light); }
   body.dark-mode .gantt-toolbar button:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; border-color: var(--primary-light); }
 
@@ -4090,22 +4073,22 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
           <!-- Only shown in day mode (see renderCalendar()) — not a
                .cal-nav-group since it must stay reachable on mobile, where
                the nav group itself is hidden in favor of swipe. -->
-          <button class="btn btn-secondary" id="calBackBtn" style="display:none;">‹ Month</button>
-          <button class="btn btn-secondary" id="calTodayBtn">Today</button>
+          <button type="button" class="cal-tool-btn" id="calBackBtn" style="display:none;">‹ Month</button>
+          <button type="button" class="cal-tool-btn" id="calTodayBtn">Today</button>
           <div class="cal-nav-group">
-            <button class="cal-nav-btn" id="calPrevBtn" title="Previous" aria-label="Previous">‹</button>
-            <button class="cal-nav-btn" id="calNextBtn" title="Next" aria-label="Next">›</button>
+            <button type="button" class="rep-step" id="calPrevBtn" title="Previous" aria-label="Previous">‹</button>
+            <button type="button" class="rep-step" id="calNextBtn" title="Next" aria-label="Next">›</button>
           </div>
           <h3 id="calendarLabel"></h3>
           <!-- Day mode only (see renderCalendar()) — the day agenda has no
                empty-cell-to-click affordance for adding an event the way
                month/week's grid cells do. -->
-          <button class="btn btn-secondary" id="calAddEventBtn" data-min-tier="editor" style="display:none;">+ Add</button>
+          <button type="button" class="cal-tool-btn" id="calAddEventBtn" data-min-tier="editor" style="display:none;">+ Add</button>
           <!-- Stages/Jobs bars + Filter menu, rendered by calendar-filters.tsx. -->
           <div class="cal-filter-bar" id="calFilterBar"></div>
-          <div class="calendar-view-toggle-wrap" style="margin-left:auto;display:flex;gap: var(--s-1);background:var(--primary-tint);padding: var(--s-0-75);border-radius:8px;">
-            <button class="btn btn-secondary" id="calViewMonth" style="padding: var(--s-1-5) var(--s-3-5);font-size: var(--t-sm);">Month</button>
-            <button class="btn btn-secondary" id="calViewWeek" style="padding: var(--s-1-5) var(--s-3-5);font-size: var(--t-sm);">Week</button>
+          <div class="rep-seg small calendar-view-toggle-wrap cal-view-toggle" role="group" aria-label="Calendar view">
+            <button type="button" id="calViewMonth">Month</button>
+            <button type="button" id="calViewWeek">Week</button>
           </div>
         </div>
         <div class="calendar-grid" id="calendarWeekdays"></div>

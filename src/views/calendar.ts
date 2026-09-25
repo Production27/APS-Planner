@@ -577,10 +577,10 @@ function renderCalendar(): void {
   const monthBtn = document.getElementById('calViewMonth');
   const weekBtn = document.getElementById('calViewWeek');
   if (monthBtn && weekBtn) {
-    const activeStyle = 'background:var(--primary-light);color:white;border-color:var(--primary-light);';
-    const inactiveStyle = 'background:transparent;color:var(--text-light);border-color:transparent;';
-    (monthBtn as HTMLElement).style.cssText = calendarViewMode === 'month' ? activeStyle : inactiveStyle;
-    (weekBtn as HTMLElement).style.cssText = calendarViewMode === 'week' ? activeStyle : inactiveStyle;
+    monthBtn.classList.toggle('active', calendarViewMode === 'month');
+    monthBtn.setAttribute('aria-pressed', String(calendarViewMode === 'month'));
+    weekBtn.classList.toggle('active', calendarViewMode === 'week');
+    weekBtn.setAttribute('aria-pressed', String(calendarViewMode === 'week'));
   }
   const backBtn = document.getElementById('calBackBtn');
   if (backBtn) (backBtn as HTMLElement).style.display = calendarViewMode === 'day' ? 'inline-flex' : 'none';
