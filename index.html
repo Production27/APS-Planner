@@ -1822,9 +1822,10 @@
   /* one per real gap between adjacent groups, above the bracket line */
   .wf-flow-arrow { position: absolute; top: 4px; transform: translateX(-50%); color: var(--text-light); opacity: 0.7; display: flex; pointer-events: none; }
   .board-wrapper::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
-  .board-column { width: 245px; min-width: 245px; background: var(--kanban-column-bg); border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; box-shadow: 0 6px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.04); transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
-  .board-column.dragging-col { opacity: 0.35; transform: scale(0.98); cursor: grabbing; }
-  .board-column.drag-over-col { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08); border-color: var(--primary-light); }
+  /* Flat, like the rest of the app (2026-09-25): 1px borders, no shadows or lift. */
+  .board-column { width: 245px; min-width: 245px; background: var(--kanban-column-bg); border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; border: 1px solid var(--border); transition: border-color 0.15s, opacity 0.15s; }
+  .board-column.dragging-col { opacity: 0.35; cursor: grabbing; }
+  .board-column.drag-over-col { border-color: var(--primary-light); box-shadow: 0 0 0 1px var(--primary-light); }
   .board-column-header { display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) var(--s-3-5) var(--s-2); font-size: var(--t-base); font-weight: 700; color: var(--text); flex-shrink: 0; cursor: grab; user-select: none; }
   .board-column-header:active { cursor: grabbing; }
   .board-column-header-title { display: flex; align-items: center; gap: var(--s-2); min-width: 0; overflow: hidden; }
@@ -1882,8 +1883,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .board-column.card-drag-over .board-column-body {
     background: #e3e7f5;
   }
-  .board-card { background: var(--card); border-radius: var(--radius); padding: var(--s-2-5) var(--s-3); box-shadow: var(--shadow); cursor: grab; border-left: 4px solid var(--primary-light); transition: box-shadow 0.15s, transform 0.15s; }
-  .board-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+  .board-card { background: var(--card); border-radius: var(--radius); padding: var(--s-2-5) var(--s-3); border: 1px solid var(--border); cursor: grab; border-left: 4px solid var(--primary-light); transition: border-color 0.15s, background 0.15s; }
+  .board-card:hover { border-top-color: var(--primary-light); border-right-color: var(--primary-light); border-bottom-color: var(--primary-light); }
   /* Mobile-only VISUALLY (see the @media (max-width:480px) rule that
      keeps it always shown there, for touch — native HTML5 drag doesn't
      work there) — see buildCardEl() for where it's built. On a wider
@@ -1909,7 +1910,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .board-card .board-card-meta-line { color: #98a0ae; }
   .board-card .board-card-due { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: var(--primary-tint); color: var(--text-light); }
   .board-card .board-card-due.overdue { background: var(--danger-tint); color: var(--danger-text); }
-  .board-card.manual-override { border-left-style: dashed; box-shadow: 0 2px 5px rgba(0,0,0,0.14), inset 0 0 0 1px rgba(240,173,78,0.5); }
+  .board-card.manual-override { border-left-style: dashed; box-shadow: inset 0 0 0 1px rgba(240,173,78,0.5); }
   .board-card-override-badge { display: inline-flex; align-items: center; gap: var(--s-0-75); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-1-75); border-radius: 999px; background: #fff3e0; color: #b26a00; margin-bottom: var(--s-1-5); cursor: pointer; }
   .board-card-override-badge:hover { background: #ffe4b3; }
   body.dark-mode .board-card-override-badge { background: rgba(240,173,78,0.18); color: var(--warning); }
@@ -2615,7 +2616,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   .board-col-settings-btn:hover { color: var(--primary); background: rgba(57,73,171,0.10); }
   body.dark-mode .board-col-settings-btn:hover { color: var(--primary-ondark); }
-  .board-col-settings-btn:active { transform: translateY(1px); }
+
   .board-col-settings-dropdown {
     position: absolute; top: calc(100% + 6px); right: 0; background: white;
     border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 140px;
@@ -3569,9 +3570,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
   body.dark-mode .rail-tab-row { background: #1a1d25; border-bottom-color: var(--border); }
 
-  body.dark-mode .board-column { background: #232732; transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; box-shadow: 0 8px 20px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.06); }
-  body.dark-mode .board-column.drag-over-col { border-color: var(--primary-light); box-shadow: 0 12px 28px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3); }
-  body.dark-mode .board-card { box-shadow: 0 3px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04); }
+  body.dark-mode .board-column { background: #232732; border-color: var(--border); }
+  body.dark-mode .board-column.drag-over-col { border-color: var(--primary-light); }
+  body.dark-mode .board-card { border-color: var(--border); }
   body.dark-mode .board-column-body:empty::before { color: #565d6b; }
   body.dark-mode .board-column-body.drag-over { background: rgba(57,73,171,0.18); }
   body.dark-mode .board-column.card-drag-over {
