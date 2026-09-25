@@ -2668,3 +2668,18 @@ test('job form on a phone: Job Name is always open, while optional sections stil
   await expect(page.locator('#f_job')).toHaveValue(await page.evaluate(() => jobs[0].name));
   await expect(page.locator('#f_due')).toBeHidden();
 });
+
+test('job form on a laptop-width window: Comments stacks below the job details (H1)', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => editJob(jobs[0].id));
+  await expect(page.locator('#jobCommentsPanel')).toBeVisible();
+  const [formTop, commentsTop] = await page.evaluate(() => [
+    document.querySelector('.form-container').getBoundingClientRect().top,
+    document.getElementById('jobCommentsPanel').getBoundingClientRect().top,
+  ]);
+  expect(commentsTop).toBeGreaterThan(formTop);
+});

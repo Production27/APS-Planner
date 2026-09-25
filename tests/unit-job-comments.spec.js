@@ -95,7 +95,7 @@ test('toggleJobCommentsPanel: collapses the panel and shrinks the drawer, and re
 
   // #jobCommentsTab (the narrow side-tab standing in for the collapsed
   // panel) is a wide-desktop-only affordance — hidden by CSS at this
-  // test viewport's width, where the panel stacks above the form instead
+  // test viewport's width, where the panel stacks below the form instead
   // and .job-comments-collapse-btn (inside the always-visible h4) is the
   // toggle that's actually reachable here.
   await page.click('.job-comments-collapse-btn');

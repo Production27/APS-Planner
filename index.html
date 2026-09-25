@@ -1487,11 +1487,9 @@
        panel already gets this same override just below for the same
        reason. */
     .form-container { width: 100%; }
-    /* The job form grew a lot (description/custom fields/checklist/
-       attachments) — stacked below all of that, Comments would sit off the
-       bottom of a very long form and look like it disappeared. Put it right
-       after the job header instead, before the rest of the form. */
-    .job-comments-panel { width: 100%; max-width: 460px; flex: none; max-height: 400px; order: -1; }
+    /* Stacked layout (laptops and phones): job details first, Comments
+       below the form (H1, Karl's call 2026-09-25). */
+    .job-comments-panel { width: 100%; max-width: 460px; flex: none; max-height: 400px; order: 1; }
     /* The collapsed-tab treatment (see .job-comments-panel.collapsed) is
        for the wide side-by-side layout only — "a tab to the right of the
        edit box" doesn't apply once the panel has stacked above the form.
