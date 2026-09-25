@@ -4170,8 +4170,10 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <button class="duplicate-job-btn" id="duplicateJobBtn" data-min-tier="projectAdmin" title="Duplicate job" aria-label="Duplicate job" style="display:none;"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg></button>
           </div>
           <div class="job-current-board-indicator" id="jobCurrentBoardIndicator" style="display:none;"></div>
-          <div class="form-group mobile-collapsible">
-            <label class="mobile-field-toggle" id="f_job_label">Job Name *</label>
+          <!-- Never collapsed on phones (H4): the name is the one field every
+               job needs, so it stays open while the optional sections fold. -->
+          <div class="form-group">
+            <label id="f_job_label">Job Name *</label>
             <div class="mobile-field-body">
               <input type="text" id="f_job" aria-labelledby="f_job_label" aria-required="true" data-min-tier="projectAdmin" placeholder="e.g. Electrical shop area">
               <span class="field-error-hint" id="f_job_hint" style="display:none;">Name required to save</span>

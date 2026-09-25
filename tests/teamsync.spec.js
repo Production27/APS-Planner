@@ -2656,3 +2656,15 @@ test('maintenance mode admin toggle: turning it on sends the right request and u
   await expect(page.locator('#maintenanceToggle')).toHaveClass(/active/);
   await expect(page.locator('#maintenanceEnableBtn')).toHaveText('Turn Off Maintenance Mode');
 });
+
+test('job form on a phone: Job Name is always open, while optional sections still start collapsed (H4)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => editJob(jobs[0].id));
+  await expect(page.locator('#f_job')).toBeVisible();
+  await expect(page.locator('#f_job')).toHaveValue(await page.evaluate(() => jobs[0].name));
+  await expect(page.locator('#f_due')).toBeHidden();
+});
