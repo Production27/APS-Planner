@@ -34,7 +34,7 @@ export interface PresenceUser {
 
 function sendPresenceUpdate(): void {
   if (!roomSocket || roomSocket.readyState !== 1) return;
-  const tabEl = document.querySelector('.rail-tab.active');
+  const tabEl = document.querySelector('#appNavNotch .nav-tab.active');
   const view = tabEl ? tabEl.id.replace('tab-', '') : null;
   try {
     roomSocket.send(JSON.stringify({ type: 'setPresence', view: view, projectId: activeProjectId || null, sessionId: myPresenceSessionId }));
@@ -60,7 +60,7 @@ function presenceInitials(displayName: string | null | undefined): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-const PRESENCE_VIEW_LABELS: Record<string, string> = { gantt: 'Gantt Chart', board: 'Board', calendar: 'Calendar' };
+const PRESENCE_VIEW_LABELS: Record<string, string> = { home: 'Home', checklist: 'Checklist', gantt: 'Gantt Chart', board: 'Board', calendar: 'Calendar', reports: 'Reports', jobs: 'Jobs' };
 
 // Deterministic per-user delay (not random-per-render, which would make
 // the pulse visibly jitter/restart every time presence re-broadcasts) so

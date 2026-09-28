@@ -6,6 +6,7 @@
 import { DISPLAY_NAME_KEY } from './session';
 import { checkMaintenanceStatus } from '../app/maintenance';
 import { refreshAdminNotices } from '../app/admin-notices';
+import { updateAccountButton } from '../app/account-nav';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -60,6 +61,7 @@ export function applyIdentityFromTokenPayload(payload: any): void {
   enforceProjectScopeForRole();
   applyPermissionGating();
   updateProjectToggle();
+  updateAccountButton();
   // Re-evaluate now that the real role is known — checkMaintenanceStatus()
   // may have already run once before this resolved (roleConfirmed was
   // still false then, so it deliberately didn't block anyone yet).

@@ -1,10 +1,6 @@
-// The Settings (⋮) dropdown. Two triggers share this one dropdown — the
-// desktop rail-tab-row's and the mobile view-switcher's own — only one of
-// which is ever actually on-screen at a time, per the usual @media rules.
-// #settingsDropdown itself lives at the top level (see its own markup
-// comment), not nested inside either trigger, so its position is computed
-// fresh from whichever one is visible each time it opens rather than
-// relying on being a positioned ancestor's child. Admins also get
+// The Account menu, opened by the navbar's #accountBtn. #settingsDropdown
+// lives at the top level (see its own markup comment), so its position is
+// computed from the button each time it opens. Admins also get
 // Settings | Admin tabs at the top of it (showSettingsTab()).
 
 interface MenuDef {
@@ -17,7 +13,7 @@ interface MenuDef {
 
 const settingsMenu: MenuDef = {
   dropdownId: 'settingsDropdown', wrapSelector: '.settings-menu-wrap',
-  triggerIds: ['desktopSettingsBtn', 'mobileSettingsBtn'], closeTimer: null,
+  triggerIds: ['accountBtn'], closeTimer: null,
 };
 const MENUS = [settingsMenu];
 
@@ -53,8 +49,12 @@ function positionMenu(menu: MenuDef): void {
   });
   if (!trigger) return;
   const rect = (trigger as HTMLElement).getBoundingClientRect();
+  // Measured from the left edge: a fixed box near the right edge shrinks to
+  // the room left of it, which would give a too-narrow width here.
+  dropdown.style.left = '0px';
   const dropdownWidth = dropdown.offsetWidth || 196; // 190 min-width + 6 padding — offsetWidth is 0 the very first time (display:none until opened)
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - dropdownWidth - 8));
+  // Right-aligned under the button (it sits at the navbar's right end).
+  const left = Math.max(8, Math.min(rect.right - dropdownWidth, window.innerWidth - dropdownWidth - 8));
   dropdown.style.left = left + 'px';
   dropdown.style.top = (rect.bottom + 8) + 'px';
 }
@@ -85,6 +85,8 @@ function toggleMenu(menu: MenuDef): void {
     positionMenu(menu);
   }
   dropdown.classList.toggle('show', opening);
+  // Measure again now that it's visible, so the right edge lines up.
+  if (opening) positionMenu(menu);
   setTriggersExpanded(menu, opening);
   cancelAutoClose(menu);
   // The dropdown sits far earlier in the page than its triggers, so Tab

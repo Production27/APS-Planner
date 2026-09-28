@@ -110,10 +110,26 @@ export function initStaticEventListeners(): void {
 
   on('reloadNowBtn', () => location.reload());
 
-  on('mobileSettingsBtn', () => toggleSettingsMenu());
-  document.querySelectorAll<HTMLElement>('#mobileViewSwitcher .mobile-view-btn[data-view]').forEach((el) => {
-    el.addEventListener('click', () => setMobileView(el.dataset.view as string));
+  // Navbar: one set of view tabs for both layouts. Phones (and landscape
+  // phones) show one view full-screen at a time (setMobileView()); wider
+  // screens switch panels beside the job rail (switchTabMorphed()).
+  const phoneLayout = window.matchMedia('(max-width: 480px), (max-height: 480px)');
+  document.querySelectorAll<HTMLElement>('#appNavNotch .nav-tab[data-tab]').forEach((el) => {
+    el.addEventListener('click', () => {
+      if (phoneLayout.matches) setMobileView(el.dataset.tab as string);
+      else switchTabMorphed(el.dataset.tab as string);
+    });
   });
+  // On a phone the job list is the opening view, so Jobs starts active there.
+  if (phoneLayout.matches && !document.body.dataset.mobileView) {
+    document.querySelectorAll('#appNavNotch .nav-tab').forEach((b) => {
+      const on = (b as HTMLElement).dataset.tab === 'jobs';
+      b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+  }
+  on('accountBtn', () => toggleSettingsMenu());
+  on('navProjectBtn', () => toggleProject());
 
   on('activityToggleBtn', () => { closeSettingsMenu(); toggleActivitySidebar(); });
   on('darkModeBtn', () => toggleDarkMode());
@@ -162,12 +178,8 @@ export function initStaticEventListeners(): void {
   on('projectToggleBtn', () => { closeSettingsMenu(); toggleProject(); });
   on('logoutBtn', () => { closeSettingsMenu(); logout(); });
 
-  on('desktopSettingsBtn', () => toggleSettingsMenu());
   on('settingsTabGeneral', () => showSettingsTab('general'));
   on('settingsTabAdmin', () => showSettingsTab('admin'));
-  document.querySelectorAll<HTMLElement>('.rail-tab[data-tab]').forEach((el) => {
-    el.addEventListener('click', () => switchTabMorphed(el.dataset.tab as string));
-  });
   on('jobRailToggleBtn', () => toggleJobRail());
   on('jobRailAddBtn', () => addNewJob());
 

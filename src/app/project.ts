@@ -499,6 +499,7 @@ export function updateProjectToggle(): void {
   const item = document.getElementById('projectToggleBtn');
   const label = document.getElementById('projectToggleLabel');
   if (!item) return;
+  updateNavProjectButton('');
   // Fail closed until the real tier/project assignment is confirmed (see
   // roleConfirmed) — same reasoning as switchProject()'s own guard, applied
   // to the item itself so it doesn't sit there clickable during the brief
@@ -523,6 +524,20 @@ export function updateProjectToggle(): void {
   const nextIdx = (currentIdx + 1) % ids.length;
   const nextProject = projects[ids[nextIdx]];
   if (label) label.textContent = 'Switch to ' + (nextProject ? nextProject.name : 'project');
+  updateNavProjectButton(nextProject ? nextProject.name : '');
+}
+
+// The navbar's project chip, next to TeamSync: the current project's name,
+// shown only when there's another project to switch to (same rule as the
+// Account menu's "Switch to" item). Clicking it switches, like that item.
+function updateNavProjectButton(nextName: string): void {
+  const btn = document.getElementById('navProjectBtn');
+  if (!btn) return;
+  const current = activeProjectId ? projects[activeProjectId] : null;
+  btn.hidden = !nextName || !current;
+  if (btn.hidden) return;
+  btn.textContent = current!.name;
+  btn.title = 'Switch to ' + nextName;
 }
 
 export function renderAll(): void {

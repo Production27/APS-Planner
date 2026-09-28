@@ -35,7 +35,7 @@ const NOTICES = {
 
 test('admin items sit behind the Admin tab in Settings', async ({ page }) => {
   await openApp(page, 'admin');
-  await page.locator('#desktopSettingsBtn').click();
+  await page.locator('#accountBtn').click();
   await expect(page.locator('#settingsTabGeneral')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#manageUsersBtn')).toBeHidden();
   await expect(page.locator('#changePasswordBtn')).toBeVisible();
@@ -46,23 +46,23 @@ test('admin items sit behind the Admin tab in Settings', async ({ page }) => {
   await expect(page.locator('#changePasswordBtn')).toBeHidden();
   // Reopening starts back on the Settings tab.
   await page.keyboard.press('Escape');
-  await page.locator('#desktopSettingsBtn').click();
+  await page.locator('#accountBtn').click();
   await expect(page.locator('#changePasswordBtn')).toBeVisible();
 });
 
 test('non-admins see no tabs, just their settings', async ({ page }) => {
   await openApp(page, 'editor');
-  await page.locator('#desktopSettingsBtn').click();
+  await page.locator('#accountBtn').click();
   await expect(page.locator('#settingsTabAdmin')).toBeHidden();
   await expect(page.locator('#changePasswordBtn')).toBeVisible();
 });
 
 test('new account events and errors badge the Settings button, and opening the Admin tab clears it', async ({ page }) => {
   const seen = await openApp(page, 'admin', { 'admin/notices': () => NOTICES, 'admin/notices/seen': () => ({ success: true }) });
-  const badge = page.locator('#desktopSettingsBtn .admin-badge');
+  const badge = page.locator('#accountBtn .admin-badge');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveText('2');
-  await page.locator('#desktopSettingsBtn').click();
+  await page.locator('#accountBtn').click();
   await expect(page.locator('#settingsTabAdmin .admin-badge')).toHaveText('2');
   await page.locator('#settingsTabAdmin').click();
   await expect(page.locator('#errorsNewCount')).toHaveText('1');

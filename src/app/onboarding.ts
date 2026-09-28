@@ -190,13 +190,11 @@ export function tutorialSlideSkip(): void {
 }
 
 // Each step tries its selectors in order and uses the first one actually
-// on-screen (offsetParent !== null) — covers the settings button's two
-// triggers (desktop rail vs. mobile view-switcher, only one ever visible
-// at once) and lets a permission-gated step (Add Job is projectAdmin+
-// only) just get skipped for a lower-tier viewer instead of pointing at
-// a hidden button.
+// on-screen (offsetParent !== null) — lets a permission-gated step (Add
+// Job is projectAdmin+ only) just get skipped for a lower-tier viewer
+// instead of pointing at a hidden button.
 const COACHMARK_STEPS = [
-  { find: ['.settings-dots-btn', '.mobile-view-btn.settings-menu-wrap'], title: 'Settings', desc: 'Your name, dark mode, and logging out all live here.' },
+  { find: ['#accountBtn'], title: 'Your account', desc: 'Settings, dark mode, and logging out all live here.' },
   { find: ['#jobRailToggleBtn'], title: 'Jobs list', desc: 'Show or hide the full job list along the left edge.' },
   { find: ['.job-rail-add-btn'], title: 'Add a job', desc: 'Start a brand new job from scratch.' },
   { find: ['#tab-checklist'], title: 'Checklist tab', desc: 'Jump to the full checklist — every open item assigned to you.' },

@@ -20,6 +20,7 @@ import { syncCardColumns } from '../core/jobs';
 import { closeDeleteJobModal } from '../views/job-list';
 import { cancelEdit, initJobFormAutosaveListeners, buildColorPresets } from '../views/job-form';
 import { initStaticEventListeners } from './static-event-wiring';
+import { updateAccountButton } from './account-nav';
 import { startDeletionStatusChecks } from './compliance';
 import { initUndo, finishLeftoverJobDeletes } from './undo';
 
@@ -68,6 +69,7 @@ export function hideFreshLoadOverlay(): void {
 // boot() before this runs. Omitted, loadProjects() reads localStorage.
 export function init(savedText?: string | null): void {
   initStaticEventListeners();
+  updateAccountButton();
   loadProjects(savedText);
   enforceFixedProjectSet();
   // Catches a stray empty "Untitled Project" already sitting in this
@@ -117,12 +119,8 @@ document.addEventListener('mousedown', function () {
 
 document.addEventListener('click', function (e) {
   const target = e.target as HTMLElement;
-  // Two possible triggers now (desktop rail-tab-row's, mobile
-  // view-switcher's own — see positionSettingsMenu()'s own comment), and
-  // the dropdown itself is a separate top-level element rather than a
-  // child of either — .closest() against both independently (instead of
-  // querying a single wrap and checking .contains()) is what makes this
-  // correct regardless of which trigger opened it.
+  // The Account menu is a separate top-level element from its button
+  // (#accountBtn, inside .settings-menu-wrap), so check both.
   if (!target.closest('.settings-menu-wrap') && !target.closest('#settingsDropdown')) closeSettingsMenu();
 
   // Close column settings dropdowns

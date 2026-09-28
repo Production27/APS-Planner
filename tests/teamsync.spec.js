@@ -2192,7 +2192,7 @@ test('switchTab: activates exactly one panel/rail-tab pair and deactivates every
   const result = await page.evaluate(() => {
     switchTab('calendar');
     const activePanels = Array.from(document.querySelectorAll('.tab-panel.active')).map((p) => p.id);
-    const activeRailTabs = Array.from(document.querySelectorAll('.rail-tab.active')).map((b) => b.id);
+    const activeRailTabs = Array.from(document.querySelectorAll('#appNavNotch .nav-tab.active')).map((b) => b.id);
     return { activePanels, activeRailTabs };
   });
 
@@ -2937,4 +2937,70 @@ test('gantt: the phone-only bulk toggle is hidden on desktop and shown on a phon
   await page.evaluate(() => setMobileView('gantt'));
   await expect(page.locator('#ganttBulkTogglePhone')).toBeVisible();
   await expect(page.locator('#ganttBulkTogglePhone')).toContainText(/Expand all|Collapse all/);
+});
+
+test('Navbar: Home is active at load, a clicked view shows its name, and Jobs stays in the rail on desktop', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await expect(page.locator('#tab-home')).toHaveClass(/active/);
+  await expect(page.locator('#tab-home .nav-tab-label')).toBeVisible();
+  await expect(page.locator('#tab-gantt .nav-tab-label')).toBeHidden();
+  // Desktop keeps the rail's own › toggle; the notch has no Jobs button here.
+  await expect(page.locator('#tab-jobs')).toBeHidden();
+  await expect(page.locator('#jobRail #jobRailToggleBtn')).toBeVisible();
+
+  await page.locator('#tab-gantt').click();
+  await expect(page.locator('#panel-gantt')).toHaveClass(/active/);
+  await expect(page.locator('#tab-gantt')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#tab-gantt .nav-tab-label')).toBeVisible();
+  await expect(page.locator('#tab-home .nav-tab-label')).toBeHidden();
+
+  await page.locator('#tab-home').click();
+  await expect(page.locator('#panel-home')).toHaveClass(/active/);
+  await expect(page.locator('#tab-home')).toHaveClass(/active/);
+});
+
+test('Navbar: the Account button shows your initials and first name and opens the menu under it', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await expect(page.locator('#accountAvatar')).toHaveText('TA');
+  await expect(page.locator('#accountName')).toHaveText('Test');
+  await page.locator('#accountBtn').click();
+  await expect(page.locator('#settingsDropdown')).toBeVisible();
+  await expect(page.locator('#accountWhoName')).toHaveText('Test Admin');
+  await expect(page.locator('#accountWhoRole')).toHaveText('Admin');
+  const btn = await page.locator('#accountBtn').boundingBox();
+  const menu = await page.locator('#settingsDropdown').boundingBox();
+  expect(Math.abs((menu.x + menu.width) - (btn.x + btn.width))).toBeLessThan(2);
+  expect(menu.y).toBeGreaterThan(btn.y + btn.height);
+});
+
+test('Navbar on a phone: the notch sits at the bottom, starts on Jobs, and switches full-screen views', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const notch = await page.locator('#appNavNotch').boundingBox();
+  expect(notch.y + notch.height).toBeGreaterThan(780 - 12);
+  await expect(page.locator('#tab-jobs')).toBeVisible();
+  await expect(page.locator('#tab-jobs')).toHaveClass(/active/);
+  await expect(page.locator('#accountName')).toBeHidden();
+
+  await page.locator('#tab-board').click();
+  await expect(page.locator('body')).toHaveAttribute('data-mobile-view', 'board');
+  await expect(page.locator('#tab-board')).toHaveClass(/active/);
+  await expect(page.locator('#tab-jobs')).not.toHaveClass(/active/);
+  await page.locator('#tab-board').click();
+  await expect(page.locator('body')).toHaveAttribute('data-mobile-view', 'home');
+  await expect(page.locator('#tab-home')).toHaveClass(/active/);
 });

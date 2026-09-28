@@ -108,11 +108,8 @@
 
   /* ===== EDITABLE HEADER ===== */
   /* The whole title bar is gone per user request — its functional
-     controls (settings, project switch, view-as, activity toggle) now
-     lead the .rail-tab-row at the top of the left sidebar (see
-     .settings-menu-wrap) instead of vanishing along with it, and presence
-     avatars moved into .manager-sidebar-header's own row instead (see the
-     "manager-sidebar" markup). #headerTitle/#headerSubtitle stay in the
+     controls (settings, project switch, presence avatars) now live in
+     the navbar (.app-nav) instead. #headerTitle/#headerSubtitle stay in the
      DOM here (not deleted): saveActiveProject()/the live-sync push read
      them directly, and two keydown/paste listeners are attached to
      #headerSubtitle at top-level script scope, so removing the elements
@@ -175,43 +172,92 @@
     0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 0 rgba(67,160,71,0.55); }
     50% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 3px rgba(67,160,71,0.55); }
   }
-  /* Mobile-only view switcher — see setMobileView() and the
-     @media (max-width:480px) rules that turn this into a visible tab bar. */
-  .mobile-view-switcher { display: none; }
-  /* Sized/shaped exactly like a .rail-tab (icon-only, fixed-width — see
-     .rail-tab.active/.rail-tab:hover further down, both extended to
-     include this selector) since it now leads that same row, but it
-     never gets .active itself (it opens a dropdown, not a tab). The
-     actual dropdown (#settingsDropdown) isn't a child of this wrap any
-     more — it's a shared top-level element, position:fixed, positioned
-     in JS off whichever trigger (this one, or the mobile view-switcher's
-     own copy — see its markup) is actually visible each time it opens. */
-  .settings-menu-wrap {
-    display: flex; align-items: center; position: relative;
-    flex: 0 0 34px; height: 34px; border-radius: 8px;
+  /* ===== APP NAVBAR ("Notch Island") =====
+     A thin strip along the top edge (::before) with the view tabs in a
+     notch hanging from it; brand on the left, presence + Account on the
+     right. The notch covers the strip where they meet, and its curved
+     shoulders (::before/::after) blend it in; drop-shadow() follows those
+     curves, so the outline reads as one shape. On phones the notch moves
+     to the bottom edge (see the max-width:480px block). */
+  .app-nav {
+    position: relative; z-index: 160; flex-shrink: 0; height: 56px;
+    display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+    padding: 6px var(--s-3) 0; background: var(--bg);
+  }
+  .app-nav::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--card); box-shadow: 0 1px 0 var(--border); }
+  .app-nav-left, .app-nav-right { position: relative; z-index: 1; display: flex; align-items: center; min-width: 0; }
+  .app-nav-left { gap: var(--s-2); }
+  .app-nav-right { gap: var(--s-2-5); }
+  .app-nav-brand { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: var(--t-md); color: var(--text); white-space: nowrap; }
+  .app-nav-logo { width: 22px; height: 22px; border-radius: 6px; background: var(--primary-light); display: grid; place-items: center; flex-shrink: 0; }
+  .app-nav-project {
+    display: flex; align-items: center; gap: 5px; max-width: 220px; height: 28px; padding: 0 var(--s-2);
+    border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text-light);
+    font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .app-nav-project:hover { background: var(--primary-tint); color: var(--primary); }
+  .app-nav-project[hidden] { display: none; }
+  .app-nav-notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 2;
+    display: flex; align-items: center; gap: 2px; padding: 9px 6px 7px;
+    background: var(--card); border-radius: 0 0 16px 16px;
+    filter: drop-shadow(0 1px 0 var(--border)) drop-shadow(0 4px 8px rgba(26,35,126,0.08));
+  }
+  body.dark-mode .app-nav-notch { filter: drop-shadow(0 1px 0 var(--border)) drop-shadow(0 4px 8px rgba(0,0,0,0.4)); }
+  .app-nav-notch::before, .app-nav-notch::after { content: ''; position: absolute; top: 6px; width: 14px; height: 14px; }
+  .app-nav-notch::before { left: -14px; background: radial-gradient(circle at 0 100%, transparent 13.5px, var(--card) 14px); }
+  .app-nav-notch::after { right: -14px; background: radial-gradient(circle at 100% 100%, transparent 13.5px, var(--card) 14px); }
+  /* Icons only, except the active view, which shows its name on a tinted
+     pill. The .badge counts stay hidden (their render code still writes
+     to them). Jobs is phones-only: the job list is its own full-screen
+     view there, while desktop keeps the rail's own › toggle. */
+  .nav-tab {
+    height: 34px; min-width: 34px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font-family: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--text); cursor: pointer; white-space: nowrap;
     transition: background 0.2s ease;
   }
-  .settings-dots-btn {
-    display: flex; align-items: center; justify-content: center; overflow: hidden;
-    width: 100%; height: 100%; background: transparent; border: none;
-    color: var(--text-light); padding: 0; cursor: pointer; white-space: nowrap;
+  .nav-tab svg { flex-shrink: 0; }
+  .nav-tab-label, .nav-tab .badge { display: none; }
+  .nav-tab:hover:not(.active) { background: var(--row-alt-bg); }
+  .nav-tab.active { background: var(--primary-tint); padding: 0 13px 0 10px; }
+  .nav-tab.active .nav-tab-label { display: inline; }
+  .nav-tab:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 1px; }
+  body.dark-mode .nav-tab:hover:not(.active) { background: rgba(255,255,255,0.06); }
+  body.dark-mode .nav-tab.active { background: rgba(57,73,171,0.3); }
+  #tab-jobs { display: none; }
+  /* Account: your initials and first name. The red dot is the admin
+     notices badge (src/app/admin-notices.ts writes a count into it; the
+     number itself is hidden here, it's just a dot). */
+  .settings-menu-wrap { display: flex; align-items: center; position: relative; }
+  .account-btn {
+    position: relative; display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 3px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--text);
+    font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; white-space: nowrap;
   }
-  .settings-dots-btn svg { flex-shrink: 0; }
-  .settings-dots-btn:active { transform: translateY(1px); }
-  /* position:fixed with top/left set in JS (positionSettingsMenu()), not
-     position:absolute anchored to a single parent — there are now two
-     possible triggers for this one shared dropdown (the desktop
-     rail-tab-row's and the mobile view-switcher's, see their own markup
-     comments), only one of which is ever actually on-screen at once, so
-     its position is computed fresh from whichever one that is rather
-     than living inside either as a DOM child. max-height/overflow-y is
-     a safety net for the landscape-phone case specifically — that
-     trigger sits near the very top of a short viewport, which doesn't
-     always have room below it for all ~15 items at full height. */
+  .account-btn:hover, .account-btn[aria-expanded="true"] { background: var(--primary-tint); border-color: var(--primary-light); }
+  .account-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
+  .account-caret { color: var(--text-light); flex-shrink: 0; }
+  .account-avatar {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--primary-light); color: #fff; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 10px; font-weight: 700;
+  }
+  .account-avatar-lg { width: 36px; height: 36px; font-size: 13px; }
+  .account-btn .admin-badge { top: -2px; left: 20px; right: auto; min-width: 0; width: 11px; height: 11px; padding: 0; font-size: 0; border: 2px solid var(--card); }
+  .account-who { display: flex; align-items: center; gap: var(--s-2-5); padding: var(--s-2) var(--s-3) var(--s-2-5); margin-bottom: var(--s-1-5); border-bottom: 1px solid var(--border); }
+  .account-who-name { font-weight: 700; font-size: var(--t-base); color: var(--text); line-height: 1.25; }
+  .account-who-role { font-size: var(--t-xs); color: var(--text-light); }
+  /* The Account menu. position:fixed with top/left set in JS
+     (positionMenu() in src/app/settings-menu.ts), right-aligned under
+     #accountBtn. max-height/overflow-y is a safety net for short
+     viewports (landscape phones), which don't always have room below the
+     button for every item at full height. */
   .settings-dropdown {
     position: fixed; background: white; color: var(--text);
-    border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 150px; padding: var(--s-1-5);
-    display: none; z-index: 200; max-height: calc(100vh - 16px); overflow-y: auto;
+    border-radius: 8px; box-shadow: var(--shadow-hover); min-width: 240px; padding: var(--s-1-5);
+    /* Above the first-visit tour prompt (.onb-notif, 2500), which sits in
+       the same bottom-right corner the menu reaches down into. */
+    display: none; z-index: 2600; max-height: calc(100vh - 16px); overflow-y: auto;
   }
   .settings-dropdown.show { display: block; }
   .skip-link {
@@ -250,51 +296,6 @@
   .theme-custom-row label { display: block; font-size: var(--t-2xs); font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: var(--s-1); }
   .theme-custom-row input[type="color"] { width: 100%; height: 38px; padding: var(--s-0-5); border-radius: 6px; cursor: pointer; border: 1px solid var(--border); }
   .theme-preview { margin-top: var(--s-4); height: 50px; border-radius: 8px; display: flex; align-items: center; padding: 0 var(--s-4); color: white; font-weight: 600; font-size: var(--t-base); transition: background 0.15s; }
-  /* ===== VIEW SWITCHER (rail-tab-row, top of the job rail) =====
-     Icon-only, permanently — no label reveal on active/hover (see
-     .rail-tab-label below, matching the mobile view-switcher's own
-     icon-only redesign). Each button keeps its own title="" for
-     identification via native tooltip, same as any icon-rail sidebar (VS
-     Code's activity bar, Slack's app rail, etc). */
-  .rail-tab-row { display: flex; align-items: center; gap: var(--s-1); padding: var(--s-2); border-bottom: 1px solid var(--border); background: var(--row-alt-bg); }
-  /* Outline Ring (Option F — Karl's pick after trying Option D live,
-     same "which switch design" evaluation the pressed-button mockup
-     went through). Quietest of the set on purpose: no background or
-     shadow ever, on either state — the ring around it is the only thing
-     that changes; icons stay full-strength always (Karl's own call —
-     the original mockup dimmed the icon at rest too, he didn't want
-     that part). */
-  .rail-tab {
-    display: flex; align-items: center; justify-content: center; overflow: hidden;
-    flex: 0 0 34px; height: 34px; padding: 0; border: 2px solid transparent; border-radius: 8px;
-    background: transparent; color: var(--text-light); cursor: pointer;
-    white-space: nowrap; transition: border-color 0.18s ease;
-  }
-  .rail-tab svg { flex-shrink: 0; }
-  .rail-tab-label, .rail-tab .badge { display: none; }
-  .rail-tab.active { border-color: var(--primary-light); }
-  /* Settings keeps its own separate, unchanged hover treatment (it opens
-     a dropdown, not a persistent on/off view, so the ring language above
-     doesn't apply to it) — scoped to .rail-tab-row specifically (the
-     desktop trigger's own container) rather than the bare
-     .settings-menu-wrap class, which the mobile view-switcher's trigger
-     now ALSO carries (see its own markup comment): a plain
-     .settings-menu-wrap:hover would match that one too, and touch taps
-     on many mobile browsers apply :hover on tap without ever clearing it
-     afterward (no mouse to move away and un-hover), which is exactly
-     what looked like the settings icon staying highlighted after closing
-     the menu. */
-  .rail-tab-row .settings-menu-wrap:hover {
-    background: var(--primary-light); color: white;
-  }
-  .rail-tab-row .settings-menu-wrap:hover .settings-dots-btn { color: white; }
-  /* Settings' own hover fills its background solid indigo, the exact
-     --primary-light Gantt already uses as its own hardcoded icon color,
-     so it needs forcing to white there or it'd vanish against it — the
-     Outline Ring's own active state never fills a background (a border
-     only), so no equivalent case exists for the rail-tab icons
-     themselves. */
-  .rail-tab-row .settings-menu-wrap:hover svg { filter: brightness(0) invert(1); }
   /* Settings | Admin tabs (admins only) and the unread badge shown on the
      Settings button and the Admin tab (src/app/admin-notices.ts). */
   .settings-tabs { display: flex; gap: 2px; padding: 2px; margin: 0 var(--s-1) var(--s-1-5); background: rgba(127,127,127,0.12); border: 1px solid var(--border); border-radius: 8px; }
@@ -312,7 +313,6 @@
     line-height: 16px; text-align: center; pointer-events: none; box-sizing: border-box;
   }
   .admin-badge[hidden] { display: none !important; }
-  .mobile-view-btn .admin-badge { top: 4px; right: calc(50% - 20px); z-index: 2; }
   .settings-dropdown-item .admin-badge { position: static; margin-left: auto; }
   .manager-sidebar-header .badge { background: var(--primary-light); color: white; font-size: var(--t-2xs); padding: var(--s-0-5) var(--s-1-75); border-radius: 10px; font-weight: 700; margin-left: var(--s-0-5); }
 
@@ -1272,18 +1272,8 @@
      fixed-width/clip approach) but means there's really nothing to see
      until it's actually opening. */
   body:not(.job-rail-open) .job-list { opacity: 0; pointer-events: none; }
-  /* This row goes from a horizontal row to a vertical column — a row of
-     6 icons (5 tabs + settings) needs real width even at their fixed
-     icon-only size, which is what actually capped how narrow the sidebar
-     could get; stacked, each row only needs to be as wide as ONE icon.
-     (The tabs/settings themselves no longer need their own closed-rail
-     sizing/label/filter overrides here — they're icon-only unconditionally
-     now, see .rail-tab's own base rules further up.) */
-  body:not(.job-rail-open) .rail-tab-row {
-    flex-direction: column; align-items: stretch; flex-wrap: nowrap;
-  }
   @media (min-width: 1101px) {
-    body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 48px; min-width: 48px; }
   }
   .manager-sidebar-header { padding: var(--s-3-5) var(--s-4); border-bottom: 1px solid var(--border); background: var(--row-alt-bg); transition: padding 0.15s ease; }
   .manager-sidebar-header h2 { font-size: var(--t-md); font-weight: 700; color: var(--text); margin-bottom: var(--s-2-5); display: flex; align-items: center; gap: var(--s-2); transition: margin 0.15s ease, justify-content 0.15s ease; }
@@ -2164,10 +2154,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   /* ===== HOME TAB ===== */
   /* Personal dashboard — the default landing tab (see the static
      "active" class on #panel-home; there's no per-user preference for
-     this, it's just always Home, and no rail-tab button represents it
-     any more either — see switchTabMorphed()'s own comment for how
-     Home is reached now: toggling off whichever tab is currently
-     active). A greeting banner, then five widgets (Checklist/Calendar
+     this, it's just always Home; the navbar's Home tab, or clicking
+     the active tab again, gets back here). A greeting banner, then five widgets (Checklist/Calendar
      stacked left, Board/Gantt stacked right, Job Chat spanning the
      center column — see .home-widget-center's own comment); each piece
      is just an innerHTML target renderHomeDashboard() fills in — see
@@ -3089,13 +3077,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      .job-rail-open at all, since it doesn't use this toggle) even
      though the mobile block's own rule is meant to be the final word. */
   @media (max-width: 1100px) and (min-width: 481px) {
-    body:not(.job-rail-open) .manager-sidebar { width: 64px; min-width: 64px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 48px; min-width: 48px; }
   }
 
   /* ===== MOBILE (phone-width) =====
      Home/Checklist/Job list+editor/Board/Calendar/Gantt each get their own
      full-screen mode, since none of them fit next to another on a phone —
-     .mobile-view-switcher's buttons call setMobileView() (src/views/home.ts),
+     the navbar's tabs call setMobileView() there (src/views/home.ts),
      which sets body[data-mobile-view="home"|"checklist"|"board"|"calendar"|
      "gantt"] so the CSS below can show just that one full-screen ("jobs" —
      the job list + editor — is the implicit default when no other value is
@@ -3107,14 +3095,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      instant the phone turns sideways. Same threshold as the portrait
      case, just checked on whichever axis is currently the narrow one. */
   @media (max-width: 480px), (max-height: 480px) {
-    /* The whole row hides here now, settings-menu-wrap included — mobile
-       has its own separate Jobs/Board nav (.mobile-view-switcher) so
-       switchTab()'s tabs are redundant, and Settings now has its own
-       entry point leading THAT row instead (see its markup), so nothing
-       in .rail-tab-row still needs to stay reachable from here. */
-    .rail-tab-row, .activity-sidebar, #activityToggleBtn { display: none; }
-    /* Mobile has its own separate "Jobs" nav mode (.mobile-view-switcher
-       below) where the job list is always what's showing — the desktop
+    .activity-sidebar, #activityToggleBtn { display: none; }
+    /* The job list is its own full-screen view here, so Jobs joins the notch. */
+    #tab-jobs { display: inline-flex; }
+    /* Mobile has its own separate "Jobs" view (the notch's Jobs tab)
+       where the job list is always what's showing — the desktop
        open/closed toggle (see toggleJobRail()) doesn't apply here at
        all, so the list/header/label/search it would otherwise collapse
        to icon-only are forced back on regardless of that toggle's
@@ -3163,39 +3148,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        and unclickable despite display:block above. */
     .job-list { width: 100%; min-width: 0; opacity: 1 !important; pointer-events: auto !important; }
 
-    /* Icon-only (like a phone's own bottom tab bar minus the captions) —
-       6 tabs' worth of full words ("Checklist" is the long pole) never
-       fits an even flex:1 split of a phone's width at a legible size;
-       dropping the label entirely rather than shrinking it further reads
-       cleaner than a near-illegible caption would. Reuses the exact icon
-       each view already has on the desktop rail-tab-row, so it's the
-       same visual language, not a new one just for mobile — title=""
-       carries the name for anyone using an accessibility tree.
-       (Revisited once, with visible captions added back at 10px/360px —
-       Karl tried it live and still didn't want it, so this reverts to
-       icon-only again. Leaving this noted so a future pass doesn't
-       re-litigate the same idea a third time without new information.) */
-    .mobile-view-switcher { display: flex; background: var(--card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-    /* Outline Ring (Option F — same quiet, background-free treatment as
-       desktop's .rail-tab now, see that rule's own comment for the full
-       rationale): a colored ring appears around the active icon; icons
-       stay full-strength always, no dimming at rest (Karl's own call).
-       Sized/centered via a fixed 34px square border box rather than just
-       bordering the button itself, since the button's own flex:1 click
-       target spans the whole column width and a ring that wide would
-       look like an underline, not a ring. */
-    .mobile-view-btn {
-      flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
-      padding: var(--s-3) var(--s-0-5); border: none; background: transparent;
-      cursor: pointer; position: relative;
-    }
-    .mobile-view-btn svg { flex-shrink: 0; position: relative; z-index: 1; }
-    .mobile-view-btn::before {
-      content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 34px; height: 34px; border-radius: 8px; border: 2px solid transparent;
-      transition: border-color 0.18s ease;
-    }
-    .mobile-view-btn.active::before { border-color: var(--primary-light); }
 
     /* NOT display:none — the job drawer (#formArea) lives inside
        .app-shell-main too, and display:none on an ancestor hides a
@@ -3233,7 +3185,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        since the Comments panel reorders to the top (order:-1, see the
        1440px query above), silently clipped Comments specifically while
        leaving the rest of the form (further down) untouched. */
-    .manager-form-area { position: fixed; top: 60px; padding: var(--s-4); }
+    .manager-form-area { position: fixed; top: 56px; padding: var(--s-4); }
     .form-container { padding: var(--s-4); }
     /* Start/Days/Finish were sized for a ~460px-wide desktop drawer column
        (92/50/92px) — at phone width that leaves almost nothing for the
@@ -3378,37 +3330,37 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      The header itself switches to a narrow vertical stack (title, then
      just the settings ⋮ menu — see below) since its normal horizontal
      layout has nowhere near enough width here. */
-  @media (max-height: 480px) and (orientation: landscape) {
-    body {
-      display: grid; grid-template-columns: 64px 1fr; grid-template-rows: auto 1fr;
-      grid-template-areas: "header shell" "tabs shell";
+  /* Portrait phones: the navbar's top row slims down to TeamSync and
+     Account, and the notch moves to the bottom edge where thumbs reach
+     it, rising from a thin strip (body::after) the same way it hangs from
+     the top one on desktop. Everything else leaves room for it below. */
+  @media (max-width: 480px) {
+    .app-nav { height: 48px; padding: 0 var(--s-3); }
+    .app-nav::before { display: none; }
+    .app-nav-project, .account-name, .account-caret { display: none; }
+    .account-btn { padding: 0 3px; }
+    .app-nav-notch {
+      position: fixed; top: auto; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); z-index: 900;
+      padding: 7px 6px 3px; border-radius: 16px 16px 0 0;
+      filter: drop-shadow(0 -1px 0 var(--border)) drop-shadow(0 -4px 8px rgba(26,35,126,0.08));
     }
-    /* .app-header itself no longer occupies the "header" grid area at
-       all (it's permanently display:none — see its base rule) — that
-       row simply collapses to 0 height since nothing occupies it.
-       .rail-tab-row (settings + the view-switcher tabs) lives inside
-       .manager-sidebar, which sits in the wide "shell" area here, not
-       the cramped 64px "tabs" column — it gets the same icon-only
-       column collapse as desktop's narrow rail in this landscape-phone
-       case, nothing landscape-specific needed for it. 64px matches that
-       same desktop collapsed-rail width (see body:not(.job-rail-open)
-       .manager-sidebar) rather than an arbitrary new value — icon-only,
-       no label, so there's nothing here that needs more than that. */
-    .mobile-view-switcher {
-      grid-area: tabs; display: flex; flex-direction: column; width: 64px;
-      border-bottom: none; border-right: 1px solid var(--border);
+    body.dark-mode .app-nav-notch { filter: drop-shadow(0 -1px 0 var(--border)) drop-shadow(0 -4px 8px rgba(0,0,0,0.4)); }
+    .app-nav-notch::before, .app-nav-notch::after { top: auto; bottom: 0; }
+    .app-nav-notch::before { background: radial-gradient(circle at 0 0, transparent 13.5px, var(--card) 14px); }
+    .app-nav-notch::after { background: radial-gradient(circle at 100% 0, transparent 13.5px, var(--card) 14px); }
+    body::after {
+      content: ''; position: fixed; left: 0; right: 0; bottom: 0; z-index: 899;
+      height: calc(6px + env(safe-area-inset-bottom, 0px)); background: var(--card); box-shadow: 0 -1px 0 var(--border);
     }
-    /* Centered (not flex-start) now that the column is icon-only width
-       (64px, same as the desktop .rail-tab it's matching) — flex-start's
-       own left-hugging padding was the leftover from when this column
-       was 130px wide and had that much empty space to fill. The ring
-       (::before, base rule above) needs no changes here — it's centered
-       on the button itself regardless of the switcher's own row/column
-       direction, so it already works unmodified in this vertical layout
-       too. */
-    .mobile-view-btn { justify-content: center; padding: var(--s-2-5) 0; }
+    .nav-tab { padding: 0 8px; }
+    .nav-tab svg { width: 20px; height: 20px; }
+    .nav-tab.active { padding: 0 8px; }
+    .nav-tab.active .nav-tab-label { display: none; }
+    .app-shell { padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
+    .manager-form-area { top: 48px; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
+  }
 
-    .app-shell { grid-area: shell; height: 100%; min-height: 0; }
+  @media (max-height: 480px) and (orientation: landscape) {
 
     /* Board columns stay the same physical width they were in portrait,
        rather than the portrait rule's calc(100vw - 48px) stretching each
@@ -3632,7 +3584,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     background: #20232c; color: var(--text);
   }
 
-  body.dark-mode .rail-tab-row { background: #1a1d25; border-bottom-color: var(--border); }
 
   body.dark-mode .board-column { background: #232732; border-color: var(--border); }
   body.dark-mode .board-column.drag-over-col { border-color: var(--primary-light); }
@@ -3851,51 +3802,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   </div>
 </div>
 
-<!-- MOBILE VIEW SWITCHER: only shown ≤480px (see @media rules) — the job
-     rail, Home, Checklist, Board, Calendar, and Gantt can't all fit on a
-     phone screen at once, so this toggles which one takes over the full
-     screen. Order mirrors the desktop rail-tab-row (Home, Checklist,
-     Calendar, Gantt, Board) with Jobs prepended, since Jobs has no
-     desktop-rail equivalent — it's the sidebar itself there, not a tab.
-     Gantt/Calendar keep their desktop layout, just narrowed/compacted as
-     far as they reasonably can be (see the .gantt-*/.calendar-* mobile
-     rules) — not going to be as good an experience as the other views,
-     but real and reachable rather than hidden entirely. Icon-only, no
-     caption — title="" carries the name for a long-press/accessibility
-     tree instead (see .mobile-view-switcher's own CSS comment: this was
-     tried once with visible captions and reverted — not an oversight).
-     Icons are the exact same ones each view already uses on the desktop
-     rail-tab-row (Jobs has no rail-tab of its own, so it gets a one-off
-     briefcase here instead). See setMobileView(). -->
-<div class="mobile-view-switcher" id="mobileViewSwitcher">
-  <!-- Settings leads this row too, same as it leads the desktop
-       rail-tab-row (see that row's own markup comment) — the actual
-       dropdown (#settingsDropdown) now lives as its own top-level
-       element just below, shared by both this button and the desktop
-       one; see positionSettingsDropdown() for why it moved out of
-       .manager-sidebar (which is display:none on every mobile view
-       except Jobs, so anything nested inside it — the dropdown included,
-       when it used to live there — was unreachable from any other
-       mobile view). -->
-  <button class="mobile-view-btn settings-menu-wrap" id="mobileSettingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="admin-badge" hidden></span></button>
-  <button class="mobile-view-btn active" data-view="jobs" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg></button>
-  <!-- No Home button here either (see setMobileView()'s own comment) —
-       same "turn off the tab you're in" gesture as desktop: tapping
-       whichever view is already active switches to Home instead of
-       re-selecting it. -->
-  <button class="mobile-view-btn" data-view="checklist" title="Checklist" aria-label="Checklist"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-  <button class="mobile-view-btn" data-view="calendar" title="Calendar" aria-label="Calendar"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg></button>
-  <button class="mobile-view-btn" data-view="gantt" title="Gantt Chart" aria-label="Gantt Chart"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg></button>
-  <button class="mobile-view-btn" data-view="board" title="Board" aria-label="Board"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg></button>
-  <button class="mobile-view-btn" data-view="reports" title="Reports" aria-label="Reports"><svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="12" width="4" height="8" rx="1" fill="#00897b"/><rect x="10" y="7" width="4" height="13" rx="1" fill="#00897b" opacity="0.75"/><rect x="16" y="4" width="4" height="16" rx="1" fill="#00897b" opacity="0.5"/></svg></button>
-</div>
-
-<!-- Shared by both the desktop rail-tab-row's settings trigger and the
-     mobile view-switcher's — top-level (not nested in .manager-sidebar,
-     which is display:none on most mobile views) and position:fixed, with
-     its actual screen position computed fresh from whichever trigger is
-     currently visible each time it opens — see positionSettingsMenu(). -->
-<div class="settings-dropdown" id="settingsDropdown" role="group" aria-label="Settings">
+<!-- The Account menu, opened by #accountBtn in the navbar. Top-level and
+     position:fixed, placed under the button each time it opens — see
+     positionMenu() in src/app/settings-menu.ts. -->
+<div class="settings-dropdown" id="settingsDropdown" role="group" aria-label="Account and settings">
+  <!-- Filled by updateAccountButton() (src/app/account-nav.ts). -->
+  <div class="account-who">
+    <span class="account-avatar account-avatar-lg" id="accountWhoAvatar" aria-hidden="true">?</span>
+    <div><div class="account-who-name" id="accountWhoName"></div><div class="account-who-role" id="accountWhoRole"></div></div>
+  </div>
   <!-- Was its own standalone square icon button in the rail row —
        see updateProjectToggle(), which now targets this list item
        (id kept the same) instead of a <button>, writing the "next
@@ -3998,6 +3913,37 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   </div>
 </div>
 
+<!-- APP NAVBAR ("Notch Island"). TeamSync (and the project switch, when
+     there's more than one project) on the left; the views in a notch that
+     hangs from the top edge, where only the active one shows its name; who
+     else is online and the Account menu on the right. On phones the notch
+     moves to the bottom edge and gains a Jobs button first (the job list is
+     its own full-screen view there). Tabs call switchTabMorphed() on
+     desktop and setMobileView() on phones (see static-event-wiring.ts);
+     the Checklist/Board .badge counts stay in the markup (hidden) because
+     their render code still writes to them. -->
+<header class="app-nav" id="appNav">
+  <div class="app-nav-left">
+    <span class="app-nav-brand"><span class="app-nav-logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13"><rect x="3" y="5" width="10" height="3.5" rx="1.5" fill="#fff"/><rect x="7" y="10.5" width="14" height="3.5" rx="1.5" fill="#fff" opacity=".8"/><rect x="3" y="16" width="8" height="3.5" rx="1.5" fill="#fff" opacity=".6"/></svg></span>TeamSync</span>
+    <button type="button" class="app-nav-project" id="navProjectBtn" hidden></button>
+  </div>
+  <nav class="app-nav-notch" id="appNavNotch" aria-label="Views">
+    <button type="button" class="nav-tab" data-tab="jobs" id="tab-jobs" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg><span class="nav-tab-label">Jobs</span></button>
+    <button type="button" class="nav-tab active" aria-current="page" data-tab="home" id="tab-home" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 01-1 1h-4v-5h-6v5H5a1 1 0 01-1-1z" fill="#5c6bc0"/></svg><span class="nav-tab-label">Home</span></button>
+    <button type="button" class="nav-tab" data-tab="checklist" id="tab-checklist" title="Checklist" aria-label="Checklist"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nav-tab-label">Checklist</span><span class="badge" id="myChecklistCount">0</span></button>
+    <button type="button" class="nav-tab" data-tab="calendar" id="tab-calendar" title="Calendar" aria-label="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="nav-tab-label">Calendar</span></button>
+    <button type="button" class="nav-tab" data-tab="gantt" id="tab-gantt" title="Gantt Chart" aria-label="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="nav-tab-label">Gantt Chart</span></button>
+    <button type="button" class="nav-tab" data-tab="board" id="tab-board" title="Board" aria-label="Board"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="nav-tab-label">Board</span><span class="badge" id="boardCount">0</span></button>
+    <button type="button" class="nav-tab" data-tab="reports" id="tab-reports" title="Reports" aria-label="Reports"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="4" y="12" width="4" height="8" rx="1" fill="#00897b"/><rect x="10" y="7" width="4" height="13" rx="1" fill="#00897b" opacity="0.75"/><rect x="16" y="4" width="4" height="16" rx="1" fill="#00897b" opacity="0.5"/></svg><span class="nav-tab-label">Reports</span></button>
+  </nav>
+  <div class="app-nav-right">
+    <div class="presence-avatars" id="presenceAvatars"></div>
+    <div class="settings-menu-wrap">
+      <button type="button" class="account-btn" id="accountBtn" title="Your account and settings" aria-label="Account and settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><span class="account-avatar" id="accountAvatar" aria-hidden="true">?</span><span class="account-name" id="accountName"></span><svg class="account-caret" viewBox="0 0 24 24" width="10" height="10" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg><span class="admin-badge" hidden></span></button>
+    </div>
+  </div>
+</header>
+
 <div class="app-shell">
   <!-- JOB RAIL: permanent left-side job list, starting right under the
        header and spanning the rest of the viewport height, rather than
@@ -4006,47 +3952,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        the slide-out drawer (#formArea, inside panelsContainer) over
        whichever panel is showing. -->
   <div class="manager-sidebar" id="jobRail">
-    <!-- Formerly the top app-header's contents — moved here so the
-         gradient title bar could go away entirely (see .app-header
-         { display:none }) without losing these controls. Order/IDs/
-         onclick handlers are all unchanged, so every function that reads
-         them by id (renderPresenceAvatars(), updateProjectToggle(),
-         applyPermissionGating(), etc.) keeps working with zero changes
-         on the JS side. View As no longer lives here — see Manage Users. -->
-    <!-- View switcher — icon-only, permanently (see .rail-tab-label's
-         display:none — the .rail-tab-label/.badge spans stay in the
-         markup since renderHomeDashboard()/renderMyChecklist()/etc still
-         write real counts into the badge ones, just invisible now,
-         rather than threading a "does this even render" check through
-         every badge-updating call site for a purely cosmetic change).
-         switchTab() drives which one has .active via the same
-         #tab-<name> ids/.rail-tab query it always used (renamed from
-         .tab-btn), just relocated. Settings leads this same row instead
-         of its own row above it — same icon-only styling as any other
-         entry here, it just opens a dropdown instead of switching tabs
-         (see .settings-menu-wrap's own rules, which extend the .rail-tab
-         selectors rather than duplicating them). -->
-    <div class="rail-tab-row">
-      <div class="settings-menu-wrap">
-        <button class="settings-dots-btn" id="desktopSettingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="5" r="2" fill="#3949ab"/><circle cx="12" cy="12" r="2" fill="#3949ab"/><circle cx="12" cy="19" r="2" fill="#3949ab"/></svg><span class="rail-tab-label">Settings</span><span class="admin-badge" hidden></span></button>
-      </div>
-      <!-- No Home button — see switchTabMorphed()'s own comment: getting
-           back to Home is done by toggling off whichever tab is
-           currently active (clicking it again), same gesture either way,
-           rather than a dedicated button for it. -->
-      <button class="rail-tab" data-tab="checklist" id="tab-checklist" title="Checklist" aria-label="Checklist"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rail-tab-label">Checklist</span> <span class="badge" id="myChecklistCount">0</span></button>
-      <button class="rail-tab" data-tab="calendar" id="tab-calendar" title="Calendar" aria-label="Calendar"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#e53935" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#e53935"/><rect x="6" y="13" width="3" height="3" fill="#e53935"/><rect x="10.5" y="13" width="3" height="3" fill="#e53935"/><rect x="15" y="13" width="3" height="3" fill="#e53935"/></svg><span class="rail-tab-label">Calendar</span></button>
-      <button class="rail-tab" data-tab="gantt" id="tab-gantt" title="Gantt Chart" aria-label="Gantt Chart"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="10" height="3.5" rx="1" fill="#3949ab"/><rect x="3" y="10.2" width="16" height="3.5" rx="1" fill="#3949ab" opacity="0.75"/><rect x="3" y="16.5" width="7" height="3.5" rx="1" fill="#3949ab" opacity="0.5"/></svg><span class="rail-tab-label">Gantt Chart</span></button>
-      <button class="rail-tab" data-tab="board" id="tab-board" title="Board" aria-label="Board"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="rail-tab-label">Board</span> <span class="badge" id="boardCount">0</span></button>
-      <button class="rail-tab" data-tab="reports" id="tab-reports" title="Reports" aria-label="Reports"><svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="12" width="4" height="8" rx="1" fill="#00897b"/><rect x="10" y="7" width="4" height="13" rx="1" fill="#00897b" opacity="0.75"/><rect x="16" y="4" width="4" height="16" rx="1" fill="#00897b" opacity="0.5"/></svg><span class="rail-tab-label">Reports</span></button>
-    </div>
     <!-- The header's own icon IS the toggle now — no separate row. Click
          it closed (icon-only) to open the Jobs search/list below (and
          widen the sidebar), click it again to close — see
          toggleJobRail(). Independent of which tab is active, same as
          before. -->
     <div class="manager-sidebar-header">
-      <h2><button class="job-rail-toggle-icon" id="jobRailToggleBtn" title="Show Jobs list" aria-label="Show Jobs list"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 5l7 7-7 7" stroke="#3949ab" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button class="job-rail-add-btn" id="jobRailAddBtn" data-min-tier="projectAdmin" title="Add a new job" aria-label="Add a new job">+</button><div class="presence-avatars" id="presenceAvatars"></div></h2>
+      <h2><button class="job-rail-toggle-icon" id="jobRailToggleBtn" title="Show Jobs list" aria-label="Show Jobs list"><svg viewBox="0 0 24 24" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path d="M9 5l7 7-7 7" stroke="#3949ab" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button class="job-rail-add-btn" id="jobRailAddBtn" data-min-tier="projectAdmin" title="Add a new job" aria-label="Add a new job">+</button></h2>
       <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
     </div>
     <!-- Clips .job-list's fixed 260px width down when the rail is

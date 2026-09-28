@@ -64,7 +64,7 @@ test('a11y: a dialog takes focus, keeps Tab inside, closes on Escape and returns
   await openApp(page);
   await page.evaluate(() => switchTabMorphed('home'));
   // Open the Archived Jobs dialog from a known, focused element.
-  await page.evaluate(() => { const b = document.getElementById('desktopSettingsBtn'); b.focus(); openArchivedJobsModal(); });
+  await page.evaluate(() => { const b = document.getElementById('accountBtn'); b.focus(); openArchivedJobsModal(); });
   const box = page.locator('#archivedJobsModal .modal-box');
   await expect(box).toHaveAttribute('role', 'dialog');
   await expect(box).toHaveAttribute('aria-modal', 'true');
@@ -75,7 +75,7 @@ test('a11y: a dialog takes focus, keeps Tab inside, closes on Escape and returns
 
   await page.keyboard.press('Escape');
   await expect(page.locator('#archivedJobsModal')).not.toHaveClass(/show/);
-  await expect(page.locator('#desktopSettingsBtn')).toBeFocused();
+  await expect(page.locator('#accountBtn')).toBeFocused();
 });
 
 test('a11y: Escape in the Security dialog closes it and never presses "Cancel deletion"', async ({ page }) => {
@@ -94,15 +94,15 @@ test('a11y: Escape in the Security dialog closes it and never presses "Cancel de
 
 test('a11y: the Settings menu opened from the keyboard moves focus into it, and Escape returns it', async ({ page }) => {
   await openApp(page);
-  await page.locator('#desktopSettingsBtn').focus();
+  await page.locator('#accountBtn').focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#settingsDropdown')).toHaveClass(/show/);
-  await expect(page.locator('#desktopSettingsBtn')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#accountBtn')).toHaveAttribute('aria-expanded', 'true');
   expect(await page.evaluate(() => document.activeElement.classList.contains('settings-dropdown-item'))).toBe(true);
   await page.keyboard.press('Escape');
   await expect(page.locator('#settingsDropdown')).not.toHaveClass(/show/);
-  await expect(page.locator('#desktopSettingsBtn')).toBeFocused();
-  await expect(page.locator('#desktopSettingsBtn')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#accountBtn')).toBeFocused();
+  await expect(page.locator('#accountBtn')).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('a11y: job cards and Board cards open from the keyboard through their title button', async ({ page }) => {
@@ -164,5 +164,5 @@ test('a11y: the first Tab reaches "Skip to main content", which jumps focus to t
   await expect(page.locator('.skip-link')).toBeInViewport();
   await page.keyboard.press('Enter');
   await expect(page.locator('#panelsContainer')).toBeFocused();
-  await expect(page.locator('.rail-tab[aria-current="page"], .rail-tab.active')).toHaveCount(await page.locator('.rail-tab.active').count());
+  await expect(page.locator('#appNavNotch .nav-tab[aria-current="page"], #appNavNotch .nav-tab.active')).toHaveCount(await page.locator('#appNavNotch .nav-tab.active').count());
 });
