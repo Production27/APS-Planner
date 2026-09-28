@@ -606,9 +606,12 @@
   .gantt-bulk-toggle:hover { background: var(--primary-tint); }
   body.dark-mode .gantt-bulk-toggle:hover { background: rgba(57,73,171,0.22); }
   .gantt-bulk-toggle svg { width: 13px; height: 13px; }
-  /* Outranks .gantt-toolbar button.gantt-toolbar-text-btn (display:flex, later in the file). */
-  .gantt-toolbar button.gantt-toolbar-text-btn.gantt-bulk-toggle-phone { display: none; }
-  @media (max-width: 480px) { .gantt-toolbar button.gantt-toolbar-text-btn.gantt-bulk-toggle-phone { display: flex; } }
+  /* The pill's phone-only bulk toggle (and its divider). */
+  .gantt-zoom-pill .gantt-bulk-toggle-phone, .gantt-zoom-pill .gantt-bulk-toggle-phone-sep { display: none; }
+  @media (max-width: 480px) {
+    .gantt-zoom-pill button.gantt-bulk-toggle-phone { display: inline-flex; }
+    .gantt-zoom-pill .gantt-bulk-toggle-phone-sep { display: block; }
+  }
   .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
@@ -1136,7 +1139,14 @@
      sits ahead of the icon buttons, pushed to the toolbar's left edge via
      margin-right: auto so the zoom/today/etc. buttons stay pinned right
      regardless of whether it's showing. */
-  .gantt-job-focus-banner { align-items: center; gap: var(--s-2); font-size: var(--t-sm); font-weight: 600; color: var(--text); margin-right: auto; }
+  .gantt-job-focus-banner {
+    position: absolute; bottom: 62px; left: 50%; transform: translateX(-50%); z-index: 95;
+    align-items: center; gap: var(--s-2); max-width: calc(100% - 24px); white-space: nowrap;
+    padding: 4px 5px 4px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(26,35,126,0.14);
+    font-size: var(--t-sm); font-weight: 600; color: var(--text);
+  }
+  body.dark-mode .gantt-job-focus-banner { box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
   .gantt-job-focus-banner b { color: var(--primary); }
   .gantt-job-focus-banner button {
     width: auto; height: auto; padding: var(--s-1) var(--s-2-5); font-size: var(--t-xs); font-weight: 700;
@@ -1153,14 +1163,16 @@
      timeline's own overlays (today line 85, bars up to 82). */
   .gantt-wrapper { position: relative; }
   .gantt-key {
-    position: absolute; top: 49px; right: var(--s-2); z-index: 200;
-    width: min(360px, calc(100vw - 16px)); max-height: calc(100% - 57px); overflow-y: auto;
+    position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 200;
+    width: min(360px, calc(100% - 16px)); max-height: calc(100% - 80px); overflow-y: auto;
     background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.2); padding: var(--s-2-5) var(--s-3-5) var(--s-3);
     font-size: var(--t-xs); line-height: 1.45;
   }
   .gantt-key[hidden] { display: none; }
   .gantt-key-head { display: flex; align-items: center; justify-content: space-between; }
+  .gantt-key-tip { margin: var(--s-1-5) 0 0; color: var(--text-light); }
+  .gantt-key-tip b { color: var(--text); }
   .gantt-key h3 { font-size: var(--t-sm); color: var(--primary); margin: 0; }
   .gantt-key h4 { font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin: var(--s-3) 0 var(--s-1-5); }
   .gantt-key-close { border: 0; background: none; font-size: 20px; line-height: 1; color: var(--text-light); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
@@ -4156,28 +4168,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <!-- GANTT TAB -->
     <div class="tab-panel" id="panel-gantt">
       <div class="gantt-wrapper">
-        <!-- One solid strip: view-mode tabs + toolbar buttons as flex
-             siblings sharing a single background/border, rather than each
-             living at the top of its own panel (which left a seam where
-             .left-panel's border-right/box-shadow cut through). -->
-        <div class="gantt-top-row">
-          <!-- Empty spacer — matches .left-panel's width below so the
-               toolbar lines up with the timeline instead of the timeline
-               grid's own start. Used to hold the view-mode tabs, then the
-               "View as" picker; both are gone now (the picker moved to the
-               app header — see setViewAs() — since it now applies
-               everywhere, not just the Gantt). -->
-          <div class="gantt-view-toggle-row"></div>
-          <div class="gantt-toolbar" id="ganttToolbar">
-            <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
-            <!-- Phones only: the Job column (and its header arrow, #ganttBulkToggle)
-                 is hidden there, so the same bulk toggle sits here instead. -->
-            <button class="gantt-toolbar-text-btn gantt-bulk-toggle-phone" id="ganttBulkTogglePhone"></button>
-            <button class="gantt-toolbar-text-btn" id="ganttKeyBtn" title="What the colors and patterns mean" aria-expanded="false" aria-controls="ganttKeyPanel">Key</button>
-          </div>
-        </div>
-        <!-- Filled by src/views/gantt-key.tsx each time #ganttKeyBtn opens it. -->
-        <div class="gantt-key" id="ganttKeyPanel" role="dialog" aria-labelledby="ganttKeyTitle" hidden></div>
         <div class="gantt-panels-row">
           <div class="left-panel">
             <div class="gantt-col-resize" id="ganttColResize" role="separator" aria-orientation="vertical" aria-label="Resize the job column (arrow keys, double-click to reset)" title="Drag to resize · double-click to reset" tabindex="0"></div>
@@ -4200,13 +4190,25 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <!-- Only shown while today is scrolled out of view, pinned to the
                  edge it went off (see updateGanttTodayMark() in gantt.ts). -->
             <button type="button" class="gantt-today-mark" id="ganttTodayMark" hidden></button>
+            <!-- "Showing only X · Show all", floating just above the zoom pill
+                 while a job or task is isolated (see syncGanttFocusBanner()). -->
+            <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
+            <!-- Filled by src/views/gantt-key.tsx each time #ganttKeyBtn opens it;
+                 opens upward from the zoom pill. -->
+            <div class="gantt-key" id="ganttKeyPanel" role="dialog" aria-labelledby="ganttKeyTitle" hidden></div>
             <!-- Floating zoom pill. Buttons stay on screen on phones too: pinch
                  can't be the only way to zoom (WCAG 2.5.1). -->
-            <div class="gantt-zoom-pill" role="group" aria-label="Zoom">
+            <div class="gantt-zoom-pill" role="group" aria-label="Chart controls">
+              <!-- Phones only: the Job column (and its header arrow, #ganttBulkToggle)
+                   is hidden there, so the same bulk toggle sits here instead. -->
+              <button type="button" class="gantt-bulk-toggle-phone" id="ganttBulkTogglePhone"></button>
+              <span class="gantt-zoom-pill-sep gantt-bulk-toggle-phone-sep" aria-hidden="true"></span>
               <button type="button" id="ganttZoomOutBtn" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
               <button type="button" id="ganttZoomInBtn" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
               <span class="gantt-zoom-pill-sep" aria-hidden="true"></span>
               <button type="button" id="ganttResetZoomBtn" title="Back to the normal zoom"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Reset</button>
+              <span class="gantt-zoom-pill-sep" aria-hidden="true"></span>
+              <button type="button" id="ganttKeyBtn" title="Key: what the colors and patterns mean" aria-label="Key: what the colors and patterns mean" aria-expanded="false" aria-controls="ganttKeyPanel"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.6v.4"/></svg></button>
             </div>
           </div>
         </div>

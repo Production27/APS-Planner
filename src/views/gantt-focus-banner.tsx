@@ -34,7 +34,7 @@ function GanttFocusBanner({ visible, jobName, taskLabel, onShowAll }: GanttFocus
       </>
     );
   }
-  return <span class="gantt-job-focus-hint">Click a job or task name to isolate it</span>;
+  return null;
 }
 
 export function renderFocusBannerInto(container: HTMLElement, visible: boolean, jobName: string | null, taskLabel: string | null, onShowAll: () => void): void {

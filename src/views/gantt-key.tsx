@@ -41,7 +41,7 @@ function GanttKey({ onClose }: { onClose: () => void }) {
   const barRows: KeyRow[] = [
     {
       swatch: <span class="gantt-key-sw gantt-key-sw-outline" />,
-      label: <>An <b>outline</b> in the job's color marks a job or phase shown as one bar. Click ▸ next to its name, or Expand All, to see its tasks one per row.</>,
+      label: <>An <b>outline</b> in the job's color marks a job or phase shown as one bar. Click ▸ next to its name to see its tasks one per row, or the arrow in the Job column header to open or close every job at once.</>,
     },
     {
       swatch: <span class="gantt-key-sw" style={{ background: hatch(softenColor(HATCH_A), softenColor(HATCH_B)) }} />,
@@ -96,6 +96,7 @@ function GanttKey({ onClose }: { onClose: () => void }) {
         <h3 id="ganttKeyTitle">Key</h3>
         <button type="button" class="gantt-key-close" aria-label="Close key" title="Close" onClick={onClose}>×</button>
       </div>
+      <p class="gantt-key-tip"><b>Tip:</b> click a job or task name to show only that one. Click it again to show everything.</p>
 
       <h4>Task colors</h4>
       <p class="gantt-key-note">Each task takes the color of its Board stage.</p>

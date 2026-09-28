@@ -1058,9 +1058,9 @@ function clearGanttTaskFocus(): void {
   setGanttTaskFocus(null);
 }
 
-// Shown in the Gantt toolbar (Tasks view only): a quiet hint when nothing's
-// focused, swapping to the active "Showing only X — Show all" banner once
-// a job or task is.
+// Floating chip just above the zoom pill (Tasks view only), shown only
+// while a job or task is isolated: "Showing only X · Show all". The
+// "click a name to isolate it" tip lives in the Key panel now.
 function syncGanttFocusBanner(): void {
   const el = document.getElementById('ganttJobFocusBanner');
   if (!el) return;
@@ -1075,7 +1075,7 @@ function syncGanttFocusBanner(): void {
   // it, e.g. deleted from Board settings).
   const job = ganttFocusedJobId ? getVisibleJobs().find(function(j) { return j.id === ganttFocusedJobId; }) : null;
   const col = ganttFocusedTaskColumnId ? BOARD_COLUMNS.find(function(c) { return c.id === ganttFocusedTaskColumnId; }) : null;
-  renderFocusBannerInto(el, true, job ? job.name : null, col ? col.label : null, job ? clearGanttJobFocus : clearGanttTaskFocus);
+  renderFocusBannerInto(el, !!(job || col), job ? job.name : null, col ? col.label : null, job ? clearGanttJobFocus : clearGanttTaskFocus);
 }
 // A .task-bar-job-tag has no background chip of its own anymore — just
 // plain text in a contrast-adjusted variant of `color` (darkened/lightened

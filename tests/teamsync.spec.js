@@ -1195,6 +1195,11 @@ test('gantt key: the Key button opens a legend listing each stage color, and Esc
 
   const btn = page.locator('#ganttKeyBtn');
   const panel = page.locator('#ganttKeyPanel');
+  // The Key lives in the floating zoom pill now. Let the tab-switch
+  // animation finish, and clear the first-visit tour prompt, which sits
+  // in the bottom-right corner over the pill on a 1280px-wide window.
+  await page.waitForTimeout(600);
+  await page.evaluate(() => document.querySelectorAll('#onbNotif').forEach((e) => e.remove()));
   await expect(panel).toBeHidden();
   await btn.click();
   await expect(panel).toBeVisible();
@@ -2862,7 +2867,7 @@ test('gantt: zoom pill buttons zoom and reset; the red Today marker appears only
   await page.waitForTimeout(1500);
 
   // The old toolbar buttons are gone; zoom lives in the pill.
-  await expect(page.locator('#ganttToolbar #ganttZoomInBtn, #ganttFitToViewBtn, #ganttScrollTodayBtn')).toHaveCount(0);
+  await expect(page.locator('#ganttToolbar, #ganttFitToViewBtn, #ganttScrollTodayBtn')).toHaveCount(0);
   const dw = () => page.evaluate(() => dayWidth);
   await page.evaluate(() => { dayWidth = 34; renderGantt(); });
   await page.locator('.gantt-zoom-pill #ganttZoomInBtn').click();
