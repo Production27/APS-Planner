@@ -57,8 +57,7 @@ declare global {
   function openAddCalendarEvent(dateStr: string): void;
   function setCalendarView(mode: string): void;
   function toIsoDate(d: Date): string;
-  function expandAllGantt(): void;
-  function collapseAllGantt(): void;
+  function toggleGanttBulkFold(): void;
   function zoomIn(): void;
   function zoomOut(): void;
   function resetZoom(): void;
@@ -193,8 +192,8 @@ export function initStaticEventListeners(): void {
   on('calViewMonth', () => setCalendarView('month'));
   on('calViewWeek', () => setCalendarView('week'));
 
-  on('ganttExpandAllBtn', () => expandAllGantt());
-  on('ganttCollapseAllBtn', () => collapseAllGantt());
+  on('ganttBulkToggle', () => toggleGanttBulkFold());
+  on('ganttBulkTogglePhone', () => toggleGanttBulkFold());
   on('ganttKeyBtn', () => toggleGanttKey());
 
   // "Skip to main content" (A5): focus the content directly instead of

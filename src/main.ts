@@ -102,7 +102,7 @@ import {
   scrollToToday, ganttTouchDist, setGanttDayWidthAnchored, requestGanttZoom, handleGanttTouchStart,
   handleGanttTouchMove, handleGanttTouchEnd, handleGanttWheelZoom, zoomGanttCentered, zoomIn, zoomOut,
   resetZoom, fitToView, togglePhaseCollapse, getSubUnitKey, toggleTasksPhaseExpanded,
-  toggleTasksSubPhaseExpanded, expandAllGantt, collapseAllGantt, toggleGanttJobFocus, clearGanttJobFocus,
+  toggleTasksSubPhaseExpanded, expandAllGantt, collapseAllGantt, toggleGanttBulkFold, toggleGanttJobFocus, clearGanttJobFocus,
   toggleGanttTaskFocus, clearGanttTaskFocus, syncGanttFocusBanner,
   computeDateRange, showDatePopover, hideDatePopover, showTooltip,
   setHeaderScroll, setupScrollSync,
@@ -625,6 +625,7 @@ declare global {
     toggleTasksSubPhaseExpanded: typeof toggleTasksSubPhaseExpanded;
     expandAllGantt: typeof expandAllGantt;
     collapseAllGantt: typeof collapseAllGantt;
+    toggleGanttBulkFold: typeof toggleGanttBulkFold;
     toggleGanttJobFocus: typeof toggleGanttJobFocus;
     clearGanttJobFocus: typeof clearGanttJobFocus;
     toggleGanttTaskFocus: typeof toggleGanttTaskFocus;
@@ -1208,6 +1209,7 @@ window.toggleTasksPhaseExpanded = toggleTasksPhaseExpanded;
 window.toggleTasksSubPhaseExpanded = toggleTasksSubPhaseExpanded;
 window.expandAllGantt = expandAllGantt;
 window.collapseAllGantt = collapseAllGantt;
+window.toggleGanttBulkFold = toggleGanttBulkFold;
 window.toggleGanttJobFocus = toggleGanttJobFocus;
 window.clearGanttJobFocus = clearGanttJobFocus;
 window.toggleGanttTaskFocus = toggleGanttTaskFocus;

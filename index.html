@@ -595,6 +595,20 @@
   }
   .left-header .col { padding: var(--s-2) var(--s-2-5); display: flex; align-items: center; border-right: 1px solid var(--divider-strong); }
   .left-header .col-date { width: 104px; } .left-header .col-task { width: 90px; } .left-header .col-jobs { flex: 1; border-right: none; }
+  /* Bulk expand/collapse, in the Job column header right above the rows'
+     own ▸ arrows (see updateGanttBulkToggle() in gantt.ts): ▸ everything
+     folded, ▾ everything open, – a mix. */
+  .gantt-bulk-toggle {
+    width: 22px; height: 22px; margin-right: var(--s-2); flex-shrink: 0; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer;
+  }
+  .gantt-bulk-toggle:hover { background: var(--primary-tint); }
+  body.dark-mode .gantt-bulk-toggle:hover { background: rgba(57,73,171,0.22); }
+  .gantt-bulk-toggle svg { width: 13px; height: 13px; }
+  /* Outranks .gantt-toolbar button.gantt-toolbar-text-btn (display:flex, later in the file). */
+  .gantt-toolbar button.gantt-toolbar-text-btn.gantt-bulk-toggle-phone { display: none; }
+  @media (max-width: 480px) { .gantt-toolbar button.gantt-toolbar-text-btn.gantt-bulk-toggle-phone { display: flex; } }
   .left-body { overflow-y: auto; flex: 1; overflow-x: hidden; }
   .left-body::-webkit-scrollbar { width: 6px; }
   .left-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
@@ -4156,8 +4170,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
           <div class="gantt-view-toggle-row"></div>
           <div class="gantt-toolbar" id="ganttToolbar">
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
-            <button class="gantt-toolbar-text-btn" id="ganttExpandAllBtn" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
-            <button class="gantt-toolbar-text-btn" id="ganttCollapseAllBtn" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
+            <!-- Phones only: the Job column (and its header arrow, #ganttBulkToggle)
+                 is hidden there, so the same bulk toggle sits here instead. -->
+            <button class="gantt-toolbar-text-btn gantt-bulk-toggle-phone" id="ganttBulkTogglePhone"></button>
             <button class="gantt-toolbar-text-btn" id="ganttKeyBtn" title="What the colors and patterns mean" aria-expanded="false" aria-controls="ganttKeyPanel">Key</button>
           </div>
         </div>
@@ -4169,7 +4184,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <div class="left-header">
               <div class="col col-date">Date</div>
               <div class="col col-task">Task</div>
-              <div class="col col-jobs" id="ganttTaskColHeader">Job</div>
+              <div class="col col-jobs" id="ganttTaskColHeader"><button type="button" class="gantt-bulk-toggle" id="ganttBulkToggle"></button>Job</div>
             </div>
             <div class="left-body" id="leftBody"></div>
           </div>

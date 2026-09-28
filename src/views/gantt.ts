@@ -956,6 +956,62 @@ function collapseAllGantt(): void {
   renderGantt();
 }
 
+// Expand All / Collapse All are cleanup tools: after opening and closing
+// rows one at a time, one click resets them. The single arrow in the Job
+// column header (#ganttBulkToggle, plus a phone-only toolbar copy) shows
+// the current mix: ▸ nothing open (click expands everything), ▾ everything
+// open, or – a mix (either of those collapses everything). Counts the same
+// foldable things the rows' own ▸ arrows toggle, on the rows in view.
+function getGanttFoldCounts(): { open: number; total: number } {
+  let open = 0, total = 0;
+  getVisibleJobs().concat(getLinkedReferenceJobs()).forEach(function (job) {
+    if (job.archived) return;
+    getJobPhases(job).forEach(function (phase) {
+      if (isPhaseFinishedOnBoard(job, phase.id)) return;
+      const phaseId = phase.id || null;
+      if (phase.subPhases && phase.subPhases.length > 1) {
+        total++;
+        if (tasksExpandedPhaseIds.has(phaseId)) open++;
+      }
+      getPhaseSubUnits(phase).forEach(function (sub) {
+        total++;
+        if (tasksExpandedSubPhaseIds.has(getSubUnitKey(job, phaseId, sub.id || null))) open++;
+      });
+    });
+  });
+  return { open: open, total: total };
+}
+function toggleGanttBulkFold(): void {
+  if (getGanttFoldCounts().open === 0) expandAllGantt(); else collapseAllGantt();
+}
+// Alt-click on any row's own ▸/▾ arrow does the same for every row, in the
+// direction that arrow was about to go (Finder's Option-click).
+function bulkFoldFromRow(wasFolded: boolean): void {
+  if (wasFolded) expandAllGantt(); else collapseAllGantt();
+}
+const BULK_ICON = {
+  closed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+  open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+  mixed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M7 12h10"/></svg>',
+};
+function updateGanttBulkToggle(): void {
+  const c = getGanttFoldCounts();
+  const state = c.open === 0 ? 'closed' : c.open === c.total ? 'open' : 'mixed';
+  const action = state === 'closed' ? 'Expand every job into its tasks' : 'Collapse every job back into one bar';
+  const btn = document.getElementById('ganttBulkToggle');
+  if (btn) {
+    btn.innerHTML = BULK_ICON[state];
+    btn.dataset.state = state;
+    btn.title = action + ' (or Alt-click any row arrow)';
+    btn.setAttribute('aria-label', action);
+  }
+  const phone = document.getElementById('ganttBulkTogglePhone');
+  if (phone) {
+    phone.innerHTML = BULK_ICON[state] + (state === 'closed' ? 'Expand all' : 'Collapse all');
+    phone.title = action;
+  }
+}
+
 // Clicking a job's name pill isolates the Gantt to just that job. NOT
 // persisted to localStorage — a short-lived "let me focus on this one
 // job" tool, reset on every page load and whenever the active project
@@ -1068,7 +1124,7 @@ function buildPhaseSubTagsData(job: Job, phaseId: string | null, phaseName: stri
       title: (folded ? foldedTitle : unfoldedTitle) + (label ? ' — ' + label : ''),
       color: tagColor,
       focused: false,
-      onClick: onClick,
+      onClick: function (e?: MouseEvent) { if (e && e.altKey) bulkFoldFromRow(folded); else onClick(); },
     };
   }
   if (phaseFoldable && phaseName !== null) {
@@ -1789,7 +1845,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
           title: phaseFolded ? 'Click to expand sub-phases' : 'Click to collapse sub-phases into one bar',
           colorLight: jobLabelColors.light,
           colorDark: jobLabelColors.dark,
-          onClick: (e) => { e.stopPropagation(); toggleTasksPhaseExpanded(phaseId); },
+          onClick: (e) => { e.stopPropagation(); if (e.altKey) bulkFoldFromRow(phaseFolded); else toggleTasksPhaseExpanded(phaseId); },
         });
       }
       // Not shown on a whole-phase-collapsed row (task.isJobSpan with
@@ -1805,7 +1861,7 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
           title: (subFolded ? 'Click to expand into individual tasks' : 'Click to collapse into a single bar') + (subLabel ? ' — ' + subLabel : ''),
           colorLight: jobLabelColors.light,
           colorDark: jobLabelColors.dark,
-          onClick: (e) => { e.stopPropagation(); toggleTasksSubPhaseExpanded(subKey); },
+          onClick: (e) => { e.stopPropagation(); if (e.altKey) bulkFoldFromRow(subFolded); else toggleTasksSubPhaseExpanded(subKey); },
         });
       }
     } else {
@@ -2975,6 +3031,7 @@ function renderGantt(): void {
   restoreScrollPosition(savedScrollTop, savedScrollLeft);
 
   animateReorderedBars(oldBarTops, jobBarMap, gridWidth, connectorsLayer);
+  updateGanttBulkToggle();
 }
 
 function scrollToToday(): void {
@@ -3695,6 +3752,7 @@ export {
   toggleTasksSubPhaseExpanded,
   expandAllGantt,
   collapseAllGantt,
+  toggleGanttBulkFold,
   toggleGanttJobFocus,
   clearGanttJobFocus,
   toggleGanttTaskFocus,

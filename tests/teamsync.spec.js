@@ -2883,3 +2883,53 @@ test('gantt: zoom pill buttons zoom and reset; the red Today marker appears only
   await expect(mark).toBeVisible();
   await expect(mark).toHaveClass(/right/);
 });
+
+test('gantt: the Job header arrow shows closed / mixed / open and folds everything; Alt-click on a row arrow does the same', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => {
+    document.querySelectorAll('.onb-notif').forEach((e) => e.remove());
+    const iso = (o) => { const d = new Date(); d.setDate(d.getDate() + o); return toIsoDate(d); };
+    jobs.slice(0, 5).forEach((j, n) => j.tasks.forEach((t, k) => { t.start = iso(-10 + n * 6 + k * 4); t.finish = iso(-6 + n * 6 + k * 4); }));
+    saveJobs();
+    collapseAllGantt();
+    switchTab('gantt');
+  });
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+  await page.waitForTimeout(1200);
+
+  const toggle = page.locator('#ganttBulkToggle');
+  const folds = page.locator('#leftBody .task-row-pill:has(.task-row-pill-chev)');
+  await expect(page.locator('#ganttExpandAllBtn, #ganttCollapseAllBtn')).toHaveCount(0);
+  await expect(toggle).toHaveAttribute('data-state', 'closed');
+
+  await folds.nth(1).click();                       // open one row by hand -> mixed
+  await expect(toggle).toHaveAttribute('data-state', 'mixed');
+  await toggle.click();                             // mixed -> collapse everything
+  await expect(toggle).toHaveAttribute('data-state', 'closed');
+  await toggle.click();                             // closed -> expand everything
+  await expect(toggle).toHaveAttribute('data-state', 'open');
+
+  await folds.first().click({ modifiers: ['Alt'] }); // Alt-click an open row's arrow -> collapse all
+  await expect(toggle).toHaveAttribute('data-state', 'closed');
+  await folds.first().click({ modifiers: ['Alt'] }); // Alt-click a closed one -> expand all
+  await expect(toggle).toHaveAttribute('data-state', 'open');
+});
+
+test('gantt: the phone-only bulk toggle is hidden on desktop and shown on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => switchTab('gantt'));
+  await expect(page.locator('#ganttBulkTogglePhone')).toBeHidden();
+  await expect(page.locator('#ganttBulkToggle')).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.evaluate(() => setMobileView('gantt'));
+  await expect(page.locator('#ganttBulkTogglePhone')).toBeVisible();
+  await expect(page.locator('#ganttBulkTogglePhone')).toContainText(/Expand all|Collapse all/);
+});

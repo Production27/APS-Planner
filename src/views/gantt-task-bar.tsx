@@ -47,7 +47,7 @@ export interface BarTagData {
   // gate: when true, the tag is clickable (gets the 'collapsible' class,
   // stopPropagation on mousedown, and its own click handler); when false
   // it's a plain inert label, exactly like the original's un-wired branch.
-  onClick?: () => void;
+  onClick?: (e?: MouseEvent) => void;
 }
 
 function BarTag({ tag }: { tag: BarTagData }) {
@@ -58,7 +58,7 @@ function BarTag({ tag }: { tag: BarTagData }) {
       style={{ color: tag.color }}
       title={tag.title}
       onMouseDown={interactive ? (e: MouseEvent) => e.stopPropagation() : undefined}
-      onClick={interactive ? (e: MouseEvent) => { e.stopPropagation(); tag.onClick!(); } : undefined}
+      onClick={interactive ? (e: MouseEvent) => { e.stopPropagation(); tag.onClick!(e); } : undefined}
     >{tag.chevron ? <span class="task-bar-job-tag-chev">{tag.chevron}</span> : null}{tag.label}</span>
   );
 }
