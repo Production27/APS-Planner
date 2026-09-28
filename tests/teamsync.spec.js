@@ -2747,3 +2747,27 @@ test('home: open Jobs rail, expand and close a widget, close the rail — the da
   await page.waitForTimeout(500);
   expect(Math.abs(await slack())).toBeLessThanOrEqual(2);
 });
+
+test('calendar: going Day -> Month or Day -> Week leaves no day-view items behind in the grid', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => {
+    const job = jobs[0];
+    job.tasks[0].start = '2026-09-14'; job.tasks[0].finish = '2026-09-18';
+    switchTab('calendar');
+    calendarViewDate = new Date('2026-09-15T00:00:00'); calendarViewMode = 'month'; renderCalendar();
+  });
+  const days = page.locator('#calendarDays');
+  const firstCellDate = () => page.evaluate(() => document.querySelector('#calendarDays').firstElementChild.dataset.date || '');
+
+  for (const exit of ['#calViewMonth', '#calBackBtn', '#calViewWeek']) {
+    await page.evaluate(() => { calendarViewDate = new Date('2026-09-15T00:00:00'); calendarViewMode = 'month'; renderCalendar(); openDayView('2026-09-16'); });
+    await expect(days.locator('.day-view-item')).toHaveCount(1);
+    await page.locator(exit).click();
+    await expect(days.locator('.day-view-item, .day-view-empty')).toHaveCount(0);
+    // The grid's first child is a real day cell again (Aug 30 for September 2026's month grid, the week's Sunday for week view).
+    expect(await firstCellDate()).toBe(exit === '#calViewWeek' ? '2026-09-13' : '2026-08-30');
+  }
+});

@@ -896,6 +896,15 @@ function getOrCreateCalBarsLayer(daysEl: HTMLElement): HTMLElement {
   return layer;
 }
 
+// Month/week rebuild their day cells in place around the persistent bars
+// layer. Everything else goes, not just old .cal-day cells: day view
+// fills this same element with its own agenda list (.day-view-item /
+// .day-view-empty), and a leftover item took the first grid slot and
+// shifted every date one cell over after going Day -> Month.
+function clearCalendarDaysExceptBars(daysEl: HTMLElement, barsLayer: HTMLElement): void {
+  Array.from(daysEl.children).forEach((el) => { if (el !== barsLayer) el.remove(); });
+}
+
 function renderMonthCalendar(): void {
   const weekdaysEl = document.getElementById('calendarWeekdays');
   const daysEl = document.getElementById('calendarDays');
@@ -1001,7 +1010,7 @@ function renderMonthCalendar(): void {
   // cell markup as its siblings (rather than daysEl.innerHTML, which would
   // destroy it) is possible below.
   const barsLayer = getOrCreateCalBarsLayer(daysEl);
-  daysEl.querySelectorAll<HTMLElement>('.cal-day').forEach((el) => el.remove());
+  clearCalendarDaysExceptBars(daysEl, barsLayer);
   daysEl.className = 'calendar-grid calendar-days';
   barsLayer.insertAdjacentHTML('beforebegin', html);
 
@@ -1098,7 +1107,7 @@ function renderWeekCalendar(): void {
   // cell markup as its siblings (rather than daysEl.innerHTML, which would
   // destroy it) is possible below.
   const barsLayer = getOrCreateCalBarsLayer(daysEl);
-  daysEl.querySelectorAll<HTMLElement>('.cal-day').forEach((el) => el.remove());
+  clearCalendarDaysExceptBars(daysEl, barsLayer);
   daysEl.className = 'calendar-grid calendar-days';
   barsLayer.insertAdjacentHTML('beforebegin', html);
 
