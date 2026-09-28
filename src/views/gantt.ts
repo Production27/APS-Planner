@@ -1143,6 +1143,7 @@ function showDatePopover(e: MouseEvent, date: Date): void {
   const dayJobs: { job: Job; task: GanttTask }[] = [];
   getVisibleJobs().forEach(job => {
     if (job.archived) return;
+    if (getJobPhases(job).every((p) => isPhaseFinishedOnBoard(job, p.id))) return;
     (job.tasks || []).forEach((task: GanttTask) => {
       const s = new Date(task.start + 'T00:00:00');
       const f = new Date(task.finish + 'T00:00:00');
@@ -1332,6 +1333,7 @@ function buildVisibleTaskRows(): GanttRow[] {
     getVisibleJobs().concat(getLinkedReferenceJobs()).forEach((job) => {
       if (job.archived) return;
       getJobPhases(job).forEach((phase) => {
+        if (isPhaseFinishedOnBoard(job, phase.id)) return;
         const phaseName = phase.isDefault ? null : phase.name;
         const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
         getPhaseSubUnits(phase).forEach((subUnit) => {
@@ -1360,6 +1362,7 @@ function buildVisibleTaskRows(): GanttRow[] {
         if (!isLinkedCounterpart) return;
       }
       getJobPhases(job).forEach((phase) => {
+        if (isPhaseFinishedOnBoard(job, phase.id)) return;
         const phaseName = phase.isDefault ? null : phase.name;
         const collapsible = !!(phase.subPhases && phase.subPhases.length > 1);
         if (collapsible && !tasksExpandedPhaseIds.has(phase.id || '')) {
@@ -3383,6 +3386,18 @@ function getJobDueMarkerTask(job: Job, phaseId: string | null): GanttTask | null
   return { id: DUE_MARKER_TASK_ID, name: 'Due Date', start: card.due, finish: card.due, notes: '', color: job.color, order: -1, isDueMarker: true };
 }
 
+// A phase whose Board card sits in a finished-trigger board (the board's
+// ⋮ menu "finished" toggle, see isFinishedColumnId()) is done: it drops off
+// the Gantt and Calendar (Karl's call, 2026-09-28). Judged per phase, since
+// each phase has its own card, so a plain job disappears as a whole and a
+// multi-phase job loses each phase as its card gets there. A linked
+// reference's cards live in its own project, so it never matches here.
+export function isPhaseFinishedOnBoard(job: Job, phaseId: string | null): boolean {
+  if ((job as any).isLinkedReference) return false;
+  const card = getPhaseCard(job, phaseId);
+  return !!(card && card.column && isFinishedColumnId(card.column));
+}
+
 // Shared job -> phase -> sub-unit walk behind flattenJobs() (Gantt Tasks
 // view) and buildCalendarJobRows() (Calendar) — the genuinely-matching
 // pair. Skips archived jobs, folds in linked reference jobs the same way
@@ -3415,6 +3430,7 @@ function forEachVisibleSubUnit(
   combined.forEach(function (job: any, jobIdx: number) {
     if (job.archived) return;
     getJobPhases(job).forEach(function (phase) {
+      if (isPhaseFinishedOnBoard(job, phase.id)) return;
       const phaseName = phase.isDefault ? null : phase.name;
       getPhaseSubUnits(phase).forEach(function (subUnit, subIdx) {
         const subPhaseName = subUnit.isDefault ? null : subUnit.name;

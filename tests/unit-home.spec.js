@@ -184,6 +184,9 @@ test('buildHomeTodayScheduleRows: includes only tasks whose start/finish window 
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate((dates) => {
     isJobVisibleToMe = () => true;
+    // No Board cards here, so no phase is sitting in a finished board.
+    boardCards = [];
+    isFinishedColumnId = () => false;
     jobs = [
       {
         id: 'j1', name: 'In Progress Job', archived: false, color: '#111',
@@ -204,6 +207,9 @@ test('buildHomeUpcomingScheduleRows: includes any task overlapping the given win
   await page.goto(FIXTURE_URL);
   const result = await page.evaluate((dates) => {
     isJobVisibleToMe = () => true;
+    // No Board cards here, so no phase is sitting in a finished board.
+    boardCards = [];
+    isFinishedColumnId = () => false;
     jobs = [
       {
         id: 'j1', name: 'Job', archived: false, color: '#111',

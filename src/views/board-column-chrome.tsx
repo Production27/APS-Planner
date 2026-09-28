@@ -173,7 +173,7 @@ function BoardColumnChrome(p: BoardColumnChromeProps) {
             </div>
             <ColToggleRow icon={SCHEDULE_VIS_ICON} on={!p.hideFromSchedule} onToggle={p.onToggleScheduleVisibility} />
             <ColToggleRow icon={SCHEDULE_SYNC_ICON} on={!p.scheduleDisconnected} onToggle={p.onToggleScheduleSync} title="When off, cards sitting in this board stay put and stop auto-moving with the schedule, until dragged into a connected board." />
-            <ColToggleRow icon={FINISHED_TRIGGER_ICON} on={p.isFinishedTrigger} onToggle={p.onToggleFinishedTrigger} title="Jobs whose card sits in this board count as finished — they stop showing as overdue/due-soon or counting toward Active Jobs on Home." />
+            <ColToggleRow icon={FINISHED_TRIGGER_ICON} on={p.isFinishedTrigger} onToggle={p.onToggleFinishedTrigger} title="Jobs whose card sits in this board count as finished: they drop off the Gantt and Calendar, and stop showing as overdue, due soon or stuck." />
             <div class="board-col-duration-row" title="Groups this board under a named item in the strip above Board, independent of this board's own name — see ⚙ Settings → Workflow Items to add more.">
               <span dangerouslySetInnerHTML={{ __html: WORKFLOW_ITEM_ICON }} />
               <select class="board-col-duration-input" aria-label="Workflow item" style={{ width: 'auto', flex: 1 }} onClick={(e: MouseEvent) => e.stopPropagation()} onChange={p.onSetWorkflowItem}>

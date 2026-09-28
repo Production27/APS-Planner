@@ -2791,3 +2791,56 @@ test('card editor: Archive archives the card\'s job, closes the editor, and Undo
   await page.locator('.undo-toast button, .toast button', { hasText: 'Undo' }).first().click();
   await expect.poll(() => page.evaluate((id) => findJob(id).job.archived, jobId)).toBe(false);
 });
+
+test('finished trigger: a job whose card sits in a finished board drops off the Gantt, Calendar and Home schedule, and comes back when moved out', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  const today = await page.evaluate(() => toIsoDate(new Date()));
+  const ids = await page.evaluate((today) => {
+    // Two plain (unphased) jobs scheduled across today; one gets moved to a finished board.
+    const pick = jobs.filter((j) => !j.archived && !(j.phases && j.phases.length > 1)).slice(0, 2);
+    const finishedCol = BOARD_COLUMNS.find((c) => isFinishedColumn(c));
+    const activeCol = BOARD_COLUMNS.find((c) => !isFinishedColumn(c) && !c.hideFromSchedule);
+    // Only the active stage is dated (today), and both cards are pinned there,
+    // so date-driven stage moves can't carry either card onto a finished board.
+    pick.forEach((j) => {
+      j.tasks.forEach((t) => { if (t.columnId === activeCol.id) { t.start = today; t.finish = today; } else { t.start = ''; t.finish = ''; } });
+      const card = boardCards.find((c) => c.jobId === j.id);
+      card.column = activeCol.id; card.manualColumn = activeCol.id; card.manualColumnUntil = Date.now() + 86400000;
+    });
+    return { done: pick[0].id, open: pick[1].id, finishedCol: finishedCol.id, activeCol: activeCol.id };
+  }, today);
+
+  const counts = () => page.evaluate((ids) => {
+    const inRows = (rows) => ({ done: rows.some((r) => r.job.id === ids.done), open: rows.some((r) => r.job.id === ids.open) });
+    return {
+      calendar: inRows(buildCalendarJobRows(getVisibleJobs())),
+      flat: inRows(flattenJobs(getVisibleJobs())),
+      homeToday: inRows(buildHomeTodayScheduleRows()),
+      ganttBars: { done: document.querySelectorAll('#panel-gantt [data-job-id="' + ids.done + '"]').length > 0, open: document.querySelectorAll('#panel-gantt [data-job-id="' + ids.open + '"]').length > 0 },
+    };
+  }, ids);
+  const place = (colId) => page.evaluate(({ id, colId }) => {
+    const card = boardCards.find((c) => c.jobId === id);
+    card.column = colId; card.manualColumn = colId; card.manualColumnUntil = Date.now() + 86400000;
+    switchTab('gantt');
+  }, { id: ids.done, colId });
+
+  await place(ids.finishedCol);
+  await page.waitForTimeout(400);
+  let c = await counts();
+  expect(c.calendar).toEqual({ done: false, open: true });
+  expect(c.flat).toEqual({ done: false, open: true });
+  expect(c.homeToday).toEqual({ done: false, open: true });
+  expect(c.ganttBars).toEqual({ done: false, open: true });
+
+  await place(ids.activeCol);
+  await page.waitForTimeout(400);
+  c = await counts();
+  expect(c.calendar).toEqual({ done: true, open: true });
+  expect(c.homeToday).toEqual({ done: true, open: true });
+  expect(c.ganttBars).toEqual({ done: true, open: true });
+});

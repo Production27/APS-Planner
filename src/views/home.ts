@@ -53,7 +53,7 @@ import { renderJobListIfStale } from './job-list';
 import { escapeHtml } from '../utils/html';
 import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
 import { darkenColor, softenColor, tintedTextColor, columnLabelTextColor, readableTextColor } from '../utils/color';
-import { renderGantt, setupScrollSync } from './gantt';
+import { renderGantt, setupScrollSync, isPhaseFinishedOnBoard } from './gantt';
 import { onPanelResize } from '../utils/ui';
 import { getStoredDisplayName } from '../auth/session';
 import {
@@ -675,6 +675,7 @@ function buildHomeTodayScheduleRows(): HomeScheduleRow[] {
     if (!isJobVisibleToMe(job)) return;
     const phases = getJobPhases(job);
     phases.forEach(function (phase) {
+      if (isPhaseFinishedOnBoard(job, phase.id)) return; // done on the Board: off the schedule
       // getPhaseSubUnits(), not phase.tasks directly — once a phase is
       // split into sub-phases, its real tasks live in
       // phase.subPhases[i].tasks and phase.tasks itself goes stale/empty
@@ -723,6 +724,7 @@ function buildHomeUpcomingScheduleRows(windowStart: Date, windowEnd: Date): Home
     if (!isJobVisibleToMe(job)) return;
     const phases = getJobPhases(job);
     phases.forEach(function (phase) {
+      if (isPhaseFinishedOnBoard(job, phase.id)) return;
       getPhaseSubUnits(phase).forEach(function (subUnit) {
         (subUnit.tasks || []).forEach(function (task) {
           if (!task.start || !task.finish) return;
