@@ -2719,3 +2719,31 @@ test('board: dragging empty space scrolls the board sideways; buttons and cards 
   expect(await wrapper.evaluate((w) => w.scrollLeft)).toBe(afterPan);
   await expect(wrapper).not.toHaveClass(/board-panning/);
 });
+
+test('home: open Jobs rail, expand and close a widget, close the rail — the dashboard grid fills its width again', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.waitForFunction(() => getActiveTab() === 'home');
+
+  // Sum of the grid's pinned column widths (+ two 16px gaps) vs the grid's real width.
+  const slack = () => page.evaluate(() => {
+    const g = document.querySelector('#panel-home .home-grid');
+    const cols = getComputedStyle(g).gridTemplateColumns.split(' ').map(parseFloat);
+    return Math.round(g.getBoundingClientRect().width - (cols[0] + cols[1] + cols[2] + 32));
+  });
+
+  const expandBtn = page.locator('#panel-home .home-widget-expand-btn').first();
+  await page.locator('#jobRailToggleBtn').click();
+  await page.waitForTimeout(500);
+  expect(Math.abs(await slack())).toBeLessThanOrEqual(2); // fits while the rail is open too
+  await expandBtn.click();
+  await page.waitForTimeout(600);
+  await expandBtn.click();
+  await page.waitForTimeout(600);
+  await page.locator('#jobRailToggleBtn').click();
+  await page.waitForTimeout(500);
+  expect(Math.abs(await slack())).toBeLessThanOrEqual(2);
+});

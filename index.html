@@ -2180,6 +2180,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      sidebar's own for the length of that one interaction makes them
      finish together instead of one trailing the other. */
   .home-grid.sidebar-sync { transition: grid-template-columns .25s ease; }
+  /* Same idea for the Jobs rail (toggleJobRail()), whose width slides in .15s. */
+  .home-grid.rail-sync { transition: grid-template-columns .15s ease; }
   /* One widget can be "expanded in place" (see toggleHomeWidgetExpand()) —
      its own grid row/column grows via an inline style JS sets on
      .home-grid/.home-grid-left/.home-grid-right (HOME_REFLOW_TRACK),

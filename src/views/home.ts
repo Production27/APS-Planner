@@ -213,7 +213,43 @@ function switchTab(tab: string): void {
 // toggle; it isn't a .rail-tab, so switchTab()'s active-class sweep
 // never touches it).
 function toggleJobRail(): void {
+  // Opening/closing the rail changes the room Home's grid has, but that
+  // grid's columns are fixed px (see applyHomeReflowTracks()) and no window
+  // resize fires. Left alone, a Home render while the rail was open (e.g.
+  // closing a job) pinned the columns to the narrow width, and closing the
+  // rail then left the dashboard short on the right until something else
+  // re-rendered it. Same approach as toggleActivitySidebar(): work out the
+  // grid's end width up front and animate the columns alongside the rail.
+  // The rail's min-width switches instantly (only width is transitioned),
+  // so reading it right after the toggle gives the rail's end width.
+  const sidebar = document.querySelector('.manager-sidebar') as HTMLElement | null;
+  const homePanel = document.getElementById('panel-home');
+  const gridEl = homePanel && homePanel.classList.contains('active') && window.innerWidth > 900
+    ? document.querySelector('#panel-home .home-grid') as HTMLElement | null : null;
+  const railBefore = sidebar ? sidebar.getBoundingClientRect().width : 0;
+  const gridBefore = gridEl ? gridEl.getBoundingClientRect().width : 0;
+
   const open = document.body.classList.toggle('job-rail-open');
+
+  const railAfter = sidebar ? (parseFloat(getComputedStyle(sidebar).minWidth) || railBefore) : railBefore;
+  if (gridEl && railAfter !== railBefore) {
+    gridEl.classList.add('rail-sync');
+    applyHomeReflowTracks(gridBefore + (railBefore - railAfter));
+    // transitionend normally ends this; the timer covers a transition that
+    // never runs (e.g. reduced motion), so the faster timing can't linger
+    // onto the next widget-expand animation.
+    let done = false;
+    const settle = function () {
+      if (done) return;
+      done = true;
+      gridEl.removeEventListener('transitionend', onSettled);
+      gridEl.classList.remove('rail-sync');
+      renderHomeWorkflowMiniBoard();
+    };
+    const onSettled = function (e: Event) { if (e.target === gridEl) settle(); };
+    gridEl.addEventListener('transitionend', onSettled);
+    setTimeout(settle, 400);
+  }
   if (open) renderJobListIfStale();
   const btn = document.getElementById('jobRailToggleBtn');
   if (btn) {
