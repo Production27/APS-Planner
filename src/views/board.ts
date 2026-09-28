@@ -1347,7 +1347,10 @@ function renderBoard(): void {
     renderBoardCardsInto(dom.bodyEl, cardProps);
   });
 
-  document.getElementById('boardCount')!.textContent = String(boardCards.filter((c) => !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).length);
+  const boardCountEl = document.getElementById('boardCount')!;
+  const boardCount = boardCards.filter((c) => !isCardFromArchivedJob(c) && isCardVisibleToMe(c)).length;
+  boardCountEl.textContent = String(boardCount);
+  boardCountEl.hidden = boardCount === 0;
 
   // renderBoard() rebuilds the ⋮ settings menu's data-min-tier="projectAdmin"
   // gating (via rebuildBoardColumnChrome(), when the chrome is actually

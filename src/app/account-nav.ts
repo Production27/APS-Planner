@@ -19,6 +19,8 @@ export function updateAccountButton(): void {
   });
   const first = document.getElementById('accountName');
   if (first) first.textContent = name ? name.trim().split(/\s+/)[0] : 'Account';
+  const btn = document.getElementById('accountBtn');
+  if (btn) btn.title = (name ? name + ' · ' : '') + 'Account and settings';
   const full = document.getElementById('accountWhoName');
   if (full) full.textContent = name || 'Signed in';
   const role = document.getElementById('accountWhoRole');

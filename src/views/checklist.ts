@@ -553,7 +553,9 @@ function renderMyChecklist(): void {
 function updateMyChecklistBadge(count?: number): void {
   const badge = document.getElementById('myChecklistCount');
   if (!badge) return;
-  badge.textContent = String(typeof count === 'number' ? count : buildMyChecklistRows().length);
+  const n = typeof count === 'number' ? count : buildMyChecklistRows().length;
+  badge.textContent = String(n);
+  badge.hidden = n === 0;
 }
 
 // Switches to the item's own project first (if it isn't already active —

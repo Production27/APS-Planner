@@ -172,78 +172,76 @@
     0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 0 rgba(67,160,71,0.55); }
     50% { box-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 0 0 3px rgba(67,160,71,0.55); }
   }
-  /* ===== APP NAVBAR ("Notch Island") =====
-     A thin strip along the top edge (::before) with the view tabs in a
-     notch hanging from it; brand on the left, presence + Account on the
-     right. The notch covers the strip where they meet, and its curved
-     shoulders (::before/::after) blend it in; drop-shadow() follows those
-     curves, so the outline reads as one shape. On phones the notch moves
-     to the bottom edge (see the max-width:480px block). */
+  /* ===== APP NAVBAR =====
+     Gmail-style chrome: the bar and the job rail sit on one surface
+     (body's --chrome, no borders between them; see "SEAMLESS CHROME" near
+     the end of this sheet), and the views sit on a rounded card inset into
+     it. The view tabs share one white island in the middle of the bar. */
   .app-nav {
-    position: relative; z-index: 160; flex-shrink: 0; height: 56px;
-    display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
-    padding: 6px var(--s-3) 0; background: var(--bg);
+    position: relative; z-index: 160; flex-shrink: 0; height: 60px;
+    display: flex; align-items: center; gap: var(--s-3); padding: 0 var(--s-4) 0 var(--s-3-5);
   }
-  .app-nav::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--card); box-shadow: 0 1px 0 var(--border); }
-  .app-nav-left, .app-nav-right { position: relative; z-index: 1; display: flex; align-items: center; min-width: 0; }
-  .app-nav-left { gap: var(--s-2); }
+  .app-nav-left, .app-nav-right { display: flex; align-items: center; min-width: 0; flex-shrink: 0; }
+  .app-nav-left { gap: var(--s-2-5); }
   .app-nav-right { gap: var(--s-2-5); }
-  .app-nav-brand { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: var(--t-md); color: var(--text); white-space: nowrap; }
-  .app-nav-logo { width: 22px; height: 22px; border-radius: 6px; background: var(--primary-light); display: grid; place-items: center; flex-shrink: 0; }
+  .app-nav-brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 17px; color: var(--text); white-space: nowrap; }
+  .app-nav-logo { width: 28px; height: 28px; border-radius: 8px; background: var(--primary-light); display: grid; place-items: center; flex-shrink: 0; }
+  .app-nav-logo svg { width: 15px; height: 15px; }
   .app-nav-project {
-    display: flex; align-items: center; gap: 5px; max-width: 220px; height: 28px; padding: 0 var(--s-2);
-    border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text-light);
+    display: flex; align-items: center; max-width: 180px; height: 30px; padding: 0 var(--s-2-5);
+    border: 0; border-radius: 999px; background: var(--chrome-hover); color: var(--text);
     font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .app-nav-project:hover { background: var(--primary-tint); color: var(--primary); }
+  .app-nav-project:hover { background: var(--nav-active); color: var(--text); }
   .app-nav-project[hidden] { display: none; }
-  .app-nav-notch {
-    position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 2;
-    display: flex; align-items: center; gap: 2px; padding: 9px 6px 7px;
-    background: var(--card); border-radius: 0 0 16px 16px;
-    filter: drop-shadow(0 1px 0 var(--border)) drop-shadow(0 4px 8px rgba(26,35,126,0.08));
+  .app-nav-island {
+    display: flex; align-items: center; gap: 2px; padding: 4px; margin: 0 auto; min-width: 0;
+    overflow-x: auto; scrollbar-width: none;
+    background: var(--card); border-radius: 999px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 2px 8px rgba(26,35,126,0.08);
   }
-  body.dark-mode .app-nav-notch { filter: drop-shadow(0 1px 0 var(--border)) drop-shadow(0 4px 8px rgba(0,0,0,0.4)); }
-  .app-nav-notch::before, .app-nav-notch::after { content: ''; position: absolute; top: 6px; width: 14px; height: 14px; }
-  .app-nav-notch::before { left: -14px; background: radial-gradient(circle at 0 100%, transparent 13.5px, var(--card) 14px); }
-  .app-nav-notch::after { right: -14px; background: radial-gradient(circle at 100% 100%, transparent 13.5px, var(--card) 14px); }
-  /* Icons only, except the active view, which shows its name on a tinted
-     pill. The .badge counts stay hidden (their render code still writes
-     to them). Jobs is phones-only: the job list is its own full-screen
-     view there, while desktop keeps the rail's own › toggle. */
+  .app-nav-island::-webkit-scrollbar { display: none; }
+  body.dark-mode .app-nav-island { box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+  /* Every view is named; Checklist and Board carry their counts (hidden
+     at zero — see updateMyChecklistBadge() and renderBoard()). Jobs is
+     phones-only: desktop keeps the rail's own › toggle. */
   .nav-tab {
-    height: 34px; min-width: 34px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent;
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 34px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     font-family: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--text); cursor: pointer; white-space: nowrap;
     transition: background 0.2s ease;
   }
   .nav-tab svg { flex-shrink: 0; }
-  .nav-tab-label, .nav-tab .badge { display: none; }
-  .nav-tab:hover:not(.active) { background: var(--row-alt-bg); }
-  .nav-tab.active { background: var(--primary-tint); padding: 0 13px 0 10px; }
-  .nav-tab.active .nav-tab-label { display: inline; }
+  /* --text-faint, not --text-light: it keeps 4.5:1 on the active tab's tint too. */
+  .nav-tab .badge { font-size: var(--t-2xs); font-weight: 700; color: var(--text-faint); }
+  body.dark-mode .nav-tab .badge { color: var(--text-light); }
+  .nav-tab .badge[hidden] { display: none; }
+  .nav-tab:hover:not(.active) { background: var(--chrome-hover); }
+  .nav-tab.active { background: var(--nav-active); }
   .nav-tab:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 1px; }
-  body.dark-mode .nav-tab:hover:not(.active) { background: rgba(255,255,255,0.06); }
-  body.dark-mode .nav-tab.active { background: rgba(57,73,171,0.3); }
   #tab-jobs { display: none; }
-  /* Account: your initials and first name. The red dot is the admin
-     notices badge (src/app/admin-notices.ts writes a count into it; the
-     number itself is hidden here, it's just a dot). */
+  /* Laptops too narrow for six names: the other views drop to icons (the
+     active one keeps its name). */
+  @media (max-width: 1180px) and (min-width: 481px) {
+    .nav-tab:not(.active) .nav-tab-label, .nav-tab:not(.active) .badge { display: none; }
+    .nav-tab:not(.active) { padding: 0 9px; }
+  }
+  /* Account: your initials in a circle (full name in the tooltip and at
+     the top of the menu). The red dot is the admin notices badge
+     (src/app/admin-notices.ts writes a count into it; only the dot shows). */
   .settings-menu-wrap { display: flex; align-items: center; position: relative; }
   .account-btn {
-    position: relative; display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 3px;
-    border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--text);
-    font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; white-space: nowrap;
+    position: relative; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent;
+    display: grid; place-items: center; cursor: pointer;
   }
-  .account-btn:hover, .account-btn[aria-expanded="true"] { background: var(--primary-tint); border-color: var(--primary-light); }
+  .account-btn:hover, .account-btn[aria-expanded="true"] { background: var(--chrome-hover); }
   .account-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
-  .account-caret { color: var(--text-light); flex-shrink: 0; }
   .account-avatar {
-    width: 26px; height: 26px; border-radius: 50%; background: var(--primary-light); color: #fff; flex-shrink: 0;
-    display: grid; place-items: center; font-size: 10px; font-weight: 700;
+    width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: #fff; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 12px; font-weight: 700;
   }
   .account-avatar-lg { width: 36px; height: 36px; font-size: 13px; }
-  .account-btn .admin-badge { top: -2px; left: 20px; right: auto; min-width: 0; width: 11px; height: 11px; padding: 0; font-size: 0; border: 2px solid var(--card); }
+  .account-btn .admin-badge { top: 3px; right: 3px; left: auto; min-width: 0; width: 12px; height: 12px; padding: 0; font-size: 0; border: 2px solid var(--chrome); }
   .account-who { display: flex; align-items: center; gap: var(--s-2-5); padding: var(--s-2) var(--s-3) var(--s-2-5); margin-bottom: var(--s-1-5); border-bottom: 1px solid var(--border); }
   .account-who-name { font-weight: 700; font-size: var(--t-base); color: var(--text); line-height: 1.25; }
   .account-who-role { font-size: var(--t-xs); color: var(--text-light); }
@@ -3174,6 +3172,15 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     body[data-mobile-view="calendar"] .app-shell-main,
     body[data-mobile-view="gantt"] .app-shell-main,
     body[data-mobile-view="reports"] .app-shell-main { flex: 1 1 auto; width: auto; min-width: 0; }
+    /* The work card's inset only while it's showing (it collapses to zero
+       width on the Jobs view, where a margin would leave a sliver). */
+    body .app-shell-main { margin: 0; }
+    body[data-mobile-view="home"] .app-shell-main,
+    body[data-mobile-view="checklist"] .app-shell-main,
+    body[data-mobile-view="board"] .app-shell-main,
+    body[data-mobile-view="calendar"] .app-shell-main,
+    body[data-mobile-view="gantt"] .app-shell-main,
+    body[data-mobile-view="reports"] .app-shell-main { margin: 0 var(--s-2) var(--s-2); }
     /* #formArea escapes that zero-width collapse via position:fixed —
        its width:min(888px,100%) then resolves against the viewport
        instead of its now-collapsed containing block, and fixed
@@ -3185,7 +3192,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        since the Comments panel reorders to the top (order:-1, see the
        1440px query above), silently clipped Comments specifically while
        leaving the rest of the form (further down) untouched. */
-    .manager-form-area { position: fixed; top: 56px; padding: var(--s-4); }
+    .manager-form-area { position: fixed; top: 60px; padding: var(--s-4); }
     .form-container { padding: var(--s-4); }
     /* Start/Days/Finish were sized for a ~460px-wide desktop drawer column
        (92/50/92px) — at phone width that leaves almost nothing for the
@@ -3330,34 +3337,16 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      The header itself switches to a narrow vertical stack (title, then
      just the settings ⋮ menu — see below) since its normal horizontal
      layout has nowhere near enough width here. */
-  /* Portrait phones: the navbar's top row slims down to TeamSync and
-     Account, and the notch moves to the bottom edge where thumbs reach
-     it, rising from a thin strip (body::after) the same way it hangs from
-     the top one on desktop. Everything else leaves room for it below. */
+  /* Portrait phones: TeamSync and your avatar on one row, the island
+     (text only, Jobs first, scrolls sideways) on the next. Fixed height so
+     the job drawer below can start right under it. */
   @media (max-width: 480px) {
-    .app-nav { height: 48px; padding: 0 var(--s-3); }
-    .app-nav::before { display: none; }
-    .app-nav-project, .account-name, .account-caret { display: none; }
-    .account-btn { padding: 0 3px; }
-    .app-nav-notch {
-      position: fixed; top: auto; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); z-index: 900;
-      padding: 7px 6px 3px; border-radius: 16px 16px 0 0;
-      filter: drop-shadow(0 -1px 0 var(--border)) drop-shadow(0 -4px 8px rgba(26,35,126,0.08));
-    }
-    body.dark-mode .app-nav-notch { filter: drop-shadow(0 -1px 0 var(--border)) drop-shadow(0 -4px 8px rgba(0,0,0,0.4)); }
-    .app-nav-notch::before, .app-nav-notch::after { top: auto; bottom: 0; }
-    .app-nav-notch::before { background: radial-gradient(circle at 0 0, transparent 13.5px, var(--card) 14px); }
-    .app-nav-notch::after { background: radial-gradient(circle at 100% 0, transparent 13.5px, var(--card) 14px); }
-    body::after {
-      content: ''; position: fixed; left: 0; right: 0; bottom: 0; z-index: 899;
-      height: calc(6px + env(safe-area-inset-bottom, 0px)); background: var(--card); box-shadow: 0 -1px 0 var(--border);
-    }
-    .nav-tab { padding: 0 8px; }
-    .nav-tab svg { width: 20px; height: 20px; }
-    .nav-tab.active { padding: 0 8px; }
-    .nav-tab.active .nav-tab-label { display: none; }
-    .app-shell { padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
-    .manager-form-area { top: 48px; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
+    .app-nav { height: 104px; flex-wrap: wrap; align-content: center; row-gap: var(--s-2); padding: 0 var(--s-2-5); }
+    .app-nav-left { flex: 1; }
+    .app-nav-project { display: none; }
+    .app-nav-island { order: 3; flex-basis: 100%; margin: 0; }
+    .nav-tab svg, .nav-tab .badge { display: none; }
+    .manager-form-area { top: 104px; }
   }
 
   @media (max-height: 480px) and (orientation: landscape) {
@@ -3662,6 +3651,29 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .job-card.archived { opacity: 0.55; }
   .task-row.archived { opacity: 0.55; }
 
+  /* ===== SEAMLESS CHROME =====
+     Gmail's trick: the navbar and the job rail are one surface (the page
+     background, --chrome), with no borders or fills between them, and the
+     views sit on one rounded card (.app-shell-main). Job rows are plain
+     rows with a color dot instead of boxed cards. */
+  :root { --chrome: #e8ebf4; --chrome-hover: rgba(57,73,171,0.08); --nav-active: #dfe3f6; }
+  body.dark-mode { --chrome: #0e1014; --chrome-hover: rgba(255,255,255,0.07); --nav-active: rgba(57,73,171,0.4); }
+  body { background: var(--chrome); }
+  .app-shell-main { background: var(--bg); border-radius: 18px; margin: 0 var(--s-3) var(--s-3) 0; }
+  .manager-sidebar, body.dark-mode .manager-sidebar { background: transparent; border-right: 0; }
+  .manager-sidebar-header, body.dark-mode .manager-sidebar-header { background: transparent; border-bottom: 0; }
+  .manager-sidebar .search-box { border-radius: 999px; border-color: transparent; background: var(--card); }
+  .manager-sidebar .search-box:focus { border-color: var(--primary-light); }
+  .job-list { scrollbar-width: thin; scrollbar-color: rgba(127,127,127,0.35) transparent; }
+  .app-nav-project { max-width: 230px; }
+  .job-list .job-card, body.dark-mode .job-list .job-card {
+    background: transparent; border-color: transparent; box-shadow: none; border-radius: 12px;
+    padding-left: 30px; margin-bottom: 2px;
+  }
+  .job-list .job-card:hover { background: var(--chrome-hover); border-color: transparent; box-shadow: none; transform: none; }
+  .job-list .job-card.active, body.dark-mode .job-list .job-card.active { background: var(--nav-active); border-color: transparent; box-shadow: none; }
+  .job-list .job-card .color-strip { left: 13px; top: 17px; bottom: auto; width: 9px; height: 9px; border-radius: 50%; }
+
 </style>
 <base target="_blank">
 </head>
@@ -3913,21 +3925,22 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   </div>
 </div>
 
-<!-- APP NAVBAR ("Notch Island"). TeamSync (and the project switch, when
-     there's more than one project) on the left; the views in a notch that
-     hangs from the top edge, where only the active one shows its name; who
-     else is online and the Account menu on the right. On phones the notch
-     moves to the bottom edge and gains a Jobs button first (the job list is
-     its own full-screen view there). Tabs call switchTabMorphed() on
-     desktop and setMobileView() on phones (see static-event-wiring.ts);
-     the Checklist/Board .badge counts stay in the markup (hidden) because
-     their render code still writes to them. -->
+<!-- APP NAVBAR. Gmail-style chrome: this bar and the job rail below it
+     share one surface (body's --chrome background), and the views sit on
+     a rounded card (.app-shell-main) inset into it. TeamSync (and the
+     project switch, when there's more than one project) on the left; the
+     views on one white island in the middle, each named, with counts on
+     Checklist and Board; who else is online and your Account avatar on the
+     right. Phones stack the island under the title and add Jobs first
+     (the job list is its own full-screen view there). Tabs call
+     switchTabMorphed() on desktop and setMobileView() on phones (see
+     static-event-wiring.ts). -->
 <header class="app-nav" id="appNav">
   <div class="app-nav-left">
     <span class="app-nav-brand"><span class="app-nav-logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13"><rect x="3" y="5" width="10" height="3.5" rx="1.5" fill="#fff"/><rect x="7" y="10.5" width="14" height="3.5" rx="1.5" fill="#fff" opacity=".8"/><rect x="3" y="16" width="8" height="3.5" rx="1.5" fill="#fff" opacity=".6"/></svg></span>TeamSync</span>
     <button type="button" class="app-nav-project" id="navProjectBtn" hidden></button>
   </div>
-  <nav class="app-nav-notch" id="appNavNotch" aria-label="Views">
+  <nav class="app-nav-island" id="appNavNotch" aria-label="Views">
     <button type="button" class="nav-tab" data-tab="jobs" id="tab-jobs" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg><span class="nav-tab-label">Jobs</span></button>
     <button type="button" class="nav-tab active" aria-current="page" data-tab="home" id="tab-home" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 01-1 1h-4v-5h-6v5H5a1 1 0 01-1-1z" fill="#5c6bc0"/></svg><span class="nav-tab-label">Home</span></button>
     <button type="button" class="nav-tab" data-tab="checklist" id="tab-checklist" title="Checklist" aria-label="Checklist"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#28a745"/><path d="M7 12l3 3 7-7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nav-tab-label">Checklist</span><span class="badge" id="myChecklistCount">0</span></button>
@@ -3939,7 +3952,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   <div class="app-nav-right">
     <div class="presence-avatars" id="presenceAvatars"></div>
     <div class="settings-menu-wrap">
-      <button type="button" class="account-btn" id="accountBtn" title="Your account and settings" aria-label="Account and settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><span class="account-avatar" id="accountAvatar" aria-hidden="true">?</span><span class="account-name" id="accountName"></span><svg class="account-caret" viewBox="0 0 24 24" width="10" height="10" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg><span class="admin-badge" hidden></span></button>
+      <button type="button" class="account-btn" id="accountBtn" title="Account and settings" aria-label="Account and settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><span class="account-avatar" id="accountAvatar" aria-hidden="true">?</span><span class="admin-badge" hidden></span></button>
     </div>
   </div>
 </header>
