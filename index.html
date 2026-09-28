@@ -1790,6 +1790,12 @@
      other child) — harmless no-ops otherwise. */
   .board-wrapper { height: 100%; flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; display: flex; gap: var(--s-4); padding: var(--s-2) var(--s-6) var(--s-5); background: var(--bg); align-items: flex-start; }
   .board-wrapper::-webkit-scrollbar { height: 8px; }
+  /* Drag the empty space to scroll sideways (wireBoardDragPan() in board.ts). */
+  @media (pointer: fine) {
+    .board-wrapper, .board-column { cursor: grab; }
+    .board-column-header[draggable="true"] { cursor: move; }
+    .board-wrapper.board-panning, .board-wrapper.board-panning * { cursor: grabbing !important; user-select: none; }
+  }
   #panel-board.active { display: flex; flex-direction: column; }
 
   /* ===== BOARD WORKFLOW STRIP ===== a "stacked header" band directly

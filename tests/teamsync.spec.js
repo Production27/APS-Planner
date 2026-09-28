@@ -2683,3 +2683,39 @@ test('job form on a laptop-width window: Comments stacks below the job details (
   ]);
   expect(commentsTop).toBeGreaterThan(formTop);
 });
+
+test('board: dragging empty space scrolls the board sideways; buttons and cards do not pan', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 700 });
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => { document.querySelectorAll('.onb-notif').forEach((e) => e.remove()); switchTab('board'); });
+  await page.waitForFunction(() => getActiveTab() === 'board');
+
+  const wrapper = page.locator('#boardWrapper');
+  const overflow = await wrapper.evaluate((w) => w.scrollWidth - w.clientWidth);
+  expect(overflow).toBeGreaterThan(100);
+
+  // The empty board area below the columns, scrolled all the way right first.
+  await wrapper.evaluate((w) => { w.scrollLeft = w.scrollWidth; });
+  const box = await wrapper.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + box.height - 40;
+  const startScroll = await wrapper.evaluate((w) => w.scrollLeft);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 150, y, { steps: 5 });
+  await page.mouse.up();
+  const afterPan = await wrapper.evaluate((w) => w.scrollLeft);
+  expect(startScroll - afterPan).toBeGreaterThan(100);
+
+  // Pressing on a button (a column's settings ⋮) and dragging does not pan.
+  const btn = page.locator('#boardWrapper .board-col-settings-btn').first();
+  const bb = await btn.boundingBox();
+  await page.mouse.move(bb.x + 5, bb.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + 155, bb.y + 5, { steps: 5 });
+  await page.mouse.up();
+  expect(await wrapper.evaluate((w) => w.scrollLeft)).toBe(afterPan);
+  await expect(wrapper).not.toHaveClass(/board-panning/);
+});

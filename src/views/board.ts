@@ -1257,11 +1257,51 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
   });
 }
 
+// Grab the Board's empty space and drag to scroll it sideways, instead of
+// reaching for the scrollbar. Mouse only (touch already swipes natively).
+// Anything with its own mouse behavior (cards and column headers are
+// draggable, plus buttons, menus and fields) is left alone, and the pan
+// only engages after a few pixels so a plain click still works.
+const BOARD_PAN_IGNORE = '.board-card, .board-column-header[draggable="true"], .board-col-settings-dropdown, button, a, input, select, textarea, label, [role="button"], [contenteditable="true"]';
+function wireBoardDragPan(wrapper: HTMLElement): void {
+  if (wrapper.dataset.dragPan) return;
+  wrapper.dataset.dragPan = '1';
+  wrapper.addEventListener('pointerdown', function (e: PointerEvent) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if ((e.target as Element).closest(BOARD_PAN_IGNORE)) return;
+    const startX = e.clientX;
+    const startScroll = wrapper.scrollLeft;
+    let panning = false;
+    const onMove = function (ev: PointerEvent) {
+      const dx = ev.clientX - startX;
+      if (!panning && Math.abs(dx) < 4) return;
+      if (!panning) {
+        panning = true;
+        wrapper.classList.add('board-panning');
+        wrapper.setPointerCapture(e.pointerId);
+      }
+      ev.preventDefault();
+      wrapper.scrollLeft = startScroll - dx;
+    };
+    const onUp = function () {
+      wrapper.removeEventListener('pointermove', onMove);
+      wrapper.removeEventListener('pointerup', onUp);
+      wrapper.removeEventListener('pointercancel', onUp);
+      wrapper.classList.remove('board-panning');
+      if (wrapper.hasPointerCapture(e.pointerId)) wrapper.releasePointerCapture(e.pointerId);
+    };
+    wrapper.addEventListener('pointermove', onMove);
+    wrapper.addEventListener('pointerup', onUp);
+    wrapper.addEventListener('pointercancel', onUp);
+  });
+}
+
 function renderBoard(): void {
   // Column placement is date-derived (or manually overridden) — resolve it
   // before reading card.column anywhere below (badge counts, DOM placement).
   syncCardColumns();
   const wrapper = document.getElementById('boardWrapper')!;
+  wireBoardDragPan(wrapper);
 
   const chromeSignature = computeBoardChromeSignature();
   // The `wrapper.contains()` half matches getOrCreateGanttGridLayers()'s
