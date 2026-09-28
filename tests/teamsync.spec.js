@@ -2844,3 +2844,42 @@ test('finished trigger: a job whose card sits in a finished board drops off the 
   expect(c.homeToday).toEqual({ done: true, open: true });
   expect(c.ganttBars).toEqual({ done: true, open: true });
 });
+
+test('gantt: zoom pill buttons zoom and reset; the red Today marker appears only while today is off-screen and jumps back', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => {
+    document.querySelectorAll('.onb-notif').forEach((e) => e.remove());
+    const iso = (o) => { const d = new Date(); d.setDate(d.getDate() + o); return toIsoDate(d); };
+    jobs.slice(0, 4).forEach((j, n) => j.tasks.forEach((t, k) => { t.start = iso(-10 + n * 6 + k * 4); t.finish = iso(-6 + n * 6 + k * 4); }));
+    saveJobs();
+    switchTab('gantt');
+  });
+  await page.waitForFunction(() => getActiveTab() === 'gantt');
+  await page.waitForTimeout(1500);
+
+  // The old toolbar buttons are gone; zoom lives in the pill.
+  await expect(page.locator('#ganttToolbar #ganttZoomInBtn, #ganttFitToViewBtn, #ganttScrollTodayBtn')).toHaveCount(0);
+  const dw = () => page.evaluate(() => dayWidth);
+  await page.evaluate(() => { dayWidth = 34; renderGantt(); });
+  await page.locator('.gantt-zoom-pill #ganttZoomInBtn').click();
+  expect(await dw()).toBe(40);
+  await page.locator('.gantt-zoom-pill #ganttResetZoomBtn').click();
+  expect(await dw()).toBe(34);
+
+  const mark = page.locator('#ganttTodayMark');
+  await page.evaluate(() => scrollToToday());
+  await expect(mark).toBeHidden();
+  await page.evaluate(() => { const b = document.getElementById('timelineBody'); b.scrollLeft += 2500; });
+  await expect(mark).toBeVisible();
+  await expect(mark).toHaveClass(/left/);
+  await expect(mark).toContainText('Today');
+  await mark.click();
+  await expect(mark).toBeHidden();
+  await page.evaluate(() => { document.getElementById('timelineBody').scrollLeft = 0; });
+  await expect(mark).toBeVisible();
+  await expect(mark).toHaveClass(/right/);
+});

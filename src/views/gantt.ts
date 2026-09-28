@@ -2994,9 +2994,8 @@ function scrollToToday(): void {
 }
 
 // ===== GANTT PINCH-TO-ZOOM =====
-// Mobile-only (see .gantt-zoom-btn's mobile hide rule, which removes the
-// +/-/reset buttons there in favor of this) — desktop keeps the buttons
-// since there's no pinch gesture available to a mouse. Two input paths
+// Phones and trackpads; the zoom pill's buttons (#ganttZoomInBtn etc.)
+// are the tap/click alternative on every device. Two input paths
 // land here: real multi-touch (phones/tablets —
 // handleGanttTouchStart/Move/End below) and the wheel event a trackpad's
 // pinch gesture synthesizes with ctrlKey set on both macOS and Windows
@@ -3118,7 +3117,7 @@ function handleGanttWheelZoom(e: WheelEvent): void {
   requestGanttZoom(dayWidth * Math.exp(-e.deltaY * 0.01), e.clientX);
 }
 
-// Desktop-only zoom buttons (see .gantt-zoom-btn) — anchored on the
+// The zoom pill's buttons (see .gantt-zoom-pill) — anchored on the
 // visible timeline viewport's own horizontal center (there's no cursor
 // position to anchor on the way the wheel/pinch paths have one), reusing
 // the same setGanttDayWidthAnchored() commit path so the day currently in
@@ -3218,6 +3217,32 @@ let isSyncingScroll = false;
 function setHeaderScroll(px: number): void {
   const header = document.getElementById('timelineHeader');
   if (header) header.style.transform = 'translateX(-' + px + 'px)';
+  updateGanttTodayMark(px);
+}
+
+// The red "Today" tag in the date header: hidden while today's column is
+// on screen, otherwise pinned to the edge today went off, with an arrow
+// pointing that way. Clicking it (wired in static-event-wiring.ts) jumps
+// back. Runs from setHeaderScroll(), so on every scroll and zoom.
+function updateGanttTodayMark(scrollLeft?: number): void {
+  const mark = document.getElementById('ganttTodayMark');
+  const body = document.getElementById('timelineBody');
+  if (!mark || !body || !startDate) return;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const idx = getDaysDiff(startDate, today);
+  const inRange = idx >= 0 && (!endDate || idx <= getDaysDiff(startDate, endDate));
+  const left = scrollLeft !== undefined ? scrollLeft : body.scrollLeft;
+  const x = idx * dayWidth + dayWidth / 2;
+  const side = !inRange ? null : x < left ? 'left' : x > left + body.clientWidth ? 'right' : null;
+  mark.hidden = !side;
+  if (!side) return;
+  mark.classList.toggle('left', side === 'left');
+  mark.classList.toggle('right', side === 'right');
+  const weekday = today.toLocaleDateString('en-US', { weekday: 'short' });
+  const label = 'Today · ' + weekday + ' ' + today.getDate();
+  mark.textContent = side === 'left' ? '‹ ' + label : label + ' ›';
+  mark.setAttribute('aria-label', 'Jump to today, ' + (side === 'left' ? 'earlier' : 'later') + ' in the chart');
 }
 
 // Called from home.ts (whenever the Home dashboard's expanded Gantt

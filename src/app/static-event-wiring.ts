@@ -208,8 +208,7 @@ export function initStaticEventListeners(): void {
   on('ganttZoomInBtn', () => zoomIn());
   on('ganttZoomOutBtn', () => zoomOut());
   on('ganttResetZoomBtn', () => resetZoom());
-  on('ganttFitToViewBtn', () => fitToView());
-  on('ganttScrollTodayBtn', () => scrollToToday());
+  on('ganttTodayMark', () => scrollToToday());
 
   // editingJobId is only ever non-null while this button is actually
   // shown (job-form.ts toggles its display alongside editingJobId being

@@ -1053,6 +1053,36 @@
     position: absolute; top: 0; bottom: 0; width: 2px;
     background: var(--accent); z-index: 85; pointer-events: none;
   }
+  /* Floating zoom pill (bottom-center of the timeline) and the "Today"
+     marker that appears in the date header only while today is scrolled
+     out of view. Both sit on .right-panel, so they stay put while the
+     timeline scrolls underneath. */
+  .gantt-zoom-pill {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 90;
+    display: flex; align-items: center; height: 38px; padding: 0 4px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(26,35,126,0.14);
+  }
+  .gantt-zoom-pill button {
+    height: 30px; min-width: 32px; padding: 0 8px; border: 0; border-radius: 999px; background: transparent;
+    color: var(--text); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font: inherit; font-size: var(--t-sm); font-weight: 600; white-space: nowrap;
+  }
+  .gantt-zoom-pill button:hover { background: var(--primary-tint); }
+  .gantt-zoom-pill-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
+  body.dark-mode .gantt-zoom-pill { box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
+  body.dark-mode .gantt-zoom-pill button:hover { background: rgba(57,73,171,0.22); }
+  .gantt-today-mark {
+    position: absolute; top: 18px; z-index: 90;
+    display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
+    border: 0; border-radius: 999px; background: #c62828; color: #fff; cursor: pointer; /* fixed dark red: white text stays readable (5.6:1) in both themes */
+    font: inherit; font-size: var(--t-xs); font-weight: 700; white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  }
+  .gantt-today-mark[hidden] { display: none; }
+  .gantt-today-mark.left { left: 8px; }
+  .gantt-today-mark.right { right: 8px; }
+  .gantt-today-mark:hover { filter: brightness(1.08); }
   .today-line::before {
     content: ''; position: absolute; top: -4px; left: -4px;
     width: 10px; height: 10px; border-radius: 50%;
@@ -4129,14 +4159,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <button class="gantt-toolbar-text-btn" id="ganttExpandAllBtn" title="Expand every phase and sub-phase into individual tasks">Expand All</button>
             <button class="gantt-toolbar-text-btn" id="ganttCollapseAllBtn" title="Collapse every phase and sub-phase back into a single bar">Collapse All</button>
             <button class="gantt-toolbar-text-btn" id="ganttKeyBtn" title="What the colors and patterns mean" aria-expanded="false" aria-controls="ganttKeyPanel">Key</button>
-            <!-- Shown everywhere since A5: phones can also pinch (see the
-                 GANTT PINCH-TO-ZOOM JS block), but a single-tap way to zoom
-                 is required too (WCAG 2.5.1). -->
-            <button class="gantt-zoom-btn" id="ganttZoomInBtn" title="Zoom in" aria-label="Zoom in">+</button>
-            <button class="gantt-zoom-btn" id="ganttZoomOutBtn" title="Zoom out" aria-label="Zoom out">−</button>
-            <button class="gantt-zoom-btn" id="ganttResetZoomBtn" title="Reset zoom" aria-label="Reset zoom">⟲</button>
-            <button id="ganttFitToViewBtn" title="Fit to view" aria-label="Fit to view">⤢</button>
-            <button id="ganttScrollTodayBtn" title="Jump to today" aria-label="Jump to today"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a6 6 0 00-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 00-6-6z" fill="#e53935"/><circle cx="12" cy="8" r="2.2" fill="#fff"/></svg></button>
           </div>
         </div>
         <!-- Filled by src/views/gantt-key.tsx each time #ganttKeyBtn opens it. -->
@@ -4159,6 +4181,17 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <div class="timeline-body" id="timelineBody" tabindex="0" role="region" aria-label="Gantt timeline (arrow keys scroll)">
               <div class="timeline-grid" id="timelineGrid"></div>
               <div class="date-popover" id="datePopover"></div>
+            </div>
+            <!-- Only shown while today is scrolled out of view, pinned to the
+                 edge it went off (see updateGanttTodayMark() in gantt.ts). -->
+            <button type="button" class="gantt-today-mark" id="ganttTodayMark" hidden></button>
+            <!-- Floating zoom pill. Buttons stay on screen on phones too: pinch
+                 can't be the only way to zoom (WCAG 2.5.1). -->
+            <div class="gantt-zoom-pill" role="group" aria-label="Zoom">
+              <button type="button" id="ganttZoomOutBtn" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+              <button type="button" id="ganttZoomInBtn" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+              <span class="gantt-zoom-pill-sep" aria-hidden="true"></span>
+              <button type="button" id="ganttResetZoomBtn" title="Back to the normal zoom"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Reset</button>
             </div>
           </div>
         </div>
