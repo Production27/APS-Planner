@@ -15,7 +15,7 @@ import { initCalendarDragHandlers, buildCalendarEventColorPresets, closeCalendar
 import { closeAllColSettings, initCardFormAutosaveListeners, closeManageFields, closeCardModal } from '../views/board';
 import { closeAllMsDropdowns, isPanelActive, initModalKeyboard } from '../utils/ui';
 import { closeSettingsMenu } from './settings-menu';
-import { loadLinkEnabledPref, loadProjects, readLocalProjectsText, enforceFixedProjectSet, loadActiveProjectData, autoArchiveJobs, renderAll, freshLocalSeed } from './project';
+import { loadLinkEnabledPref, loadProjects, readLocalProjectsText, enforceFixedProjectSet, loadActiveProjectData, renderAll, freshLocalSeed } from './project';
 import { syncCardColumns } from '../core/jobs';
 import { closeDeleteJobModal } from '../views/job-list';
 import { cancelEdit, initJobFormAutosaveListeners, buildColorPresets } from '../views/job-form';
@@ -85,7 +85,6 @@ export function init(savedText?: string | null): void {
   loadDarkModePref();
   loadActiveProjectData();
   buildColorPresets();
-  autoArchiveJobs();
   renderAll();
   setupScrollSync();
   buildCalendarEventColorPresets();

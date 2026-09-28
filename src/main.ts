@@ -50,7 +50,7 @@ import {
 import {
   migrateFromLegacy, loadProjects, saveProjects, flushProjectsToLocalCache, getActiveProject, switchProject, enforceProjectScopeForRole,
   slugifyFixedProjectName, enforceFixedProjectSet, loadActiveProjectData, saveActiveProject, toggleProject,
-  updateProjectToggle, renderAll, applyPermissionGating, saveJobs, autoArchiveJobs, saveBoardColumns,
+  updateProjectToggle, renderAll, applyPermissionGating, saveJobs, saveBoardColumns,
   saveWorkflowItems, saveBoardCards, saveCalendarEvents, saveFieldOptions, saveHeader, loadLinkEnabledPref,
   saveLinkEnabledPref, isLinkEnabledLocally, setLinkEnabledLocally, getOtherFixedProjectId, getLinkedReferenceJobs,
   jumpToLinkedJobReference, linkJobs, setJobLinkEnabled, unlinkJobById,
@@ -418,7 +418,6 @@ declare global {
     renderAll: typeof renderAll;
     applyPermissionGating: typeof applyPermissionGating;
     saveJobs: typeof saveJobs;
-    autoArchiveJobs: typeof autoArchiveJobs;
     saveBoardColumns: typeof saveBoardColumns;
     saveWorkflowItems: typeof saveWorkflowItems;
     saveBoardCards: typeof saveBoardCards;
@@ -1002,7 +1001,6 @@ window.updateProjectToggle = updateProjectToggle;
 window.renderAll = renderAll;
 window.applyPermissionGating = applyPermissionGating;
 window.saveJobs = saveJobs;
-window.autoArchiveJobs = autoArchiveJobs;
 window.saveBoardColumns = saveBoardColumns;
 window.saveWorkflowItems = saveWorkflowItems;
 window.saveBoardCards = saveBoardCards;

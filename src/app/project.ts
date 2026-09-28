@@ -615,31 +615,8 @@ export function applyPermissionGating(): void {
 export function saveJobs(): void {
   ensureJobAndTaskIds(jobs);
   jobs.forEach(function (job, i) { job.order = i; });
-  autoArchiveJobs();
   saveActiveProject();
   queueSharedSync();
-}
-
-export function autoArchiveJobs(): void {
-  const cutoff = new Date();
-  cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - ARCHIVE_CUTOFF_DAYS);
-  let changed = false;
-  jobs.forEach(function (job) {
-    if (job.archived) return;
-    const finishes = (job.tasks || []).map(function (t) { return new Date(t.finish + 'T00:00:00').getTime(); });
-    const maxFinish = finishes.length ? Math.max.apply(null, finishes) : 0;
-    if (maxFinish && new Date(maxFinish) < cutoff) {
-      job.archived = true;
-      changed = true;
-    }
-  });
-  if (changed) {
-    saveActiveProject();
-    queueSharedSync();
-    logActivity('auto-archived old jobs');
-    showToast('Old jobs auto-archived', 'info');
-  }
 }
 
 // Targeted, immediate pushes (not the debounced queueSharedSync()) — see

@@ -94,8 +94,7 @@ declare global {
   var ganttViewMode: string;
   // eslint-disable-next-line no-var
   var ganttFirstRender: boolean;
-  // Shared with autoArchiveJobs() (src/app/project.ts) — how far back a
-  // job/task can be and still show up before being treated as archived.
+  // How far back the chart always leaves room to scroll (src/core/constants.ts).
   const ARCHIVE_CUTOFF_DAYS: number;
   function editJob(jobId: string, phaseId?: string | null, subPhaseId?: string | null): void;
   function jumpToLinkedJobReference(job: Job): void;
@@ -789,9 +788,8 @@ function onBarMoveEnd(e: MouseEvent): void {
         renderGantt();
         // Deferred past the render above (see this function's own opening
         // comment on why) — saving, activity-log, job-list and the toast
-        // are all real work a busy real project makes slow (see saveJobs()'s
-        // own autoArchiveJobs() scan and saveActiveProject()'s localStorage
-        // write), but none of it is what the user actually just let go of
+        // are all real work a busy real project makes slow (see
+        // saveActiveProject()'s localStorage write), but none of it is what the user actually just let go of
         // the mouse to see. Running it in the very same synchronous burst
         // as the reorder itself made the animation wait behind it for a
         // frame the user was already staring at, which read as the bar
@@ -1115,9 +1113,8 @@ function computeDateRange(): void {
     });
   });
   // However the task dates work out, always leave room to scroll back at
-  // least ARCHIVE_CUTOFF_DAYS — otherwise a job that just auto-archived (or
-  // doesn't have anything scheduled that far back) leaves no grid to
-  // scroll into, even though the data's still there with "Show archived" on.
+  // least ARCHIVE_CUTOFF_DAYS — otherwise a project with nothing scheduled
+  // that far back leaves no grid to scroll into.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const minPastDate = new Date(today);

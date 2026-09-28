@@ -4,7 +4,7 @@ const { APP_URL, seedSession, mockRoomWebSocket } = require('./helpers');
 // Project management (src/app/project.ts) — switchProject() (the single
 // highest-blast-radius function in the app: it touches every view's own
 // close/flush logic on every switch, for every user), applyPermissionGating(),
-// toggleProject(), and autoArchiveJobs(). The cross-project restriction
+// toggleProject(), and that saving never archives jobs on its own. The cross-project restriction
 // path already had one test (teamsync.spec.js); these cover what didn't:
 // the happy-path switch itself (including that a pending edit on the OLD
 // project actually flushes before the switch, not after), the fail-closed
@@ -128,7 +128,7 @@ test('applyPermissionGating: hides projectAdmin-only controls for an editor, and
   await expect(page.locator('.job-rail-add-btn')).not.toHaveCSS('display', 'none');
 });
 
-test('autoArchiveJobs: archives a job whose every task finished more than the cutoff window ago, and leaves a recently-finished one alone', async ({ page }) => {
+test('no auto-archive: saving and reloading leaves a job that finished long ago active', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
   await page.goto(APP_URL);
@@ -146,11 +146,13 @@ test('autoArchiveJobs: archives a job whose every task finished more than the cu
     const recentJob = { id: 'recent-job', name: 'Recently finished job', color: '#123', archived: false, comments: [], tasks: [{ id: 't2', start: iso(recently), finish: iso(recently), order: 0 }] };
     jobs.push(oldJob, recentJob);
 
-    autoArchiveJobs();
+    saveJobs();
+    renderAll();
 
-    return { oldArchived: jobs.find((j) => j.id === 'old-job').archived, recentArchived: jobs.find((j) => j.id === 'recent-job').archived };
+    return { oldArchived: jobs.find((j) => j.id === 'old-job').archived, recentArchived: jobs.find((j) => j.id === 'recent-job').archived, gone: typeof window.autoArchiveJobs };
   });
 
-  expect(result.oldArchived).toBe(true);
+  expect(result.oldArchived).toBe(false);
   expect(result.recentArchived).toBe(false);
+  expect(result.gone).toBe('undefined');
 });

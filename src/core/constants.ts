@@ -40,7 +40,7 @@ export const CAL_DAYNUM_H = 26;
 // for how this floor now also gets raised per-column.
 export const DEFAULT_STALLED_AFTER_DAYS = 14;
 
-// How far back a job/task can be and still show up before being treated
-// as archived — shared between src/views/gantt.ts's date-range clamp and
-// autoArchiveJobs() (src/app/project.ts).
+// How far back the Gantt always leaves room to scroll, even when nothing
+// is scheduled that early (src/views/gantt.ts's date-range clamp). Jobs are
+// only ever archived by hand now; there is no automatic archiving.
 export const ARCHIVE_CUTOFF_DAYS = 90;

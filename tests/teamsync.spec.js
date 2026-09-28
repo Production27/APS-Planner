@@ -2771,3 +2771,23 @@ test('calendar: going Day -> Month or Day -> Week leaves no day-view items behin
     expect(await firstCellDate()).toBe(exit === '#calViewWeek' ? '2026-09-13' : '2026-08-30');
   }
 });
+
+test('card editor: Archive archives the card\'s job, closes the editor, and Undo brings it back', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  const { jobId, cardId } = await page.evaluate(() => {
+    switchTab('board');
+    const card = boardCards.find((c) => c.jobId && !findJob(c.jobId).job.archived);
+    openEditCard(card.id);
+    return { jobId: card.jobId, cardId: card.id };
+  });
+  await expect(page.locator('#cardArchiveBtn')).toBeVisible();
+  await page.locator('#cardArchiveBtn').click();
+  await expect(page.locator('#cardModal')).not.toHaveClass(/show/);
+  expect(await page.evaluate((id) => findJob(id).job.archived, jobId)).toBe(true);
+  await expect(page.locator('#boardWrapper .board-card[data-id="' + cardId + '"]')).toHaveCount(0);
+  await page.locator('.undo-toast button, .toast button', { hasText: 'Undo' }).first().click();
+  await expect.poll(() => page.evaluate((id) => findJob(id).job.archived, jobId)).toBe(false);
+});

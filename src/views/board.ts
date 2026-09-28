@@ -68,6 +68,7 @@ import { hasMinTier } from '../auth/permissions';
 import { getStoredSessionToken } from '../auth/session';
 import { fetchWithReauth } from '../app/worker-client';
 import { offerUndo } from '../app/undo';
+import { archiveJob } from './job-list';
 import { ensureCardChecklists, isChecklistStageVisibleToMe, confirmChecklistBeforeMove } from './checklist';
 import { buildHomeStageSummary, buildHomeStalledRows, computeColumnStalledFloors } from './home';
 import { displayNameForUsername, getLeadRoster, ensureUserRosterLoaded } from '../app/user-roster';
@@ -823,6 +824,18 @@ function openEditCard(id: string): void {
   draftAttachments = JSON.parse(JSON.stringify(card.attachments || []));
   document.getElementById('cardModalTitle')!.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right:3px" xmlns="http://www.w3.org/2000/svg"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z" fill="#f0ad4e"/><path d="M15.5 5L19 8.5" stroke="#fff" stroke-width="1"/></svg> Edit Card';
   (document.getElementById('cardDeleteBtn') as HTMLElement).style.display = 'inline-flex';
+  // Archive the card's job (archiving is per job, so a multi-phase job's
+  // other cards go with it), with the same 10-second Undo as the job form.
+  const archiveBtn = document.getElementById('cardArchiveBtn') as HTMLButtonElement;
+  const archiveJobFound = card.jobId ? findJob(card.jobId) : null;
+  archiveBtn.style.display = archiveJobFound && !archiveJobFound.job.archived && !archiveJobFound.job.isLinkedReference ? 'inline-flex' : 'none';
+  archiveBtn.title = archiveJobFound && (archiveJobFound.job.phases || []).length > 1 ? 'Archive the whole job, all its phases' : 'Archive this job';
+  archiveBtn.onclick = function () {
+    if (!archiveJobFound) return;
+    const jobId = archiveJobFound.job.id;
+    closeCardModal();
+    archiveJob(jobId);
+  };
   const nameTarget = resolveCardNameTarget(card);
   const titleLabel = document.getElementById('c_title_label')!;
   if (nameTarget.type === 'phase') {
