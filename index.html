@@ -1323,7 +1323,6 @@
   .job-card-archived-note { font-size: var(--t-2xs); color: var(--text-light); font-weight: 400; }
   .job-card .job-card-title { font-weight: 700; font-size: var(--t-base); color: var(--jct-light, var(--text)); margin-bottom: var(--s-1); display: flex; align-items: center; gap: var(--s-1-5); }
   .job-card .job-card-meta { font-size: var(--t-xs); color: var(--text-light); display: flex; gap: var(--s-3); align-items: center; }
-  .job-card .color-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); }
   /* #b26a00 not var(--warning): same fix as .board-card-override-badge
      below — raw --warning (#f0ad4e) on a light card background is a
      1.95:1 contrast ratio, well under the 4.5:1 small-text needs. Dark
@@ -3663,7 +3662,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   .job-list .job-card:hover { background: var(--chrome-hover); border-color: transparent; box-shadow: none; transform: none; }
   .job-list .job-card.active, body.dark-mode .job-list .job-card.active { background: var(--nav-active); border-color: transparent; box-shadow: none; }
-  .job-list .job-card .color-strip { left: 13px; top: 17px; bottom: auto; width: 9px; height: 9px; border-radius: 50%; }
   /* Job list workflow groups (JobGroup in src/views/job-list-card.tsx). */
   .job-group + .job-group { margin-top: var(--s-2); }
   .job-group-header { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 12px 6px 8px; border: 0; border-radius: 999px; background: transparent; color: var(--text-light); font: inherit; font-size: var(--t-xs); font-weight: 700; text-align: left; cursor: pointer; }

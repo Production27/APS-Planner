@@ -24,7 +24,6 @@ export interface JobCardProps {
   active: boolean;
   archived: boolean;
   finished: boolean;
-  color: string;
   // Same job-colored title as the Board's cards (see BoardCardProps.
   // titleColorLight/Dark in board-card.tsx) — set as custom properties so
   // a dark-mode toggle doesn't need a re-render.
@@ -55,7 +54,6 @@ function JobCard(p: JobCardProps) {
       class={'job-card' + (p.active ? ' active' : '') + (p.archived ? ' archived' : '') + (p.finished ? ' finished' : '')}
       onClick={p.onActivate}
     >
-      <div class="color-strip" style={{ background: p.color }} />
       <button type="button" class="job-card-title" aria-current={p.active ? 'true' : undefined} style={{ '--jct-light': p.titleColorLight, '--jct-dark': p.titleColorDark } as Record<string, string>}>{p.name}{p.archived ? <span class="job-card-archived-note"> (archived)</span> : null}</button>
       <div class="job-card-meta">
         {p.dateRangeLabel ? (

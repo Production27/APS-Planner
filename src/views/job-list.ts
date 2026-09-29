@@ -161,7 +161,6 @@ export function renderJobList(): void {
       active: editingJobId === job.id,
       archived: !!job.archived,
       finished: isJobFinished(job),
-      color: job.color,
       // Identical to the Board card's title color for this job (same
       // inputs as buildCardProps() in board.ts), so a job reads as the
       // same color in both places.
