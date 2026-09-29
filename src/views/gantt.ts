@@ -34,7 +34,7 @@ import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { safeJsonParse } from '../utils/id';
 import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
 import { escapeHtml } from '../utils/html';
-import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor } from '../utils/color';
+import { tintedTextColor, ganttPastel, ganttPastelHex } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
@@ -1081,12 +1081,12 @@ function syncGanttFocusBanner(): void {
 // plain text in a contrast-adjusted variant of `color` (darkened/lightened
 // as needed, never snapped to a flat white/black — see tintedTextColor())
 // sitting directly on the bar underneath it. That bar's own fill is always
-// `color` run through softenColor() (see the various `background:
-// softenColor(...)` bar/segment fills below), so approximating against
+// `color` run through ganttPastel() (see the various `background:
+// ganttPastel(...)` bar/segment fills below), so approximating against
 // that same softened tone here keeps the tag readable against its real
 // background without needing to thread the exact segment color through.
 function barTagTextColor(color: string): string {
-  return tintedTextColor(color, softenColor(color));
+  return tintedTextColor(color, ganttPastelHex(color));
 }
 
 // The left-panel Job column's job-name/phase/sub-phase labels have no
@@ -1726,14 +1726,17 @@ function findTaskForCardColumn(job: Job, phaseId: string | null | undefined, tas
   return tasks.find((t) => t.columnId === card.column) || null;
 }
 
-// A task pill's colors. A real task's color mirrors its board column's
-// (already-pastel) color, so it's used as-is with the Board's own label-text
-// rule — same look as the column header — instead of being softened again.
-// Due markers and colorless tasks keep the softened job-color treatment.
+// A task pill's colors: a soft tinted chip of the task's stage color (or
+// the job's, for due markers and colorless tasks) with text in a darker
+// shade of the same color. Both are mixed in CSS (--gantt-chip-* in
+// index.html) so dark mode flips them without a re-render.
 function taskPillColors(task: { [key: string]: any }, jobColor: string): { background: string; color: string | undefined } {
   const own = task.color as string | undefined;
-  if (own && !task.isDueMarker) return { background: own, color: columnLabelTextColor(own) };
-  return { background: softenColor(own || jobColor), color: undefined };
+  const c = (own && !task.isDueMarker) ? own : (own || jobColor || '#3949ab');
+  return {
+    background: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-bg-pct), var(--gantt-bar-base))',
+    color: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-ink-pct), var(--gantt-chip-ink-base))',
+  };
 }
 
 function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {
@@ -2234,7 +2237,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
                 rowKey, origLeft: segLeft, left: segLeft, width: segWidth, top,
                 fullLeft: dt.sIdx * dayWidth, fullWidth: (dt.eIdx - dt.sIdx + 1) * dayWidth,
                 title: dt.t.name,
-                background: softenColor((dt.t.color as string | undefined) || job.color || '#3949ab'),
+                background: ganttPastel((dt.t.color as string | undefined) || job.color || '#3949ab'),
                 onMouseEnter: (e: MouseEvent) => showTooltip(e, job, dt.t),
                 onMouseLeave: hideTooltip,
                 onMouseMove: moveTooltip,
@@ -2256,12 +2259,12 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
                 // as a flat fill indistinguishable from a solid segment.
                 // Alternate the job color with a darker shade of itself
                 // instead, so an overlap still reads as a hatch.
-                const base = softenColor(job.color || '#3949ab');
-                const dark = darkenColor(base, 0.28);
+                const base = ganttPastel(job.color || '#3949ab');
+                const dark = ganttPastel(job.color || '#3949ab', 60);
                 background = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
                 title = 'Overlapping sub-phases: ' + covering.map(function (dt) { return dt.t.name; }).join(', ');
               } else {
-                const uniqColors = Array.from(new Set(covering.map(function (dt) { return softenColor((dt.t.color as string | undefined) || job.color || '#3949ab'); })));
+                const uniqColors = Array.from(new Set(covering.map(function (dt) { return ganttPastel((dt.t.color as string | undefined) || job.color || '#3949ab'); })));
                 const stripe = 6;
                 const stops: string[] = [];
                 uniqColors.forEach(function (c, idx) {
@@ -2353,7 +2356,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
           rowKey,
           className: 'task-bar' + (isTaskFinished(job, task) ? ' finished' : '') + (task.isDueMarker ? ' due-marker-bar' : '') + (duration === 1 ? ' milestone' : '') + (job.isLinkedReference ? ' linked-ref' : ''),
           left, width, top,
-          background: task.isDueMarker ? undefined : softenColor((task.color as string | undefined) || job.color),
+          background: task.isDueMarker ? undefined : ganttPastel((task.color as string | undefined) || job.color),
           border: task.isDueMarker ? undefined : ('2px solid ' + (job.color || '#3949ab')),
           isFlag: !!task.isDueMarker,
           jobTag, subTags,

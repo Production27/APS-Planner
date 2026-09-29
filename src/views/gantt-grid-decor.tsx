@@ -17,11 +17,6 @@ function GridLines({ days }: { days: GanttDayCell[] }) {
       {days.map((d) => (
         <Fragment key={d.key}>
           <div class={'grid-line' + (d.isWeekend ? ' weekend-line' : '')} style={{ left: d.left + 'px' }} />
-          {d.isToday ? (
-            // No width set here — .today-line-bg's own CSS spans it from
-            // `left` to the grid's real right edge via right:0.
-            <div class="grid-line today-line-bg" style={{ left: d.left + 'px' }} />
-          ) : null}
         </Fragment>
       ))}
     </>
@@ -74,8 +69,9 @@ function TodayLine({ data }: { data: TodayLineData | null }) {
   if (!data) return null;
   return (
     <>
+      {/* Just the line: today's date is circled in the header instead of
+          a "Today — Sep 29" tag (Karl, 2026-09-29). */}
       <div class="today-line" style={{ left: data.left + 'px' }} />
-      <div class="today-label" style={{ left: (data.left + 6) + 'px' }}>{data.label}</div>
     </>
   );
 }

@@ -7,9 +7,9 @@
 // column with no color of its own falls back to the job's color).
 //
 // Every swatch reuses the exact recipe the timeline itself draws with
-// (softenColor() fills, the 45° two-color overlap hatch, the accent-ringed
+// (ganttPastel() fills, the 45° two-color overlap hatch, the accent-ringed
 // due circle) so the key can't drift into describing a different look.
-import { softenColor } from '../utils/color';
+import { ganttPastel } from '../utils/color';
 
 const HATCH_A = '#4dd0e1';
 const HATCH_B = '#ffb74d';
@@ -44,21 +44,21 @@ export function GanttKeyBody() {
       label: <>An <b>outline</b> in the job's color marks a job or phase shown as one bar. Click ▸ next to its name to see its tasks one per row, or the arrow in the Job column header to open or close every job at once.</>,
     },
     {
-      swatch: <span class="gantt-key-sw" style={{ background: hatch(softenColor(HATCH_A), softenColor(HATCH_B)) }} />,
+      swatch: <span class="gantt-key-sw" style={{ background: hatch(ganttPastel(HATCH_A), ganttPastel(HATCH_B)) }} />,
       label: <><b>Stripes</b> mean two or more tasks are scheduled on the same days.</>,
     },
     {
       swatch: (
         <span class="gantt-key-sw gantt-key-sw-outline gantt-key-sw-gap">
-          <span style={{ background: softenColor(HATCH_A) }} />
+          <span style={{ background: ganttPastel(HATCH_A) }} />
           <span />
-          <span style={{ background: softenColor(HATCH_B) }} />
+          <span style={{ background: ganttPastel(HATCH_B) }} />
         </span>
       ),
       label: <>An <b>empty stretch</b> inside an outline means no task is scheduled on those days.</>,
     },
     {
-      swatch: <span class="gantt-key-sw gantt-key-sw-tick" style={{ background: softenColor(HATCH_A) }}><span /></span>,
+      swatch: <span class="gantt-key-sw gantt-key-sw-tick" style={{ background: ganttPastel(HATCH_A) }}><span /></span>,
       label: <>A <b>white tick</b> is where one task ends. Drag it to change that task's finish date.</>,
     },
     {
@@ -70,7 +70,7 @@ export function GanttKeyBody() {
       label: <>A <b>line between bars</b>, in the job's color, joins bars that belong to the same job.</>,
     },
     {
-      swatch: <span class="gantt-key-sw gantt-key-sw-linked" style={{ background: softenColor(HATCH_A) }}>🔗</span>,
+      swatch: <span class="gantt-key-sw gantt-key-sw-linked" style={{ background: ganttPastel(HATCH_A) }}>🔗</span>,
       label: <>A <b>faded, dashed bar</b> with 🔗 is a job linked from another project. It's read-only; click it to go there.</>,
     },
     {
@@ -100,7 +100,7 @@ export function GanttKeyBody() {
         <ul class="gantt-key-stages">
           {colored.map((c) => (
             <li key={c.id}>
-              <span class="gantt-key-sw gantt-key-sw-stage" style={{ background: softenColor(c.color) }} aria-hidden="true" />
+              <span class="gantt-key-sw gantt-key-sw-stage" style={{ background: ganttPastel(c.color) }} aria-hidden="true" />
               {c.label}
             </li>
           ))}

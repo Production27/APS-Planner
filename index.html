@@ -51,6 +51,8 @@
        — that's a real design judgment call about acceptable subtle
        color shifts across a dozen+ elements, not a mechanical rename. */
     --table-header-bg: #f8f9fa; --table-header-border: #dee2e6;
+    /* Gantt "Soft" restyle: bar pastels and stage chips mix toward these. */
+    --gantt-bar-base: #fff; --gantt-chip-bg-pct: 18%; --gantt-chip-ink-pct: 55%; --gantt-chip-ink-base: #000;
     --row-alt-bg: #fafafa; --btn-gradient-end: #f4f5f8;
     --kanban-column-bg: #eeeeee; --divider: #f0f0f0; --divider-strong: #e9ecef;
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
@@ -635,9 +637,9 @@
      slack) so the task rows below line up with the bar rows next to
      them instead of starting 10px lower. */
   .left-header {
-    display: flex; background: var(--table-header-bg); border-bottom: 2px solid var(--table-header-border);
-    font-weight: 700; font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.6px;
-    color: #495057; height: 58px; flex-shrink: 0;
+    display: flex; background: var(--card); border-bottom: 1px solid var(--divider-strong);
+    font-weight: 600; font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--text-light); height: 58px; flex-shrink: 0;
   }
   .left-header .col { padding: var(--s-2) var(--s-2-5); display: flex; align-items: center; border-right: 1px solid var(--divider-strong); }
   .left-header .col-date { width: 104px; } .left-header .col-task { width: 90px; } .left-header .col-jobs { flex: 1; border-right: none; }
@@ -665,8 +667,7 @@
      gantt.ts), which drives the matching right-panel bar rows. */
   .task-row { display: flex; height: 40px; border-bottom: 1px solid var(--divider); font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
   .task-row:hover { background: #f0f0f0; }
-  .task-row:nth-child(even) { background: var(--row-alt-bg); }
-  .task-row:nth-child(even):hover { background: #f0f0f0; }
+
   .task-row .col { padding: 0 var(--s-2-5); border-right: 1px solid var(--divider); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
   .task-row .col-date { width: 104px; color: var(--text-light); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
   /* Between Date and Job — a pill (same look as the phase/sub-phase pills
@@ -716,12 +717,12 @@
      illegibly small — when everything doesn't fit there, .col-jobs's own
      overflow:hidden just clips whichever trailing pill(s) run past the
      column edge. */
-  .task-row .task-row-pill { display: inline-block; flex-shrink: 0; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 10px; vertical-align: middle; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; }
+  .task-row .col-date { color: var(--text-light); font-variant-numeric: tabular-nums; }
+  .task-row .task-row-pill { display: inline-block; flex-shrink: 0; font-size: var(--t-2xs); font-weight: 600; color: #fff; margin-left: var(--s-1-5); padding: 1px var(--s-2); border-radius: 6px; vertical-align: middle; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; }
   .task-row .task-row-pill.collapsible { cursor: pointer; }
-  .task-row .task-row-pill.collapsible:hover { filter: brightness(1.15); }
+  .task-row .task-row-pill.collapsible:hover { filter: brightness(0.96); }
   .task-row .task-row-pill.focused { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary); }
   body.dark-mode .task-row .task-row-pill.focused { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary-light); }
-  body.dark-mode .task-row .task-row-pill { color: #fff; }
   /* Job column's phase/sub-phase fold toggles — bare, same de-chromed
      treatment as .task-row-name just above (and the on-bar phase/sub-
      phase tags): no chip, plain text in the job's own color, chevron sized
@@ -743,7 +744,7 @@
 
   /* ===== TIMELINE HEADER (scrolls with body) ===== */
   .timeline-header-wrap {
-    height: 58px; background: var(--table-header-bg); border-bottom: 2px solid var(--table-header-border);
+    height: 58px; background: var(--card); border-bottom: 1px solid var(--divider-strong);
     overflow: hidden;
     flex-shrink: 0; position: relative;
   }
@@ -762,32 +763,32 @@
   }
   .timeline-header .week-header {
     position: absolute; top: 0; height: 24px;
-    border-right: 1px solid var(--border); display: flex;
-    align-items: center; justify-content: center;
-    font-size: var(--t-2xs); font-weight: 700; color: var(--primary-light);
-    background: var(--table-header-bg); text-align: center; padding: var(--s-0-5);
+    border-left: 1px solid var(--divider-strong); display: flex;
+    align-items: center; justify-content: flex-start;
+    font-size: 11px; font-weight: 600; color: var(--text-light);
+    background: transparent; padding: var(--s-0-5) var(--s-2-5); box-sizing: border-box;
     cursor: pointer; transition: background 0.2s;
     user-select: none;
   }
-  .timeline-header .week-header:hover { background: #ececec; }
+  .timeline-header .week-header:hover { background: var(--chrome-hover); color: var(--text); }
   .timeline-header .day-header {
     position: absolute; top: 24px; height: 34px;
-    border-right: 1px solid var(--divider-strong); display: flex;
+    display: flex;
     flex-direction: column; align-items: center; justify-content: center;
-    font-size: var(--t-2xs); color: var(--text-light); background: var(--table-header-bg);
+    font-size: var(--t-2xs); color: var(--text-light); background: transparent;
     cursor: pointer; transition: background 0.2s, color 0.2s;
     user-select: none;
   }
-  .timeline-header .day-header:hover { background: #ececec; color: var(--primary); }
-  .timeline-header .day-header .day-num { font-weight: 700; font-size: var(--t-xs); }
-  .timeline-header .day-header .day-name { font-size: var(--t-3xs); color: var(--text-faint); text-transform: uppercase; }
-  .timeline-header .day-header.weekend { background: var(--divider); color: var(--text-faint); }
-  .timeline-header .day-header.weekend:hover { background: var(--border); }
-  .timeline-header .day-header.today-header {
-    background: var(--danger-tint) !important; color: var(--accent) !important;
-    font-weight: 700;
+  .timeline-header .day-header:hover { background: var(--chrome-hover); }
+  /* Today's number sits in a red circle (Google Calendar style). */
+  .timeline-header .day-header .day-num {
+    font-weight: 600; font-size: var(--t-xs); color: var(--text);
+    width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%;
   }
-  .timeline-header .day-header.today-header .day-num { color: var(--accent-text); }
+  .timeline-header .day-header .day-name { font-size: var(--t-3xs); color: var(--text-faint); text-transform: uppercase; }
+  .timeline-header .day-header.weekend .day-num { color: var(--text-faint); font-weight: 500; }
+  .timeline-header .day-header.today-header .day-num { background: #d32f2f; color: #fff; }
+  .timeline-header .day-header.today-header .day-name { color: var(--accent-text); font-weight: 700; }
 
   /* Slightly transparent, same reasoning as .cal-day above — lets a
      project's background image (set on the panel itself, see
@@ -810,21 +811,7 @@
   .timeline-grid { position: relative; min-height: 100%; }
   .grid-line {
     position: absolute; top: 0; bottom: 0; width: 1px;
-    background: var(--divider); pointer-events: none;
-  }
-  .grid-line.weekend-line { background: var(--border); }
-  .grid-line.today-line-bg {
-    background: rgba(229,57,53,0.06) !important;
-    /* Meant to tint from today's column to the actual right edge of the
-       grid — width:100% on an absolutely-positioned element with a
-       non-zero `left` instead extends `left + 100%` PAST that edge (a
-       real, non-rubber-band overflow: it was inflating #timelineBody's
-       scrollWidth by exactly that `left` offset, letting the Gantt
-       scroll into genuinely empty space past the last rendered day).
-       right:0 with no explicit width computes the correct span instead. */
-    right: 0 !important;
-    width: auto !important;
-    z-index: 1;
+    background: rgba(0,0,0,0.04); pointer-events: none;
   }
 
   /* ===== TASK BARS ===== */
@@ -834,12 +821,12 @@
      practice; it's kept matching anyway as the correct fallback/first-
      paint value). */
   .task-bar {
-    position: absolute; height: 26px; border-radius: 5px; top: 7px;
+    position: absolute; height: 26px; border-radius: 7px; top: 7px;
     cursor: grab; transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
     display: flex; align-items: center; padding: 0 var(--s-2);
-    font-size: var(--t-2xs); color: white; font-weight: 600;
+    font-size: var(--t-2xs); color: var(--text); font-weight: 600;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15); border: 1px solid rgba(0,0,0,0.08);
+    border: 1px solid rgba(0,0,0,0.08);
   }
   /* Applied only for the duration of animateReorderedBars()'s FLIP-style
      move (see gantt.ts) — slowed and eased gently on purpose so a bar
@@ -862,8 +849,8 @@
      separately-hand-tuned numbers (one here, one there) eventually would.
      No CSS rule needed for the class itself — see gantt.ts. */
   .task-bar:hover {
-    transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,0.25);
-    z-index: 50; filter: brightness(1.1);
+    transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    z-index: 50; filter: brightness(0.97);
   }
   /* A reorder swap (see GANTT_REORDER_MS/animateReorderedBars() in gantt.ts)
      slides two bars past each other along the same vertical band, and the
@@ -926,10 +913,10 @@
        color, set inline per element since it varies per task. Unlike the
        other overlays it's interactive: pointer-events are left on so it
        can be grabbed to move just that one task (see renderGantt()). */
-    position: absolute; height: 26px; border-radius: 2px; z-index: 64; cursor: grab;
+    position: absolute; height: 26px; border-radius: 4px; z-index: 64; cursor: grab;
     transition: filter 0.15s;
   }
-  .job-span-task-solid:hover { filter: brightness(1.12); }
+  .job-span-task-solid:hover { filter: brightness(0.96); }
   .job-span-task-solid.moving { cursor: grabbing; filter: brightness(1.15); transition: none; z-index: 66; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
   /* The rest of a condensed bar while one task/sub-phase piece of it is
      being dragged (see startBarMove()) — it isn't moving, so it steps back. */
@@ -971,7 +958,7 @@
      topmost overlay on the row (above the name pill's z-index 70) so it
      frames everything else instead of being painted over by it. */
   .job-span-border {
-    position: absolute; height: 26px; border-radius: 5px; border-width: 3px;
+    position: absolute; height: 26px; border-radius: 7px; border-width: 3px;
     border-style: solid; box-sizing: border-box; z-index: 80; pointer-events: none;
   }
   /* Condensed Jobs/Leads bar's due-date marker — see the isJobSpan branch
@@ -1078,13 +1065,6 @@
      for guaranteed separation from whatever's actually behind it, just
      less harsh-looking. Plain-bar tags don't need this: their one flat
      fill is exactly what the text color was already computed against. */
-  .job-span-name-wrap .task-bar-job-tag {
-    text-shadow:
-      -0.5px -0.5px 0.7px rgba(255,255,255,0.55), 0.5px -0.5px 0.7px rgba(255,255,255,0.55),
-      -0.5px 0.5px 0.7px rgba(255,255,255,0.55), 0.5px 0.5px 0.7px rgba(255,255,255,0.55),
-      -0.7px 0 0.7px rgba(255,255,255,0.55), 0.7px 0 0.7px rgba(255,255,255,0.55),
-      0 -0.7px 0.7px rgba(255,255,255,0.55), 0 0.7px 0.7px rgba(255,255,255,0.55);
-  }
   /* The job-name pill (first) may ellipsize; the phase/sub-phase pills after
      it never squeeze — fitBarTags() (gantt-task-bar.tsx) hides whichever
      don't fit whole instead of letting them shrink into tiny circles. */
@@ -1114,7 +1094,7 @@
      what's under it. */
   .today-line {
     position: absolute; top: 0; bottom: 0; width: 2px;
-    background: var(--accent); z-index: 85; pointer-events: none;
+    background: #d32f2f; opacity: 0.85; z-index: 85; pointer-events: none;
   }
   /* Floating zoom pill (bottom-center of the timeline) and the "Today"
      marker that appears in the date header only while today is scrolled
@@ -1124,7 +1104,7 @@
     position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 90;
     display: flex; align-items: center; height: 38px; padding: 0 4px;
     background: var(--card); border: 1px solid var(--border); border-radius: 999px;
-    box-shadow: 0 4px 14px rgba(26,35,126,0.14);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
   }
   .gantt-zoom-pill button {
     height: 30px; min-width: 32px; padding: 0 8px; border: 0; border-radius: 999px; background: transparent;
@@ -1151,16 +1131,10 @@
     width: 10px; height: 10px; border-radius: 50%;
     background: var(--accent);
   }
-  .today-label {
-    position: absolute; top: 2px;
-    background: #d32f2f; color: white;
-    font-size: var(--t-3xs); padding: var(--s-0-5) var(--s-2); border-radius: 3px;
-    font-weight: 700; z-index: 86; white-space: nowrap;
-    pointer-events: none;
-  }
 
-  .row-bg { position: absolute; left: 0; right: 0; height: 40px; border-bottom: 1px solid #f5f5f5; }
-  .row-bg:nth-child(even) { background: var(--row-alt-bg); }
+  .row-bg { position: absolute; left: 0; right: 0; height: 40px; border-bottom: 1px solid rgba(0,0,0,0.035); }
+  /* The lines joining a job's bars: thinner and see-through. */
+  #ganttConnectorSvg path { stroke-width: 1.5px; stroke-opacity: 0.5; stroke-linejoin: round; }
   /* Sits in .gantt-top-row next to .gantt-view-toggle-row, sharing that
      row's background/border rather than carrying its own — see the
      comment on .gantt-top-row. justify-content pushes the buttons to the
@@ -3520,8 +3494,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      light-mode rules, letting a project's background image show through. */
   body.dark-mode .timeline-body,
   body.dark-mode .left-panel {
-    background: linear-gradient(165deg, rgba(32,35,47,0.8) 0%, rgba(23,26,34,0.8) 55%, rgba(28,31,41,0.8) 100%);
+    background: rgba(31,31,31,0.82);
   }
+  body.dark-mode {
+    --gantt-bar-base: #1f1f1f; --gantt-chip-bg-pct: 30%; --gantt-chip-ink-pct: 55%; --gantt-chip-ink-base: #fff;
+  }
+  /* Pastel bars are dark in dark mode, so their labels go light. */
+  body.dark-mode .task-bar, body.dark-mode .task-bar .task-bar-job-tag, body.dark-mode .job-span-name-wrap .task-bar-job-tag { color: #ececec !important; }
 
   body.dark-mode .left-header,
   body.dark-mode .timeline-header-wrap,
@@ -3535,27 +3514,24 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      var(--primary-light) — fine against its light-mode var(--table-header-bg)
      background, unreadable against the dark #1a1d25 it gets right above
      in dark mode, and never had its own override until now. */
-  body.dark-mode .timeline-header .week-header { color: var(--primary-ondark); }
+  body.dark-mode .timeline-header .week-header { color: var(--text-light); background: transparent; }
   body.dark-mode .left-header .col { border-right-color: var(--border); }
   body.dark-mode .gantt-top-row { background: #1f1f1f; border-bottom-color: var(--border); }
   body.dark-mode .timeline-header .week-header:hover { background: rgba(255,255,255,0.13); }
-  body.dark-mode .timeline-header .day-header { color: var(--text-light); border-right-color: var(--border); }
-  body.dark-mode .timeline-header .day-header:hover { background: rgba(255,255,255,0.1); color: #cfd4e0; }
-  body.dark-mode .timeline-header .day-header .day-name { color: #9aa1ae; }
-  body.dark-mode .timeline-header .day-header.weekend { background: #181818; color: #9aa1ae; }
-  body.dark-mode .timeline-header .day-header.weekend:hover { background: #252525; }
-  body.dark-mode .timeline-header .day-header.today-header { background: rgba(229,57,53,0.2) !important; }
+  body.dark-mode .timeline-header .day-header { color: var(--text-light); background: transparent; }
+  body.dark-mode .timeline-header .day-header:hover { background: rgba(255,255,255,0.08); }
+  body.dark-mode .timeline-header .day-header .day-name { color: #9a9a9a; }
+  body.dark-mode .timeline-header .day-header.weekend .day-num { color: #8a8a8a; }
+  body.dark-mode .timeline-header .day-header.today-header .day-num { color: #fff; }
+  body.dark-mode .timeline-header .day-header.today-header .day-name { color: #ff8a80; }
 
   body.dark-mode .task-row { border-bottom-color: var(--border); }
-  body.dark-mode .task-row:hover, body.dark-mode .task-row:nth-child(even):hover { background: rgba(255,255,255,0.1); }
-  body.dark-mode .task-row:nth-child(even) { background: rgba(255,255,255,0.025); }
+  body.dark-mode .task-row:hover { background: rgba(255,255,255,0.08); }
   body.dark-mode .task-row .col { border-right-color: var(--border); }
   body.dark-mode .task-row .col-date { color: var(--text-light); }
 
-  body.dark-mode .grid-line { background: rgba(255,255,255,0.05); }
-  body.dark-mode .grid-line.weekend-line { background: rgba(255,255,255,0.09); }
+  body.dark-mode .grid-line { background: rgba(255,255,255,0.045); }
   body.dark-mode .row-bg { border-bottom-color: rgba(255,255,255,0.04); }
-  body.dark-mode .row-bg:nth-child(even) { background: rgba(255,255,255,0.02); }
 
   body.dark-mode .gantt-toolbar button { background: var(--card); border-color: var(--border); color: var(--text); }
   body.dark-mode .gantt-toolbar button:hover { background: rgba(255,255,255,0.09); }

@@ -131,3 +131,16 @@ export function softenColor(hex: string | null | undefined, amount?: number): st
   const b = blend(num & 255);
   return '#' + toHex(r) + toHex(g) + toHex(b);
 }
+
+// Gantt bar fills (Karl, 2026-09-29, the "Soft" restyle): a light pastel of
+// the stage/job color, mixed in CSS against --gantt-bar-base (white, or the
+// dark card color in dark mode) so it follows a dark-mode switch without a
+// re-render. `pct` is how much of the color to keep.
+export function ganttPastel(color: string | null | undefined, pct?: number): string {
+  return 'color-mix(in srgb, ' + (color || '#3949ab') + ' ' + (pct || 34) + '%, var(--gantt-bar-base))';
+}
+// The same pastel as a plain hex over white, for contrast math on the
+// light-mode text sitting on it (dark mode sets bar text in CSS).
+export function ganttPastelHex(color: string | null | undefined): string {
+  return softenColor(color, 0.66);
+}
