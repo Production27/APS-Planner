@@ -2952,12 +2952,12 @@ test('Navbar: Home is active at load, every view is named on the island, and Job
   // Desktop shows the job list with the navbar's ☰; the island has no Jobs button here.
   await expect(page.locator('#tab-jobs')).toBeHidden();
   await expect(page.locator('#appNav #jobRailToggleBtn')).toBeVisible();
-  // Add Job (+) sits next to the Jobs label, and stays when the rail is closed.
+  // "+ New job" sits next to the Jobs title; closed, the rail keeps just its +.
   await expect(page.locator('#jobRailAddBtn')).toBeVisible();
-  await expect(page.locator('.job-rail-header-label')).toBeHidden();
+  await expect(page.locator('#jobRailAddBtn .job-rail-add-label')).toBeHidden();
   await page.locator('#jobRailToggleBtn').click();
   await expect(page.locator('.job-rail-header-label')).toBeVisible();
-  await expect(page.locator('#jobRailAddBtn')).toBeVisible();
+  await expect(page.locator('#jobRailAddBtn .job-rail-add-label')).toBeVisible();
   await expect(page.locator('#jobRailToggleBtn')).toHaveAttribute('aria-expanded', 'true');
   await page.locator('#jobRailToggleBtn').click();
 

@@ -1268,10 +1268,10 @@
      until it's actually opening. */
   body:not(.job-rail-open) .job-list { opacity: 0; pointer-events: none; }
   @media (min-width: 1101px) {
-    body:not(.job-rail-open) .manager-sidebar { width: 48px; min-width: 48px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 56px; min-width: 56px; }
   }
   .manager-sidebar-header { padding: var(--s-3-5) var(--s-4); border-bottom: 1px solid var(--border); background: var(--row-alt-bg); transition: padding 0.15s ease; }
-  .manager-sidebar-header h2 { font-size: var(--t-md); font-weight: 700; color: var(--text); margin-bottom: var(--s-2-5); display: flex; align-items: center; gap: var(--s-2); transition: margin 0.15s ease, justify-content 0.15s ease; }
+  .manager-sidebar-header h2 { font-size: 19px; font-weight: 700; color: var(--text); margin-bottom: var(--s-2-5); display: flex; align-items: center; gap: var(--s-2); transition: margin 0.15s ease, justify-content 0.15s ease; }
   /* ☰ at the navbar's far left (Gmail's menu button): shows or hides the
      job list (toggleJobRail()). Phones hide it; the job list is its own
      view there. */
@@ -1282,16 +1282,22 @@
   .app-nav-menu:hover, .app-nav-menu.active { background: var(--chrome-hover); }
   .app-nav-menu:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 1px; }
   .job-rail-header-label { display: flex; align-items: center; gap: var(--s-2); }
-  /* Add Job, next to the Jobs label (a second way in besides the tile at
-     the end of the list, see renderJobList()). Stays when the rail is
-     closed. */
+  /* Add Job: a raised white "+ New job" next to the Jobs title (a second
+     way in besides the tile at the end of the list, see renderJobList()).
+     The closed rail keeps just its +. */
   .job-rail-add-btn {
-    margin-left: auto; width: 22px; height: 22px; border-radius: 50%; border: none;
-    background: var(--primary-light); color: white; font-size: var(--t-lg); font-weight: 700;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    line-height: 1; padding: 0; flex-shrink: 0; transition: transform 0.15s, background 0.15s;
+    margin-left: auto; display: flex; align-items: center; gap: 7px; flex-shrink: 0;
+    height: 38px; min-width: 38px; padding: 0 14px 0 11px; border: 0; border-radius: 12px;
+    background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    font-family: inherit; font-size: var(--t-sm); font-weight: 600; white-space: nowrap; cursor: pointer;
+    transition: box-shadow 0.15s ease;
   }
-  .job-rail-add-btn:hover { background: var(--primary); transform: scale(1.1); }
+  .job-rail-add-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+  .job-rail-add-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
+  .job-rail-add-plus { font-size: 22px; font-weight: 500; line-height: 1; color: var(--primary-light); }
+  body.dark-mode .job-rail-add-plus { color: var(--primary-ondark); }
+  body:not(.job-rail-open) .job-rail-add-btn { padding: 0; justify-content: center; }
+  body:not(.job-rail-open) .job-rail-add-label { display: none; }
   .search-box { width: 100%; padding: var(--s-2) var(--s-3); border: 1px solid var(--border); border-radius: 8px; font-size: var(--t-base); outline: none; transition: border-color 0.2s; }
   .search-box:focus { border-color: var(--primary-light); }
   /* Clips .job-list's fixed 260px width down when narrow — scoped to
@@ -3058,7 +3064,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      .job-rail-open at all, since it doesn't use this toggle) even
      though the mobile block's own rule is meant to be the final word. */
   @media (max-width: 1100px) and (min-width: 481px) {
-    body:not(.job-rail-open) .manager-sidebar { width: 48px; min-width: 48px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 56px; min-width: 56px; }
   }
 
   /* ===== MOBILE (phone-width) =====
@@ -3088,6 +3094,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        hide rules outrank a plain override here on specificity alone). */
     .manager-sidebar-header, .job-list, .search-box { display: block !important; }
     .job-rail-header-label, .job-rail-add-btn, .presence-avatars { display: flex !important; }
+    .job-rail-add-btn { margin-left: auto !important; padding: 0 14px 0 11px !important; }
+    .job-rail-add-label { display: inline !important; }
     .manager-sidebar-header h2 { display: flex !important; margin-bottom: var(--s-2-5) !important; justify-content: flex-start !important; }
     /* The pull-tab toggle itself is the one piece of desktop chrome that
        doesn't just need forcing back open here — clicking it flips
@@ -3956,7 +3964,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
          toggleJobRail(). Independent of which tab is active, same as
          before. -->
     <div class="manager-sidebar-header">
-      <h2><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button type="button" class="job-rail-add-btn" id="jobRailAddBtn" data-min-tier="projectAdmin" title="Add a new job" aria-label="Add a new job">+</button></h2>
+      <h2><span class="job-rail-header-label">Jobs <span class="badge" id="jobCount">0</span></span><button type="button" class="job-rail-add-btn" id="jobRailAddBtn" data-min-tier="projectAdmin" title="Add a new job" aria-label="Add a new job"><span class="job-rail-add-plus" aria-hidden="true">+</span><span class="job-rail-add-label">New job</span></button></h2>
       <input type="text" class="search-box" id="jobSearch" placeholder="Search jobs..." oninput="filterJobList()">
     </div>
     <!-- Clips .job-list's fixed 260px width down when the rail is
