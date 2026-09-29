@@ -139,6 +139,16 @@ export function softenColor(hex: string | null | undefined, amount?: number): st
 export function ganttPastel(color: string | null | undefined, pct?: number): string {
   return 'color-mix(in srgb, ' + (color || '#3949ab') + ' ' + (pct || 34) + '%, var(--gantt-bar-base))';
 }
+// A soft tinted chip (stage tags, job tags): a light tint of `color` with
+// text in a deeper shade of it. Mixed in CSS (--gantt-chip-* in index.html)
+// so dark mode flips it without a re-render.
+export function softChip(color: string | null | undefined): { background: string; color: string } {
+  const c = color || '#3949ab';
+  return {
+    background: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-bg-pct), var(--gantt-bar-base))',
+    color: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-ink-pct), var(--gantt-chip-ink-base))',
+  };
+}
 // The same pastel as a plain hex over white, for contrast math on the
 // light-mode text sitting on it (dark mode sets bar text in CSS).
 export function ganttPastelHex(color: string | null | undefined): string {

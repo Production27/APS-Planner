@@ -34,7 +34,7 @@ import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { safeJsonParse } from '../utils/id';
 import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
 import { escapeHtml } from '../utils/html';
-import { tintedTextColor, ganttPastel, ganttPastelHex } from '../utils/color';
+import { tintedTextColor, ganttPastel, ganttPastelHex, softChip } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
@@ -1728,15 +1728,10 @@ function findTaskForCardColumn(job: Job, phaseId: string | null | undefined, tas
 
 // A task pill's colors: a soft tinted chip of the task's stage color (or
 // the job's, for due markers and colorless tasks) with text in a darker
-// shade of the same color. Both are mixed in CSS (--gantt-chip-* in
-// index.html) so dark mode flips them without a re-render.
+// shade of the same color (softChip() in src/utils/color.ts).
 function taskPillColors(task: { [key: string]: any }, jobColor: string): { background: string; color: string | undefined } {
   const own = task.color as string | undefined;
-  const c = (own && !task.isDueMarker) ? own : (own || jobColor || '#3949ab');
-  return {
-    background: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-bg-pct), var(--gantt-bar-base))',
-    color: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-ink-pct), var(--gantt-chip-ink-base))',
-  };
+  return softChip(own || jobColor);
 }
 
 function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, gridWidth: number, leftBody: HTMLElement, gridHeightPx: number): void {

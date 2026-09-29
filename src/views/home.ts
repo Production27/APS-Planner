@@ -52,7 +52,7 @@ import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
 import { renderJobListIfStale } from './job-list';
 import { escapeHtml } from '../utils/html';
 import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
-import { darkenColor, softenColor, tintedTextColor, columnLabelTextColor, readableTextColor } from '../utils/color';
+import { darkenColor, tintedTextColor, ganttPastel, ganttPastelHex, softChip } from '../utils/color';
 import { renderGantt, setupScrollSync, isPhaseFinishedOnBoard } from './gantt';
 import { onPanelResize } from '../utils/ui';
 import { getStoredDisplayName } from '../auth/session';
@@ -1428,14 +1428,15 @@ function renderHomeTodayScheduleWidgetInto(containerEl: HTMLElement, rows: HomeS
     const leftPct = (getDaysDiff(windowStart, clippedStart) / (windowDays as number)) * 100;
     const widthPct = Math.max((getDaysDiff(clippedStart, clippedFinishExclusive) / (windowDays as number)) * 100, 6);
     const jobColor = row.job.color || '#3949ab';
-    const barColor = softenColor(row.taskColor);
+    const barColor = ganttPastel(row.taskColor);
     const titleText = row.label + (row.phaseName ? ' — ' + row.phaseName : '');
     // Task pill: same rule as the real Gantt's Task column (see
     // taskPillColors() in gantt.ts) — a task's own color is its board
     // column's pastel, used as-is with the Board header's label-text rule;
     // a colorless task falls back to the softened job color.
-    const taskPillBg = row.taskOwnColor ? row.taskOwnColor : softenColor(jobColor);
-    const taskPillText = row.taskOwnColor ? columnLabelTextColor(row.taskOwnColor) : readableTextColor(taskPillBg);
+    const pill = softChip(row.taskOwnColor || jobColor);
+    const taskPillBg = pill.background;
+    const taskPillText = pill.color;
     return {
       rowKey: row.job.id + '::' + row.taskName + '::' + (row.phaseId || '') + '::' + (row.subPhaseId || ''),
       taskName: row.taskName,
@@ -1448,7 +1449,7 @@ function renderHomeTodayScheduleWidgetInto(containerEl: HTMLElement, rows: HomeS
       // .task-bar-job-tag: plain text in the job's own hue, contrast-
       // adjusted against this bar's actual fill (the task's softened
       // color, which can differ from the job's).
-      jobTagColor: tintedTextColor(jobColor, barColor),
+      jobTagColor: tintedTextColor(jobColor, ganttPastelHex(row.taskColor)),
       taskPillBg: taskPillBg,
       taskPillText: taskPillText,
       jobName: row.job.name,

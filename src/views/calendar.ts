@@ -33,7 +33,7 @@ import type { CalendarEvent, CalendarEventOccurrence, Job } from '../core/types'
 import { addMonths, toIsoDate, formatTimeLabel, timeToMinutes, getDaysDiff } from '../utils/date';
 import { genId } from '../utils/id';
 import { escapeHtml } from '../utils/html';
-import { darkenColor, softenColor } from '../utils/color';
+import { darkenColor, ganttPastel, ganttPastelHex, softChip } from '../utils/color';
 import { findJob, findTask, getPhaseCard } from '../core/models';
 import { openModal, closeModal, showToast, moveTooltip, hideTooltip, msDropdownLabelText, onPanelResize, isPanelActive } from '../utils/ui';
 import { getEffectiveRole, hasMinTier } from '../auth/permissions';
@@ -646,10 +646,10 @@ function buildCalBarHtml(seg: CalSeg, left: number, top: number, width: number):
   // is really just here to give buildInnerBlocks below something sane to
   // sit on top of before the per-segment blocks paint over it.
   function segmentFill(colors: string[], taskCount: number): string {
-    if (taskCount <= 1) return softenColor(colors[0]);
-    if (colors.length > 1) return 'repeating-linear-gradient(45deg, ' + colors.map(function (c: string, idx: number) { const sc = softenColor(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
-    const base = softenColor(colors[0]);
-    const dark = darkenColor(base, 0.28);
+    if (taskCount <= 1) return ganttPastel(colors[0]);
+    if (colors.length > 1) return 'repeating-linear-gradient(45deg, ' + colors.map(function (c: string, idx: number) { const sc = ganttPastel(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
+    const base = ganttPastel(colors[0]);
+    const dark = ganttPastel(colors[0], 60);
     return 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
   }
   const clusterSegs = isJobSpan ? task.clusterSegments : null;
@@ -660,7 +660,7 @@ function buildCalBarHtml(seg: CalSeg, left: number, top: number, width: number):
   } else if (isMultiSegmentCluster && clusterSegs) {
     fillColor = segmentFill(clusterSegs[0].colors, clusterSegs[0].taskCount);
   } else {
-    fillColor = showJobBorder ? softenColor(barColor) : barColor;
+    fillColor = isDue ? barColor : ganttPastel(barColor);
   }
   // Softening the fill (see showJobBorder above) means it's often light
   // enough that the bar's own hardcoded white text (see .cal-event-bar)
@@ -671,7 +671,7 @@ function buildCalBarHtml(seg: CalSeg, left: number, top: number, width: number):
   // against a plain softened color even for a hatch fill (softenColor's
   // own output, ignoring the stripe) — close enough to representative for
   // picking readable text, and isDarkColor() can't evaluate a gradient.
-  const contrastColor = clusterSegs && clusterSegs.length ? softenColor(clusterSegs[0].colors[0]) : (showJobBorder ? softenColor(barColor) : barColor);
+  const contrastColor = clusterSegs && clusterSegs.length ? ganttPastelHex(clusterSegs[0].colors[0]) : (isDue ? barColor : ganttPastelHex(barColor));
   const textColor = isDarkColor(contrastColor) ? '#fff' : darkenColor(contrastColor, 0.6);
   const styleExtra = isTimedCalEvt ? ('--dot-color:' + barColor + ';') :
     ('background:' + fillColor + '; color: ' + textColor + ';' +
@@ -765,10 +765,10 @@ function buildCalBarProps(seg: CalSeg, left: number, top: number, width: number)
   const barColor = task.color || job.color || '#3949ab';
   const showJobBorder = !isDue && !isCalEvt;
   function segmentFill(colors: string[], taskCount: number): string {
-    if (taskCount <= 1) return softenColor(colors[0]);
-    if (colors.length > 1) return 'repeating-linear-gradient(45deg, ' + colors.map(function (c: string, idx: number) { const sc = softenColor(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
-    const base = softenColor(colors[0]);
-    const dark = darkenColor(base, 0.28);
+    if (taskCount <= 1) return ganttPastel(colors[0]);
+    if (colors.length > 1) return 'repeating-linear-gradient(45deg, ' + colors.map(function (c: string, idx: number) { const sc = ganttPastel(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
+    const base = ganttPastel(colors[0]);
+    const dark = ganttPastel(colors[0], 60);
     return 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
   }
   const clusterSegs = isJobSpan ? task.clusterSegments : null;
@@ -779,9 +779,9 @@ function buildCalBarProps(seg: CalSeg, left: number, top: number, width: number)
   } else if (isMultiSegmentCluster && clusterSegs) {
     fillColor = segmentFill(clusterSegs[0].colors, clusterSegs[0].taskCount);
   } else {
-    fillColor = showJobBorder ? softenColor(barColor) : barColor;
+    fillColor = isDue ? barColor : ganttPastel(barColor);
   }
-  const contrastColor = clusterSegs && clusterSegs.length ? softenColor(clusterSegs[0].colors[0]) : (showJobBorder ? softenColor(barColor) : barColor);
+  const contrastColor = clusterSegs && clusterSegs.length ? ganttPastelHex(clusterSegs[0].colors[0]) : (isDue ? barColor : ganttPastelHex(barColor));
   const textColor = isDarkColor(contrastColor) ? '#fff' : darkenColor(contrastColor, 0.6);
 
   // Read-only: no drag handles for a linked reference (its real data
@@ -805,7 +805,7 @@ function buildCalBarProps(seg: CalSeg, left: number, top: number, width: number)
     // buildCalendarJobRows()) — the usual job-name tag alongside it would
     // just repeat that.
     const tagLabel = isCalEvt ? formatTimeLabel(task.time) : (isJobSpan ? '' : (job.isLinkedReference ? '🔗 ' : '') + job.name + (phaseLabel ? ' — ' + phaseLabel : ''));
-    content = { kind: 'plain', timeLabel: null, linkGlyph: isJobSpan && linkGlyph, text: task.name, tagLabel: tagLabel || null, tagBackground: job.color || '#3949ab' };
+    content = { kind: 'plain', timeLabel: null, linkGlyph: isJobSpan && linkGlyph, text: task.name, tagLabel: tagLabel || null, tagBackground: softChip(job.color).background };
   }
 
   // A cluster with more than one internal segment (a hand-off between two
@@ -1238,7 +1238,7 @@ function renderWeekHourGrid(cellDates: Date[], timedCalRows: { job: CalJob; task
       return {
         eventKey: it.task.id + '::' + i,
         top, height, leftPct, widthPct: laneWidthPct,
-        background: it.task.color || it.job.color || '#7e57c2',
+        background: ganttPastel(it.task.color || it.job.color || '#7e57c2'),
         title: it.task.name + (timeLabel ? ' — ' + timeLabel : ''),
         timeLabel: timeLabel || null,
         text: it.task.name,

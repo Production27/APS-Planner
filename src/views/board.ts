@@ -61,7 +61,7 @@ import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../c
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
-import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor } from '../utils/color';
+import { darkenColor, softenColor, tintedTextColor, ganttPastel, softChip } from '../utils/color';
 import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -1179,7 +1179,6 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
   document.querySelectorAll('.board-col-color-toggle').forEach((t) => t.classList.remove('open'));
 
   const columnProps: BoardColumnChromeProps[] = BOARD_COLUMNS.map((col, colIdx) => {
-    const dark = col.color ? isDarkColor(col.color) : false;
     const colorSwatches: ColorSwatch[] = [
       { color: null, selected: !col.color, onClick: (e: MouseEvent) => changeColumnColor(col.id, '', e) },
       ...BOARD_COLOR_PRESETS.map((c) => ({ color: c, selected: col.color === c, onClick: (e: MouseEvent) => changeColumnColor(col.id, c, e) })),
@@ -1194,15 +1193,13 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
       // col.color is stored pre-softened now — the board column picker
       // (BOARD_COLOR_PRESETS) offers its own pastel palette directly,
       // rather than this rendering a runtime-transformed version of
-      // whatever the job/task color picker offers. Rendered as-is; no
-      // further transform here.
-      headerStyle: col.color ? { background: col.color, color: columnLabelTextColor(col.color) } : {},
+      // whatever the job/task color picker offers. On the Board it is
+      // softened once more to match the Gantt (Karl, 2026-09-29): the
+      // column is a light tint of it and the title a deeper shade.
+      headerStyle: col.color ? { background: ganttPastel(col.color, 40), color: softChip(col.color).color } : {},
       // Trello-style: the title reads as a darker shade of the board's
-      // own color rather than generic black text, when the background is
-      // light enough for that to stay readable — see headerStyle above.
-      // The ⋮ button gets its own lighter tint on a dark background so it
-      // doesn't disappear.
-      settingsBtnColor: col.color ? (dark ? 'rgba(255,255,255,0.7)' : undefined) : undefined,
+      // own color — see headerStyle above. The ⋮ button matches it.
+      settingsBtnColor: col.color ? softChip(col.color).color : undefined,
       hideFromSchedule: !!col.hideFromSchedule,
       scheduleDisconnected: !!col.scheduleDisconnected,
       isFinishedTrigger: isFinishedColumn(col),
