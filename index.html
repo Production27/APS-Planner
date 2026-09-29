@@ -3652,7 +3652,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     background: transparent; border-color: transparent; box-shadow: none; border-radius: 12px;
     padding-left: 30px; margin-bottom: 2px;
   }
-  .job-list .job-card:hover { background: var(--chrome-hover); border-color: transparent; box-shadow: none; transform: none; }
+  .job-list .job-card:hover, body.dark-mode .job-list .job-card:hover { background: var(--chrome-hover); border-color: transparent; box-shadow: none; transform: none; }
   .job-list .job-card.active, body.dark-mode .job-list .job-card.active { background: var(--nav-active); border-color: transparent; box-shadow: none; }
   /* Job list workflow groups (JobGroup in src/views/job-list-card.tsx). */
   .job-group + .job-group { margin-top: var(--s-2); }
