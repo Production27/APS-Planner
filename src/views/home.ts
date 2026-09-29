@@ -191,6 +191,9 @@ function switchTab(tab: string): void {
   document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
   const tabBtn = document.getElementById('tab-' + tab);
   if (tabBtn) { tabBtn.classList.add('active'); tabBtn.setAttribute('aria-current', 'page'); }
+  // The page name in the top bar is the tab's own name (its tooltip).
+  const pageTitle = document.getElementById('appNavPage');
+  if (pageTitle && tabBtn) pageTitle.textContent = tabBtn.title;
   document.getElementById('panel-' + tab)!.classList.add('active');
   if (tab === 'home') { renderHomeDashboard(); }
   else if (tab === 'gantt') { setTimeout(() => { renderGantt(); setupScrollSync(); }, 50); }

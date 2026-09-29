@@ -2965,8 +2965,11 @@ test('Navbar: Home is active at load, pages are icons in the left column, and th
   await expect(page.locator('#jobRailToggleBtn')).toHaveAttribute('aria-expanded', 'true');
   await page.locator('#jobRailToggleBtn').click();
 
+  // The top bar names the current page.
+  await expect(page.locator('#appNavPage')).toHaveText('Home');
   await page.locator('#tab-gantt').click();
   await expect(page.locator('#panel-gantt')).toHaveClass(/active/);
+  await expect(page.locator('#appNavPage')).toHaveText('Gantt Chart');
   await expect(page.locator('#tab-gantt')).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#tab-home')).not.toHaveClass(/active/);
 

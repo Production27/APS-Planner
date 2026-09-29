@@ -187,6 +187,7 @@
   .app-nav-brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 17px; color: var(--text); white-space: nowrap; }
   .app-nav-logo { width: 28px; height: 28px; border-radius: 8px; background: var(--primary-light); display: grid; place-items: center; flex-shrink: 0; }
   .app-nav-logo svg { width: 15px; height: 15px; }
+  .app-nav-page { display: none; }
   .app-nav-island {
     display: flex; align-items: center; gap: 2px; padding: 4px; margin: 0 auto; min-width: 0;
     overflow-x: auto; scrollbar-width: none;
@@ -3691,6 +3692,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     }
     body.dark-mode::before { border-right-color: rgba(255,255,255,0.08); }
     .app-nav, .app-shell { margin-left: var(--pages-col); }
+    .app-nav-page {
+      display: block; margin-left: 10px; padding-left: 20px; border-left: 1px solid rgba(0,0,0,0.12);
+      font-size: 20px; font-weight: 700; line-height: 26px; color: var(--text); white-space: nowrap;
+    }
+    body.dark-mode .app-nav-page { border-left-color: rgba(255,255,255,0.12); }
+    /* The top bar names the page now, so Reports drops its own heading. */
+    #panel-reports .rep-top h2 { display: none; }
     .app-nav-menu { position: fixed; left: 14px; top: 10px; margin: 0; }
     .app-nav-right { margin-left: auto; }
     .app-nav-island, body.dark-mode .app-nav-island {
@@ -3992,6 +4000,10 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <!-- Gmail's ☰: shows or hides the job list (toggleJobRail()). -->
     <button type="button" class="app-nav-menu" id="jobRailToggleBtn" title="Show Jobs list" aria-label="Show Jobs list" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <span class="app-nav-brand"><span class="app-nav-logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13"><rect x="3" y="5" width="10" height="3.5" rx="1.5" fill="#fff"/><rect x="7" y="10.5" width="14" height="3.5" rx="1.5" fill="#fff" opacity=".8"/><rect x="3" y="16" width="8" height="3.5" rx="1.5" fill="#fff" opacity=".6"/></svg></span>TeamSync</span>
+    <!-- The current page's name (Karl, 2026-09-29), kept in step by
+         switchTab() in src/views/home.ts. Desktop only; phones show the
+         active tab in the island instead. -->
+    <span class="app-nav-page" id="appNavPage">Home</span>
   </div>
   <nav class="app-nav-island" id="appNavNotch" aria-label="Views">
     <button type="button" class="nav-tab" data-tab="jobs" id="tab-jobs" title="Jobs" aria-label="Jobs"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="#3949ab" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="3" y="8" width="18" height="11" rx="2" fill="#3949ab"/></svg><span class="nav-tab-label">Jobs</span></button>
