@@ -1,4 +1,6 @@
 import { render } from 'preact';
+import { createPortal } from 'preact/compat';
+import { pageControlsInHeader, onPageControlsPlacementChange } from '../app/page-controls';
 import { useState } from 'preact/hooks';
 import { formatDate } from '../utils/date';
 import type { BoardCard, Job } from '../core/types';
@@ -514,13 +516,18 @@ function ReportsView() {
 
   const finSorted = fin.slice().sort((a, b) => (b.finishedOn as Date).getTime() - (a.finishedOn as Date).getTime());
   const finShown = showAllFinished ? finSorted : finSorted.slice(0, 6);
+  // Desktop: the toolbar renders into the navbar next to the page name
+  // (see src/app/page-controls.ts); phones keep it at the top of the page.
+  const toolbar = <Toolbar all={all} t0={t0} earliest={earliest} />;
+  const headerSlot = pageControlsInHeader() ? document.getElementById('appNavCtlReports') : null;
 
   return (
     <div class="rep-wrap">
       <div class="rep-top">
         <h2>Reports</h2>
-        <Toolbar all={all} t0={t0} earliest={earliest} />
+        {headerSlot ? null : toolbar}
       </div>
+      {headerSlot ? createPortal(toolbar, headerSlot) : null}
 
       <section class="rep-hero">
         <p class="rep-headline">{headline}</p>
@@ -659,6 +666,8 @@ document.addEventListener('click', (e) => {
   const t = e.target as HTMLElement;
   if (t.closest && !t.closest('.rep-filter-wrap')) { filterMenuOpen = false; renderReports(); }
 });
+
+onPageControlsPlacementChange(renderReportsIfActive);
 
 export function renderReports(): void {
   const el = document.getElementById('reportsBody');

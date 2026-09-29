@@ -3030,3 +3030,33 @@ test('Navbar on a phone: the island sits under the title, starts on Jobs, and sw
   await expect(page.locator('body')).toHaveAttribute('data-mobile-view', 'home');
   await expect(page.locator('#tab-home')).toHaveClass(/active/);
 });
+
+test('Navbar: Calendar and Reports controls sit in the top bar on wide screens and move back onto the page when narrow', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+
+  await page.locator('#tab-calendar').click();
+  await expect(page.locator('#appNavCtlCalendar #calTodayBtn')).toBeVisible();
+  await expect(page.locator('#appNavCtlReports')).toBeHidden();
+  // The period sits left of the view toggles, which sit left of Settings.
+  const today = await page.locator('#calTodayBtn').boundingBox();
+  const month = await page.locator('#calViewMonth').boundingBox();
+  const cog = await page.locator('#settingsBtn').boundingBox();
+  expect(today.x).toBeLessThan(month.x);
+  expect(month.x).toBeLessThan(cog.x);
+  await page.locator('#calNextBtn').click();
+  await expect(page.locator('#calendarLabel')).not.toHaveText('');
+
+  await page.locator('#tab-reports').click();
+  await expect(page.locator('#appNavCtlReports .rep-filter-btn')).toBeVisible();
+  await expect(page.locator('#appNavCtlCalendar')).toBeHidden();
+
+  // Too narrow for the top bar: both toolbars go back onto their pages.
+  await page.setViewportSize({ width: 900, height: 800 });
+  await expect(page.locator('#panel-reports .rep-filter-btn')).toBeVisible();
+  await page.locator('#tab-calendar').click();
+  await expect(page.locator('#panel-calendar #calTodayBtn')).toBeVisible();
+});

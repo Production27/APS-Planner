@@ -97,14 +97,15 @@ test('reports: a customer filter scopes every figure, and the breakdown sets it'
   await seedHistory(page);
   await page.locator('.rep-card', { hasText: 'Breakdown' }).locator('.rep-seg button', { hasText: 'Customer' }).click();
   await page.locator('.rep-rank a', { hasText: 'Globex' }).click();
-  await expect(page.locator('#panel-reports .rep-chip')).toContainText('Globex');
-  await page.locator('#panel-reports .rep-step[aria-label="Previous period"]').click();
+  // On desktop the Reports toolbar (period, chips, Filter) sits in the top bar.
+  await expect(page.locator('#appNavCtlReports .rep-chip')).toContainText('Globex');
+  await page.locator('#appNavCtlReports .rep-step[aria-label="Previous period"]').click();
   await expect(stat(page, 'Finished')).toHaveText('0');
-  await page.locator('#panel-reports .rep-chip button').click();
+  await page.locator('#appNavCtlReports .rep-chip button').click();
   await expect(stat(page, 'Finished')).toHaveText('2');
   // The filter menu sets the same thing.
-  await page.locator('#panel-reports .rep-filter-btn').click();
-  await page.locator('#panel-reports .rep-filter-menu select').first().selectOption('Acme');
-  await expect(page.locator('#panel-reports .rep-chip')).toContainText('Acme');
+  await page.locator('#appNavCtlReports .rep-filter-btn').click();
+  await page.locator('#appNavCtlReports .rep-filter-menu select').first().selectOption('Acme');
+  await expect(page.locator('#appNavCtlReports .rep-chip')).toContainText('Acme');
   await expect(openSub(page)).toContainText('0 open jobs');
 });

@@ -18,6 +18,7 @@ import { checkForNewerVersion } from './app/version-check';
 import { checkMaintenanceStatus, applyMaintenanceStatus, toggleMaintenancePanel, setMaintenanceMode } from './app/maintenance';
 import { reportClientError } from './app/error-reporting';
 import { positionSettingsMenu, toggleSettingsMenu, toggleAccountMenu, closeSettingsMenu, armSettingsMenuAutoClose, cancelSettingsMenuAutoClose, showSettingsTab } from './app/settings-menu';
+import './app/page-controls';
 import { applyDarkMode, loadDarkModePref, toggleDarkMode, DEFAULT_THEME_COLOR, normalizeThemeColor, getSavedThemeColor, applyThemeColor, buildThemePresets, updateThemePreview, openThemeModal, closeThemeModal, applyTheme, resetThemeDefault, applyProjectBgVisual } from './app/theme';
 import {
   tutorialStateKey, getTutorialState, saveTutorialState,

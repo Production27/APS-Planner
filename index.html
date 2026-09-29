@@ -188,6 +188,7 @@
   .app-nav-logo { width: 28px; height: 28px; border-radius: 8px; background: var(--primary-light); display: grid; place-items: center; flex-shrink: 0; }
   .app-nav-logo svg { width: 15px; height: 15px; }
   .app-nav-page { display: none; }
+  .app-nav-ctl { display: none; }
   .app-nav-island {
     display: flex; align-items: center; gap: 2px; padding: 4px; margin: 0 auto; min-width: 0;
     overflow-x: auto; scrollbar-width: none;
@@ -3725,6 +3726,29 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   @media (min-width: 481px) and (max-width: 1100px) and (min-height: 481px) {
     .manager-sidebar-header { min-width: 210px; }
   }
+  /* Page controls in the top bar (src/app/page-controls.ts, same 1000px
+     breakpoint): the period on the left by the page name, view toggles and
+     Filter on the right by Settings. Narrower screens keep them on the page. */
+  @media (min-width: 1000px) and (min-height: 481px) {
+    #panel-reports .rep-top { display: none; }
+    .app-nav-ctl { display: flex; flex: 1; min-width: 0; align-items: center; margin: 0 var(--s-2) 0 var(--s-5); }
+    .app-nav-ctl-slot { display: none; flex: 1; min-width: 0; align-items: center; }
+    body:has(#panel-calendar.active) #appNavCtlCalendar,
+    body:has(#panel-reports.active) #appNavCtlReports { display: flex; }
+    .app-nav-ctl .calendar-toolbar, .app-nav-ctl .rep-toolbar { flex: 1; margin: 0; flex-wrap: nowrap; gap: var(--s-2); }
+    .app-nav-ctl .calendar-toolbar h3 { font-size: 17px; font-weight: 700; margin: 0 var(--s-1); white-space: nowrap; }
+    .app-nav-ctl #calFilterBar { margin-left: auto; flex-wrap: nowrap; }
+    .app-nav-ctl .cal-view-toggle { margin-left: 0; }
+    .app-nav-ctl .rep-period-name { min-width: 0; padding: 0 var(--s-2); white-space: nowrap; }
+    .app-nav-ctl .rep-toolbar > .rep-seg { margin-left: auto; }
+    /* Menus open under a button near the right edge, so they align right. */
+    .app-nav-ctl .rep-filter-menu { left: auto; right: 0; }
+  }
+  /* Room for Calendar's controls on smaller laptops: the logo stays, the
+     "TeamSync" word goes. */
+  @media (min-width: 1000px) and (max-width: 1200px) and (min-height: 481px) {
+    .app-nav-brand { font-size: 0; gap: 0; }
+  }
 
 </style>
 <base target="_blank">
@@ -4014,6 +4038,12 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <button type="button" class="nav-tab" data-tab="board" id="tab-board" title="Board" aria-label="Board"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 6a1 1 0 011-1h5l2 2h9a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V6z" fill="#f0ad4e"/></svg><span class="nav-tab-label">Board</span><span class="badge" id="boardCount">0</span></button>
     <button type="button" class="nav-tab" data-tab="reports" id="tab-reports" title="Reports" aria-label="Reports"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="4" y="12" width="4" height="8" rx="1" fill="#00897b"/><rect x="10" y="7" width="4" height="13" rx="1" fill="#00897b" opacity="0.75"/><rect x="16" y="4" width="4" height="16" rx="1" fill="#00897b" opacity="0.5"/></svg><span class="nav-tab-label">Reports</span></button>
   </nav>
+  <!-- Calendar's and Reports' own controls on wide screens
+       (src/app/page-controls.ts); each slot shows only while its page is active. -->
+  <div class="app-nav-ctl">
+    <div class="app-nav-ctl-slot" id="appNavCtlCalendar"></div>
+    <div class="app-nav-ctl-slot" id="appNavCtlReports"></div>
+  </div>
   <div class="app-nav-right">
     <div class="presence-avatars" id="presenceAvatars"></div>
     <div class="settings-menu-wrap">
