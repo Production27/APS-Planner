@@ -195,7 +195,7 @@ export function tutorialSlideSkip(): void {
 // instead of pointing at a hidden button.
 const COACHMARK_STEPS = [
   { find: ['#accountBtn'], title: 'Your account', desc: 'Settings, dark mode, and logging out all live here.' },
-  { find: ['#jobRailToggleBtn'], title: 'Jobs list', desc: 'Show or hide the full job list along the left edge.' },
+  { find: ['#jobRailToggleBtn'], title: 'Jobs list', desc: 'The ☰ button shows or hides the full job list along the left edge.' },
   { find: ['.job-rail-add-btn'], title: 'Add a job', desc: 'Start a brand new job from scratch.' },
   { find: ['#tab-checklist'], title: 'Checklist tab', desc: 'Jump to the full checklist — every open item assigned to you.' },
   { find: ['#tab-calendar'], title: 'Calendar tab', desc: 'The full month view, with every job\'s scheduled bar.' },

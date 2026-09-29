@@ -203,7 +203,7 @@ function switchTab(tab: string): void {
 
 // The sidebar defaults to closed (a narrow icon rail, Jobs search/list
 // hidden — see the body:not(.job-rail-open) CSS rules) on every view now,
-// not just Home. #jobRailToggleBtn is the header's own Jobs icon — the
+// not just Home. #jobRailToggleBtn (the navbar's ☰) is the
 // one manual override, independent of which tab is active (switching
 // tabs while it's open leaves it open, same as any persistent panel
 // toggle; it isn't a .rail-tab, so switchTab()'s active-class sweep
@@ -216,8 +216,10 @@ function toggleJobRail(): void {
   // rail then left the dashboard short on the right until something else
   // re-rendered it. Same approach as toggleActivitySidebar(): work out the
   // grid's end width up front and animate the columns alongside the rail.
-  // The rail's min-width switches instantly (only width is transitioned),
-  // so reading it right after the toggle gives the rail's end width.
+  // The rail's width and min-width both animate now (so it slides open as
+  // well as closed), so its end width comes from the same sizes the CSS
+  // uses (.manager-sidebar and its closed/≤1100px rules) rather than a
+  // mid-animation read.
   const sidebar = document.querySelector('.manager-sidebar') as HTMLElement | null;
   const homePanel = document.getElementById('panel-home');
   const gridEl = homePanel && homePanel.classList.contains('active') && window.innerWidth > 900
@@ -227,7 +229,7 @@ function toggleJobRail(): void {
 
   const open = document.body.classList.toggle('job-rail-open');
 
-  const railAfter = sidebar ? (parseFloat(getComputedStyle(sidebar).minWidth) || railBefore) : railBefore;
+  const railAfter = sidebar ? (open ? (window.innerWidth <= 1100 ? 210 : 260) : 72) : railBefore;
   if (gridEl && railAfter !== railBefore) {
     gridEl.classList.add('rail-sync');
     applyHomeReflowTracks(gridBefore + (railBefore - railAfter));
@@ -244,13 +246,15 @@ function toggleJobRail(): void {
     };
     const onSettled = function (e: Event) { if (e.target === gridEl) settle(); };
     gridEl.addEventListener('transitionend', onSettled);
-    setTimeout(settle, 400);
+    setTimeout(settle, 550);
   }
   if (open) renderJobListIfStale();
   const btn = document.getElementById('jobRailToggleBtn');
   if (btn) {
     btn.classList.toggle('active', open);
     btn.title = open ? 'Hide Jobs list' : 'Show Jobs list';
+    btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('aria-expanded', String(open));
   }
 }
 

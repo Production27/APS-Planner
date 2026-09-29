@@ -2949,9 +2949,16 @@ test('Navbar: Home is active at load, every view is named on the island, and Job
   await expect(page.locator('#tab-home')).toHaveClass(/active/);
   await expect(page.locator('#tab-home .nav-tab-label')).toBeVisible();
   await expect(page.locator('#tab-gantt .nav-tab-label')).toBeVisible();
-  // Desktop keeps the rail's own › toggle; the island has no Jobs button here.
+  // Desktop shows the job list with the navbar's ☰; the island has no Jobs button here.
   await expect(page.locator('#tab-jobs')).toBeHidden();
-  await expect(page.locator('#jobRail #jobRailToggleBtn')).toBeVisible();
+  await expect(page.locator('#appNav #jobRailToggleBtn')).toBeVisible();
+  // Closed, the rail keeps just the + of "+ New job"; open, it's labeled.
+  await expect(page.locator('#jobRailAddBtn')).toBeVisible();
+  await expect(page.locator('#jobRailAddBtn .job-rail-add-label')).toBeHidden();
+  await page.locator('#jobRailToggleBtn').click();
+  await expect(page.locator('#jobRailAddBtn .job-rail-add-label')).toBeVisible();
+  await expect(page.locator('#jobRailToggleBtn')).toHaveAttribute('aria-expanded', 'true');
+  await page.locator('#jobRailToggleBtn').click();
 
   await page.locator('#tab-gantt').click();
   await expect(page.locator('#panel-gantt')).toHaveClass(/active/);
