@@ -181,3 +181,40 @@ test('delete flow: deleting the currently-open job closes its drawer', async ({ 
   const editingId = await page.evaluate(() => editingJobId);
   expect(editingId).toBeNull();
 });
+
+test('renderJobList: jobs are grouped by workflow item in Board order, groups collapse, and search opens them', async ({ page }) => {
+  await seedSession(page, { role: 'admin' });
+  await mockRoomWebSocket(page);
+  await page.goto(APP_URL);
+  await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
+  await page.evaluate(() => toggleJobRail());
+
+  const moved = await page.evaluate(() => {
+    WORKFLOW_ITEMS.push({ id: 'wPre', label: 'Pre-Construction', color: '#8e24aa' });
+    BOARD_COLUMNS[0].workflowItemId = 'wPre';
+    BOARD_COLUMNS[1].workflowItemId = 'wPre';
+    const last = BOARD_COLUMNS[BOARD_COLUMNS.length - 1];
+    const job = jobs[1];
+    boardCards.filter((c) => c.jobId === job.id).forEach((c) => { c.column = last.id; c.manualColumn = last.id; c.manualColumnUntil = null; });
+    renderJobList();
+    return { name: job.name, lastLabel: last.label, lastId: last.id };
+  });
+
+  const headers = page.locator('#jobList .job-group-header .job-group-label');
+  await expect(headers.first()).toHaveText('Pre-Construction');
+  await expect(headers.last()).toHaveText(moved.lastLabel);
+  const lastGroup = page.locator('#jobList .job-group[data-group="__col__' + moved.lastId + '"]');
+  await expect(lastGroup.locator('.job-card')).toHaveCount(1);
+  await expect(lastGroup).toContainText(moved.name);
+
+  // Collapsing hides the group's jobs and is remembered across a reload.
+  await lastGroup.locator('.job-group-header').click();
+  await expect(lastGroup.locator('.job-group-header')).toHaveAttribute('aria-expanded', 'false');
+  await expect(lastGroup.locator('.job-card')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('job_list_collapsed_groups_v1'))).toContain(moved.lastId);
+
+  // A search shows matches even inside a collapsed group.
+  await page.locator('#jobSearch').fill(moved.name);
+  await page.waitForTimeout(250);
+  await expect(lastGroup.locator('.job-card')).toHaveCount(1);
+});

@@ -194,17 +194,50 @@ function openJobCardMenu(anchor: HTMLElement, p: JobCardProps): void {
   items[0].focus();
 }
 
-interface JobListViewProps {
+export interface JobGroupProps {
+  groupKey: string;
+  label: string;
+  color: string | null;
   cards: JobCardProps[];
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+// One workflow group: a header row (chevron, color dot, name, count) that
+// collapses the jobs under it. While collapsed, the header is highlighted
+// if the open job is inside it, so that job is still findable.
+function JobGroup(g: JobGroupProps) {
+  const hasActive = g.cards.some((c) => c.active);
+  return (
+    <section class={'job-group' + (g.collapsed ? ' collapsed' : '')} data-group={g.groupKey}>
+      <button
+        type="button"
+        class={'job-group-header' + (g.collapsed && hasActive ? ' has-active' : '')}
+        aria-expanded={g.collapsed ? 'false' : 'true'}
+        title={(g.collapsed ? 'Show' : 'Hide') + ' ' + g.label + ' jobs'}
+        onClick={g.onToggle}
+      >
+        <svg class="job-group-chevron" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        <span class="job-group-dot" style={g.color ? { background: g.color } : undefined} aria-hidden="true" />
+        <span class="job-group-label">{g.label}</span>
+        <span class="job-group-count">{g.cards.length}</span>
+      </button>
+      {g.collapsed ? null : g.cards.map((c) => <JobCard key={c.jobKey} {...c} />)}
+    </section>
+  );
+}
+
+interface JobListViewProps {
+  groups: JobGroupProps[];
   onAddJob: () => void;
   archivedCount: number;
   onOpenArchived: () => void;
 }
 
-function JobListView({ cards, onAddJob, archivedCount, onOpenArchived }: JobListViewProps) {
+function JobListView({ groups, onAddJob, archivedCount, onOpenArchived }: JobListViewProps) {
   return (
     <>
-      {cards.map((c) => <JobCard key={c.jobKey} {...c} />)}
+      {groups.map((g) => <JobGroup key={g.groupKey} {...g} />)}
       <button class="job-list-add-btn" onClick={onAddJob}>+ Add Job</button>
       {archivedCount > 0 ? (
         <button class="job-list-archived-link" onClick={onOpenArchived}>
@@ -215,6 +248,6 @@ function JobListView({ cards, onAddJob, archivedCount, onOpenArchived }: JobList
   );
 }
 
-export function renderJobListInto(container: HTMLElement, cards: JobCardProps[], onAddJob: () => void, archivedCount: number, onOpenArchived: () => void): void {
-  render(<JobListView cards={cards} onAddJob={onAddJob} archivedCount={archivedCount} onOpenArchived={onOpenArchived} />, container);
+export function renderJobListInto(container: HTMLElement, groups: JobGroupProps[], onAddJob: () => void, archivedCount: number, onOpenArchived: () => void): void {
+  render(<JobListView groups={groups} onAddJob={onAddJob} archivedCount={archivedCount} onOpenArchived={onOpenArchived} />, container);
 }

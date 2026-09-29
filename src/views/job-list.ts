@@ -9,7 +9,7 @@
 import { formatDate } from '../utils/date';
 import type { Job } from '../core/types';
 import { findJob, getJobPhases, getPhaseCard, getJobCards, getPrimaryPhaseCard } from '../core/models';
-import { genId } from '../utils/id';
+import { genId, safeJsonParse } from '../utils/id';
 import { tintedTextColor } from '../utils/color';
 import { openModal, closeModal, showToast, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -20,7 +20,7 @@ import { renderGantt } from './gantt';
 import { renderCalendar } from './calendar';
 import { renderBoard } from './board';
 import { getVisibleJobs, isJobFinished, ensureJobHasCards, syncCardColumns } from '../core/jobs';
-import { renderJobListInto, type JobCardProps, type JobBoardDotProps } from './job-list-card';
+import { renderJobListInto, type JobCardProps, type JobBoardDotProps, type JobGroupProps } from './job-list-card';
 import { renderArchivedJobsListInto } from './job-list-archived';
 
 // editJob()/cancelEdit() are already declared ambient (identically) by
@@ -66,6 +66,40 @@ export function renderJobListIfStale(): void {
   if (jobListStale) renderJobList();
 }
 
+// The list is split into collapsible groups, one per Board workflow item
+// (Pre-Construction, In-Progress…), in Board order. A stage that isn't in
+// any workflow item gets its own group under its own name, same as the
+// Board's workflow strip does. Which groups are collapsed is remembered
+// per browser, by workflow item id (or column id for an unassigned stage).
+const COLLAPSED_GROUPS_KEY = 'job_list_collapsed_groups_v1';
+const collapsedJobGroups = new Set<string>(safeJsonParse(localStorage.getItem(COLLAPSED_GROUPS_KEY) || '[]', []));
+function toggleJobGroup(key: string): void {
+  if (collapsedJobGroups.has(key)) collapsedJobGroups.delete(key); else collapsedJobGroups.add(key);
+  try { localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(Array.from(collapsedJobGroups))); } catch (e) { /* private mode */ }
+  renderJobList();
+}
+const NO_STAGE_GROUP = '__none__';
+function groupKeyForColumn(colId: string | null | undefined): string {
+  const col = colId ? BOARD_COLUMNS.find(function (c) { return c.id === colId; }) : null;
+  if (!col) return NO_STAGE_GROUP;
+  const itemId = col.workflowItemId;
+  return itemId && WORKFLOW_ITEMS.some(function (i) { return i.id === itemId; }) ? itemId : '__col__' + col.id;
+}
+// A job's place in the workflow is its first phase that isn't finished on
+// the Board yet (a plain job has just the one); once every phase is
+// finished, its last phase.
+function jobGroupKey(job: Job): string {
+  const phases = getJobPhases(job);
+  const ids: (string | null)[] = phases.length ? phases.map(function (p) { return p.id; }) : [null];
+  let colId: string | null = null;
+  for (const id of ids) {
+    const card = getPhaseCard(job, id);
+    colId = card ? card.column : null;
+    if (colId && !isFinishedColumnId(colId)) break;
+  }
+  return groupKeyForColumn(colId);
+}
+
 export function renderJobList(): void {
   jobListStale = false;
   const list = document.getElementById('jobList')!;
@@ -75,7 +109,7 @@ export function renderJobList(): void {
   // before reading card.column below so the board tag is never stale.
   syncCardColumns();
 
-  const cards: JobCardProps[] = [];
+  const cardsByGroup: Record<string, JobCardProps[]> = {};
   getVisibleJobs().forEach((job) => {
     if (job.archived) return;
     if (search && !job.name.toLowerCase().includes(search)) return;
@@ -121,7 +155,8 @@ export function renderJobList(): void {
     }
 
     const comments = job.comments as any[] | undefined;
-    cards.push({
+    const groupKey = jobGroupKey(job);
+    (cardsByGroup[groupKey] = cardsByGroup[groupKey] || []).push({
       jobKey: job.id,
       active: editingJobId === job.id,
       archived: !!job.archived,
@@ -152,8 +187,27 @@ export function renderJobList(): void {
   // Board's dashed "+ Add Board" tile at the end of the column row.
   // Archived jobs are reached from a link at the bottom of this list (it
   // used to be an item in the settings menu, far from the jobs it's about).
+  // Empty groups are left out. While searching, every group with a match
+  // shows open, so a hit is never hidden inside a collapsed group.
+  const groups: JobGroupProps[] = [];
+  const seen: Record<string, true> = {};
+  const addGroup = function (key: string, label: string, color: string | null) {
+    if (seen[key]) return;
+    seen[key] = true;
+    const groupCards = cardsByGroup[key];
+    if (!groupCards || !groupCards.length) return;
+    const collapsed = !search && collapsedJobGroups.has(key);
+    groups.push({ groupKey: key, label: label, color: color, cards: groupCards, collapsed: collapsed, onToggle: function () { toggleJobGroup(key); } });
+  };
+  BOARD_COLUMNS.forEach(function (col) {
+    const key = groupKeyForColumn(col.id);
+    const item = key.indexOf('__col__') === 0 ? null : WORKFLOW_ITEMS.find(function (i) { return i.id === key; });
+    addGroup(key, item ? item.label : col.label, item ? item.color : (col.color || null));
+  });
+  addGroup(NO_STAGE_GROUP, 'No stage', null);
+
   const archivedCount = getVisibleJobs().filter(function (j) { return j.archived; }).length;
-  renderJobListInto(list, cards, function () { addNewJob(); }, archivedCount, openArchivedJobsModal);
+  renderJobListInto(list, groups, function () { addNewJob(); }, archivedCount, openArchivedJobsModal);
 
   updateJobCount();
   applyPermissionGating(); // rebuilt on every job list refresh, outside renderAll()'s own sweep
