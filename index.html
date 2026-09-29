@@ -32,7 +32,7 @@
 <style>
   :root {
     --primary: #1a237e; --primary-light: #3949ab; --accent: #e53935;
-    --bg: #f5f6fa; --card: #ffffff; --border: #e0e0e0;
+    --bg: #f5f5f5; --card: #ffffff; --border: #e0e0e0;
     --text: #2c3e50; --text-light: #666; --text-faint: #5b6573;
     --success: #28a745; --danger: #dc3545; --warning: #f0ad4e;
     /* Text-weight versions of --danger/--accent: the bright reds are fine
@@ -43,7 +43,7 @@
        background paired with that color's text — copy-pasted as the
        same literal at 20+/7+ sites respectively (a mechanical audit
        finding, not new colors) before being promoted to tokens here. */
-    --primary-tint: #eef1fa; --danger-tint: #ffebee;
+    --primary-tint: #f0f0f0; --danger-tint: #ffebee;
     /* Each of these is one exact value reused verbatim at 2-5 call
        sites (another mechanical-audit finding) — named here with zero
        visual change. Deliberately NOT merged into fewer, closer-together
@@ -52,7 +52,7 @@
        color shifts across a dozen+ elements, not a mechanical rename. */
     --table-header-bg: #f8f9fa; --table-header-border: #dee2e6;
     --row-alt-bg: #fafafa; --btn-gradient-end: #f4f5f8;
-    --kanban-column-bg: #eceef4; --divider: #f0f0f0; --divider-strong: #e9ecef;
+    --kanban-column-bg: #eeeeee; --divider: #f0f0f0; --divider-strong: #e9ecef;
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
     --shadow-hover: 0 4px 20px rgba(0,0,0,0.15);
     --radius: 10px;
@@ -104,7 +104,7 @@
     padding: var(--s-1-5) var(--s-4); font-size: var(--t-sm); font-weight: 700; cursor: pointer; flex-shrink: 0;
     transition: transform 0.15s;
   }
-  .new-version-banner button:hover { background: #eef0fb; }
+  .new-version-banner button:hover { background: #f0f0f0; }
 
   /* ===== EDITABLE HEADER ===== */
   /* The whole title bar is gone per user request — its functional
@@ -609,9 +609,9 @@
   /* 40px — kept in sync with GANTT_ROW_H (see its declaration in
      gantt.ts), which drives the matching right-panel bar rows. */
   .task-row { display: flex; height: 40px; border-bottom: 1px solid var(--divider); font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
-  .task-row:hover { background: #e3f2fd; }
+  .task-row:hover { background: #f0f0f0; }
   .task-row:nth-child(even) { background: var(--row-alt-bg); }
-  .task-row:nth-child(even):hover { background: #e3f2fd; }
+  .task-row:nth-child(even):hover { background: #f0f0f0; }
   .task-row .col { padding: 0 var(--s-2-5); border-right: 1px solid var(--divider); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
   .task-row .col-date { width: 104px; color: var(--text-light); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
   /* Between Date and Job — a pill (same look as the phase/sub-phase pills
@@ -714,7 +714,7 @@
     cursor: pointer; transition: background 0.2s;
     user-select: none;
   }
-  .timeline-header .week-header:hover { background: #e8eaf6; }
+  .timeline-header .week-header:hover { background: #ececec; }
   .timeline-header .day-header {
     position: absolute; top: 24px; height: 34px;
     border-right: 1px solid var(--divider-strong); display: flex;
@@ -723,7 +723,7 @@
     cursor: pointer; transition: background 0.2s, color 0.2s;
     user-select: none;
   }
-  .timeline-header .day-header:hover { background: #e3f2fd; color: var(--primary); }
+  .timeline-header .day-header:hover { background: #ececec; color: var(--primary); }
   .timeline-header .day-header .day-num { font-weight: 700; font-size: var(--t-xs); }
   .timeline-header .day-header .day-name { font-size: var(--t-3xs); color: var(--text-faint); text-transform: uppercase; }
   .timeline-header .day-header.weekend { background: var(--divider); color: var(--text-faint); }
@@ -1308,7 +1308,7 @@
   .job-list::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
   .job-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: var(--s-3) var(--s-3-5); margin-bottom: var(--s-2); cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
   .job-card:hover { border-color: var(--primary-light); box-shadow: var(--shadow-hover); transform: translateY(-1px); }
-  .job-card.active { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.15); background: #f8f9ff; }
+  .job-card.active { border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(57,73,171,0.15); background: #f5f5f5; }
   /* A real <button> (keyboard/screen-reader control for the card) that
      should look like the plain title text it replaced. */
   button.job-card-title { background: none; border: 0; padding: 0; font-family: inherit; text-align: left; width: 100%; cursor: pointer; }
@@ -1906,13 +1906,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   .board-column-body::-webkit-scrollbar { width: 6px; }
   .board-column-body::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-  .board-column-body.drag-over { background: #e3e7f5; }
+  .board-column-body.drag-over { background: #e4e4e4; }
   .board-column.card-drag-over {
     box-shadow: 0 0 0 2px var(--primary-light), 0 12px 28px rgba(0,0,0,0.18);
     transform: translateY(-2px);
   }
   .board-column.card-drag-over .board-column-body {
-    background: #e3e7f5;
+    background: #e4e4e4;
   }
   .board-card { background: var(--card); border-radius: var(--radius); padding: var(--s-2-5) var(--s-3); border: 1px solid var(--border); cursor: grab; transition: border-color 0.15s, background 0.15s; }
   .board-card:hover { border-color: var(--primary-light); }
@@ -2217,7 +2217,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
     flex-shrink: 0; margin-left: auto; transition: background .15s, color .15s;
   }
-  .home-widget-expand-btn:hover { background: rgba(57,73,171,0.12); color: var(--primary); }
+  .home-widget-expand-btn:hover { background: rgba(0,0,0,0.06); color: var(--text); }
   body.dark-mode .home-widget-expand-btn:hover { background: rgba(139,157,245,0.18); color: var(--primary-ondark); }
   .home-widget.is-expanded .home-widget-expand-btn { color: var(--primary-light); transform: rotate(180deg); }
   body.dark-mode .home-widget.is-expanded .home-widget-expand-btn { color: var(--primary-ondark); }
@@ -2319,7 +2319,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      text picks up the color change — .home-widget-subtitle sets its own
      explicit color, which wins over inheriting this one, so the "— My
      Open Items" half stays visually secondary even while hovering. */
-  .home-widget-header:hover { background: rgba(57,73,171,0.09); color: var(--primary); transform: translateY(-1px); }
+  .home-widget-header:hover { background: rgba(0,0,0,0.05); transform: translateY(-1px); }
   body.dark-mode .home-widget-header:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
   /* Job Chat's header isn't a link (see its own .no-nav rule further
      down) — undoes all three of the above so it doesn't imply a click
@@ -2437,10 +2437,10 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     padding-top: var(--s-0-75); border-radius: 6px; font-size: var(--t-xs); color: var(--text);
     position: relative; cursor: pointer; gap: var(--s-0-5); transition: background 0.15s;
   }
-  .home-mini-cal-day:hover { background: rgba(57,73,171,0.08); }
+  .home-mini-cal-day:hover { background: rgba(0,0,0,0.05); }
   body.dark-mode .home-mini-cal-day:hover { background: rgba(255,255,255,0.06); }
   .home-mini-cal-day.other-month { color: var(--text-faint); font-weight: 400; }
-  .home-mini-cal-day.today { background: rgba(57,73,171,0.12); }
+  .home-mini-cal-day.today { background: rgba(0,0,0,0.08); }
   .home-mini-cal-day.today .home-mini-cal-num { color: var(--primary-light); font-weight: 700; }
   body.dark-mode .home-mini-cal-day.today .home-mini-cal-num { color: var(--primary-ondark); }
   /* ::before, not box-shadow — an inset shadow at this cell size read as
@@ -2645,7 +2645,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     cursor: pointer; transition: all 0.15s; letter-spacing: 1px;
     display: flex; align-items: center; justify-content: center;
   }
-  .board-col-settings-btn:hover { color: var(--primary); background: rgba(57,73,171,0.10); }
+  .board-col-settings-btn:hover { color: var(--primary); background: rgba(0,0,0,0.06); }
   body.dark-mode .board-col-settings-btn:hover { color: var(--primary-ondark); }
 
   .board-col-settings-dropdown {
