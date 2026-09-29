@@ -3710,14 +3710,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     .app-nav-island .nav-tab, .app-nav-island .nav-tab:not(.active) { width: 52px; height: 36px; padding: 0; position: relative; }
     .app-nav-island .nav-tab .nav-tab-label { display: none; }
     .app-nav-island .nav-tab svg { width: 20px; height: 20px; }
-    .app-nav-island .nav-tab .badge, .app-nav-island .nav-tab:not(.active) .badge {
-      display: block; position: absolute; top: 1px; left: 29px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
-      border-radius: 999px; background: var(--primary-light); color: #fff; font-size: 10.5px; line-height: 18px; text-align: center;
-      box-shadow: 0 0 0 2px var(--chrome);
-    }
-    body.dark-mode .app-nav-island .nav-tab .badge, body.dark-mode .app-nav-island .nav-tab.active .badge { color: #fff; }
-    .app-nav-island .nav-tab.active .badge { box-shadow: 0 0 0 2px var(--nav-active); color: #fff; }
-    .app-nav-island .nav-tab .badge[hidden] { display: none; }
+    /* No counts on the page icons (Karl, 2026-09-29). */
+    .app-nav-island .nav-tab .badge { display: none !important; }
     /* Fixed-width header, so the rail clips it while sliding instead of
        squeezing the title and + New job together. */
     .manager-sidebar { overflow: hidden; }
