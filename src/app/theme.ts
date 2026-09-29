@@ -167,7 +167,9 @@ const STATIC_PROJECT_BG_BY_NAME: Record<string, string> = {
 // consistently even where that wrapper doesn't span the full width (My
 // Checklist's is a centered max-width:760px column; a background set on
 // IT alone would leave the wider margins on either side untouched).
-const STATIC_BG_PANEL_IDS = ['panel-home', 'panel-checklist', 'panel-calendar', 'panel-gantt'];
+// Home is left out on purpose: its widgets sit straight on the page
+// chrome, each one its own window, not inside a panel (Karl, 2026-09-29).
+const STATIC_BG_PANEL_IDS = ['panel-checklist', 'panel-calendar', 'panel-gantt'];
 export function applyProjectBgVisual(): void {
   const proj = getActiveProject();
   const staticBg = proj && STATIC_PROJECT_BG_BY_NAME[proj.name];
