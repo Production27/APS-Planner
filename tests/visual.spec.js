@@ -21,6 +21,10 @@ const FROZEN_NOW = '2026-09-01T12:00:00';
 async function prepPage(page) {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
+  // The "New here?" tour prompt pops up on an 800ms timer, so it was in
+  // some screenshots and not others. Turned off here (same as "Don't ask
+  // again") so the baselines are stable.
+  await page.addInitScript(() => localStorage.setItem('gantt_tutorial_state_v1_testadmin', JSON.stringify({ neverShow: true })));
   await page.clock.install({ time: new Date(FROZEN_NOW) });
   await page.goto(APP_URL);
   await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
