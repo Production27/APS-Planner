@@ -17,7 +17,7 @@ import { openModal, closeModal, showToast, moveTooltip, hideTooltip, toggleMsDro
 import { checkForNewerVersion } from './app/version-check';
 import { checkMaintenanceStatus, applyMaintenanceStatus, toggleMaintenancePanel, setMaintenanceMode } from './app/maintenance';
 import { reportClientError } from './app/error-reporting';
-import { positionSettingsMenu, toggleSettingsMenu, closeSettingsMenu, armSettingsMenuAutoClose, cancelSettingsMenuAutoClose, showSettingsTab } from './app/settings-menu';
+import { positionSettingsMenu, toggleSettingsMenu, toggleAccountMenu, closeSettingsMenu, armSettingsMenuAutoClose, cancelSettingsMenuAutoClose, showSettingsTab } from './app/settings-menu';
 import { applyDarkMode, loadDarkModePref, toggleDarkMode, DEFAULT_THEME_COLOR, normalizeThemeColor, getSavedThemeColor, applyThemeColor, buildThemePresets, updateThemePreview, openThemeModal, closeThemeModal, applyTheme, resetThemeDefault, applyProjectBgVisual } from './app/theme';
 import {
   tutorialStateKey, getTutorialState, saveTutorialState,
@@ -295,6 +295,7 @@ declare global {
     renderActivityLogSidebar: typeof renderActivityLogSidebar;
     positionSettingsMenu: typeof positionSettingsMenu;
     toggleSettingsMenu: typeof toggleSettingsMenu;
+    toggleAccountMenu: typeof toggleAccountMenu;
     closeSettingsMenu: typeof closeSettingsMenu;
     armSettingsMenuAutoClose: typeof armSettingsMenuAutoClose;
     cancelSettingsMenuAutoClose: typeof cancelSettingsMenuAutoClose;
@@ -887,6 +888,7 @@ window.getLogProp = getLogProp;
 window.renderActivityLogSidebar = renderActivityLogSidebar;
 window.positionSettingsMenu = positionSettingsMenu;
 window.toggleSettingsMenu = toggleSettingsMenu;
+window.toggleAccountMenu = toggleAccountMenu;
 window.closeSettingsMenu = closeSettingsMenu;
 window.armSettingsMenuAutoClose = armSettingsMenuAutoClose;
 window.cancelSettingsMenuAutoClose = cancelSettingsMenuAutoClose;

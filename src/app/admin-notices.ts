@@ -58,13 +58,13 @@ function setBadge(el: HTMLElement, count: number): void {
 }
 
 function renderBadges(newErrors: number): void {
-  document.querySelectorAll<HTMLElement>('#accountBtn .admin-badge, #settingsTabAdmin .admin-badge').forEach(function(el) {
+  document.querySelectorAll<HTMLElement>('#settingsBtn .admin-badge, #settingsTabAdmin .admin-badge').forEach(function(el) {
     setBadge(el, unread);
   });
   const errorsCount = document.getElementById('errorsNewCount');
   if (errorsCount) setBadge(errorsCount, newErrors);
-  const accountBtn = document.getElementById('accountBtn');
-  if (accountBtn) accountBtn.setAttribute('aria-label', unread ? 'Account and settings, ' + unread + ' new admin notices' : 'Account and settings');
+  const settingsBtn = document.getElementById('settingsBtn');
+  if (settingsBtn) settingsBtn.setAttribute('aria-label', unread ? 'Settings, ' + unread + ' new admin notices' : 'Settings');
 }
 
 // Opening the Admin tab marks everything seen. The Recent Errors count

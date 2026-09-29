@@ -119,9 +119,10 @@ document.addEventListener('mousedown', function () {
 
 document.addEventListener('click', function (e) {
   const target = e.target as HTMLElement;
-  // The Account menu is a separate top-level element from its button
-  // (#accountBtn, inside .settings-menu-wrap), so check both.
-  if (!target.closest('.settings-menu-wrap') && !target.closest('#settingsDropdown')) closeSettingsMenu();
+  // The Settings and Account menus are separate top-level elements from
+  // their buttons (inside .settings-menu-wrap / .account-menu-wrap), so
+  // check all four.
+  if (!target.closest('.settings-menu-wrap, .account-menu-wrap, #settingsDropdown, #accountDropdown')) closeSettingsMenu();
 
   // Close column settings dropdowns
   if (!target.closest('.board-col-settings-wrap')) closeAllColSettings();

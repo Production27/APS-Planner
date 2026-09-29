@@ -144,7 +144,7 @@ test('Manage Users: the account email is shown, edited and saved', async ({ page
 // ---- Settings > My email (src/app/account-email.ts) ----
 
 async function openMyEmail(page) {
-  await page.evaluate(() => toggleSettingsMenu());
+  await page.evaluate(() => toggleAccountMenu());
   await page.locator('#myEmailBtn').click();
   await expect(page.locator('#accountEmailModal')).toHaveClass(/show/);
 }

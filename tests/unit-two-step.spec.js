@@ -126,7 +126,7 @@ test('Settings > Two-step verification: set up with password and code, then see 
     'mfa/setup': (b) => b.password === 'pw' ? { body: { secret: 'JBSWY3DPEHPK3PXP', uri: URI } } : { status: 403, body: { error: 'Incorrect password' } },
     'mfa/enable': () => ({ body: { recoveryCodes: CODES } }),
   }, 'viewer');
-  await page.evaluate(() => toggleSettingsMenu());
+  await page.evaluate(() => toggleAccountMenu());
   await page.locator('#twoStepBtn').click();
   await expect(page.locator('#mfaOff')).toBeVisible();
   await page.fill('#mfaSetupPassword', 'nope');
@@ -152,7 +152,7 @@ test('Settings > Two-step verification when on: new recovery codes, and turning 
     'mfa/recovery-codes': () => ({ body: { recoveryCodes: CODES } }),
     'mfa/disable': () => ({ body: { success: true } }),
   });
-  await page.evaluate(() => toggleSettingsMenu());
+  await page.evaluate(() => toggleAccountMenu());
   await page.locator('#twoStepBtn').click();
   await expect(page.locator('#mfaOn')).toBeVisible();
   await expect(page.locator('#mfaCodesLeft')).toHaveText('2');
@@ -163,7 +163,7 @@ test('Settings > Two-step verification when on: new recovery codes, and turning 
   await expect(page.locator('#mfaCodes')).toBeVisible();
 
   await page.click('#mfaCloseBtn');
-  await page.evaluate(() => toggleSettingsMenu());
+  await page.evaluate(() => toggleAccountMenu());
   await page.locator('#twoStepBtn').click();
   await page.fill('#mfaManageCode', '654321');
   await page.fill('#mfaDisablePassword', 'pw');
@@ -174,7 +174,7 @@ test('Settings > Two-step verification when on: new recovery codes, and turning 
 
 test('when the company requires it, the settings screen has no way to turn it off', async ({ page }) => {
   await openSignedIn(page, { 'mfa/status': () => ({ body: { enabled: true, enabledAt: Date.now(), recoveryCodesLeft: 10, required: true } }) });
-  await page.evaluate(() => toggleSettingsMenu());
+  await page.evaluate(() => toggleAccountMenu());
   await page.locator('#twoStepBtn').click();
   await expect(page.locator('#mfaRequiredNote')).toBeVisible();
   await expect(page.locator('#mfaDisableBtn')).toBeHidden();

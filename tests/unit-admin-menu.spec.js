@@ -35,34 +35,34 @@ const NOTICES = {
 
 test('admin items sit behind the Admin tab in Settings', async ({ page }) => {
   await openApp(page, 'admin');
-  await page.locator('#accountBtn').click();
+  await page.locator('#settingsBtn').click();
   await expect(page.locator('#settingsTabGeneral')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#manageUsersBtn')).toBeHidden();
-  await expect(page.locator('#changePasswordBtn')).toBeVisible();
+  await expect(page.locator('#darkModeBtn')).toBeVisible();
   await page.locator('#settingsTabAdmin').click();
   await expect(page.locator('#settingsDropdown')).toHaveClass(/show/);
   await expect(page.locator('#manageUsersBtn')).toBeVisible();
   await expect(page.locator('#errorsBtn')).toBeVisible();
-  await expect(page.locator('#changePasswordBtn')).toBeHidden();
+  await expect(page.locator('#darkModeBtn')).toBeHidden();
   // Reopening starts back on the Settings tab.
   await page.keyboard.press('Escape');
-  await page.locator('#accountBtn').click();
-  await expect(page.locator('#changePasswordBtn')).toBeVisible();
+  await page.locator('#settingsBtn').click();
+  await expect(page.locator('#darkModeBtn')).toBeVisible();
 });
 
 test('non-admins see no tabs, just their settings', async ({ page }) => {
   await openApp(page, 'editor');
-  await page.locator('#accountBtn').click();
+  await page.locator('#settingsBtn').click();
   await expect(page.locator('#settingsTabAdmin')).toBeHidden();
-  await expect(page.locator('#changePasswordBtn')).toBeVisible();
+  await expect(page.locator('#darkModeBtn')).toBeVisible();
 });
 
 test('new account events and errors badge the Settings button, and opening the Admin tab clears it', async ({ page }) => {
   const seen = await openApp(page, 'admin', { 'admin/notices': () => NOTICES, 'admin/notices/seen': () => ({ success: true }) });
-  const badge = page.locator('#accountBtn .admin-badge');
+  const badge = page.locator('#settingsBtn .admin-badge');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveText('2');
-  await page.locator('#accountBtn').click();
+  await page.locator('#settingsBtn').click();
   await expect(page.locator('#settingsTabAdmin .admin-badge')).toHaveText('2');
   await page.locator('#settingsTabAdmin').click();
   await expect(page.locator('#errorsNewCount')).toHaveText('1');

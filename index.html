@@ -220,10 +220,18 @@
     .nav-tab:not(.active) .nav-tab-label, .nav-tab:not(.active) .badge { display: none; }
     .nav-tab:not(.active) { padding: 0 9px; }
   }
-  /* Account: your initials in a circle (full name in the tooltip and at
-     the top of the menu). The red dot is the admin notices badge
-     (src/app/admin-notices.ts writes a count into it; only the dot shows). */
-  .settings-menu-wrap { display: flex; align-items: center; position: relative; }
+  /* Settings cog and Account (your initials in a circle, full name in the
+     tooltip and at the top of its menu). The red dot on the cog is the
+     admin notices badge (src/app/admin-notices.ts writes a count into it;
+     only the dot shows). */
+  .settings-menu-wrap, .account-menu-wrap { display: flex; align-items: center; position: relative; }
+  .settings-btn {
+    position: relative; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent;
+    display: grid; place-items: center; cursor: pointer; color: var(--text-light);
+  }
+  .settings-btn:hover, .settings-btn[aria-expanded="true"] { background: var(--chrome-hover); color: var(--text); }
+  .settings-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
+  .settings-btn .admin-badge { top: 5px; right: 5px; left: auto; min-width: 0; width: 12px; height: 12px; padding: 0; font-size: 0; border: 2px solid var(--chrome); }
   .account-btn {
     position: relative; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent;
     display: grid; place-items: center; cursor: pointer;
@@ -235,13 +243,12 @@
     display: grid; place-items: center; font-size: 12px; font-weight: 700;
   }
   .account-avatar-lg { width: 36px; height: 36px; font-size: 13px; }
-  .account-btn .admin-badge { top: 3px; right: 3px; left: auto; min-width: 0; width: 12px; height: 12px; padding: 0; font-size: 0; border: 2px solid var(--chrome); }
   .account-who { display: flex; align-items: center; gap: var(--s-2-5); padding: var(--s-2) var(--s-3) var(--s-2-5); margin-bottom: var(--s-1-5); border-bottom: 1px solid var(--border); }
   .account-who-name { font-weight: 700; font-size: var(--t-base); color: var(--text); line-height: 1.25; }
   .account-who-role { font-size: var(--t-xs); color: var(--text-light); }
-  /* The Account menu. position:fixed with top/left set in JS
+  /* The Settings and Account menus. position:fixed with top/left set in JS
      (positionMenu() in src/app/settings-menu.ts), right-aligned under
-     #accountBtn. max-height/overflow-y is a safety net for short
+     their button. max-height/overflow-y is a safety net for short
      viewports (landscape phones), which don't always have room below the
      button for every item at full height. */
   .settings-dropdown {
@@ -3851,15 +3858,37 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   </div>
 </div>
 
-<!-- The Account menu, opened by #accountBtn in the navbar. Top-level and
-     position:fixed, placed under the button each time it opens — see
-     positionMenu() in src/app/settings-menu.ts. -->
-<div class="settings-dropdown" id="settingsDropdown" role="group" aria-label="Account and settings">
+<!-- Two navbar menus (Karl, 2026-09-29): the cog (#settingsBtn) opens
+     Settings, your initials (#accountBtn) open Account. Both are top-level
+     and position:fixed, placed under their button each time they open —
+     see positionMenu() in src/app/settings-menu.ts. -->
+<!-- Account: who's signed in, then password, email, two-step sign-in,
+     switching project, and logging out. -->
+<div class="settings-dropdown" id="accountDropdown" role="group" aria-label="Account">
   <!-- Filled by updateAccountButton() (src/app/account-nav.ts). -->
   <div class="account-who">
     <span class="account-avatar account-avatar-lg" id="accountWhoAvatar" aria-hidden="true">?</span>
     <div><div class="account-who-name" id="accountWhoName"></div><div class="account-who-role" id="accountWhoRole"></div></div>
   </div>
+  <button type="button" class="settings-dropdown-item" id="changePasswordBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</button>
+  <button type="button" class="settings-dropdown-item" id="myEmailBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2" fill="#3949ab"/><path d="M4 7l8 6 8-6" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> My email</button>
+  <button type="button" class="settings-dropdown-item" id="twoStepBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2.5" width="12" height="19" rx="2.5" fill="#3949ab"/><rect x="8" y="5" width="8" height="12" rx="1" fill="#fff"/><path d="M10 11l1.5 1.5L14.5 9" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Two-step verification</button>
+  <div class="settings-dropdown-divider"></div>
+  <!-- Moved down here from the top of the menu, and grouped with Log Out —
+       both leave the context you're currently in. It used to be the very
+       first item under the settings icon, one careless click away from
+       anything reaching for the menu; this reordering is what guards
+       against that now (toggleProject() itself used to also confirm
+       before switching, but that popup was more annoying than useful on
+       the deliberate path, so it's gone — see toggleProject()'s own
+       comment). -->
+  <button type="button" class="settings-dropdown-item" id="projectToggleBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></button>
+  <button type="button" class="settings-dropdown-item" id="logoutBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H5a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 005 20h4" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11 12h10m0 0l-3.5-3.5M21 12l-3.5 3.5" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Log Out</button>
+</div>
+
+<!-- Settings: preferences, this project's look and workflow, export and
+     print, plus (admins) the Admin tab. -->
+<div class="settings-dropdown" id="settingsDropdown" role="group" aria-label="Settings">
   <!-- Was its own standalone square icon button in the rail row —
        see updateProjectToggle(), which now targets this list item
        (id kept the same) instead of a <button>, writing the "next
@@ -3873,8 +3902,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
        old bespoke full-hide-by-id logic for this element (removed),
        same generic mechanism every other item here already uses. -->
   <!-- Sections, top to bottom: Preferences (everyone), Project (project
-       admins: this project's look, workflow and history), Admin (admins
-       only: people, backups, errors, maintenance), Account (everyone).
+       admins: this project's look, workflow and history), Export & print
+       (everyone). The Admin tab holds people, backups, errors, security and
+       maintenance. Account items live in #accountDropdown above.
        Each section's label and divider carry the same data-min-tier as its
        items, so nobody sees a heading with nothing under it. Archived Jobs
        moved out of this menu to a link at the bottom of the job list. -->
@@ -3910,21 +3940,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   <button type="button" class="settings-dropdown-item" id="exportSpreadsheetBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2" fill="#1f7a4a"/><path d="M3 9h18M3 15h18M9 3v18" stroke="#fff" stroke-width="1.4"/></svg> Export to spreadsheet…</button>
   <button type="button" class="settings-dropdown-item" id="printBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="3" width="12" height="6" rx="1" fill="#90a4ae"/><rect x="3" y="8" width="18" height="9" rx="2" fill="#546e7a"/><rect x="7" y="13" width="10" height="8" rx="1" fill="#fff" stroke="#546e7a" stroke-width="1.4"/></svg> Print or save as PDF…</button>
   <button type="button" class="settings-dropdown-item" id="downloadIcsBtn" title="A calendar file for Outlook, Google Calendar or Apple Calendar"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" fill="#fff" stroke="#1e88e5" stroke-width="1.5"/><rect x="3" y="5" width="18" height="4" rx="2" fill="#1e88e5"/><path d="M12 11v6m0 0l-2.5-2.5M12 17l2.5-2.5" stroke="#1e88e5" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Add to my calendar (.ics)</button>
-  <div class="settings-dropdown-divider"></div>
-  <div class="settings-dropdown-label">Account</div>
-  <button type="button" class="settings-dropdown-item" id="changePasswordBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="10.5" width="14" height="9.5" rx="1.5" fill="#f0ad4e"/><path d="M8 10.5V7a4 4 0 018 0v3.5" stroke="#8a5a00" stroke-width="1.8" fill="none"/><circle cx="12" cy="14.5" r="1.6" fill="#8a5a00"/></svg> Change My Password</button>
-  <button type="button" class="settings-dropdown-item" id="myEmailBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2" fill="#3949ab"/><path d="M4 7l8 6 8-6" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> My email</button>
-  <button type="button" class="settings-dropdown-item" id="twoStepBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2.5" width="12" height="19" rx="2.5" fill="#3949ab"/><rect x="8" y="5" width="8" height="12" rx="1" fill="#fff"/><path d="M10 11l1.5 1.5L14.5 9" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Two-step verification</button>
-  <!-- Moved down here from the top of the menu, and grouped with Log Out —
-       both leave the context you're currently in. It used to be the very
-       first item under the settings icon, one careless click away from
-       anything reaching for the menu; this reordering is what guards
-       against that now (toggleProject() itself used to also confirm
-       before switching, but that popup was more annoying than useful on
-       the deliberate path, so it's gone — see toggleProject()'s own
-       comment). -->
-  <button type="button" class="settings-dropdown-item" id="projectToggleBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h13" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M14 5l3 3-3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16H7" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 13l-3 3 3 3" stroke="#3949ab" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="projectToggleLabel">Switch Project</span></button>
-  <button type="button" class="settings-dropdown-item" id="logoutBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M9 4H5a1.5 1.5 0 00-1.5 1.5v13A1.5 1.5 0 005 20h4" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M11 12h10m0 0l-3.5-3.5M21 12l-3.5 3.5" stroke="#e53935" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Log Out</button>
   </div>
   <div class="settings-panel" id="settingsAdminPanel" hidden>
   <button type="button" class="settings-dropdown-item" id="manageUsersBtn" data-min-tier="admin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.5" fill="#3949ab"/><path d="M2.5 19c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke="#3949ab" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="17" cy="7.5" r="2.6" fill="#90a4ae"/><path d="M14.5 13c2.9 0.3 5 2.7 5 6" stroke="#90a4ae" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg> Manage Users</button>
@@ -3990,7 +4005,10 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   <div class="app-nav-right">
     <div class="presence-avatars" id="presenceAvatars"></div>
     <div class="settings-menu-wrap">
-      <button type="button" class="account-btn" id="accountBtn" title="Account and settings" aria-label="Account and settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><span class="account-avatar" id="accountAvatar" aria-hidden="true">?</span><span class="admin-badge" hidden></span></button>
+      <button type="button" class="settings-btn" id="settingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="admin-badge" hidden></span></button>
+    </div>
+    <div class="account-menu-wrap">
+      <button type="button" class="account-btn" id="accountBtn" title="Account" aria-label="Account" aria-haspopup="true" aria-expanded="false" aria-controls="accountDropdown"><span class="account-avatar" id="accountAvatar" aria-hidden="true">?</span></button>
     </div>
   </div>
 </header>

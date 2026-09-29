@@ -44,6 +44,7 @@ const SCREENS = {
   'job form': () => { switchTabMorphed('gantt'); editJob(jobs.find((j) => !j.archived).id); },
   'card dialog': () => { switchTabMorphed('board'); openEditCard(boardCards.find((c) => isCardVisibleToMe(c)).id); },
   'settings menu': () => { switchTabMorphed('home'); toggleSettingsMenu(); },
+  'account menu': () => { switchTabMorphed('home'); toggleAccountMenu(); },
   'calendar event dialog': () => { switchTabMorphed('calendar'); openAddCalendarEvent('2026-09-24'); },
   'tour prompt': () => { switchTabMorphed('home'); tutorialNotifShow(); },
   'board column menu': () => { switchTabMorphed('board'); document.querySelector('.board-col-settings-btn').click(); },
@@ -94,15 +95,23 @@ test('a11y: Escape in the Security dialog closes it and never presses "Cancel de
 
 test('a11y: the Settings menu opened from the keyboard moves focus into it, and Escape returns it', async ({ page }) => {
   await openApp(page);
-  await page.locator('#accountBtn').focus();
+  await page.locator('#settingsBtn').focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#settingsDropdown')).toHaveClass(/show/);
-  await expect(page.locator('#accountBtn')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#settingsBtn')).toHaveAttribute('aria-expanded', 'true');
   expect(await page.evaluate(() => document.activeElement.classList.contains('settings-dropdown-item'))).toBe(true);
   await page.keyboard.press('Escape');
   await expect(page.locator('#settingsDropdown')).not.toHaveClass(/show/);
+  await expect(page.locator('#settingsBtn')).toBeFocused();
+  await expect(page.locator('#settingsBtn')).toHaveAttribute('aria-expanded', 'false');
+  // The Account menu works the same way.
+  await page.locator('#accountBtn').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#accountDropdown')).toHaveClass(/show/);
+  expect(await page.evaluate(() => document.getElementById('accountDropdown').contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#accountDropdown')).not.toHaveClass(/show/);
   await expect(page.locator('#accountBtn')).toBeFocused();
-  await expect(page.locator('#accountBtn')).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('a11y: job cards and Board cards open from the keyboard through their title button', async ({ page }) => {

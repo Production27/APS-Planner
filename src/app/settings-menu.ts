@@ -1,7 +1,8 @@
-// The Account menu, opened by the navbar's #accountBtn. #settingsDropdown
-// lives at the top level (see its own markup comment), so its position is
-// computed from the button each time it opens. Admins also get
-// Settings | Admin tabs at the top of it (showSettingsTab()).
+// The navbar's two menus: Settings (the cog, #settingsBtn) and Account
+// (your initials, #accountBtn). Both dropdowns live at the top level (see
+// their markup comment), so each one's position is computed from its
+// button when it opens. Admins also get Settings | Admin tabs at the top of
+// the Settings menu (showSettingsTab()).
 
 interface MenuDef {
   dropdownId: string;
@@ -13,9 +14,13 @@ interface MenuDef {
 
 const settingsMenu: MenuDef = {
   dropdownId: 'settingsDropdown', wrapSelector: '.settings-menu-wrap',
+  triggerIds: ['settingsBtn'], closeTimer: null,
+};
+const accountMenu: MenuDef = {
+  dropdownId: 'accountDropdown', wrapSelector: '.account-menu-wrap',
   triggerIds: ['accountBtn'], closeTimer: null,
 };
-const MENUS = [settingsMenu];
+const MENUS = [settingsMenu, accountMenu];
 
 // Settings | Admin tabs. Every open starts on Settings. src/app/admin-notices.ts
 // hooks the Admin tab opening to clear its badge.
@@ -123,9 +128,11 @@ function cancelAutoClose(menu: MenuDef): void {
   menu.closeTimer = null;
 }
 
-export function positionSettingsMenu(): void { positionMenu(settingsMenu); }
+export function positionSettingsMenu(): void { MENUS.forEach(positionMenu); }
 export function toggleSettingsMenu(): void { toggleMenu(settingsMenu); }
-export function closeSettingsMenu(): void { closeMenu(settingsMenu); }
+export function toggleAccountMenu(): void { toggleMenu(accountMenu); }
+// Closes both menus: every item in either one calls this after it runs.
+export function closeSettingsMenu(): void { MENUS.forEach(closeMenu); }
 export function armSettingsMenuAutoClose(): void { armAutoClose(settingsMenu); }
 export function cancelSettingsMenuAutoClose(): void { cancelAutoClose(settingsMenu); }
 

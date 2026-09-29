@@ -29,6 +29,7 @@ import { toggleGanttKey } from '../views/gantt-key';
 
 declare global {
   function toggleSettingsMenu(): void;
+  function toggleAccountMenu(): void;
   function setMobileView(view: string): void;
   function closeSettingsMenu(): void;
   function toggleActivitySidebar(): void;
@@ -128,7 +129,8 @@ export function initStaticEventListeners(): void {
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
   }
-  on('accountBtn', () => toggleSettingsMenu());
+  on('settingsBtn', () => toggleSettingsMenu());
+  on('accountBtn', () => toggleAccountMenu());
 
   on('activityToggleBtn', () => { closeSettingsMenu(); toggleActivitySidebar(); });
   on('darkModeBtn', () => toggleDarkMode());

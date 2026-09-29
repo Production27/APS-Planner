@@ -194,7 +194,8 @@ export function tutorialSlideSkip(): void {
 // Job is projectAdmin+ only) just get skipped for a lower-tier viewer
 // instead of pointing at a hidden button.
 const COACHMARK_STEPS = [
-  { find: ['#accountBtn'], title: 'Your account', desc: 'Settings, dark mode, and logging out all live here.' },
+  { find: ['#settingsBtn'], title: 'Settings', desc: 'Dark mode, the project\'s look and workflow, and export and print.' },
+  { find: ['#accountBtn'], title: 'Your account', desc: 'Your password, email, two-step sign-in, and logging out.' },
   { find: ['#jobRailToggleBtn'], title: 'Jobs list', desc: 'The ☰ button shows or hides the full job list along the left edge.' },
   { find: ['.job-rail-add-btn'], title: 'Add a job', desc: 'Start a brand new job from scratch.' },
   { find: ['#tab-checklist'], title: 'Checklist tab', desc: 'Jump to the full checklist — every open item assigned to you.' },

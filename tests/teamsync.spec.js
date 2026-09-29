@@ -2975,7 +2975,7 @@ test('Navbar: Home is active at load, pages are icons in the left column, and th
   await expect(page.locator('#tab-home')).toHaveClass(/active/);
 });
 
-test('Navbar: the Account avatar shows your initials and opens the menu under it', async ({ page }) => {
+test('Navbar: the Account avatar shows your initials and opens the Account menu under it; the cog opens Settings', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
   await page.setViewportSize({ width: 1366, height: 800 });
@@ -2985,13 +2985,25 @@ test('Navbar: the Account avatar shows your initials and opens the menu under it
   await expect(page.locator('#accountAvatar')).toHaveText('TA');
   await expect(page.locator('#accountBtn')).toHaveAttribute('title', /Test Admin/);
   await page.locator('#accountBtn').click();
-  await expect(page.locator('#settingsDropdown')).toBeVisible();
+  await expect(page.locator('#accountDropdown')).toBeVisible();
+  await expect(page.locator('#settingsDropdown')).toBeHidden();
   await expect(page.locator('#accountWhoName')).toHaveText('Test Admin');
   await expect(page.locator('#accountWhoRole')).toHaveText('Admin');
+  await expect(page.locator('#logoutBtn')).toBeVisible();
+  await expect(page.locator('#changePasswordBtn')).toBeVisible();
   const btn = await page.locator('#accountBtn').boundingBox();
-  const menu = await page.locator('#settingsDropdown').boundingBox();
+  const menu = await page.locator('#accountDropdown').boundingBox();
   expect(Math.abs((menu.x + menu.width) - (btn.x + btn.width))).toBeLessThan(2);
   expect(menu.y).toBeGreaterThan(btn.y + btn.height);
+
+  // The cog sits just left of the avatar and opens Settings (closing Account).
+  const cog = await page.locator('#settingsBtn').boundingBox();
+  expect(cog.x + cog.width).toBeLessThanOrEqual(btn.x + 1);
+  await page.locator('#settingsBtn').click();
+  await expect(page.locator('#settingsDropdown')).toBeVisible();
+  await expect(page.locator('#accountDropdown')).toBeHidden();
+  await expect(page.locator('#darkModeBtn')).toBeVisible();
+  await expect(page.locator('#settingsDropdown #logoutBtn')).toHaveCount(0);
 });
 
 test('Navbar on a phone: the island sits under the title, starts on Jobs, and switches full-screen views', async ({ page }) => {
