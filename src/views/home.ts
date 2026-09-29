@@ -229,7 +229,7 @@ function toggleJobRail(): void {
 
   const open = document.body.classList.toggle('job-rail-open');
 
-  const railAfter = sidebar ? (open ? (window.innerWidth <= 1100 ? 210 : 260) : 72) : railBefore;
+  const railAfter = sidebar ? (open ? (window.innerWidth <= 1100 ? 210 : 260) : 48) : railBefore;
   if (gridEl && railAfter !== railBefore) {
     gridEl.classList.add('rail-sync');
     applyHomeReflowTracks(gridBefore + (railBefore - railAfter));
