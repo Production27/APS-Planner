@@ -79,6 +79,8 @@ export function tintedTextColor(color: string, bg: string, targetContrast?: numb
   const bgLum = luminanceFromRGB(bgRgb[0], bgRgb[1], bgRgb[2]);
   // 4.5 = WCAG AA for normal-size text (was 3.2 before the A5 pass).
   const TARGET_CONTRAST = targetContrast || 4.5;
+  // Already readable: keep the color itself rather than shifting it.
+  if (contrastRatio(luminanceFromRGB(base[0], base[1], base[2]), bgLum) >= TARGET_CONTRAST) return 'rgb(' + base.join(',') + ')';
   const shift = (amt: number, towardBlack: boolean): [number, number, number] => {
     const toward = towardBlack ? 0 : 255;
     const mix = (c: number) => Math.max(0, Math.min(255, Math.round(c + (toward - c) * amt)));
@@ -154,3 +156,8 @@ export function softChip(color: string | null | undefined): { background: string
 export function ganttPastelHex(color: string | null | undefined): string {
   return softenColor(color, 0.66);
 }
+
+// Contrast target for job names (Gantt rows, the Jobs list, Board cards):
+// WCAG AA, so names stay as close to the job's own color as they can while
+// still readable. Was 6 until Karl found the names too dark (2026-09-29).
+export const JOB_NAME_CONTRAST = 4.5;

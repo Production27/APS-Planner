@@ -34,7 +34,7 @@ import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { safeJsonParse } from '../utils/id';
 import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
 import { escapeHtml } from '../utils/html';
-import { tintedTextColor, ganttPastel, ganttPastelHex, softChip } from '../utils/color';
+import { tintedTextColor, ganttPastel, ganttPastelHex, softChip, JOB_NAME_CONTRAST } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
@@ -1106,9 +1106,9 @@ function rowLabelColors(color: string): { light: string; dark: string } {
   // .left-panel is translucent (a gradient in dark mode) over whatever
   // sits behind it, alternating rows tint slightly, and hover recolors it
   // again — so these reference colors are deliberately conservative
-  // (already-composited estimates, not exact) and paired with a bigger
-  // contrast target (6, vs. barTagTextColor()'s 3.2) for margin.
-  return { light: tintedTextColor(color, '#f7f8fb', 6), dark: tintedTextColor(color, '#242732', 6) };
+  // (already-composited estimates, not exact), checked against
+  // JOB_NAME_CONTRAST (WCAG AA).
+  return { light: tintedTextColor(color, '#f7f8fb', JOB_NAME_CONTRAST), dark: tintedTextColor(color, '#242732', JOB_NAME_CONTRAST) };
 }
 // Builds the phase-fold and/or sub-phase-fold tag(s) shown on a Tasks-view
 // Gantt bar, as plain data for BarTag (see gantt-task-bar.tsx) to render.

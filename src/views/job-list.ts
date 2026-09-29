@@ -10,7 +10,7 @@ import { formatDate } from '../utils/date';
 import type { Job } from '../core/types';
 import { findJob, getJobPhases, getPhaseCard, getJobCards, getPrimaryPhaseCard } from '../core/models';
 import { genId, safeJsonParse } from '../utils/id';
-import { tintedTextColor } from '../utils/color';
+import { tintedTextColor, JOB_NAME_CONTRAST } from '../utils/color';
 import { openModal, closeModal, showToast, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 import { logActivity } from '../sync/outbound';
@@ -164,8 +164,8 @@ export function renderJobList(): void {
       // Identical to the Board card's title color for this job (same
       // inputs as buildCardProps() in board.ts), so a job reads as the
       // same color in both places.
-      titleColorLight: tintedTextColor(job.color || '#3949ab', '#ffffff', 6),
-      titleColorDark: tintedTextColor(job.color || '#3949ab', '#242732', 6),
+      titleColorLight: tintedTextColor(job.color || '#3949ab', '#ffffff', JOB_NAME_CONTRAST),
+      titleColorDark: tintedTextColor(job.color || '#3949ab', '#242732', JOB_NAME_CONTRAST),
       name: job.name,
       dateRangeLabel: (s && f) ? (formatDate(s as Date, { month: 'short', day: 'numeric' }) + ' – ' + formatDate(f as Date, { month: 'short', day: 'numeric' })) : null,
       boardDots: boardDots,

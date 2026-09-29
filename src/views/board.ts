@@ -61,7 +61,7 @@ import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../c
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
-import { darkenColor, softenColor, tintedTextColor, ganttPastel, softChip } from '../utils/color';
+import { darkenColor, softenColor, tintedTextColor, ganttPastel, softChip, JOB_NAME_CONTRAST } from '../utils/color';
 import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -111,6 +111,9 @@ const BOARD_COLOR_SOFTEN_AMOUNT = 0.30;
 // Real module-owned export now (moved out of index.html) — every other
 // reader is a test asserting against it, not another src/ file, so this
 // only needs wiring into window via main.ts, not src/shared-globals.d.ts.
+// A dark-mode card's real fill (body.dark-mode .board-card is #2a2a2a),
+// nudged lighter for hover, for the contrast math on job-name titles.
+const BOARD_CARD_DARK_BG = '#303030';
 export const BOARD_COLOR_PRESETS = COLOR_PRESETS.map((c) => softenColor(c, BOARD_COLOR_SOFTEN_AMOUNT));
 
 // Fallback only — per-board default lives on col.defaultDuration, set from
@@ -1397,8 +1400,8 @@ function buildCardEl(card: BoardCard, stalledFloors?: Record<string, number>): H
   // the child .board-card-title div's `color: var(--bct-light, ...)` rule
   // without needing to find that div separately.
   const cardTitleColor = card.color || '#3949ab';
-  el.style.setProperty('--bct-light', tintedTextColor(cardTitleColor, '#ffffff', 6));
-  el.style.setProperty('--bct-dark', tintedTextColor(cardTitleColor, '#242732', 6));
+  el.style.setProperty('--bct-light', tintedTextColor(cardTitleColor, '#ffffff', JOB_NAME_CONTRAST));
+  el.style.setProperty('--bct-dark', tintedTextColor(cardTitleColor, BOARD_CARD_DARK_BG, JOB_NAME_CONTRAST));
   if (hasOverride) {
     el.title = 'Manually placed — auto-sync resumes at ' + formatDate(new Date(card.manualColumnUntil!), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
@@ -1609,8 +1612,8 @@ function buildCardProps(card: BoardCard, stalledFloors?: Record<string, number>)
   // approximation, since a board card (unlike the Gantt panel) is a flat,
   // non-translucent fill.
   const titleColor = card.color || '#3949ab';
-  const titleColorLight = tintedTextColor(titleColor, '#ffffff', 6);
-  const titleColorDark = tintedTextColor(titleColor, '#242732', 6);
+  const titleColorLight = tintedTextColor(titleColor, '#ffffff', JOB_NAME_CONTRAST);
+  const titleColorDark = tintedTextColor(titleColor, BOARD_CARD_DARK_BG, JOB_NAME_CONTRAST);
 
   return {
     id: String(card.id),
