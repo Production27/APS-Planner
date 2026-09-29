@@ -411,7 +411,7 @@
      Month/Week is a .rep-seg toggle like Stages/Jobs. */
   .cal-tool-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; }
   .cal-tool-btn:hover { background: var(--primary-tint); }
-  body.dark-mode .cal-tool-btn:hover { background: rgba(57,73,171,0.2); }
+  body.dark-mode .cal-tool-btn:hover { background: rgba(255,255,255,0.09); }
   .cal-nav-group { display: inline-flex; gap: 2px; }
   .cal-view-toggle { margin-left: auto; }
   .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
@@ -459,7 +459,7 @@
      cell — a thick outline around blank white space stood out as an odd,
      broken-looking box rather than a normal highlighted grid cell. */
   .cal-day.cal-today { background: var(--primary-tint); box-shadow: 0 0 0 1px var(--primary) inset; }
-  body.dark-mode .cal-day.cal-today { background: rgba(57,73,171,0.18); }
+  body.dark-mode .cal-day.cal-today { background: rgba(255,255,255,0.08); }
   .cal-day-num { font-size: var(--t-base); font-weight: 700; color: var(--text-light); margin-bottom: var(--s-1); flex-shrink: 0; text-align: center; }
   .cal-day.cal-today .cal-day-num { color: var(--primary); }
   body.dark-mode .cal-day.cal-today .cal-day-num { color: var(--primary-ondark); }
@@ -509,7 +509,7 @@
   .day-view-item-title { font-size: var(--t-base); font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .day-view-item-sub { font-size: var(--t-xs); color: var(--text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .day-view-empty { font-size: var(--t-base); color: var(--text-light); text-align: center; padding: var(--s-6) 0; }
-  body.dark-mode .day-view-item:hover { background: rgba(57,73,171,0.18); }
+  body.dark-mode .day-view-item:hover { background: rgba(255,255,255,0.08); }
 
 /* ===== CALENDAR BAR DRAG ===== */
 .cal-bar-drag-body { position: absolute; inset: 0; cursor: grab; z-index: 2; }
@@ -562,7 +562,7 @@
     content: ''; position: absolute; top: 17px; left: 3px; width: 4px; height: 24px; border-radius: 2px;
     background: #b9bfd0; transition: background 0.12s;
   }
-  body.dark-mode .gantt-col-resize::before { background: #4a5162; }
+  body.dark-mode .gantt-col-resize::before { background: #545454; }
   .gantt-col-resize:hover::before, .gantt-col-resize:focus-visible::before, body.gantt-col-resizing .gantt-col-resize::before { background: var(--primary-light); }
   .gantt-col-resize::after {
     content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 2px;
@@ -595,7 +595,7 @@
     border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer;
   }
   .gantt-bulk-toggle:hover { background: var(--primary-tint); }
-  body.dark-mode .gantt-bulk-toggle:hover { background: rgba(57,73,171,0.22); }
+  body.dark-mode .gantt-bulk-toggle:hover { background: rgba(255,255,255,0.1); }
   .gantt-bulk-toggle svg { width: 13px; height: 13px; }
   /* The pill's phone-only bulk toggle (and its divider). */
   .gantt-zoom-pill .gantt-bulk-toggle-phone, .gantt-zoom-pill .gantt-bulk-toggle-phone-sep { display: none; }
@@ -1079,7 +1079,7 @@
   .gantt-zoom-pill button:hover { background: var(--primary-tint); }
   .gantt-zoom-pill-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
   body.dark-mode .gantt-zoom-pill { box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
-  body.dark-mode .gantt-zoom-pill button:hover { background: rgba(57,73,171,0.22); }
+  body.dark-mode .gantt-zoom-pill button:hover { background: rgba(255,255,255,0.1); }
   .gantt-today-mark {
     position: absolute; top: 18px; z-index: 90;
     display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
@@ -1191,7 +1191,7 @@
   .gantt-key-sw-weekend { background: var(--divider); border: 1px solid var(--border); }
   body.dark-mode .gantt-key { background: var(--card); }
   body.dark-mode .gantt-key h3 { color: var(--primary-ondark); }
-  body.dark-mode .gantt-key-close:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
+  body.dark-mode .gantt-key-close:hover { background: rgba(255,255,255,0.1); color: var(--primary-ondark); }
   body.dark-mode .gantt-key-sw-due { border-color: var(--card); }
   body.dark-mode .gantt-key-sw-linked { border-color: rgba(255,255,255,0.5); }
 
@@ -1347,7 +1347,7 @@
   .duplicate-job-btn { width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; color: var(--text-faint); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; margin-left: auto; }
   .duplicate-job-btn:hover { background: var(--primary-tint); color: var(--primary); }
   .job-card-board-tag { font-size: var(--t-2xs); font-weight: 600; color: var(--text-light); background: var(--primary-tint); padding: 1px var(--s-2) 1px var(--s-1-25); border-radius: 999px; display: inline-flex; align-items: center; gap: var(--s-1); }
-  body.dark-mode .job-card-board-tag { background: rgba(57,73,171,0.18); }
+  body.dark-mode .job-card-board-tag { background: rgba(255,255,255,0.08); }
   .job-card-board-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .job-card-phase-dots { display: inline-flex; align-items: center; gap: var(--s-1); padding: var(--s-0-5) 0; }
   .job-card-phase-dots .job-card-board-dot { width: 8px; height: 8px; border: 1px solid rgba(0,0,0,0.15); }
@@ -1369,8 +1369,8 @@
      look, which read as a disabled placeholder rather than an action. */
   .job-phase-strip-btn { padding: var(--s-1-25) var(--s-2-5); border-radius: 8px; background: var(--card); border: 1px solid var(--border); color: var(--text); font-size: var(--t-sm); font-weight: 600; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
   .job-phase-strip-btn:hover { background: var(--primary-tint); }
-  body.dark-mode .job-phase-strip-btn:hover { background: rgba(57,73,171,0.2); }
-  body.dark-mode .job-phase-strip-btn:hover { border-color: var(--primary-ondark); color: var(--primary-ondark); background: linear-gradient(180deg, #262a35 0%, #1c1f28 100%); }
+  body.dark-mode .job-phase-strip-btn:hover { background: rgba(255,255,255,0.09); }
+  body.dark-mode .job-phase-strip-btn:hover { border-color: var(--primary-ondark); color: var(--primary-ondark); background: linear-gradient(180deg, #2c2c2c 0%, #212121 100%); }
   .job-subphase-strip { margin: var(--s-1-5) 0 0 var(--s-5); padding-left: var(--s-2-5); border-left: 2px solid #dcdfe6; }
   body.dark-mode .job-subphase-strip { border-left-color: rgba(255,255,255,0.15); }
   .job-subphase-strip .job-phase-chip { font-size: var(--t-xs); padding: var(--s-1) var(--s-2-5); }
@@ -1463,8 +1463,8 @@
     min-width: 18px; height: 18px; border-radius: 9px; box-sizing: border-box;
     display: flex; align-items: center; justify-content: center; padding: 0 var(--s-1-25);
   }
-  body.dark-mode .job-comments-panel.collapsed:hover { background: rgba(57,73,171,0.18); }
-  body.dark-mode .job-comments-collapse-btn:hover { background: rgba(57,73,171,0.18); color: var(--primary-ondark); }
+  body.dark-mode .job-comments-panel.collapsed:hover { background: rgba(255,255,255,0.08); }
+  body.dark-mode .job-comments-collapse-btn:hover { background: rgba(255,255,255,0.08); color: var(--primary-ondark); }
   .job-comments-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--s-2-5); margin-bottom: var(--s-3-5); min-height: 60px; }
   .job-comments-empty { font-size: var(--t-sm); color: var(--text-light); text-align: center; padding: var(--s-6) 0; }
   .job-comment-item { background: var(--bg); border-radius: 8px; padding: var(--s-2-5) var(--s-3); }
@@ -1557,7 +1557,7 @@
   .task-fixed-date-display:hover { border-color: var(--primary-light); background: var(--primary-tint); color: var(--primary); }
   .task-fixed-date-display.empty { color: var(--text-light); }
   .task-fixed-date-display.empty:hover { color: var(--primary); }
-  body.dark-mode .task-fixed-date-display:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
+  body.dark-mode .task-fixed-date-display:hover { background: rgba(255,255,255,0.1); color: var(--primary-ondark); }
   .task-fixed-date-wrap input[type="date"] {
     position: absolute; inset: 0; width: 100%; height: 100%;
     opacity: 0; border: none; padding: 0; margin: 0;
@@ -1611,7 +1611,7 @@
   .job-list-add-btn { width: 100%; height: 46px; margin-top: var(--s-1); border: 2px dashed #c7cbe0; border-radius: var(--radius); background: rgba(255,255,255,0.4); color: var(--text-light); font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.15s; font-family: inherit; }
   .job-list-add-btn:hover { border-color: var(--primary-light); color: var(--primary); background: white; }
   body.dark-mode .job-list-add-btn { border-color: #3a3f4d; background: rgba(255,255,255,0.03); color: var(--text-light); }
-  body.dark-mode .job-list-add-btn:hover { border-color: var(--primary-light); background: rgba(57,73,171,0.15); color: var(--primary-ondark); }
+  body.dark-mode .job-list-add-btn:hover { border-color: var(--primary-light); background: rgba(255,255,255,0.07); color: var(--primary-ondark); }
   /* ===== REPORTS TAB (src/views/reports.tsx) ===== */
   /* Fallback stage colors for stages without their own board color: the
      validated 8-slot categorical palette (worst adjacent-pair colorblind
@@ -1639,7 +1639,7 @@
   .rep-step { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 18px; line-height: 1; cursor: pointer; }
   .rep-step:hover:not(:disabled) { background: var(--primary-tint); }
   .rep-step:disabled { opacity: .35; cursor: default; }
-  body.dark-mode .rep-step:hover:not(:disabled) { background: rgba(57,73,171,0.2); }
+  body.dark-mode .rep-step:hover:not(:disabled) { background: rgba(255,255,255,0.09); }
   .rep-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 9px; background: rgba(127,127,127,0.12); }
   .rep-seg button { border: 0; background: transparent; font: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--text); padding: 5px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; min-height: 28px; }
   .rep-seg button.active { background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,0.14); }
@@ -1653,7 +1653,7 @@
   .rep-filter-menu label { display: grid; gap: 4px; font-size: var(--t-xs); font-weight: 700; color: var(--text-light); }
   .rep-filter-menu select { font: inherit; font-size: var(--t-sm); font-weight: 500; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-height: 34px; }
   .rep-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 10px; border-radius: 14px; background: var(--primary-tint); color: var(--text); font-size: var(--t-xs); font-weight: 600; }
-  body.dark-mode .rep-chip { background: rgba(57,73,171,0.25); }
+  body.dark-mode .rep-chip { background: rgba(255,255,255,0.11); }
   .rep-chip-k { color: var(--text-light); font-weight: 500; }
   .rep-chip button { width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--text-light); font-size: 15px; line-height: 1; cursor: pointer; }
   .rep-chip button:hover { background: rgba(127,127,127,0.2); color: var(--text); }
@@ -1794,7 +1794,7 @@
   .export-options { display: grid; gap: var(--s-2); margin: var(--s-3) 0; }
   .export-option { display: flex; gap: var(--s-2-5); align-items: flex-start; padding: var(--s-2-5) var(--s-3); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
   .export-option:has(input:checked) { border-color: var(--primary-light); background: var(--primary-tint); }
-  body.dark-mode .export-option:has(input:checked) { background: rgba(57,73,171,0.16); }
+  body.dark-mode .export-option:has(input:checked) { background: rgba(255,255,255,0.07); }
   .export-option input { margin-top: 3px; }
   .export-option b { display: block; font-size: var(--t-sm); color: var(--text); }
   .export-option small { display: block; font-size: var(--t-xs); color: var(--text-light); }
@@ -1807,7 +1807,7 @@
      item in the settings menu. Only rendered when there's at least one. */
   .job-list-archived-link { display: block; width: 100%; margin-top: var(--s-2); padding: var(--s-1-5); border: none; background: transparent; color: var(--text-light); font: inherit; font-size: var(--t-xs); font-weight: 600; text-align: center; cursor: pointer; border-radius: 6px; }
   .job-list-archived-link:hover { color: var(--primary); background: var(--primary-tint); }
-  body.dark-mode .job-list-archived-link:hover { color: var(--primary-ondark); background: rgba(57,73,171,0.15); }
+  body.dark-mode .job-list-archived-link:hover { color: var(--primary-ondark); background: rgba(255,255,255,0.07); }
 
   /* ===== TRELLO-STYLE BOARD ===== */
   /* flex:1/min-height:0 only matter now that #panel-board.active is a
@@ -1868,7 +1868,7 @@
 font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.15s; }
   .board-add-column-btn:hover { border-color: var(--primary-light); color: var(--primary); background: white; }
   body.dark-mode .board-add-column-btn { border-color: #3a3f4d; background: rgba(255,255,255,0.03); color: var(--text-light); }
-  body.dark-mode .board-add-column-btn:hover { border-color: var(--primary-light); background: rgba(57,73,171,0.15); color: var(--primary-ondark); }
+  body.dark-mode .board-add-column-btn:hover { border-color: var(--primary-light); background: rgba(255,255,255,0.07); color: var(--primary-ondark); }
   .board-add-column-form {
     display: none;
     background: var(--kanban-column-bg);
@@ -2320,7 +2320,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      explicit color, which wins over inheriting this one, so the "— My
      Open Items" half stays visually secondary even while hovering. */
   .home-widget-header:hover { background: rgba(0,0,0,0.05); transform: translateY(-1px); }
-  body.dark-mode .home-widget-header:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
+  body.dark-mode .home-widget-header:hover { background: rgba(255,255,255,0.1); }
   /* Job Chat's header isn't a link (see its own .no-nav rule further
      down) — undoes all three of the above so it doesn't imply a click
      that does nothing. */
@@ -2392,7 +2392,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .home-widget-alert.tier-today { background: #fef3e2; color: #a0620c; }
   body.dark-mode .home-widget-alert.tier-today { background: rgba(240,173,78,0.2); color: var(--warning); }
   .home-widget-alert.tier-soon { background: var(--primary-tint); color: var(--primary-light); }
-  body.dark-mode .home-widget-alert.tier-soon { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
+  body.dark-mode .home-widget-alert.tier-soon { background: rgba(255,255,255,0.1); color: var(--primary-ondark); }
   .home-widget-alert-text { flex: 1; }
   .home-widget-alert-dismiss {
     background: none; border: none; color: inherit; font-size: var(--t-lg); line-height: 1; cursor: pointer;
@@ -2736,7 +2736,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      var(--danger-tint)/var(--danger) rule above, which needs to stay red — a plain
      .board-col-settings-item:hover selector matches danger items too,
      since it doesn't exclude them on its own. */
-  body.dark-mode .board-col-settings-item:not(.danger):hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
+  body.dark-mode .board-col-settings-item:not(.danger):hover { background: rgba(255,255,255,0.09); color: var(--primary-ondark); }
 
   /* ===== CROSS-PROJECT LINKED JOB REFERENCE =====
      A linked reference is a real, precisely-positioned row (not a
@@ -2779,7 +2779,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   .undo-toast-btn:hover { border-color: var(--primary-light); }
   .undo-toast-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
-  body.dark-mode .undo-toast-btn { color: var(--primary-ondark); background: rgba(57,73,171,0.22); }
+  body.dark-mode .undo-toast-btn { color: var(--primary-ondark); background: rgba(255,255,255,0.1); }
   @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
   /* ===== NEW USER TUTORIAL ===== see maybeShowTutorialPrompt() and the
@@ -3031,7 +3031,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .activity-sidebar-body { flex: 1; overflow-y: auto; padding: var(--s-2-5); }
 
   body.dark-mode .activity-sidebar { background: var(--card); border-left-color: var(--border); }
-  body.dark-mode .activity-sidebar-header { background: #1a1d25; border-bottom-color: var(--border); color: var(--text); }
+  body.dark-mode .activity-sidebar-header { background: #1f1f1f; border-bottom-color: var(--border); color: var(--text); }
   body.dark-mode .activity-sidebar-close { color: var(--text-faint); }
   body.dark-mode .activity-sidebar-close:hover { background: rgba(220,53,69,0.18); color: var(--danger); }
 
@@ -3393,7 +3393,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
   /* ===== DARK MODE ===== */
   body.dark-mode {
-    --bg: #14161c; --card: #1c1f27; --border: #323744;
+    --bg: #171717; --card: #212121; --border: #3a3a3a;
     --text: #e7e9ee; --text-light: #98a0ae; --text-faint: #8a93a3;
     /* Accessible text versions of the danger red and accent red (4.5:1 on
        the dark card and on their own dark tints — see the light values). */
@@ -3412,9 +3412,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     --primary-ondark: #8b9df5;
     --shadow: 0 2px 12px rgba(0,0,0,0.45);
     --shadow-hover: 0 4px 24px rgba(0,0,0,0.6);
-    background: linear-gradient(165deg, #1c1f2a 0%, #14161c 45%, #1a1d27 100%);
+    background: linear-gradient(165deg, #222222 0%, #171717 45%, #1f1f1f 100%);
   }
-  body.dark-mode ::-webkit-scrollbar-thumb { background: #404656 !important; }
+  body.dark-mode ::-webkit-scrollbar-thumb { background: #494949 !important; }
   /* The thumb rule above was already dark, but every scrollable panel here
      (.board-wrapper/.board-column-body included) only ever styled the
      THUMB, never the track around it — Windows Chrome's classic (non-
@@ -3426,7 +3426,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode ::-webkit-scrollbar-track { background: transparent; }
   /* Firefox has no ::-webkit-scrollbar-* pseudo-elements at all — this is
      its own (inherited) equivalent, thumb then track. */
-  body.dark-mode { scrollbar-color: #404656 transparent; }
+  body.dark-mode { scrollbar-color: #494949 transparent; }
   /* Every hardcoded navy icon fill/stroke in the app's static chrome
      (Settings' three dots, Jobs' briefcase, Gantt's bars, the project-
      toggle/backups/refresh icons, etc.) uses this exact literal hex
@@ -3457,7 +3457,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      one-off shade — and titleColorDark below is computed against this
      exact value so the contrast math matches what's actually on screen. */
   body.dark-mode .board-card {
-    background: #242732;
+    background: #2a2a2a;
   }
   /* See BoardCardProps.titleColorLight/Dark's own comment (board-card.tsx)
      — a job-colored label, same de-chromed treatment as the Gantt's own
@@ -3473,13 +3473,13 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     color: var(--jct-dark, var(--text));
   }
   body.dark-mode .btn-secondary { background: var(--card); }
-  body.dark-mode .btn-secondary:hover:not(:disabled) { background: rgba(57,73,171,0.2); }
+  body.dark-mode .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.09); }
 
   /* Bigger canvas areas get a soft gradient instead of a flat fill */
   body.dark-mode .manager-form-area,
   body.dark-mode .board-wrapper,
   body.dark-mode .manager-sidebar {
-    background: linear-gradient(165deg, #20232f 0%, #171a22 55%, #1c1f29 100%);
+    background: linear-gradient(165deg, #262626 0%, #1c1c1c 55%, #212121 100%);
   }
   /* Same gradient as above, slightly transparent — same reasoning as the
      light-mode rules, letting a project's background image show through. */
@@ -3493,7 +3493,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .timeline-header .week-header,
   body.dark-mode .timeline-header .day-header,
   body.dark-mode .manager-sidebar-header {
-    background: #1a1d25;
+    background: #1f1f1f;
   }
   body.dark-mode .left-header { color: var(--text-light); }
   /* .week-header's own base rule (further up) colors its label text
@@ -3502,17 +3502,17 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      in dark mode, and never had its own override until now. */
   body.dark-mode .timeline-header .week-header { color: var(--primary-ondark); }
   body.dark-mode .left-header .col { border-right-color: var(--border); }
-  body.dark-mode .gantt-top-row { background: #1a1d25; border-bottom-color: var(--border); }
-  body.dark-mode .timeline-header .week-header:hover { background: rgba(57,73,171,0.28); }
+  body.dark-mode .gantt-top-row { background: #1f1f1f; border-bottom-color: var(--border); }
+  body.dark-mode .timeline-header .week-header:hover { background: rgba(255,255,255,0.13); }
   body.dark-mode .timeline-header .day-header { color: var(--text-light); border-right-color: var(--border); }
-  body.dark-mode .timeline-header .day-header:hover { background: rgba(57,73,171,0.22); color: #cfd4e0; }
+  body.dark-mode .timeline-header .day-header:hover { background: rgba(255,255,255,0.1); color: #cfd4e0; }
   body.dark-mode .timeline-header .day-header .day-name { color: #9aa1ae; }
-  body.dark-mode .timeline-header .day-header.weekend { background: #15171d; color: #9aa1ae; }
-  body.dark-mode .timeline-header .day-header.weekend:hover { background: #20232c; }
+  body.dark-mode .timeline-header .day-header.weekend { background: #181818; color: #9aa1ae; }
+  body.dark-mode .timeline-header .day-header.weekend:hover { background: #252525; }
   body.dark-mode .timeline-header .day-header.today-header { background: rgba(229,57,53,0.2) !important; }
 
   body.dark-mode .task-row { border-bottom-color: var(--border); }
-  body.dark-mode .task-row:hover, body.dark-mode .task-row:nth-child(even):hover { background: rgba(57,73,171,0.22); }
+  body.dark-mode .task-row:hover, body.dark-mode .task-row:nth-child(even):hover { background: rgba(255,255,255,0.1); }
   body.dark-mode .task-row:nth-child(even) { background: rgba(255,255,255,0.025); }
   body.dark-mode .task-row .col { border-right-color: var(--border); }
   body.dark-mode .task-row .col-date { color: var(--text-light); }
@@ -3523,7 +3523,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .row-bg:nth-child(even) { background: rgba(255,255,255,0.02); }
 
   body.dark-mode .gantt-toolbar button { background: var(--card); border-color: var(--border); color: var(--text); }
-  body.dark-mode .gantt-toolbar button:hover { background: rgba(57,73,171,0.2); }
+  body.dark-mode .gantt-toolbar button:hover { background: rgba(255,255,255,0.09); }
 
   body.dark-mode .date-popover .dp-label,
   body.dark-mode .cf-field label,
@@ -3531,14 +3531,14 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     color: var(--text-light);
   }
 
-  body.dark-mode .job-card.active { background: rgba(57,73,171,0.16); }
+  body.dark-mode .job-card.active { background: rgba(255,255,255,0.07); }
   body.dark-mode .job-comment-delete:hover { background: rgba(220,53,69,0.18); }
   body.dark-mode .job-card-menu-item.danger:hover, body.dark-mode .job-card-menu-item.danger:focus-visible { background: rgba(220,53,69,0.18); color: var(--danger); }
   body.dark-mode .job-card .job-card-menu-btn:hover,
   body.dark-mode .job-card .job-card-menu-btn[aria-expanded="true"],
   body.dark-mode .job-card-menu-item:hover,
   body.dark-mode .job-card-menu-item:focus-visible,
-  body.dark-mode .duplicate-job-btn:hover { background: rgba(57,73,171,0.22); color: var(--primary-ondark); }
+  body.dark-mode .duplicate-job-btn:hover { background: rgba(255,255,255,0.1); color: var(--primary-ondark); }
 
   body.dark-mode .form-group label { color: var(--text-light); }
   body.dark-mode .form-group input,
@@ -3552,21 +3552,21 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .checklist-subitem-add-row input,
   body.dark-mode .manage-field-add-row input,
   body.dark-mode .search-box {
-    background: #20232c; color: var(--text);
+    background: #252525; color: var(--text);
   }
 
 
-  body.dark-mode .board-column { background: #232732; border-color: var(--border); }
+  body.dark-mode .board-column { background: #292929; border-color: var(--border); }
   body.dark-mode .board-column.drag-over-col { border-color: var(--primary-light); }
   body.dark-mode .board-card { border-color: var(--border); }
   body.dark-mode .board-column-body:empty::before { color: #565d6b; }
-  body.dark-mode .board-column-body.drag-over { background: rgba(57,73,171,0.18); }
+  body.dark-mode .board-column-body.drag-over { background: rgba(255,255,255,0.08); }
   body.dark-mode .board-column.card-drag-over {
     box-shadow: 0 0 0 2px var(--primary-light), 0 12px 28px rgba(0,0,0,0.4);
     transform: translateY(-2px);
   }
   body.dark-mode .board-column.card-drag-over .board-column-body {
-    background: rgba(57,73,171,0.18);
+    background: rgba(255,255,255,0.08);
   }
 
   body.dark-mode .board-card-due,
@@ -3574,14 +3574,14 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .mini-badge,
   body.dark-mode .att-icon,
   body.dark-mode .manage-field-chip {
-    background: rgba(57,73,171,0.2); color: var(--primary-ondark);
+    background: rgba(255,255,255,0.09); color: var(--primary-ondark);
   }
   body.dark-mode .manage-field-chip button { color: var(--primary-ondark); }
   body.dark-mode .board-card-due.overdue { background: rgba(220,53,69,0.2); }
   body.dark-mode .mini-badge.checklist-complete { background: rgba(40,167,69,0.2); }
-  body.dark-mode .board-add-column-form { background: #232732; }
+  body.dark-mode .board-add-column-form { background: #292929; }
   body.dark-mode .board-add-column-form input {
-    background: #20232c;
+    background: #252525;
     color: var(--text);
     border-color: var(--border);
   }
@@ -3591,11 +3591,11 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   body.dark-mode .board-col-settings-divider { background: var(--border); }
   body.dark-mode .board-col-color-option { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
-  body.dark-mode .board-col-color-toggle:hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
-  body.dark-mode .att-thumb { background: #2d3140; }
+  body.dark-mode .board-col-color-toggle:hover { background: rgba(255,255,255,0.09); color: var(--primary-ondark); }
+  body.dark-mode .att-thumb { background: #353535; }
   body.dark-mode .color-toggle-row:hover { background: rgba(255,255,255,0.05); }
 
-  body.dark-mode .settings-dropdown-item:hover { background: rgba(57,73,171,0.2); color: var(--primary-ondark); }
+  body.dark-mode .settings-dropdown-item:hover { background: rgba(255,255,255,0.09); color: var(--primary-ondark); }
   body.dark-mode .settings-tab.active { background: var(--border); color: var(--primary-ondark); }
   body.dark-mode .settings-dropdown-divider { background: var(--border); }
   body.dark-mode .modal-box p { color: var(--text-light); }
@@ -3629,7 +3629,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   }
   .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: var(--primary-tint); }
   body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn { border-color: var(--border); color: var(--text); }
-  body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: rgba(57,73,171,0.2); }
+  body.dark-mode .gantt-toolbar button.gantt-toolbar-text-btn:hover { background: rgba(255,255,255,0.09); }
   .job-card.archived { opacity: 0.55; }
   .task-row.archived { opacity: 0.55; }
 
@@ -3639,7 +3639,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      views sit on one rounded card (.app-shell-main). Job rows are plain
      rows with a color dot instead of boxed cards. */
   :root { --chrome: #f6f6f6; --chrome-hover: rgba(0,0,0,0.045); --nav-active: #e6e6e6; }
-  body.dark-mode { --chrome: #0e1014; --chrome-hover: rgba(255,255,255,0.07); --nav-active: rgba(57,73,171,0.4); }
+  body.dark-mode { --chrome: #101010; --chrome-hover: rgba(255,255,255,0.07); --nav-active: rgba(255,255,255,0.12); }
   body { background: var(--chrome); }
   .app-shell-main { background: var(--bg); border-radius: 18px; margin: 0 var(--s-3) var(--s-3) 0; }
   .manager-sidebar, body.dark-mode .manager-sidebar { background: transparent; border-right: 0; }
