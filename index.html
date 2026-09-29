@@ -208,6 +208,7 @@
   /* --text-faint, not --text-light: it keeps 4.5:1 on the active tab's tint too. */
   .nav-tab .badge { font-size: var(--t-2xs); font-weight: 700; color: var(--text-faint); }
   body.dark-mode .nav-tab .badge { color: var(--text-light); }
+  body.dark-mode .nav-tab.active .badge { color: var(--text); }
   .nav-tab .badge[hidden] { display: none; }
   .nav-tab:hover:not(.active) { background: var(--chrome-hover); }
   .nav-tab.active { background: var(--nav-active); }
@@ -3393,7 +3394,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
   /* ===== DARK MODE ===== */
   body.dark-mode {
-    --bg: #171717; --card: #212121; --border: #3a3a3a;
+    --bg: #161616; --card: #1f1f1f; --border: #353535;
     --text: #e7e9ee; --text-light: #98a0ae; --text-faint: #8a93a3;
     /* Accessible text versions of the danger red and accent red (4.5:1 on
        the dark card and on their own dark tints — see the light values). */
