@@ -1,6 +1,7 @@
-// Gantt "Key" panel (#ganttKeyPanel, opened by #ganttKeyBtn in the
-// toolbar) — explains what each color, pattern and marker on the timeline
-// means. Built fresh on every open so the stage swatches always match the
+// Gantt key — explains what each color, pattern and marker on the
+// timeline means. Shown in the Gantt Chart section of the Help panel
+// (src/views/help.tsx); it used to open from an ⓘ in the Gantt's floating
+// pill. Built fresh on every open so the stage swatches always match the
 // Board's current columns and colors (a task's color always mirrors its
 // board column — see normalizeTasksToColumns() in src/core/jobs.ts — and a
 // column with no color of its own falls back to the job's color).
@@ -8,7 +9,6 @@
 // Every swatch reuses the exact recipe the timeline itself draws with
 // (softenColor() fills, the 45° two-color overlap hatch, the accent-ringed
 // due circle) so the key can't drift into describing a different look.
-import { render } from 'preact';
 import { softenColor } from '../utils/color';
 
 const HATCH_A = '#4dd0e1';
@@ -33,7 +33,7 @@ function Row({ swatch, label }: KeyRow) {
   );
 }
 
-function GanttKey({ onClose }: { onClose: () => void }) {
+export function GanttKeyBody() {
   const cols = (typeof BOARD_COLUMNS !== 'undefined' && BOARD_COLUMNS) || [];
   const colored = cols.filter((c) => !!c.color);
   const uncolored = cols.filter((c) => !c.color);
@@ -92,11 +92,7 @@ function GanttKey({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <div class="gantt-key-head">
-        <h3 id="ganttKeyTitle">Key</h3>
-        <button type="button" class="gantt-key-close" aria-label="Close key" title="Close" onClick={onClose}>×</button>
-      </div>
-      <p class="gantt-key-tip"><b>Tip:</b> click a job or task name to show only that one. Click it again to show everything.</p>
+      <h3 class="gantt-key-title">Key</h3>
 
       <h4>Task colors</h4>
       <p class="gantt-key-note">Each task takes the color of its Board stage.</p>
@@ -124,45 +120,4 @@ function GanttKey({ onClose }: { onClose: () => void }) {
       <ul class="gantt-key-list">{timelineRows.map((r, i) => <Row key={i} {...r} />)}</ul>
     </>
   );
-}
-
-function panel(): HTMLElement { return document.getElementById('ganttKeyPanel')!; }
-function button(): HTMLElement { return document.getElementById('ganttKeyBtn')!; }
-
-export function isGanttKeyOpen(): boolean {
-  return !panel().hidden;
-}
-
-export function closeGanttKey(returnFocus?: boolean): void {
-  const p = panel();
-  if (p.hidden) return;
-  p.hidden = true;
-  button().setAttribute('aria-expanded', 'false');
-  document.removeEventListener('mousedown', onOutsidePointer, true);
-  document.removeEventListener('keydown', onKeyDown, true);
-  if (returnFocus) button().focus();
-}
-
-export function openGanttKey(): void {
-  const p = panel();
-  render(<GanttKey onClose={() => closeGanttKey(true)} />, p);
-  p.hidden = false;
-  button().setAttribute('aria-expanded', 'true');
-  document.addEventListener('mousedown', onOutsidePointer, true);
-  document.addEventListener('keydown', onKeyDown, true);
-  (p.querySelector('.gantt-key-close') as HTMLElement | null)?.focus();
-}
-
-export function toggleGanttKey(): void {
-  if (isGanttKeyOpen()) closeGanttKey(); else openGanttKey();
-}
-
-function onOutsidePointer(e: MouseEvent): void {
-  const t = e.target as Node;
-  if (panel().contains(t) || button().contains(t)) return;
-  closeGanttKey();
-}
-
-function onKeyDown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') { e.stopPropagation(); closeGanttKey(true); }
 }

@@ -25,7 +25,7 @@ import { openSecurityModal, closeSecurityModal, downloadAuditLog, exportAllData,
 import { openTwoStepModal, closeTwoStepModal, startTwoStepSetup, confirmTwoStepSetup, makeNewRecoveryCodes, turnOffTwoStep, setRequireTwoStep } from './two-step';
 import { saveGoogleSettings } from './sso-settings';
 import { openAccountEmailModal, closeAccountEmailModal, saveMyEmail, connectGoogleAccount } from './account-email';
-import { toggleGanttKey } from '../views/gantt-key';
+import { toggleHelp } from '../views/help';
 
 declare global {
   function toggleSettingsMenu(): void;
@@ -129,12 +129,12 @@ export function initStaticEventListeners(): void {
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
   }
+  on('helpBtn', () => { closeSettingsMenu(); toggleHelp(); });
   on('settingsBtn', () => toggleSettingsMenu());
   on('accountBtn', () => toggleAccountMenu());
 
   on('activityToggleBtn', () => { closeSettingsMenu(); toggleActivitySidebar(); });
   on('darkModeBtn', () => toggleDarkMode());
-  on('replayTourBtn', () => { closeSettingsMenu(); tutorialNotifShow(); });
   on('themeColorBtn', () => { closeSettingsMenu(); openThemeModal(); });
   on('workflowItemsBtn', () => { closeSettingsMenu(); openWorkflowItemsModal(); });
   on('backupsBtn', () => { closeSettingsMenu(); openBackupsModal(); });
@@ -207,7 +207,6 @@ export function initStaticEventListeners(): void {
 
   on('ganttBulkToggle', () => toggleGanttBulkFold());
   on('ganttBulkTogglePhone', () => toggleGanttBulkFold());
-  on('ganttKeyBtn', () => toggleGanttKey());
 
   // "Skip to main content" (A5): focus the content directly instead of
   // relying on #hash navigation, which doesn't reliably move focus here.

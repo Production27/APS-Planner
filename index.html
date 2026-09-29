@@ -233,6 +233,51 @@
   }
   .settings-btn:hover, .settings-btn[aria-expanded="true"] { background: var(--chrome-hover); color: var(--text); }
   .settings-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
+  /* Help (?) sits left of the cog and looks the same. */
+  .help-btn {
+    width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; flex-shrink: 0;
+    display: grid; place-items: center; cursor: pointer; color: var(--text-light);
+  }
+  .help-btn:hover, .help-btn[aria-expanded="true"] { background: var(--chrome-hover); color: var(--text); }
+  .help-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
+  /* The Help panel (src/views/help.tsx): a card down the right side, under
+     the top bar, above the page. Full screen on phones. */
+  .help-panel {
+    position: fixed; top: 64px; right: 12px; bottom: 12px; width: min(400px, calc(100vw - 24px)); z-index: 2600;
+    display: flex; flex-direction: column; background: var(--card); color: var(--text);
+    border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .help-panel[hidden] { display: none; }
+  .help-head { display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) var(--s-3) var(--s-2) var(--s-4-5, 18px); }
+  .help-head h2 { margin: 0; font-size: 18px; }
+  .help-close { border: 0; background: none; font-size: 24px; line-height: 1; color: var(--text-light); cursor: pointer; width: 36px; height: 36px; border-radius: 50%; }
+  .help-close:hover { background: var(--chrome-hover); color: var(--text); }
+  .help-body { flex: 1; overflow-y: auto; padding: 0 var(--s-3) var(--s-4); }
+  .help-tour {
+    display: flex; align-items: center; gap: var(--s-3); width: 100%; margin: 0 0 var(--s-2); padding: var(--s-3);
+    border: 1px solid var(--border); border-radius: 12px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  }
+  .help-tour:hover { background: var(--chrome-hover); }
+  .help-tour svg { color: var(--primary-light); flex-shrink: 0; }
+  .help-tour > span { display: grid; }
+  .help-tour > span > span { font-size: var(--t-xs); color: var(--text-light); }
+  .help-section { border-bottom: 1px solid var(--border); }
+  .help-section:last-child { border-bottom: 0; }
+  .help-section summary {
+    list-style: none; cursor: pointer; padding: var(--s-3) var(--s-2); border-radius: 8px;
+    font-weight: 700; font-size: var(--t-base); display: flex; align-items: center; justify-content: space-between;
+  }
+  .help-section summary::-webkit-details-marker { display: none; }
+  .help-section summary::after { content: ''; width: 7px; height: 7px; border-right: 2px solid var(--text-light); border-bottom: 2px solid var(--text-light); transform: rotate(45deg); margin: -4px 4px 0 0; transition: transform 0.15s; }
+  .help-section[open] summary::after { transform: rotate(-135deg); margin-top: 4px; }
+  .help-section summary:hover { background: var(--chrome-hover); }
+  .help-section summary:focus-visible { outline: 2px solid var(--primary-light); outline-offset: -2px; }
+  .help-section-body { padding: 0 var(--s-2) var(--s-3); font-size: var(--t-sm); line-height: 1.55; color: var(--text); }
+  .help-section-body p { margin: 0 0 var(--s-2); }
+  .help-section-body ul { margin: 0; padding-left: 18px; display: grid; gap: var(--s-1-5); }
+  @media (max-width: 480px), (max-height: 480px) {
+    .help-panel { top: 0; right: 0; bottom: 0; width: 100vw; border-radius: 0; }
+  }
   .settings-btn .admin-badge { top: 5px; right: 5px; left: auto; min-width: 0; width: 12px; height: 12px; padding: 0; font-size: 0; border: 2px solid var(--chrome); }
   .account-btn {
     position: relative; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent;
@@ -1158,26 +1203,12 @@
   .gantt-job-focus-hint { font-weight: 500; font-style: italic; color: var(--text-light); }
 
   /* ===== GANTT KEY =====
-     Legend panel under the toolbar (see src/views/gantt-key.tsx). Lives in
-     .gantt-wrapper, not inside .gantt-toolbar, since the toolbar scrolls
-     sideways on narrow screens and would clip it. z-index 200 clears the
-     timeline's own overlays (today line 85, bars up to 82). */
+     What the timeline's colors and marks mean (src/views/gantt-key.tsx),
+     shown in the Gantt section of the Help panel (.help-key). */
   .gantt-wrapper { position: relative; }
-  .gantt-key {
-    position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 200;
-    width: min(360px, calc(100% - 16px)); max-height: calc(100% - 80px); overflow-y: auto;
-    background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.2); padding: var(--s-2-5) var(--s-3-5) var(--s-3);
-    font-size: var(--t-xs); line-height: 1.45;
-  }
-  .gantt-key[hidden] { display: none; }
-  .gantt-key-head { display: flex; align-items: center; justify-content: space-between; }
-  .gantt-key-tip { margin: var(--s-1-5) 0 0; color: var(--text-light); }
-  .gantt-key-tip b { color: var(--text); }
-  .gantt-key h3 { font-size: var(--t-sm); color: var(--primary); margin: 0; }
-  .gantt-key h4 { font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin: var(--s-3) 0 var(--s-1-5); }
-  .gantt-key-close { border: 0; background: none; font-size: 20px; line-height: 1; color: var(--text-light); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
-  .gantt-key-close:hover { background: var(--primary-tint); color: var(--primary); }
+  .help-key { font-size: var(--t-xs); line-height: 1.45; }
+  .gantt-key-title { font-size: var(--t-sm); color: var(--text); margin: var(--s-3) 0 0; }
+  .help-key h4 { font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin: var(--s-3) 0 var(--s-1-5); }
   .gantt-key-note { margin: 0 0 var(--s-1-5); color: var(--text-light); }
   .gantt-key-stages { list-style: none; margin: 0 0 var(--s-1-5); padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-1-5) var(--s-3); }
   .gantt-key-stages li { display: flex; align-items: center; gap: var(--s-1-5); }
@@ -1199,9 +1230,6 @@
   .gantt-key-sw-focus { font-size: var(--t-2xs); font-weight: 600; color: var(--primary-light); outline: 1.5px dashed currentColor; outline-offset: 2px; border-radius: 3px; padding: 0 2px; }
   .gantt-key-sw-today { display: inline-block; width: 40px; height: 16px; background: linear-gradient(to right, transparent 0 19px, var(--accent) 19px 21px, rgba(229,57,53,0.12) 21px); }
   .gantt-key-sw-weekend { background: var(--divider); border: 1px solid var(--border); }
-  body.dark-mode .gantt-key { background: var(--card); }
-  body.dark-mode .gantt-key h3 { color: var(--primary-ondark); }
-  body.dark-mode .gantt-key-close:hover { background: rgba(255,255,255,0.1); color: var(--primary-ondark); }
   body.dark-mode .gantt-key-sw-due { border-color: var(--card); }
   body.dark-mode .gantt-key-sw-linked { border-color: rgba(255,255,255,0.5); }
 
@@ -3948,12 +3976,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     <span><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M20 14.5A8.5 8.5 0 119.5 4 7 7 0 0020 14.5z" fill="#6c5ce7"/></svg> Dark Mode</span>
     <span class="mini-toggle" id="darkModeToggle"></span>
   </button>
-  <!-- No data-min-tier — the new-user tour (src/app/onboarding.ts) applies
-       to every tier, so this stays available to everyone, same as Dark
-       Mode above. Reopens from slide 1 regardless of the auto-popup's own
-       dismissal/login-count state, since this is an independent, explicit
-       request rather than that state's business. -->
-  <button type="button" class="settings-dropdown-item" id="replayTourBtn"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L2 8l10 5 8-4.2V15h2V8L12 3z" fill="#3949ab"/><path d="M6 12.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-3.5l-6 3-6-3z" fill="#3949ab" opacity="0.55"/></svg> Replay Tour</button>
   <div class="settings-dropdown-divider" data-min-tier="projectAdmin"></div>
   <div class="settings-dropdown-label" data-min-tier="projectAdmin">Project</div>
   <button type="button" class="settings-dropdown-item" id="activityToggleBtn" data-min-tier="projectAdmin"><svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:-3px;margin-right: var(--s-0-75)" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="11" width="18" height="3" rx="1.5" fill="#3949ab"/><rect x="3" y="17" width="12" height="3" rx="1.5" fill="#3949ab"/></svg> Activity Log</button>
@@ -4013,6 +4035,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      (the job list is its own full-screen view there). Tabs call
      switchTabMorphed() on desktop and setMobileView() on phones (see
      static-event-wiring.ts). -->
+<aside class="help-panel" id="helpPanel" role="dialog" aria-labelledby="helpTitle" hidden></aside>
 <header class="app-nav" id="appNav">
   <div class="app-nav-left">
     <!-- Gmail's ☰: shows or hides the job list (toggleJobRail()). -->
@@ -4040,6 +4063,9 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   </div>
   <div class="app-nav-right">
     <div class="presence-avatars" id="presenceAvatars"></div>
+    <!-- Help (src/views/help.tsx): how every page works, the Gantt key and
+         the new-user tour. -->
+    <button type="button" class="help-btn" id="helpBtn" title="Help" aria-label="Help" aria-expanded="false" aria-controls="helpPanel"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17.2v.1"/></svg></button>
     <div class="settings-menu-wrap">
       <button type="button" class="settings-btn" id="settingsBtn" title="Settings" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settingsDropdown"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="admin-badge" hidden></span></button>
     </div>
@@ -4210,9 +4236,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
             <!-- "Showing only X · Show all", floating just above the zoom pill
                  while a job or task is isolated (see syncGanttFocusBanner()). -->
             <div class="gantt-job-focus-banner" id="ganttJobFocusBanner" style="display:none;"></div>
-            <!-- Filled by src/views/gantt-key.tsx each time #ganttKeyBtn opens it;
-                 opens upward from the zoom pill. -->
-            <div class="gantt-key" id="ganttKeyPanel" role="dialog" aria-labelledby="ganttKeyTitle" hidden></div>
             <!-- Floating zoom pill. Buttons stay on screen on phones too: pinch
                  can't be the only way to zoom (WCAG 2.5.1). -->
             <div class="gantt-zoom-pill" role="group" aria-label="Chart controls">
@@ -4224,8 +4247,6 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
               <button type="button" id="ganttZoomInBtn" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
               <span class="gantt-zoom-pill-sep" aria-hidden="true"></span>
               <button type="button" id="ganttResetZoomBtn" title="Back to the normal zoom"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Reset</button>
-              <span class="gantt-zoom-pill-sep" aria-hidden="true"></span>
-              <button type="button" id="ganttKeyBtn" title="Key: what the colors and patterns mean" aria-label="Key: what the colors and patterns mean" aria-expanded="false" aria-controls="ganttKeyPanel"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.6v.4"/></svg></button>
             </div>
           </div>
         </div>

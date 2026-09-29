@@ -1178,7 +1178,7 @@ test('gantt zoom: zoomIn/zoomOut/resetZoom step dayWidth and clamp to [14, 80]',
   expect(result.clampedHigh).toBe(80);
 });
 
-test('gantt key: the Key button opens a legend listing each stage color, and Escape or an outside click closes it', async ({ page }) => {
+test('help: the ? button opens Help on the current page\'s section, the Gantt section holds the key, and Escape or an outside click closes it', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
   await page.goto(APP_URL);
@@ -1193,21 +1193,26 @@ test('gantt key: the Key button opens a legend listing each stage color, and Esc
     return { coloredLabel: BOARD_COLUMNS[0].label, otherLabel: BOARD_COLUMNS[1].label };
   });
 
-  const btn = page.locator('#ganttKeyBtn');
-  const panel = page.locator('#ganttKeyPanel');
-  // The Key lives in the floating zoom pill now. Let the tab-switch
-  // animation finish, and clear the first-visit tour prompt, which sits
-  // in the bottom-right corner over the pill on a 1280px-wide window.
+  const btn = page.locator('#helpBtn');
+  const panel = page.locator('#helpPanel');
+  // The key is in the Gantt section of Help now (no ⓘ on the pill).
+  await expect(page.locator('#ganttKeyBtn')).toHaveCount(0);
   await page.waitForTimeout(600);
-  await page.evaluate(() => document.querySelectorAll('#onbNotif').forEach((e) => e.remove()));
   await expect(panel).toBeHidden();
   await btn.click();
   await expect(panel).toBeVisible();
   await expect(btn).toHaveAttribute('aria-expanded', 'true');
-  await expect(panel.locator('.gantt-key-stages li')).toHaveText([coloredLabel]);
-  await expect(panel.locator('.gantt-key-note').last()).toContainText(otherLabel);
-  await expect(panel).toContainText('Stripes');
-  await expect(panel).not.toContainText(/turn (the )?stripes off/i);
+  // Opened on the page you're on: only the Gantt section is unfolded.
+  await expect(panel.locator('.help-section[open]')).toHaveCount(1);
+  const gantt = panel.locator('.help-section[data-section="gantt"]');
+  await expect(gantt).toHaveAttribute('open', '');
+  await expect(gantt.locator('.gantt-key-stages li')).toHaveText([coloredLabel]);
+  await expect(gantt.locator('.gantt-key-note').last()).toContainText(otherLabel);
+  await expect(gantt).toContainText('Stripes');
+  await expect(gantt).not.toContainText(/turn (the )?stripes off/i);
+  // The tour starts from Help now, not Settings.
+  await expect(panel.locator('#helpTourBtn')).toBeVisible();
+  await expect(page.locator('#replayTourBtn')).toHaveCount(0);
 
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden();

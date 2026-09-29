@@ -45,6 +45,7 @@ const SCREENS = {
   'card dialog': () => { switchTabMorphed('board'); openEditCard(boardCards.find((c) => isCardVisibleToMe(c)).id); },
   'settings menu': () => { switchTabMorphed('home'); toggleSettingsMenu(); },
   'account menu': () => { switchTabMorphed('home'); toggleAccountMenu(); },
+  'help panel (gantt key)': () => { switchTabMorphed('gantt'); document.getElementById('helpBtn').click(); },
   'calendar event dialog': () => { switchTabMorphed('calendar'); openAddCalendarEvent('2026-09-24'); },
   'tour prompt': () => { switchTabMorphed('home'); tutorialNotifShow(); },
   'board column menu': () => { switchTabMorphed('board'); document.querySelector('.board-col-settings-btn').click(); },
