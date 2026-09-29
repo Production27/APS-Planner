@@ -129,7 +129,6 @@ export function initStaticEventListeners(): void {
     });
   }
   on('accountBtn', () => toggleSettingsMenu());
-  on('navProjectBtn', () => toggleProject());
 
   on('activityToggleBtn', () => { closeSettingsMenu(); toggleActivitySidebar(); });
   on('darkModeBtn', () => toggleDarkMode());
