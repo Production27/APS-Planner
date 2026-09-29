@@ -18,10 +18,9 @@ test('renderJobList: search filters by name, and hides archived jobs from the ma
   await expect(page.locator('#jobList')).not.toContainText(jobName);
 
   await page.evaluate((id) => restoreJob(id), jobId);
-  await expect(page.locator('#jobList .job-card').first()).toBeVisible();
-
-  // The job rail's search box is hidden behind toggleJobRail() until opened.
+  // The job rail (list and search box) is hidden until toggleJobRail() opens it.
   await page.evaluate(() => toggleJobRail());
+  await expect(page.locator('#jobList .job-card').first()).toBeVisible();
   await page.locator('#jobSearch').fill('zzz-no-such-job-zzz');
   await page.waitForTimeout(250); // filterJobList() debounces 150ms
   await expect(page.locator('#jobList .job-card')).toHaveCount(0);

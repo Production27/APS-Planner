@@ -107,6 +107,8 @@ test('a11y: the Settings menu opened from the keyboard moves focus into it, and 
 
 test('a11y: job cards and Board cards open from the keyboard through their title button', async ({ page }) => {
   await openApp(page);
+  // Closed, the rail is hidden entirely (out of the Tab order too); open it first.
+  await page.evaluate(() => toggleJobRail());
   const job = page.locator('#jobList .job-card button.job-card-title').first();
   await job.focus();
   await page.keyboard.press('Enter');

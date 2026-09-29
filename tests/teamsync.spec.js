@@ -2939,7 +2939,7 @@ test('gantt: the phone-only bulk toggle is hidden on desktop and shown on a phon
   await expect(page.locator('#ganttBulkTogglePhone')).toContainText(/Expand all|Collapse all/);
 });
 
-test('Navbar: Home is active at load, every view is named on the island, and Jobs stays in the rail on desktop', async ({ page }) => {
+test('Navbar: Home is active at load, pages are icons in the left column, and the Jobs rail closes all the way on desktop', async ({ page }) => {
   await seedSession(page, { role: 'admin' });
   await mockRoomWebSocket(page);
   await page.setViewportSize({ width: 1366, height: 800 });
@@ -2947,14 +2947,18 @@ test('Navbar: Home is active at load, every view is named on the island, and Job
   await expect(page.locator('#freshLoadOverlay')).not.toHaveClass(/show/);
 
   await expect(page.locator('#tab-home')).toHaveClass(/active/);
-  await expect(page.locator('#tab-home .nav-tab-label')).toBeVisible();
-  await expect(page.locator('#tab-gantt .nav-tab-label')).toBeVisible();
-  // Desktop shows the job list with the navbar's ☰; the island has no Jobs button here.
+  // Gmail-style column: icons only, the name is the tooltip.
+  await expect(page.locator('#tab-home .nav-tab-label')).toBeHidden();
+  await expect(page.locator('#tab-gantt')).toHaveAttribute('title', 'Gantt Chart');
+  const col = await page.locator('#appNavNotch').boundingBox();
+  const menu = await page.locator('#jobRailToggleBtn').boundingBox();
+  expect(col.x).toBeLessThan(2);
+  expect(col.y).toBeGreaterThan(menu.y + menu.height);
+  // Desktop shows the job list with the ☰ at the top of the column; the column has no Jobs button here.
   await expect(page.locator('#tab-jobs')).toBeHidden();
   await expect(page.locator('#appNav #jobRailToggleBtn')).toBeVisible();
-  // "+ New job" sits next to the Jobs title; closed, the rail keeps just its +.
-  await expect(page.locator('#jobRailAddBtn')).toBeVisible();
-  await expect(page.locator('#jobRailAddBtn .job-rail-add-label')).toBeHidden();
+  // Closed, the rail is gone entirely, + New job included.
+  await expect(page.locator('#jobRailAddBtn')).toBeHidden();
   await page.locator('#jobRailToggleBtn').click();
   await expect(page.locator('.job-rail-header-label')).toBeVisible();
   await expect(page.locator('#jobRailAddBtn .job-rail-add-label')).toBeVisible();

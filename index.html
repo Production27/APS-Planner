@@ -1244,14 +1244,11 @@
      further down. The header itself stays visible (just its label/badge/
      add-button/search collapse away, see the icon-only rules below) since
      its icon is now the only way to reopen the rail. */
-  /* Closed, the header keeps just its + (Add Job), centered. */
-  body:not(.job-rail-open) .manager-sidebar-header { padding: var(--s-2); }
-  body:not(.job-rail-open) .manager-sidebar-header h2 { margin-bottom: 0; justify-content: center; }
-  body:not(.job-rail-open) .job-rail-add-btn { margin-left: 0; }
-  body:not(.job-rail-open) .job-rail-header-label,
-  body:not(.job-rail-open) .presence-avatars,
-  body:not(.job-rail-open) .search-box {
-    display: none;
+  /* Closed, the rail slides all the way shut (Karl, 2026-09-29: no + left
+     behind, so the Jobs column more or less disappears). Hidden once the
+     slide finishes, so its controls also leave the Tab order. */
+  @media (min-width: 481px) and (min-height: 481px) {
+    body:not(.job-rail-open) .manager-sidebar { visibility: hidden; transition: width 0.3s ease, min-width 0.3s ease, visibility 0s linear 0.3s; }
   }
   /* Clipping alone (.manager-sidebar's overflow:hidden + .job-list's own
      fixed 260px width, see both rules) only hides what falls outside the
@@ -1262,7 +1259,7 @@
      until it's actually opening. */
   body:not(.job-rail-open) .job-list { opacity: 0; pointer-events: none; }
   @media (min-width: 1101px) {
-    body:not(.job-rail-open) .manager-sidebar { width: 56px; min-width: 56px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 0; min-width: 0; }
   }
   .manager-sidebar-header { padding: var(--s-3-5) var(--s-4); border-bottom: 1px solid var(--border); background: var(--row-alt-bg); transition: padding 0.15s ease; }
   .manager-sidebar-header h2 { font-size: 19px; font-weight: 700; color: var(--text); margin-bottom: var(--s-2-5); display: flex; align-items: center; gap: var(--s-2); transition: margin 0.15s ease, justify-content 0.15s ease; }
@@ -1290,8 +1287,6 @@
   .job-rail-add-btn:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
   .job-rail-add-plus { font-size: 22px; font-weight: 500; line-height: 1; color: var(--primary-light); }
   body.dark-mode .job-rail-add-plus { color: var(--primary-ondark); }
-  body:not(.job-rail-open) .job-rail-add-btn { padding: 0; justify-content: center; }
-  body:not(.job-rail-open) .job-rail-add-label { display: none; }
   .search-box { width: 100%; padding: var(--s-2) var(--s-3); border: 1px solid var(--border); border-radius: 8px; font-size: var(--t-base); outline: none; transition: border-color 0.2s; }
   .search-box:focus { border-color: var(--primary-light); }
   /* Clips .job-list's fixed 260px width down when narrow — scoped to
@@ -3059,7 +3054,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
      .job-rail-open at all, since it doesn't use this toggle) even
      though the mobile block's own rule is meant to be the final word. */
   @media (max-width: 1100px) and (min-width: 481px) {
-    body:not(.job-rail-open) .manager-sidebar { width: 56px; min-width: 56px; }
+    body:not(.job-rail-open) .manager-sidebar { width: 0; min-width: 0; }
   }
 
   /* ===== MOBILE (phone-width) =====
@@ -3674,6 +3669,47 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   #panel-home .home-widget { border-radius: 18px; border-color: transparent; box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.05); }
   #panel-home .home-widget:hover, #panel-home .home-widget.is-expanded { box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.10); }
   body.dark-mode #panel-home .home-widget { border-color: var(--border); }
+
+  /* ===== PAGES COLUMN =====
+     Gmail-style (Karl, 2026-09-29): a slim full-height column on the far
+     left, past the top bar, with ☰ on top and one icon per page under it
+     (the name is the tooltip; counts are red bubbles on the icon). Same
+     markup as the phone island (#appNavNotch in the navbar), just pinned
+     into the column here, so phones keep their own layout. */
+  @media (min-width: 481px) and (min-height: 481px) {
+    body { --pages-col: 68px; }
+    body::before {
+      content: ""; position: fixed; left: 0; top: 0; bottom: 0; width: var(--pages-col); z-index: 1;
+      border-right: 1px solid rgba(0,0,0,0.08); pointer-events: none;
+    }
+    body.dark-mode::before { border-right-color: rgba(255,255,255,0.08); }
+    .app-nav, .app-shell { margin-left: var(--pages-col); }
+    .app-nav-menu { position: fixed; left: 14px; top: 10px; margin: 0; }
+    .app-nav-right { margin-left: auto; }
+    .app-nav-island, body.dark-mode .app-nav-island {
+      position: fixed; left: 0; top: 64px; width: var(--pages-col); margin: 0; padding: 0;
+      flex-direction: column; gap: 8px; overflow: visible;
+      background: transparent; border-radius: 0; box-shadow: none;
+    }
+    .app-nav-island .nav-tab, .app-nav-island .nav-tab:not(.active) { width: 52px; height: 36px; padding: 0; position: relative; }
+    .app-nav-island .nav-tab .nav-tab-label { display: none; }
+    .app-nav-island .nav-tab svg { width: 20px; height: 20px; }
+    .app-nav-island .nav-tab .badge, .app-nav-island .nav-tab:not(.active) .badge {
+      display: block; position: absolute; top: 1px; left: 29px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+      border-radius: 999px; background: var(--primary-light); color: #fff; font-size: 10.5px; line-height: 18px; text-align: center;
+      box-shadow: 0 0 0 2px var(--chrome);
+    }
+    body.dark-mode .app-nav-island .nav-tab .badge, body.dark-mode .app-nav-island .nav-tab.active .badge { color: #fff; }
+    .app-nav-island .nav-tab.active .badge { box-shadow: 0 0 0 2px var(--nav-active); color: #fff; }
+    .app-nav-island .nav-tab .badge[hidden] { display: none; }
+    /* Fixed-width header, so the rail clips it while sliding instead of
+       squeezing the title and + New job together. */
+    .manager-sidebar { overflow: hidden; }
+    .manager-sidebar-header { min-width: 260px; box-sizing: border-box; }
+  }
+  @media (min-width: 481px) and (max-width: 1100px) and (min-height: 481px) {
+    .manager-sidebar-header { min-width: 210px; }
+  }
 
 </style>
 <base target="_blank">
