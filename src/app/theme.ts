@@ -188,14 +188,20 @@ export function applyProjectBgVisual(): void {
   // exactly, box included — Board shows that exact same box in its own
   // dark mode today (confirmed directly), so this isn't a new problem,
   // just Board's already-shipped look applied consistently everywhere.
-  const bgCss = staticBg ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + staticBg + '") center/cover no-repeat') : '';
+  // The logo's size comes from --project-logo-size (index.html): smaller on
+  // a computer screen than a full cover (Karl, 2026-09-30). The logo images
+  // are square on white, so a white fill behind them keeps any uncovered
+  // edge the same color as the image (no visible box, even under dark
+  // mode's overlay).
+  const logo = staticBg ? ('url("' + staticBg + '") center / var(--project-logo-size, cover) no-repeat #fff') : '';
+  const bgCss = staticBg ? ('linear-gradient(' + overlay + ', ' + overlay + '), ' + logo) : '';
   STATIC_BG_PANEL_IDS.forEach(function(id) {
     const el = document.getElementById(id) as HTMLElement | null;
     if (!el) return;
     // Checklist shows the image at full strength in light mode, like the
     // Board (Karl, 2026-09-30); Calendar and Gantt keep the haze, since
     // their grids sit right on top of it.
-    el.style.background = (staticBg && !dark && id === 'panel-checklist') ? ('url("' + staticBg + '") center/cover no-repeat') : bgCss;
+    el.style.background = (staticBg && !dark && id === 'panel-checklist') ? logo : bgCss;
     // background-blend-mode isn't part of the background shorthand
     // above, so a stale value from before this reverted away from
     // multiply-blend wouldn't otherwise get cleared on re-runs (project
@@ -218,8 +224,10 @@ export function applyProjectBgVisual(): void {
     // Light mode shows the Board's image at full strength, the way Trello
     // does (Karl, 2026-09-30: the hazed version read as faded). Dark mode
     // keeps the overlay, since the image's own background is white.
+    // An uploaded photo (the legacy fallback) still covers the panel.
+    const boardImage = staticBg ? logo : ('url("' + boardPhoto + '") center/cover no-repeat');
     boardPanel.style.background = boardPhoto
-      ? ((dark ? 'linear-gradient(' + overlay + ', ' + overlay + '), ' : '') + 'url("' + boardPhoto + '") center/cover no-repeat')
+      ? ((dark ? 'linear-gradient(' + overlay + ', ' + overlay + '), ' : '') + boardImage)
       : 'var(--bg)';
     boardWrapper.style.background = 'transparent';
   }
