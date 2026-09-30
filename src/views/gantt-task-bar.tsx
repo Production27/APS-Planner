@@ -188,7 +188,7 @@ export interface JobSpanSegmentData {
   onOpen?: (e: MouseEvent | KeyboardEvent) => void;
 }
 
-function JobSpanSegment(s: JobSpanSegmentData) {
+function JobSpanSegment(s: JobSpanSegmentData & { borderRadius?: string }) {
   const cls = s.kind === 'hash' ? 'job-span-gap-hash' : s.kind === 'solid' ? 'job-span-task-solid' : 'job-span-task-hatch';
   const isSolid = s.kind === 'solid';
   const onKeyDown = isSolid
@@ -205,7 +205,7 @@ function JobSpanSegment(s: JobSpanSegmentData) {
       data-full-left={s.fullLeft}
       data-full-width={s.fullWidth}
       data-dragged={isSolid ? 'false' : undefined}
-      style={{ left: s.left + 'px', width: s.width + 'px', top: s.top + 'px', background: s.background }}
+      style={{ left: s.left + 'px', width: s.width + 'px', top: s.top + 'px', background: s.background, borderRadius: s.borderRadius }}
       title={s.title}
       tabIndex={isSolid ? 0 : undefined}
       role={isSolid ? 'button' : undefined}
@@ -258,6 +258,17 @@ export interface JobSpanBarProps {
   segments: JobSpanSegmentData[];
 }
 
+// A segment sitting at either end of the span takes the outline's own
+// corner radius on that end (.job-span-border, 7px), so its corners stay
+// inside the rounded outline instead of poking out past it. Joints between
+// segments are square, so neighbours meet flush.
+const JOB_SPAN_RADIUS = 7;
+function segmentRadius(s: JobSpanSegmentData, spanLeft: number, spanWidth: number): string {
+  const l = Math.abs(s.left - spanLeft) < 1 ? JOB_SPAN_RADIUS : 0;
+  const r = Math.abs(s.left + s.width - (spanLeft + spanWidth)) < 1 ? JOB_SPAN_RADIUS : 0;
+  return l + 'px ' + r + 'px ' + r + 'px ' + l + 'px';
+}
+
 function JobSpanBarGroup(p: JobSpanBarProps) {
   const onBarKeyDown = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.onOpen(e); } };
   const onDueKeyDown = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.due!.onClick(e); } };
@@ -304,7 +315,7 @@ function JobSpanBarGroup(p: JobSpanBarProps) {
         onClick={p.onOpen} onKeyDown={onBarKeyDown} onMouseDown={p.onMouseDown}
       />
       {p.ticks.map((t) => <JobSpanTick key={t.domKey} {...t} />)}
-      {p.segments.map((s) => <JobSpanSegment key={s.domKey} {...s} />)}
+      {p.segments.map((s) => <JobSpanSegment key={s.domKey} {...s} borderRadius={segmentRadius(s, p.left, p.width)} />)}
     </>
   );
 }
