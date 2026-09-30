@@ -649,7 +649,7 @@ function buildCalBarHtml(seg: CalSeg, left: number, top: number, width: number):
     if (taskCount <= 1) return ganttPastel(colors[0]);
     if (colors.length > 1) return 'repeating-linear-gradient(45deg, ' + colors.map(function (c: string, idx: number) { const sc = ganttPastel(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
     const base = ganttPastel(colors[0]);
-    const dark = ganttPastel(colors[0], 60);
+    const dark = ganttPastel(colors[0], true);
     return 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
   }
   const clusterSegs = isJobSpan ? task.clusterSegments : null;
@@ -768,7 +768,7 @@ function buildCalBarProps(seg: CalSeg, left: number, top: number, width: number)
     if (taskCount <= 1) return ganttPastel(colors[0]);
     if (colors.length > 1) return 'repeating-linear-gradient(45deg, ' + colors.map(function (c: string, idx: number) { const sc = ganttPastel(c); return sc + ' ' + (idx * 6) + 'px, ' + sc + ' ' + ((idx + 1) * 6) + 'px'; }).join(', ') + ')';
     const base = ganttPastel(colors[0]);
-    const dark = ganttPastel(colors[0], 60);
+    const dark = ganttPastel(colors[0], true);
     return 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
   }
   const clusterSegs = isJobSpan ? task.clusterSegments : null;

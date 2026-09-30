@@ -2258,7 +2258,7 @@ function renderTimelineBars(visibleRows: GanttRow[], barsLayer: HTMLElement, job
                 // Alternate the job color with a darker shade of itself
                 // instead, so an overlap still reads as a hatch.
                 const base = ganttPastel(job.color || '#3949ab');
-                const dark = ganttPastel(job.color || '#3949ab', 60);
+                const dark = ganttPastel(job.color || '#3949ab', true);
                 background = 'repeating-linear-gradient(45deg, ' + base + ' 0px, ' + base + ' 6px, ' + dark + ' 6px, ' + dark + ' 12px)';
                 title = 'Overlapping sub-phases: ' + covering.map(function (dt) { return dt.t.name; }).join(', ');
               } else {
