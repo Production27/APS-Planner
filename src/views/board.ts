@@ -61,7 +61,7 @@ import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../c
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
-import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor, ganttPastel, JOB_NAME_CONTRAST } from '../utils/color';
+import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor, JOB_NAME_CONTRAST } from '../utils/color';
 import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -114,7 +114,13 @@ const BOARD_COLOR_SOFTEN_AMOUNT = 0.30;
 // A dark-mode card's real fill (body.dark-mode .board-card is #2a2a2a),
 // nudged lighter for hover, for the contrast math on job-name titles.
 const BOARD_CARD_DARK_BG = '#303030';
-export const BOARD_COLOR_PRESETS = COLOR_PRESETS.map((c) => softenColor(c, BOARD_COLOR_SOFTEN_AMOUNT));
+// One swap: the cyan made from #00bcd4 gives way to Trello's list blue
+// (Karl, 2026-09-30). Two other cyans stay in the palette.
+const TRELLO_BLUE = '#9cc0ff';
+export const BOARD_COLOR_PRESETS = COLOR_PRESETS.map((c) => c === '#00bcd4' ? TRELLO_BLUE : softenColor(c, BOARD_COLOR_SOFTEN_AMOUNT));
+// How far a column's stored color is lightened for its background. Tuned
+// against Trello side by side: 0.15 read a touch too dark, 0.6 faded.
+const BOARD_COLUMN_LIGHTEN = 0.42;
 
 // Fallback only — per-board default lives on col.defaultDuration, set from
 // each board's ⋮ settings menu (see setColumnDefaultDuration). Read by
@@ -1196,10 +1202,11 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
       // col.color is stored pre-softened now — the board column picker
       // (BOARD_COLOR_PRESETS) offers its own pastel palette directly,
       // rather than this rendering a runtime-transformed version of
-      // whatever the job/task color picker offers. Shown at close to full
-      // strength, Trello-style (Karl, 2026-09-30: the paler tint read as
-      // faded), with the title a darker shade of the same color.
-      headerStyle: col.color ? { background: ganttPastel(col.color, 85), color: columnLabelTextColor(col.color) } : {},
+      // whatever the job/task color picker offers. Shown a little lighter,
+      // Trello-style (the same in dark mode, where the columns stay light
+      // so the title keeps its contrast), with the title a darker shade of
+      // the same color.
+      headerStyle: col.color ? { background: softenColor(col.color, BOARD_COLUMN_LIGHTEN), color: columnLabelTextColor(col.color) } : {},
       // The ⋮ button matches the title.
       settingsBtnColor: col.color ? columnLabelTextColor(col.color) : undefined,
       hideFromSchedule: !!col.hideFromSchedule,
