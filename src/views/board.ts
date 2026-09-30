@@ -61,7 +61,7 @@ import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../c
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
-import { darkenColor, softenColor, tintedTextColor, ganttPastel, softChip, JOB_NAME_CONTRAST } from '../utils/color';
+import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor, ganttPastel, JOB_NAME_CONTRAST } from '../utils/color';
 import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -1196,13 +1196,12 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
       // col.color is stored pre-softened now — the board column picker
       // (BOARD_COLOR_PRESETS) offers its own pastel palette directly,
       // rather than this rendering a runtime-transformed version of
-      // whatever the job/task color picker offers. On the Board it is
-      // softened once more to match the Gantt (Karl, 2026-09-29): the
-      // column is a light tint of it and the title a deeper shade.
-      headerStyle: col.color ? { background: ganttPastel(col.color, 40), color: softChip(col.color).color } : {},
-      // Trello-style: the title reads as a darker shade of the board's
-      // own color — see headerStyle above. The ⋮ button matches it.
-      settingsBtnColor: col.color ? softChip(col.color).color : undefined,
+      // whatever the job/task color picker offers. Shown at close to full
+      // strength, Trello-style (Karl, 2026-09-30: the paler tint read as
+      // faded), with the title a darker shade of the same color.
+      headerStyle: col.color ? { background: ganttPastel(col.color, 85), color: columnLabelTextColor(col.color) } : {},
+      // The ⋮ button matches the title.
+      settingsBtnColor: col.color ? columnLabelTextColor(col.color) : undefined,
       hideFromSchedule: !!col.hideFromSchedule,
       scheduleDisconnected: !!col.scheduleDisconnected,
       isFinishedTrigger: isFinishedColumn(col),

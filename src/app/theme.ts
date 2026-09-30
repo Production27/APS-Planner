@@ -207,8 +207,11 @@ export function applyProjectBgVisual(): void {
   const boardWrapper = document.getElementById('boardWrapper') as HTMLElement | null;
   if (boardWrapper) {
     const boardPhoto = staticBg || localStorage.getItem('gantt_board_bg_photo_v1');
+    // Light mode shows the Board's image at full strength, the way Trello
+    // does (Karl, 2026-09-30: the hazed version read as faded). Dark mode
+    // keeps the overlay, since the image's own background is white.
     boardWrapper.style.background = boardPhoto
-      ? ('linear-gradient(' + overlay + ', ' + overlay + '), url("' + boardPhoto + '") center/cover no-repeat')
+      ? ((dark ? 'linear-gradient(' + overlay + ', ' + overlay + '), ' : '') + 'url("' + boardPhoto + '") center/cover no-repeat')
       : '';
   }
 }

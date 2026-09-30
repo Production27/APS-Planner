@@ -33,7 +33,7 @@
   :root {
     --primary: #1a237e; --primary-light: #3949ab; --accent: #e53935;
     --bg: #f5f5f5; --card: #ffffff; --border: #e0e0e0;
-    --text: #2c3e50; --text-light: #666; --text-faint: #5b6573;
+    --text: #172b4d; --text-light: #44546f; --text-faint: #44546f;
     --success: #28a745; --danger: #dc3545; --warning: #f0ad4e;
     /* Text-weight versions of --danger/--accent: the bright reds are fine
        as fills and borders but fall under WCAG's 4.5:1 as small text on
@@ -1864,7 +1864,7 @@
   .wf-flow-arrow { position: absolute; top: 4px; transform: translateX(-50%); color: var(--text-light); opacity: 0.7; display: flex; pointer-events: none; }
   .board-wrapper::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
   /* Flat, like the rest of the app (2026-09-25): 1px borders, no shadows or lift. */
-  .board-column { width: 245px; min-width: 245px; background: var(--kanban-column-bg); border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; border: 1px solid var(--border); transition: border-color 0.15s, opacity 0.15s; }
+  .board-column { width: 245px; min-width: 245px; background: var(--kanban-column-bg); border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; border: 1px solid transparent; transition: border-color 0.15s, opacity 0.15s; }
   .board-column.dragging-col { opacity: 0.35; cursor: grabbing; }
   .board-column.drag-over-col { border-color: var(--primary-light); box-shadow: 0 0 0 1px var(--primary-light); }
   .board-column-header { display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) var(--s-3-5) var(--s-2); font-size: var(--t-base); font-weight: 700; color: var(--text); flex-shrink: 0; cursor: grab; user-select: none; }
@@ -1924,7 +1924,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   .board-column.card-drag-over .board-column-body {
     background: #e4e4e4;
   }
-  .board-card { background: var(--card); border-radius: var(--radius); padding: var(--s-2-5) var(--s-3); border: 1px solid var(--border); cursor: grab; transition: border-color 0.15s, background 0.15s; }
+  .board-card { background: var(--card); border-radius: var(--radius); padding: var(--s-2-5) var(--s-3); border: 1px solid transparent; box-shadow: 0 1px 1px rgba(9,30,66,0.25), 0 0 1px rgba(9,30,66,0.31); cursor: grab; transition: border-color 0.15s, background 0.15s; }
   .board-card:hover { border-color: var(--primary-light); }
   /* Mobile-only VISUALLY (see the @media (max-width:480px) rule that
      keeps it always shown there, for touch — native HTML5 drag doesn't
@@ -1951,7 +1951,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .board-card .board-card-meta-line { color: #98a0ae; }
   .board-card .board-card-due { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-2); border-radius: 10px; background: var(--primary-tint); color: var(--text-light); }
   .board-card .board-card-due.overdue { background: var(--danger-tint); color: var(--danger-text); }
-  .board-card.manual-override { box-shadow: inset 0 0 0 1px rgba(240,173,78,0.5); }
+  .board-card.manual-override { box-shadow: inset 0 0 0 1px rgba(240,173,78,0.5), 0 1px 1px rgba(9,30,66,0.25), 0 0 1px rgba(9,30,66,0.31); }
   .board-card-override-badge { display: inline-flex; align-items: center; gap: var(--s-0-75); font-size: var(--t-2xs); font-weight: 700; padding: var(--s-0-5) var(--s-1-75); border-radius: 999px; background: #fff3e0; color: #b26a00; margin-bottom: var(--s-1-5); cursor: pointer; }
   .board-card-override-badge:hover { background: #ffe4b3; }
   body.dark-mode .board-card-override-badge { background: rgba(240,173,78,0.18); color: var(--warning); }
@@ -3571,7 +3571,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
   body.dark-mode .board-column { background: #292929; border-color: var(--border); }
   body.dark-mode .board-column.drag-over-col { border-color: var(--primary-light); }
   body.dark-mode .board-card { border-color: var(--border); }
-  body.dark-mode .board-column-body:empty::before { color: rgba(255,255,255,0.5); }
+  body.dark-mode .board-column-body:empty::before { color: #565d6b; }
   body.dark-mode .board-column-body.drag-over { background: rgba(255,255,255,0.08); }
   body.dark-mode .board-column.card-drag-over {
     box-shadow: 0 0 0 2px var(--primary-light), 0 12px 28px rgba(0,0,0,0.4);
