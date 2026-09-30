@@ -51,8 +51,11 @@
        — that's a real design judgment call about acceptable subtle
        color shifts across a dozen+ elements, not a mechanical rename. */
     --table-header-bg: #f8f9fa; --table-header-border: #dee2e6;
-    /* Gantt "Soft" restyle: bar pastels and stage chips mix toward these. */
-    --gantt-bar-base: #fff; --gantt-bar-pct: 34%; --gantt-bar-pct-strong: 60%; --gantt-chip-bg-pct: 18%; --gantt-chip-ink-pct: 55%; --gantt-chip-ink-base: #000;
+    /* Gantt "Soft" restyle: bar pastels and soft chips mix toward these.
+       Bars are the same light pastel in dark mode (Karl, 2026-09-30: the
+       dark-tinted versions read as too dark); only the chips flip. */
+    --gantt-bar-base: #fff; --gantt-bar-pct: 34%; --gantt-bar-pct-strong: 60%; --gantt-bar-ink: #172b4d;
+    --gantt-chip-base: #fff; --gantt-chip-bg-pct: 18%; --gantt-chip-ink-pct: 55%; --gantt-chip-ink-base: #000;
     --row-alt-bg: #fafafa; --btn-gradient-end: #f4f5f8;
     --kanban-column-bg: #eeeeee; --divider: #f0f0f0; --divider-strong: #e9ecef;
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
@@ -551,7 +554,6 @@
   .cal-bar-content { position: relative; z-index: 2; }
   body.dark-mode .cal-day { background: rgba(31,31,31,0.82); }
   body.dark-mode .cal-day.cal-outside { background: rgba(22,22,22,0.6); }
-  body.dark-mode .cal-event-bar:not(.due-marker), body.dark-mode .cal-event-bar .cal-jobname-tag, body.dark-mode .week-timed-event { color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.55); }
 
   /* ===== DAY VIEW (calendarViewMode = 'day') ===== */
   /* Renders into the same #calendarDays/#weekHourSection elements as
@@ -825,7 +827,7 @@
     position: absolute; height: 26px; border-radius: 7px; top: 7px;
     cursor: grab; transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
     display: flex; align-items: center; padding: 0 var(--s-2);
-    font-size: var(--t-2xs); color: var(--text); font-weight: 600;
+    font-size: var(--t-2xs); color: var(--gantt-bar-ink); font-weight: 600;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     border: 1px solid rgba(0,0,0,0.08);
   }
@@ -1027,7 +1029,7 @@
   .week-hour-row-line { height: 48px; border-bottom: 1px solid var(--border); box-sizing: border-box; }
   .week-timed-event {
     position: absolute; left: 2px; right: 2px; border-radius: 4px; padding: var(--s-0-5) var(--s-1-25);
-    font-size: var(--t-xs); color: var(--text); overflow: hidden; cursor: pointer; box-shadow: none;
+    font-size: var(--t-xs); color: var(--gantt-bar-ink); overflow: hidden; cursor: pointer; box-shadow: none;
     z-index: 2; line-height: 13px;
   }
   .week-timed-event:hover { filter: brightness(1.1); z-index: 6; }
@@ -3498,10 +3500,8 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     background: rgba(31,31,31,0.82);
   }
   body.dark-mode {
-    --gantt-bar-base: #1f1f1f; --gantt-bar-pct: 66%; --gantt-bar-pct-strong: 86%; --gantt-chip-bg-pct: 30%; --gantt-chip-ink-pct: 55%; --gantt-chip-ink-base: #fff;
+    --gantt-chip-base: #1f1f1f; --gantt-chip-bg-pct: 30%; --gantt-chip-ink-pct: 55%; --gantt-chip-ink-base: #fff;
   }
-  /* Pastel bars are dark in dark mode, so their labels go light. */
-  body.dark-mode .task-bar, body.dark-mode .task-bar .task-bar-job-tag, body.dark-mode .job-span-name-wrap .task-bar-job-tag { color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.55) !important; }
 
   body.dark-mode .left-header,
   body.dark-mode .timeline-header-wrap,

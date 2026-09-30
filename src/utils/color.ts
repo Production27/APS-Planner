@@ -135,12 +135,11 @@ export function softenColor(hex: string | null | undefined, amount?: number): st
 }
 
 // Gantt bar fills (Karl, 2026-09-29, the "Soft" restyle): a light pastel of
-// the stage/job color, mixed in CSS against --gantt-bar-base (white, or the
-// dark card color in dark mode) so it follows a dark-mode switch without a
-// re-render. How much of the color is kept is a CSS variable too, because
-// dark mode needs more of it: a third of the color over a dark base read
-// as nearly black (Karl, 2026-09-30). `strong` is the deeper shade used for
-// the second stripe of a one-color overlap hatch.
+// the stage/job color, mixed in CSS against --gantt-bar-base. The base and
+// the share of color are CSS variables (index.html) so a theme could change
+// them without a re-render; today both themes use the same light pastel,
+// since dark-tinted bars read as too dark (Karl, 2026-09-30). `strong` is
+// the deeper shade used for the second stripe of a one-color overlap hatch.
 export function ganttPastel(color: string | null | undefined, strong?: boolean): string {
   return 'color-mix(in srgb, ' + (color || '#3949ab') + ' var(--gantt-bar-pct' + (strong ? '-strong' : '') + '), var(--gantt-bar-base))';
 }
@@ -150,7 +149,7 @@ export function ganttPastel(color: string | null | undefined, strong?: boolean):
 export function softChip(color: string | null | undefined): { background: string; color: string } {
   const c = color || '#3949ab';
   return {
-    background: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-bg-pct), var(--gantt-bar-base))',
+    background: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-bg-pct), var(--gantt-chip-base))',
     color: 'color-mix(in srgb, ' + c + ' var(--gantt-chip-ink-pct), var(--gantt-chip-ink-base))',
   };
 }
