@@ -207,14 +207,20 @@ export function applyProjectBgVisual(): void {
   // no static image is configured) rather than being folded into the loop
   // above, since the other views never had that upload feature and
   // shouldn't inherit a fallback that's specific to Board's own history.
+  //
+  // The image goes on the whole Board panel, not just #boardWrapper, so
+  // the workflow strip above the columns is see-through onto it too
+  // (Karl, 2026-09-30); the wrapper itself goes transparent.
+  const boardPanel = document.getElementById('panel-board') as HTMLElement | null;
   const boardWrapper = document.getElementById('boardWrapper') as HTMLElement | null;
-  if (boardWrapper) {
+  if (boardPanel && boardWrapper) {
     const boardPhoto = staticBg || localStorage.getItem('gantt_board_bg_photo_v1');
     // Light mode shows the Board's image at full strength, the way Trello
     // does (Karl, 2026-09-30: the hazed version read as faded). Dark mode
     // keeps the overlay, since the image's own background is white.
-    boardWrapper.style.background = boardPhoto
+    boardPanel.style.background = boardPhoto
       ? ((dark ? 'linear-gradient(' + overlay + ', ' + overlay + '), ' : '') + 'url("' + boardPhoto + '") center/cover no-repeat')
-      : '';
+      : 'var(--bg)';
+    boardWrapper.style.background = 'transparent';
   }
 }
