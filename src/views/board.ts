@@ -61,7 +61,7 @@ import { ensureJobTasksMatchColumns, setCardColumn, syncCardColumns } from '../c
 import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
-import { darkenColor, softenColor, columnLabelTextColor, tintedTextColor, JOB_NAME_CONTRAST } from '../utils/color';
+import { tintedTextColor, JOB_NAME_CONTRAST, BOARD_COLORS, boardColumnColors } from '../utils/color';
 import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
@@ -99,28 +99,12 @@ declare global {
   function openManageColumnChecklist(colId: string, event?: Event): void;
 }
 
-// A stronger blend than utils/color.ts's own SOFTEN_AMOUNT (used for
-// Gantt bars): at 18%, already-light presets (yellow, cyan) barely
-// shifted while dark ones (navy, red) shifted a lot, so the palette read
-// as an inconsistent mix of "still vivid" and "clearly pastel" rather
-// than a uniform pastel set — confirmed by rendering an actual
-// side-by-side comparison. 30% reads as consistently pastel across every
-// hue. Local to this file — nothing else needs the raw blend amount,
-// only the resulting BOARD_COLOR_PRESETS below.
-const BOARD_COLOR_SOFTEN_AMOUNT = 0.30;
-// Real module-owned export now (moved out of index.html) — every other
-// reader is a test asserting against it, not another src/ file, so this
-// only needs wiring into window via main.ts, not src/shared-globals.d.ts.
+// The Board's column colors are Trello's list palette (BOARD_COLORS in
+// src/utils/color.ts); a column stores the palette entry's `base`.
+export const BOARD_COLOR_PRESETS = BOARD_COLORS.map((c) => c.base);
 // A dark-mode card's real fill (body.dark-mode .board-card is #2a2a2a),
 // nudged lighter for hover, for the contrast math on job-name titles.
 const BOARD_CARD_DARK_BG = '#303030';
-// One swap: the cyan made from #00bcd4 gives way to Trello's list blue
-// (Karl, 2026-09-30). Two other cyans stay in the palette.
-const TRELLO_BLUE = '#9cc0ff';
-export const BOARD_COLOR_PRESETS = COLOR_PRESETS.map((c) => c === '#00bcd4' ? TRELLO_BLUE : softenColor(c, BOARD_COLOR_SOFTEN_AMOUNT));
-// How far a column's stored color is lightened for its background. Tuned
-// against Trello side by side: 0.15 read a touch too dark, 0.6 faded.
-const BOARD_COLUMN_LIGHTEN = 0.42;
 
 // Fallback only — per-board default lives on col.defaultDuration, set from
 // each board's ⋮ settings menu (see setColumnDefaultDuration). Read by
@@ -1188,9 +1172,10 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
   document.querySelectorAll('.board-col-color-toggle').forEach((t) => t.classList.remove('open'));
 
   const columnProps: BoardColumnChromeProps[] = BOARD_COLUMNS.map((col, colIdx) => {
+    const colColors = col.color ? boardColumnColors(col.color) : null;
     const colorSwatches: ColorSwatch[] = [
       { color: null, selected: !col.color, onClick: (e: MouseEvent) => changeColumnColor(col.id, '', e) },
-      ...BOARD_COLOR_PRESETS.map((c) => ({ color: c, selected: col.color === c, onClick: (e: MouseEvent) => changeColumnColor(col.id, c, e) })),
+      ...BOARD_COLORS.map((c) => ({ color: c.base, name: c.name, selected: col.color === c.base, onClick: (e: MouseEvent) => changeColumnColor(col.id, c.base, e) })),
     ];
     const workflowItemOptions: SelectOption[] = WORKFLOW_ITEMS.map((item) => ({ value: item.id, label: item.label, selected: item.id === col.workflowItemId }));
     const assigneeOptions: SelectOption[] = (cachedUserRoster || []).map((u) => ({ value: u.username, label: u.displayName, selected: u.username === col.checklistAssigneeOverride }));
@@ -1199,16 +1184,12 @@ function rebuildBoardColumnChrome(wrapper: HTMLElement): void {
       label: col.label,
       scheduleDisconnectedIcon: !!col.scheduleDisconnected,
       canManage: hasMinTier('projectAdmin'),
-      // col.color is stored pre-softened now — the board column picker
-      // (BOARD_COLOR_PRESETS) offers its own pastel palette directly,
-      // rather than this rendering a runtime-transformed version of
-      // whatever the job/task color picker offers. Shown a little lighter,
-      // Trello-style (the same in dark mode, where the columns stay light
-      // so the title keeps its contrast), with the title a darker shade of
-      // the same color.
-      headerStyle: col.color ? { background: softenColor(col.color, BOARD_COLUMN_LIGHTEN), color: columnLabelTextColor(col.color) } : {},
-      // The ⋮ button matches the title.
-      settingsBtnColor: col.color ? columnLabelTextColor(col.color) : undefined,
+      // Trello's pairing: a light fill with the title in a dark shade of
+      // the same color (boardColumnColors()). The same in dark mode, where
+      // the columns stay light so the title keeps its contrast. The ⋮
+      // button matches the title.
+      headerStyle: colColors ? { background: colColors.background, color: colColors.title } : {},
+      settingsBtnColor: colColors ? colColors.title : undefined,
       hideFromSchedule: !!col.hideFromSchedule,
       scheduleDisconnected: !!col.scheduleDisconnected,
       isFinishedTrigger: isFinishedColumn(col),

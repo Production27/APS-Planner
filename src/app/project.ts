@@ -8,6 +8,7 @@
 // linked-job data model are covered by tests/unit-project.spec.js.
 import { genId, safeJsonParse } from '../utils/id';
 import { showToast } from '../utils/ui';
+import { toBoardColor } from '../utils/color';
 import { hasMinTier } from '../auth/permissions';
 import {
   queueSharedSync, flushPendingRoomPush, pushProjectToShared, pushBoardColumnsToShared,
@@ -423,6 +424,8 @@ export function loadActiveProjectData(): void {
   }
   jobs = ensureJobAndTaskIds(p.jobs || []);
   BOARD_COLUMNS = p.boardColumns || JSON.parse(JSON.stringify(DEFAULT_BOARD_COLUMNS));
+  // Old palette colors move onto the Trello palette (see toBoardColor()).
+  BOARD_COLUMNS.forEach(function (col) { if (col.color) col.color = toBoardColor(col.color); });
   WORKFLOW_ITEMS = p.workflowItems || [];
   boardCards = ensureCardIds(p.boardCards || []);
   calendarEvents = ensureCalendarEventIds(p.calendarEvents || []);

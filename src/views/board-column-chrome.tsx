@@ -31,6 +31,8 @@ import { render } from 'preact';
 
 export interface ColorSwatch {
   color: string | null;
+  // The palette name ("Blue"), read out instead of the hex.
+  name?: string;
   selected: boolean;
   onClick: (e: MouseEvent) => void;
 }
@@ -164,7 +166,7 @@ function BoardColumnChrome(p: BoardColumnChromeProps) {
                     onKeyDown={p.onSwatchKeyDown}
                     onClick={s.onClick}
                     title={s.color ? undefined : 'Default (no color)'}
-                    aria-label={s.color ? 'Color ' + s.color : 'Default (no color)'}
+                    aria-label={s.color ? (s.name || ('Color ' + s.color)) : 'Default (no color)'}
                   >
                     {s.color ? null : <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: 'var(--text-light)' }} dangerouslySetInnerHTML={{ __html: DEFAULT_SWATCH_ICON }} />}
                   </div>

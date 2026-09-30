@@ -52,7 +52,7 @@ import { findJob, getJobPhases, getPhaseSubUnits } from '../core/models';
 import { renderJobListIfStale } from './job-list';
 import { escapeHtml } from '../utils/html';
 import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
-import { darkenColor, tintedTextColor, ganttPastel, ganttPastelHex, softChip } from '../utils/color';
+import { tintedTextColor, ganttPastel, ganttPastelHex, softChip, boardColumnColors } from '../utils/color';
 import { renderGantt, setupScrollSync, isPhaseFinishedOnBoard } from './gantt';
 import { onPanelResize } from '../utils/ui';
 import { getStoredDisplayName } from '../auth/session';
@@ -60,7 +60,7 @@ import {
   renderCalendar, initCalendarDragHandlers, buildCalBarHtml, flattenCalendarEventsForRange,
   isCalendarEventTaskId, parseCalendarEventTaskId, openEditCalendarEvent, calendarOpenJob,
 } from './calendar';
-import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, isDarkColor, buildWorkflowStageData, scrollToBoardColumn } from './board';
+import { renderBoard, isCardFromArchivedJob, isCardVisibleToMe, buildCardEl, buildWorkflowStageData, scrollToBoardColumn } from './board';
 import { renderMyChecklist, buildMyChecklistRows, toggleMyChecklistItemDone, openMyChecklistItem } from './checklist';
 import { sendPresenceUpdate } from '../sync/presence';
 import { formatCommentWhen, postJobComment, postJobReply, deleteJobComment, deleteJobReply } from './job-comments';
@@ -1354,8 +1354,9 @@ function renderHomeWorkflowExpandedBoard(): void {
     let colStyle: Record<string, string> | undefined;
     let headStyle: Record<string, string> | undefined;
     if (col.color) {
-      colStyle = { background: col.color as string };
-      headStyle = { color: isDarkColor(col.color as string) ? '#fff' : darkenColor(col.color as string, 0.6) };
+      const cc = boardColumnColors(col.color as string);
+      colStyle = { background: cc.background };
+      headStyle = { color: cc.title };
     }
     return { colId: col.id, label: col.label, count: cards.length, colStyle: colStyle, headStyle: headStyle };
   });

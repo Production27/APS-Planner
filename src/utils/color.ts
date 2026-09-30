@@ -161,3 +161,75 @@ export function ganttPastelHex(color: string | null | undefined): string {
 // WCAG AA, so names stay as close to the job's own color as they can while
 // still readable. Was 6 until Karl found the names too dark (2026-09-29).
 export const JOB_NAME_CONTRAST = 4.5;
+
+// ===== Board column colors: Trello's list palette (Karl, 2026-09-30) =====
+// `base` is what a column stores (and what its Gantt/Calendar stage color
+// is mixed from); `bg` and `title` are the column's background and title
+// on the Board. Blue, yellow, orange, red and purple were read straight
+// off Karl's Trello board; the rest are Atlassian's matching tokens.
+export interface BoardColor { name: string; base: string; bg: string; title: string }
+export const BOARD_COLORS: BoardColor[] = [
+  { name: 'Green', base: '#4bce97', bg: '#baf3db', title: '#164b35' },
+  { name: 'Yellow', base: '#e2b203', bg: '#f5e989', title: '#533f04' },
+  { name: 'Orange', base: '#faa53d', bg: '#fce4a6', title: '#693200' },
+  { name: 'Red', base: '#f87462', bg: '#ffd5d2', title: '#5d1f1a' },
+  { name: 'Purple', base: '#c97cf4', bg: '#eed7fc', title: '#48245d' },
+  { name: 'Blue', base: '#579dff', bg: '#cfe1fd', title: '#123263' },
+  { name: 'Teal', base: '#6cc3e0', bg: '#c6edfb', title: '#164555' },
+  { name: 'Lime', base: '#94c748', bg: '#d3f1a7', title: '#37471f' },
+  { name: 'Pink', base: '#e774bb', bg: '#fdd0ec', title: '#50253f' },
+  { name: 'Gray', base: '#8590a2', bg: '#dcdfe4', title: '#172b4d' },
+];
+
+export function boardColorFor(color: string | null | undefined): BoardColor | null {
+  const c = (color || '').toLowerCase();
+  return BOARD_COLORS.find((b) => b.base === c) || null;
+}
+
+function hueSat(rgb: [number, number, number]): { h: number; s: number } {
+  const r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  if (!d) return { h: 0, s: 0 };
+  const l = (max + min) / 2;
+  const sat = d / (1 - Math.abs(2 * l - 1));
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  return { h, s: sat };
+}
+
+// The old Board palette's cyan (made from #00bcd4) is Karl's Design column,
+// which he asked to be Trello's blue rather than its teal.
+const OLD_CYAN = '#4dd0e1';
+
+// Moves a column color from the old palette onto the Trello one: a color
+// already in the palette is kept, anything else goes to the nearest hue
+// (greys to Gray). Run when a project's columns load, so existing boards
+// switch over without anyone re-picking each column.
+export function toBoardColor(color: string | null | undefined): string | undefined {
+  if (!color) return undefined;
+  const c = color.toLowerCase();
+  if (boardColorFor(c)) return c;
+  if (c === OLD_CYAN) return '#579dff';
+  const rgb = parseHexRGB(c);
+  if (!rgb) return color;
+  const hs = hueSat(rgb);
+  if (hs.s < 0.15) return '#8590a2';
+  let best = BOARD_COLORS[0], bestDist = 999;
+  BOARD_COLORS.forEach(function (b) {
+    if (b.name === 'Gray') return;
+    const bh = hueSat(parseHexRGB(b.base) as [number, number, number]).h;
+    const dist = Math.min(Math.abs(bh - hs.h), 360 - Math.abs(bh - hs.h));
+    if (dist < bestDist) { bestDist = dist; best = b; }
+  });
+  return best.base;
+}
+
+// A column's background and title on the Board (and Home's Board widget).
+// Palette colors use Trello's exact pair; any other color (tests, old data
+// not yet loaded through toBoardColor()) falls back to a lightened fill
+// with a darker shade of itself for the title.
+export function boardColumnColors(color: string): { background: string; title: string } {
+  const b = boardColorFor(color);
+  if (b) return { background: b.bg, title: b.title };
+  return { background: softenColor(color, 0.42), title: columnLabelTextColor(color) };
+}
