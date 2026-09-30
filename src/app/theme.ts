@@ -192,7 +192,10 @@ export function applyProjectBgVisual(): void {
   STATIC_BG_PANEL_IDS.forEach(function(id) {
     const el = document.getElementById(id) as HTMLElement | null;
     if (!el) return;
-    el.style.background = bgCss;
+    // Checklist shows the image at full strength in light mode, like the
+    // Board (Karl, 2026-09-30); Calendar and Gantt keep the haze, since
+    // their grids sit right on top of it.
+    el.style.background = (staticBg && !dark && id === 'panel-checklist') ? ('url("' + staticBg + '") center/cover no-repeat') : bgCss;
     // background-blend-mode isn't part of the background shorthand
     // above, so a stale value from before this reverted away from
     // multiply-blend wouldn't otherwise get cleared on re-runs (project
