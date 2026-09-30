@@ -152,15 +152,27 @@ function TaskRow(props: TaskRowProps) {
   );
 }
 
-function TaskRowList({ rows, spacerHeight }: { rows: TaskRowProps[]; spacerHeight: number }) {
+// The space below the last real row is filled with empty rows, so the row
+// lines and the Date/Task/Job column dividers carry on to the bottom of
+// the chart instead of stopping at the last job (Karl, 2026-09-30). They
+// are decoration only: not .task-row, not focusable, hidden from screen
+// readers. The wrapper keeps the exact spacer height (see
+// renderLeftPanelRows() on why that height matters) and clips a last
+// partial row.
+function TaskRowList({ rows, spacerHeight, rowHeight }: { rows: TaskRowProps[]; spacerHeight: number; rowHeight: number }) {
+  const fillerCount = Math.ceil(spacerHeight / rowHeight);
+  const fillers = [];
+  for (let i = 0; i < fillerCount; i++) {
+    fillers.push(<div key={i} class="task-row-filler"><div /><div /><div /></div>);
+  }
   return (
     <>
       {rows.map((r) => <TaskRow key={r.rowKey} {...r} />)}
-      <div style={{ height: spacerHeight + 'px' }} />
+      <div class="task-row-fillers" aria-hidden="true" style={{ height: spacerHeight + 'px' }}>{fillers}</div>
     </>
   );
 }
 
-export function renderTaskRowsInto(container: HTMLElement, rows: TaskRowProps[], spacerHeight: number): void {
-  render(<TaskRowList rows={rows} spacerHeight={spacerHeight} />, container);
+export function renderTaskRowsInto(container: HTMLElement, rows: TaskRowProps[], spacerHeight: number, rowHeight: number): void {
+  render(<TaskRowList rows={rows} spacerHeight={spacerHeight} rowHeight={rowHeight} />, container);
 }

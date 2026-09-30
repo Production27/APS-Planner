@@ -670,6 +670,15 @@
      gantt.ts), which drives the matching right-panel bar rows. */
   .task-row { display: flex; height: 40px; border-bottom: 1px solid var(--divider); font-size: var(--t-sm); align-items: center; transition: background 0.15s; cursor: pointer; }
   .task-row:hover { background: #f0f0f0; }
+  /* Empty rows below the last job (see TaskRowList in gantt-task-row.tsx):
+     the same lines and column widths as .task-row, nothing else. */
+  .task-row-fillers { overflow: hidden; }
+  .task-row-filler { display: flex; height: 40px; border-bottom: 1px solid var(--divider); }
+  .task-row-filler > div { height: 100%; border-right: 1px solid var(--divider); }
+  .task-row-filler > div:nth-child(1) { width: 104px; }
+  .task-row-filler > div:nth-child(2) { width: 90px; }
+  .task-row-filler > div:nth-child(3) { flex: 1; border-right: none; }
+  body.dark-mode .task-row-filler, body.dark-mode .task-row-filler > div { border-color: var(--border); }
 
   .task-row .col { padding: 0 var(--s-2-5); border-right: 1px solid var(--divider); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; display: flex; align-items: center; }
   .task-row .col-date { width: 104px; color: var(--text-light); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }

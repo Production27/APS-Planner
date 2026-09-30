@@ -1556,10 +1556,20 @@ function getOrCreateGanttGridLayers(grid: HTMLElement): GanttGridLayers {
 
 function setupDateRangeAndGrid(): SetupDateRangeAndGridResult {
   computeDateRange();
-  const totalDays = getDaysDiff(startDate, endDate) + 1;
+  let totalDays = getDaysDiff(startDate, endDate) + 1;
   const containerW = document.getElementById('timelineBody')!.clientWidth;
   const containerH = document.getElementById('timelineBody')!.clientHeight;
-  const gridWidth = Math.max(totalDays * dayWidth, containerW);
+  // Zoomed far out, the date range can be narrower than the chart. Keep
+  // adding days until the columns reach the right edge, so they don't
+  // stop partway across. The grid itself stays the chart's width then (the
+  // last day may be cut off), so this never adds a sideways scroll.
+  const daysToFill = Math.ceil(containerW / dayWidth);
+  const padded = totalDays < daysToFill;
+  if (padded) {
+    endDate.setDate(endDate.getDate() + (daysToFill - totalDays));
+    totalDays = daysToFill;
+  }
+  const gridWidth = padded ? containerW : totalDays * dayWidth;
   const grid = document.getElementById('timelineGrid')!;
   const header = document.getElementById('timelineHeader')!;
   const leftBody = document.getElementById('leftBody')!;
@@ -1921,7 +1931,11 @@ function renderLeftPanelRows(visibleRows: GanttRow[], rowBgLayer: HTMLElement, g
   // rather than appended imperatively after it, since Preact owns every
   // child of #leftBody now (see renderTaskRowsInto()'s own comment).
   const spacerHeight = Math.max(0, gridHeightPx - visibleRows.length * GANTT_ROW_H);
-  renderTaskRowsInto(leftBody, rowProps, spacerHeight);
+  renderTaskRowsInto(leftBody, rowProps, spacerHeight, GANTT_ROW_H);
+  // The row lines carry on below the last job to the bottom of the grid,
+  // matching the left panel's filler rows. Whole rows only: a partial one
+  // would stick out past the grid and lengthen the scroll.
+  for (let i = visibleRows.length; (i + 1) * GANTT_ROW_H <= gridHeightPx; i++) rowBgEntries.push({ top: i * GANTT_ROW_H });
   renderRowBgInto(rowBgLayer, rowBgEntries, gridWidth);
 }
 
