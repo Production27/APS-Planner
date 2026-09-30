@@ -34,7 +34,7 @@ import type { Job, Phase, SubPhase, Task, BoardColumn } from '../core/types';
 import { safeJsonParse } from '../utils/id';
 import { toIsoDate, getDaysDiff, formatDate } from '../utils/date';
 import { escapeHtml } from '../utils/html';
-import { tintedTextColor, ganttPastel, ganttPastelHex, softChip, JOB_NAME_CONTRAST } from '../utils/color';
+import { tintedTextColor, ganttPastel, ganttPastelHex, softChip, boardColumnColors, JOB_NAME_CONTRAST } from '../utils/color';
 import { findJob, findTask, getJobPhases, getPhaseSubUnits, getPhaseCard } from '../core/models';
 import { buildDateHeaderCells, renderDateHeaderInto } from './gantt-date-header';
 import { renderFocusBannerInto } from './gantt-focus-banner';
@@ -1726,11 +1726,14 @@ function findTaskForCardColumn(job: Job, phaseId: string | null | undefined, tas
   return tasks.find((t) => t.columnId === card.column) || null;
 }
 
-// A task pill's colors: a soft tinted chip of the task's stage color (or
-// the job's, for due markers and colorless tasks) with text in a darker
-// shade of the same color (softChip() in src/utils/color.ts).
+// A task pill's colors. A real task mirrors its Board column, so its pill
+// is that column exactly as the Board shows it: the same fill and the same
+// title color (boardColumnColors() — Karl, 2026-09-30: not a softened
+// version). Due markers and colorless tasks get a soft chip of the job's
+// color instead (softChip()).
 function taskPillColors(task: { [key: string]: any }, jobColor: string): { background: string; color: string | undefined } {
   const own = task.color as string | undefined;
+  if (own && !task.isDueMarker) { const cc = boardColumnColors(own); return { background: cc.background, color: cc.title }; }
   return softChip(own || jobColor);
 }
 

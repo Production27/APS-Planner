@@ -1435,9 +1435,10 @@ function renderHomeTodayScheduleWidgetInto(containerEl: HTMLElement, rows: HomeS
     // taskPillColors() in gantt.ts) — a task's own color is its board
     // column's pastel, used as-is with the Board header's label-text rule;
     // a colorless task falls back to the softened job color.
-    const pill = softChip(row.taskOwnColor || jobColor);
-    const taskPillBg = pill.background;
-    const taskPillText = pill.color;
+    const cc = row.taskOwnColor ? boardColumnColors(row.taskOwnColor) : null;
+    const pill = softChip(jobColor);
+    const taskPillBg = cc ? cc.background : pill.background;
+    const taskPillText = cc ? cc.title : pill.color;
     return {
       rowKey: row.job.id + '::' + row.taskName + '::' + (row.phaseId || '') + '::' + (row.subPhaseId || ''),
       taskName: row.taskName,
