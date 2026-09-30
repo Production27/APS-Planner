@@ -551,7 +551,7 @@
   .cal-bar-content { position: relative; z-index: 2; }
   body.dark-mode .cal-day { background: rgba(31,31,31,0.82); }
   body.dark-mode .cal-day.cal-outside { background: rgba(22,22,22,0.6); }
-  body.dark-mode .cal-event-bar:not(.due-marker), body.dark-mode .cal-event-bar .cal-jobname-tag, body.dark-mode .week-timed-event { color: #fff !important; }
+  body.dark-mode .cal-event-bar:not(.due-marker), body.dark-mode .cal-event-bar .cal-jobname-tag, body.dark-mode .week-timed-event { color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.55); }
 
   /* ===== DAY VIEW (calendarViewMode = 'day') ===== */
   /* Renders into the same #calendarDays/#weekHourSection elements as
@@ -3498,10 +3498,10 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
     background: rgba(31,31,31,0.82);
   }
   body.dark-mode {
-    --gantt-bar-base: #1f1f1f; --gantt-bar-pct: 50%; --gantt-bar-pct-strong: 72%; --gantt-chip-bg-pct: 30%; --gantt-chip-ink-pct: 55%; --gantt-chip-ink-base: #fff;
+    --gantt-bar-base: #1f1f1f; --gantt-bar-pct: 66%; --gantt-bar-pct-strong: 86%; --gantt-chip-bg-pct: 30%; --gantt-chip-ink-pct: 55%; --gantt-chip-ink-base: #fff;
   }
   /* Pastel bars are dark in dark mode, so their labels go light. */
-  body.dark-mode .task-bar, body.dark-mode .task-bar .task-bar-job-tag, body.dark-mode .job-span-name-wrap .task-bar-job-tag { color: #fff !important; }
+  body.dark-mode .task-bar, body.dark-mode .task-bar .task-bar-job-tag, body.dark-mode .job-span-name-wrap .task-bar-job-tag { color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.55) !important; }
 
   body.dark-mode .left-header,
   body.dark-mode .timeline-header-wrap,
