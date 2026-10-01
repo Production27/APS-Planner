@@ -1037,7 +1037,9 @@ function buildWorkflowStageData(): { firstColId: string; lastColId: string; labe
 // WORKFLOW LANES CSS). Each lane reaches halfway into the gap on either
 // side, so neighbouring lanes meet edge to edge. Called from renderBoard()
 // so it always reflects the same data/column positions currently on screen.
-// A board not assigned to any workflow item gets a grey lane of its own.
+// A board not assigned to any workflow item gets a grey tab of its own
+// but no lane behind it, so a Board without workflow items isn't washed
+// grey from top to bottom.
 const WF_UNASSIGNED = { base: '#8590a2', bg: '#dcdfe4', ink: '#172b4d' };
 function renderBoardWorkflowStrip(): void {
   const wrapper = document.getElementById('boardWrapper');
@@ -1078,7 +1080,7 @@ function renderBoardWorkflowStrip(): void {
     '</div>';
     const title = g.count + ' job' + (g.count === 1 ? '' : 's') + ' in ' + g.label + (g.stalledCount ? ', ' + g.stalledCount + ' stalled' : '');
     segmentsHtml += '<div class="wf-seg' + (isUnassigned ? ' unassigned' : '') + '" style="' + box + vars + '" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="scrollToBoardColumn(\'' + g.firstColId + '\')" title="' + escapeHtml(title) + '">' + labelRow + '</div>';
-    lanesHtml += '<div class="wf-lane" style="' + box + vars + '"></div>';
+    if (!isUnassigned) lanesHtml += '<div class="wf-lane" style="' + box + vars + '"></div>';
   });
 
   track.innerHTML = segmentsHtml;
