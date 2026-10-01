@@ -427,6 +427,9 @@ export function loadActiveProjectData(): void {
   // Old palette colors move onto the Trello palette (see toBoardColor()).
   BOARD_COLUMNS.forEach(function (col) { if (col.color) col.color = toBoardColor(col.color); });
   WORKFLOW_ITEMS = p.workflowItems || [];
+  // Workflow items share the columns' palette (their lanes are tinted
+  // from it), so older colors move over the same way.
+  WORKFLOW_ITEMS.forEach(function (item) { if (item.color) item.color = toBoardColor(item.color) as string; });
   boardCards = ensureCardIds(p.boardCards || []);
   calendarEvents = ensureCalendarEventIds(p.calendarEvents || []);
   fieldOptions = p.fieldOptions || {};

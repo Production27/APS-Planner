@@ -62,7 +62,6 @@ import { escapeHtml } from '../utils/html';
 import { genId } from '../utils/id';
 import { createAutosaveController } from '../utils/autosave';
 import { tintedTextColor, JOB_NAME_CONTRAST, BOARD_COLORS, boardColumnColors } from '../utils/color';
-import { COLOR_PRESETS } from '../core/constants';
 import { openModal, closeModal, showToast, onPanelResize, toggleMsDropdown, msSetAll, msDropdownLabelText, isPanelActive } from '../utils/ui';
 import { hasMinTier } from '../auth/permissions';
 import { getStoredSessionToken } from '../auth/session';
@@ -700,11 +699,11 @@ function renderWorkflowItemsBody(): void {
   // Row layout (not the chip pattern Default Checklist/Custom Fields use
   // elsewhere) since each item needs room for an expandable color picker
   // underneath — reuses the board column ⋮ menu's own color-toggle/
-  // panel/grid CSS classes verbatim (same swatch palette, COLOR_PRESETS,
+  // panel/grid CSS classes verbatim (same swatch palette, BOARD_COLOR_PRESETS,
   // same click-to-expand interaction), just scoped to #workflowItemsBody
   // instead of a column dropdown.
   const rows = WORKFLOW_ITEMS.map((item) => {
-    const swatches = COLOR_PRESETS.map((c) => {
+    const swatches = BOARD_COLOR_PRESETS.map((c) => {
       return '<div class="board-col-color-option' + (item.color === c ? ' selected' : '') + '" style="background:' + c + ';" role="radio" aria-checked="' + (item.color === c) + '"' + swatchKeyboardAttrs(item.color === c) + ' onclick="changeWorkflowItemColor(\'' + item.id + '\', \'' + c + '\', event)"></div>';
     }).join('');
     return '<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden;">' +
@@ -763,10 +762,9 @@ function addWorkflowItem(): void {
   const input = document.getElementById('wfi_new_item') as HTMLInputElement;
   const text = input.value.trim();
   if (!text) return;
-  // Cycles through the same swatch palette job/board colors already draw
-  // from, rather than a separate color picker — one less decision for
+  // Cycles through the same swatch palette the board columns draw from, rather than a separate color picker — one less decision for
   // something that'll usually be picked a handful of times total.
-  const color = COLOR_PRESETS[WORKFLOW_ITEMS.length % COLOR_PRESETS.length];
+  const color = BOARD_COLOR_PRESETS[WORKFLOW_ITEMS.length % BOARD_COLOR_PRESETS.length];
   WORKFLOW_ITEMS.push({ id: genId(), label: text, color: color });
   input.value = '';
   saveWorkflowItems();
@@ -1034,14 +1032,24 @@ function buildWorkflowStageData(): { firstColId: string; lastColId: string; labe
 // Measures each group's real left/right edge against the actual rendered
 // .board-column elements — not computed from fixed widths, so it stays
 // correct whether desktop (245px columns) or mobile (calc(100vw-48px))
-// — then draws an angled bracket per group and a flow arrow in each real
-// gap between adjacent groups. Called from renderBoard() so it always
-// reflects the same data/column positions currently on screen.
+// — then draws each group as a lane: a tab in the strip above the
+// columns plus a fading tint behind them (#boardWfLanes; see the BOARD
+// WORKFLOW LANES CSS). Each lane reaches halfway into the gap on either
+// side, so neighbouring lanes meet edge to edge. Called from renderBoard()
+// so it always reflects the same data/column positions currently on screen.
+// A board not assigned to any workflow item gets a grey lane of its own.
+const WF_UNASSIGNED = { base: '#8590a2', bg: '#dcdfe4', ink: '#172b4d' };
 function renderBoardWorkflowStrip(): void {
   const wrapper = document.getElementById('boardWrapper');
   const track = document.getElementById('wfTrack');
-  if (!wrapper || !track) return;
+  const laneTrack = document.getElementById('wfLaneTrack');
+  if (!wrapper || !track || !laneTrack) return;
   const wrapperRect = wrapper.getBoundingClientRect();
+  const strip = document.getElementById('boardWorkflowStrip');
+  const lanes = document.getElementById('boardWfLanes');
+  if (strip && lanes) lanes.style.top = strip.offsetHeight + 'px';
+  // Half of the real gap between columns (the wrapper's flex gap).
+  const halfGap = (parseFloat(getComputedStyle(wrapper).columnGap) || 16) / 2;
 
   const measured = buildWorkflowStageData().map(function(g) {
     const firstEl = wrapper.querySelector('.board-column[data-column="' + g.firstColId + '"]');
@@ -1052,40 +1060,29 @@ function renderBoardWorkflowStrip(): void {
     return Object.assign({}, g, { left: left, right: right });
   }).filter(Boolean) as ({ firstColId: string; lastColId: string; label: string; color?: string | null; isItem: boolean; count: number; stalledCount: number; left: number; right: number })[];
 
-  const segmentsHtml = measured.map(function(g) {
-    const width = g.right - g.left;
+  let segmentsHtml = '';
+  let lanesHtml = '';
+  measured.forEach(function(g) {
     const isUnassigned = !g.isItem;
-    const style = 'left:' + g.left + 'px; width:' + width + 'px;';
+    let colors = WF_UNASSIGNED;
+    if (g.color) {
+      const cc = boardColumnColors(g.color);
+      colors = { base: g.color, bg: cc.background, ink: cc.title };
+    }
+    const vars = '--wf-base:' + colors.base + ';--wf-bg:' + colors.bg + ';--wf-ink:' + colors.ink + ';';
+    const box = 'left:' + (g.left - halfGap) + 'px; width:' + (g.right - g.left + 2 * halfGap) + 'px;';
     const stalledHtml = g.stalledCount ? '<span class="wf-stalled">⚠ ' + g.stalledCount + '</span>' : '';
     const labelRow = '<div class="wf-seg-label">' + escapeHtml(g.label) +
       (isUnassigned ? '' : '<span class="wf-count">' + g.count + '</span>') +
       stalledHtml +
     '</div>';
-    // Angled ticks (a trapezoid: narrower at the top bar, flaring
-    // outward toward the boards) rather than a squared-off corner, per
-    // Karl's direction — drawn over every group, single-column or not.
-    const bw = Math.max(width - 16, 20);
-    const inset = 2.5, flare = 7;
-    const path = 'M' + inset + ',10 L' + (inset + flare) + ',2.5 L' + (bw - inset - flare) + ',2.5 L' + (bw - inset) + ',10';
-    const bracketStyle = g.color ? ('color:' + g.color + ';') : 'color:var(--text-light);opacity:0.6;';
-    const bracket = '<div class="wf-bracket-wrap" style="' + bracketStyle + '"><svg width="' + bw + '" height="10" viewBox="0 0 ' + bw + ' 10">' +
-      '<path d="' + path + '" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
-      '</svg></div>';
     const title = g.count + ' job' + (g.count === 1 ? '' : 's') + ' in ' + g.label + (g.stalledCount ? ', ' + g.stalledCount + ' stalled' : '');
-    return '<div class="wf-seg' + (isUnassigned ? ' unassigned' : '') + '" style="' + style + '" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="scrollToBoardColumn(\'' + g.firstColId + '\')" title="' + escapeHtml(title) + '">' + labelRow + bracket + '</div>';
-  }).join('');
+    segmentsHtml += '<div class="wf-seg' + (isUnassigned ? ' unassigned' : '') + '" style="' + box + vars + '" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click();}" onclick="scrollToBoardColumn(\'' + g.firstColId + '\')" title="' + escapeHtml(title) + '">' + labelRow + '</div>';
+    lanesHtml += '<div class="wf-lane" style="' + box + vars + '"></div>';
+  });
 
-  // One arrow per real gap between adjacent groups — flow direction
-  // between workflow items, not just within one.
-  const arrowsHtml = measured.slice(0, -1).map(function(g, i) {
-    const next = measured[i + 1];
-    const midX = (g.right + next.left) / 2;
-    return '<div class="wf-flow-arrow" style="left:' + midX + 'px;">' +
-      '<svg width="32" height="32" viewBox="0 0 24 24"><path d="M4 12h14m0 0l-5.5-5.5m5.5 5.5l-5.5 5.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-    '</div>';
-  }).join('');
-
-  track.innerHTML = segmentsHtml + arrowsHtml;
+  track.innerHTML = segmentsHtml;
+  laneTrack.innerHTML = lanesHtml;
 
   // Keeps the band locked to the board's own horizontal scroll — same
   // mechanism the Gantt's date header uses (src/views/gantt.ts's
@@ -1093,9 +1090,13 @@ function renderBoardWorkflowStrip(): void {
   // drift out of alignment. Property assignment, not addEventListener,
   // so re-running this on every renderBoard() doesn't stack up duplicate
   // listeners the way repeated addEventListener calls would.
-  (wrapper as HTMLElement).onscroll = function() {
-    (track as HTMLElement).style.transform = 'translateX(-' + (wrapper as HTMLElement).scrollLeft + 'px)';
+  const syncScroll = function() {
+    const t = 'translateX(-' + (wrapper as HTMLElement).scrollLeft + 'px)';
+    (track as HTMLElement).style.transform = t;
+    (laneTrack as HTMLElement).style.transform = t;
   };
+  (wrapper as HTMLElement).onscroll = syncScroll;
+  syncScroll();
 }
 
 function scrollToBoardColumn(colId: string): void {

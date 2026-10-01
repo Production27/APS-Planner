@@ -1844,39 +1844,55 @@
   }
   #panel-board.active { display: flex; flex-direction: column; }
 
-  /* ===== BOARD WORKFLOW STRIP ===== a "stacked header" band directly
-     above the board, position-synced to .board-wrapper's own horizontal
-     scroll (transform:translateX(-scrollLeft), the same mechanism the
-     Gantt's own date header already uses — see setHeaderScroll() — not
-     a second independent scrollbar that could drift out of alignment).
-     Segments are measured against the real rendered column positions
-     (see renderBoardWorkflowStrip()), so a workflow item spanning two+
-     adjacent boards genuinely stretches across both. Bracket shape and
-     arrow direction: Karl's explicit design direction, iterated against
-     a published mockup before this was built. */
+  /* ===== BOARD WORKFLOW LANES ===== each workflow item is a lane
+     (Karl, 2026-10-01, picked from a mockup): a tab in the strip above the
+     columns, with a colored line across its top and its name and count,
+     then a tint behind its columns that fades out toward the bottom of
+     the Board. No side lines; neighbouring lanes meet edge to edge, so the
+     colors tell them apart. Both the strip's track and the lanes' track
+     are position-synced to .board-wrapper's own horizontal scroll
+     (transform:translateX(-scrollLeft), the same mechanism the Gantt's
+     date header uses), and every lane is measured against the real
+     rendered columns (see renderBoardWorkflowStrip()), so an item
+     spanning two+ adjacent boards stretches across both. Colors come in
+     per lane as --wf-base (the line), --wf-bg (the tint) and --wf-ink
+     (the name); the tint strengths are theme tokens so dark mode flips
+     without a re-render. */
+  :root { --wf-tint-top: 95%; --wf-tint-bottom: 30%; }
+  body.dark-mode { --wf-tint-top: 80%; --wf-tint-bottom: 22%; }
+  /* The lanes sit behind the columns: the panel is its own stacking
+     context, so z-index:-1 puts them above its background image but
+     under everything in the normal flow. */
+  #panel-board { position: relative; isolation: isolate; }
   .board-workflow-strip { position: relative; overflow: hidden; height: 52px; background: transparent; flex-shrink: 0; }
   /* A project's background logo (applyProjectBgVisual() in theme.ts): on a
      computer screen it is a little smaller than a full cover, which on a
      wide window meant the square logo image spanned the whole width. */
   @media (min-width: 901px) { :root { --project-logo-size: 80% auto; } }
   .wf-track { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
-  .wf-seg { position: absolute; top: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-1); cursor: pointer; }
-  .wf-seg-label { display: flex; align-items: center; gap: var(--s-1-5); font-size: var(--t-sm); font-weight: 700; color: var(--text); white-space: nowrap; }
-  .wf-seg.unassigned .wf-seg-label { color: var(--text-light); font-weight: 600; }
-  .wf-count { background: rgba(0,0,0,0.06); color: var(--text-light); font-size: var(--t-2xs); padding: 1px var(--s-1-5); border-radius: 8px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  body.dark-mode .wf-count { background: rgba(255,255,255,0.08); }
-  /* Same light/dark split as .job-card .note-icon above, same reason. */
-  .wf-stalled { color: var(--warning-text); font-size: var(--t-2xs); font-weight: 700; display: flex; align-items: center; gap: var(--s-0-5); }
-  body.dark-mode .wf-stalled { color: var(--warning); }
-  /* the bracket — an explicit drawn path (angled ticks flaring outward,
-     not a squared-off corner), not a border/pseudo-element trick, so
-     the angle reads crisply at any segment width. Drawn over every
-     board now, single-column or not — an unassigned one just gets it
-     in a neutral currentColor/text-light instead of an item's color. */
-  .wf-bracket-wrap { width: calc(100% - 16px); height: 10px; }
-  .wf-bracket-wrap svg { display: block; }
-  /* one per real gap between adjacent groups, above the bracket line */
-  .wf-flow-arrow { position: absolute; top: 4px; transform: translateX(-50%); color: var(--text-light); opacity: 0.7; display: flex; pointer-events: none; }
+  .wf-seg {
+    position: absolute; top: 8px; bottom: 0; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    border-top: 3.5px solid var(--wf-base); border-radius: 12px 12px 0 0;
+    background: color-mix(in srgb, var(--wf-bg) var(--wf-tint-top), transparent);
+  }
+  .wf-seg:focus-visible { outline: 2px solid var(--wf-ink); outline-offset: -4px; }
+  .wf-seg-label { display: flex; align-items: center; gap: var(--s-1-5); font-size: var(--t-sm); font-weight: 700; color: var(--wf-ink); white-space: nowrap; }
+  .wf-seg.unassigned .wf-seg-label { font-weight: 600; }
+  .wf-count { background: var(--wf-ink); color: var(--wf-bg); font-size: var(--t-2xs); padding: 1px var(--s-1-5); border-radius: 8px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  /* Sits on the lane's light tint in both themes, so one color pair. */
+  .wf-stalled { background: #fff3cd; color: #7a4f01; font-size: var(--t-2xs); font-weight: 700; display: flex; align-items: center; gap: var(--s-0-5); padding: 1px var(--s-1-5); border-radius: 8px; }
+  .board-wf-lanes { position: absolute; left: 0; right: 0; top: 52px; bottom: 0; overflow: hidden; z-index: -1; pointer-events: none; }
+  .wf-lane-track { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
+  .wf-lane {
+    position: absolute; top: 0; bottom: 0;
+    background: linear-gradient(
+      color-mix(in srgb, var(--wf-bg) var(--wf-tint-top), transparent),
+      color-mix(in srgb, var(--wf-bg) var(--wf-tint-bottom), transparent) 120px,
+      color-mix(in srgb, var(--wf-bg) var(--wf-tint-bottom), transparent));
+    -webkit-mask-image: linear-gradient(#000 60%, transparent);
+    mask-image: linear-gradient(#000 60%, transparent);
+  }
   .board-wrapper::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
   /* Flat, like the rest of the app (2026-09-25): 1px borders, no shadows or lift. */
   .board-column { width: 245px; min-width: 245px; background: var(--kanban-column-bg); border-radius: var(--radius); display: flex; flex-direction: column; max-height: 100%; border: 1px solid transparent; transition: border-color 0.15s, opacity 0.15s; }
@@ -4382,6 +4398,7 @@ font-size: var(--t-base); font-weight: 700; cursor: pointer; transition: all 0.1
 
     <div class="tab-panel" id="panel-board">
       <div class="board-workflow-strip" id="boardWorkflowStrip"><div class="wf-track" id="wfTrack"></div></div>
+      <div class="board-wf-lanes" id="boardWfLanes" aria-hidden="true"><div class="wf-lane-track" id="wfLaneTrack"></div></div>
       <div class="board-wrapper" id="boardWrapper"></div>
     </div>
   </div>
