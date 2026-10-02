@@ -1082,10 +1082,18 @@ test('gantt bar drag (real mouse events): dragging a bar body moves its dates, e
     const sub = getPhaseSubUnits(phase)[0];
     const t = (sub.tasks || [])[0];
     if (!t) return null;
-    t.start = '2026-09-01';
-    t.finish = '2026-09-20';
+    // Dates relative to today: the Gantt opens scrolled to today, so a
+    // bar with fixed dates drifts off-screen as the calendar moves on.
+    // The bar ends just after today so its right end is on-screen.
+    const iso = (offset) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    };
+    t.start = iso(-12);
+    t.finish = iso(3);
     renderGantt();
-    return { jobId: job.id, taskId: t.id };
+    return { jobId: job.id, taskId: t.id, expectStart: iso(-14), expectFinish: iso(1) };
   });
   expect(before).not.toBeNull();
 
@@ -1105,8 +1113,8 @@ test('gantt bar drag (real mouse events): dragging a bar body moves its dates, e
   );
 
   expect(result).not.toBeNull();
-  expect(result.start).toBe('2026-08-30'); // 09-01 shifted 2 days earlier
-  expect(result.finish).toBe('2026-09-18'); // 09-20 shifted the same 2 days
+  expect(result.start).toBe(before.expectStart); // shifted 2 days earlier
+  expect(result.finish).toBe(before.expectFinish); // shifted the same 2 days
 });
 
 test('regression: hovering two different Gantt date headers shows each one\'s own date, not always the last', async ({ page }) => {
